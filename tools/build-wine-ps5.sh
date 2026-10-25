@@ -159,13 +159,13 @@ done
 
 # The pinned OpenGL SDK is linked unless it is declined: a win32u.prx built without it has no OpenGL, and every OpenGL
 # game (a .NET MonoGame game, a Java game) then fails at its first GL call, which looks like a regression elsewhere.
-if [ -z "$ps5opengl_sdk" ] && [ "$no_opengl" = 0 ] && [ -f "$root/.deps/ps5-opengl-sdk-1.0.0/sdk/manifest.sha256" ]; then
-    ps5opengl_sdk=$root/.deps/ps5-opengl-sdk-1.0.0/sdk
+if [ -z "$ps5opengl_sdk" ] && [ "$no_opengl" = 0 ] && [ -f "$root/.deps/ps5-opengl-sdk-1.0.2/sdk/manifest.sha256" ]; then
+    ps5opengl_sdk=$root/.deps/ps5-opengl-sdk-1.0.2/sdk
     echo "linking the pinned OpenGL SDK: $ps5opengl_sdk (--no-opengl to decline)"
 fi
 # Missing, it stops the build: only --no-opengl builds without it (the helper runtime, tools/build-production.sh).
 [ -n "$ps5opengl_sdk" ] || [ "$no_opengl" = 1 ] || [ "$check_only" = 1 ] ||
-    fail "no OpenGL SDK at $root/.deps/ps5-opengl-sdk-1.0.0/sdk: run tools/fetch-opengl-sdk.sh, or pass --no-opengl"
+    fail "no OpenGL SDK at $root/.deps/ps5-opengl-sdk-1.0.2/sdk: run tools/fetch-opengl-sdk.sh, or pass --no-opengl"
 [ -z "$ps5vk_sdk" ] || [ -z "$radv" ] || fail "--ps5vk-sdk and --radv both name libvulkan.prx; give one"
 [ -z "$ps5opengl_sdk" ] || [ -f "$ps5opengl_sdk/lib/libPS5OpenGL.a" ] ||
     [ -f "$ps5opengl_sdk/lib/libPS5OpenGLCore33.a" ] ||

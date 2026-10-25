@@ -89,9 +89,9 @@ OWN = {'ps5-proton/LICENSE': 'LICENSE', 'ps5-proton/NOTICE.md': 'NOTICE.md', 'ps
 # Mesa's licence page, the same at the RADV (PS5_Vulkan's export) and WGL/Zink (b3588f78) revisions.
 MESA = '.deps/mesa-foundation-wgl/source/docs/license.rst'
 
-# The PS5 OpenGL SDK 1.0.0 (tools/fetch-opengl-sdk.sh), statically linked into the runtime's win32u.prx: its licence,
+# The PS5 OpenGL SDK 1.0.2 (tools/fetch-opengl-sdk.sh), statically linked into the runtime's win32u.prx: its licence,
 # its third-party notices and every component licence its package carries.
-OPENGL_SDK = '.deps/ps5-opengl-sdk-1.0.0'
+OPENGL_SDK = '.deps/ps5-opengl-sdk-1.0.2'
 OPENGL_SDK_TEXTS = ['LICENSE', 'THIRD_PARTY_NOTICES.md', 'LICENSES/Dear-ImGui.txt', 'LICENSES/Mesa/Apache-2.0', 'LICENSES/Mesa/BSL-1.0', 'LICENSES/Mesa/exceptions/Linux-Syscall-Note', 'LICENSES/Mesa/GPL-1.0-or-later', 'LICENSES/Mesa/GPL-2.0-only', 'LICENSES/Mesa/MIT', 'LICENSES/Mesa/SGI-B-2.0', 'LICENSES/NanoVG.txt', 'LICENSES/OpenGNM-PSBC.txt', 'LICENSES/OpenGNM.txt', 'LICENSES/SDL2.txt', 'LICENSES/Sokol-Samples.txt', 'LICENSES/Sokol.txt', 'LICENSES/SPIRV-Headers.txt', 'LICENSES/vecmath.txt', 'LICENSES/VK-GL-CTS.txt', 'LICENSES/Vulkan-Headers.txt']
 
 RUNTIME = {

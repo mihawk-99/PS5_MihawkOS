@@ -105,8 +105,8 @@ fetch "$deps/GE-Proton11-7-x86_64.tar.gz" \
     "$ge_sha256"
 # The OpenGL SDK linked into the title's win32u.prx; tools/fetch-opengl-sdk.sh holds its pin and unpacks it.
 opengl_sha256=$(sed -n 's/^digest=//p' "$root/tools/fetch-opengl-sdk.sh")
-fetch "$deps/ps5-opengl-sdk-1.0.0.tar.gz" \
-    https://github.com/blackbearreloaded/ps5-opengl/releases/download/v1.0.0/ps5-opengl-sdk-1.0.0.tar.gz "$opengl_sha256"
+fetch "$deps/ps5-opengl-sdk-1.0.2.tar.gz" \
+    https://github.com/darkxex/ps5-opengl/releases/download/v1.0.2/ps5-opengl-sdk-1.0.2.tar.gz "$opengl_sha256"
 $check || bash "$root/tools/fetch-opengl-sdk.sh"
 # The Lapy daemon's inputs, pinned in tools/build-lapy-validation.py: the upstream payload SDK v0.42, and the logger
 # header at prospero-win e665a2c (that revision carries no licence, so it is fetched, never vendored).

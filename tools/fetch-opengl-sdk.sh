@@ -2,8 +2,8 @@
 # SPDX-License-Identifier: GPL-3.0-or-later
 set -euo pipefail
 root=$(cd -- "$(dirname -- "$0")/.." && pwd)
-version=1.0.0
-digest=f93643c04c843d56143b00951df1f8042ea7706ae9f19e4e9abf158e1ead77c5
+version=1.0.2
+digest=30d8e51dd062739b629346102be5932728ba714bc50b1bdcdf08306c8843d9a4
 archive="$root/.deps/ps5-opengl-sdk-$version.tar.gz"
 prefix="$root/.deps/ps5-opengl-sdk-$version"
 mkdir -p "$root/.deps"
