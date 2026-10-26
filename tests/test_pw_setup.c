@@ -155,9 +155,11 @@ int main(int argc, char **argv)
             assert(placeholders(text) == placeholders(english->text[key]));
         }
     }
-    assert(shown == 10 && pw_setup_language("ja-JP") && !pw_setup_language("en-GB") && !pw_setup_language(NULL));
+    assert(shown == 10 && pw_setup_language("sv-SE") && pw_setup_language("ja-JP") &&
+           !pw_setup_language("en-GB") && !pw_setup_language(NULL));
     assert(!strcmp(pw_setup_text(NULL, PW_TEXT_CONTINUE), "Continue"));
     assert(!strcmp(pw_setup_text(pw_setup_language("fr-FR"), PW_TEXT_CONTINUE), "Continuer"));
+    assert(!strcmp(pw_setup_text(pw_setup_language("sv-SE"), PW_TEXT_CONTINUE), "Fortsätt"));
 
     /* Filling placeholders. */
     char out[64];
@@ -171,6 +173,8 @@ int main(int argc, char **argv)
     assert(!strcmp(out, "1.19 GB"));
     pw_setup_gigabytes(pw_setup_language("fr-FR"), 3000000000ull, out, sizeof(out));
     assert(!strcmp(out, "3,00 Go"));
+    pw_setup_gigabytes(pw_setup_language("sv-SE"), 3000000000ull, out, sizeof(out));
+    assert(!strcmp(out, "3,00 GB"));
 
     /* The record. */
     char folder[] = "/tmp/proton-setup-XXXXXX", path[256];
