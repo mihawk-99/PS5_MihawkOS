@@ -1,0 +1,108 @@
+From 0000000000000000000000000000000000000000 Mon Sep 17 00:00:00 2001
+From: Mihawk <163614687+mihawk-99@users.noreply.github.com>
+Date: Thu, 29 Oct 2026 16:00:00 -0400
+Subject: [PATCH] win32u: ps5: time font setup and the desktop wallpaper in every process.
+
+Installers start hundreds of short processes (the DirectX redistributable: about 150 infinst and regsvr32
+runs), and every one that starts user32 sets up fonts and the PS5 display driver before its program runs.
+The 2026-10-25 installer slice put about 58 ms in the gap that holds font setup (270 of 287 helpers) and
+50 ms in the one that holds the wallpaper decode (83 helpers); neither is stamped. One line each, on the PS5
+only: font_init's FreeType start, the font-file scan and the registry cache step, and the wallpaper's
+decode, in microseconds (PS5_Proton tools/start_stages.py keeps their medians).
+---
+--- a/dlls/win32u/font.c
++++ b/dlls/win32u/font.c
+@@ -45,6 +45,19 @@
+ #include "wine/rbtree.h"
+ #include "wine/debug.h"
+ 
++#ifdef __PROSPERO__
++#include <stdio.h>
++#include <time.h>
++/* PS5: font_init's steps in microseconds, one line per process, for the installer timing (PS5_Proton
++ * tools/start_stages.py: every helper that starts user32 pays them). */
++static long long font_clock_us(void)
++{
++    struct timespec now;
++    clock_gettime( CLOCK_MONOTONIC, &now );
++    return now.tv_sec * 1000000ll + now.tv_nsec / 1000;
++}
++#endif
++
+ WINE_DEFAULT_DEBUG_CHANNEL(font);
+ 
+ static HKEY wine_fonts_key;
+@@ -6774,6 +6787,9 @@
+     HANDLE mutex;
+     DWORD disposition;
+     UINT dpi = 0;
++#ifdef __PROSPERO__
++    long long began = font_clock_us(), freetype_us = 0, files_us = 0;
++#endif
+ 
+     static WCHAR wine_font_mutexW[] =
+         {'\\','B','a','s','e','N','a','m','e','d','O','b','j','e','c','t','s',
+@@ -6790,10 +6806,16 @@
+ 
+     if (!(font_funcs = init_freetype_lib()))
+         return dpi;
++#ifdef __PROSPERO__
++    freetype_us = font_clock_us();
++#endif
+ 
+     load_system_bitmap_fonts();
+     load_file_system_fonts();
+     font_funcs->load_fonts();
++#ifdef __PROSPERO__
++    files_us = font_clock_us();
++#endif
+ 
+     attr.Attributes = OBJ_OPENIF;
+     attr.ObjectName = &name;
+@@ -6826,6 +6848,14 @@
+     load_system_links();
+     dump_gdi_font_list();
+     dump_gdi_font_subst();
++#ifdef __PROSPERO__
++    {
++        long long ended = font_clock_us();
++        fprintf( stderr, "wine-ps5: fonts ready us=%lld freetype_us=%lld files_us=%lld cache_us=%lld cache_made=%d\n",
++                 ended - began, freetype_us - began, files_us - freetype_us, ended - files_us,
++                 disposition == REG_CREATED_NEW_KEY );
++    }
++#endif
+     return dpi;
+ }
+ 
+--- a/dlls/win32u/ps5drv.c
++++ b/dlls/win32u/ps5drv.c
+@@ -46,6 +46,7 @@
+ #include <stdio.h>
+ #include <stdlib.h>
+ #include <string.h>
++#include <time.h>
+ #include <unistd.h>
+ 
+ #include "ntstatus.h"
+@@ -1229,6 +1230,8 @@
+         extern int pw_wine_wallpaper_load( const char *, UINT32 *, unsigned, unsigned );
+         const char *prefix = getenv( "WINEPREFIX" );
+         char path[4096];
++        struct timespec began, ended;
++        clock_gettime( CLOCK_MONOTONIC, &began );
+         if (prefix && snprintf( path, sizeof(path), "%s/drive_c/windows/web/wallpaper/proton.bmp", prefix ) < sizeof(path) &&
+             (background = malloc( (size_t)screen_width * screen_height * sizeof(*background) )))
+         {
+@@ -1237,8 +1240,10 @@
+                 free( background );
+                 background = NULL;
+             }
+-            fprintf( stderr, "wine-ps5: managed wallpaper %s desktop=%ux%u\n",
+-                     background ? "loaded" : "absent", screen_width, screen_height );
++            clock_gettime( CLOCK_MONOTONIC, &ended );
++            fprintf( stderr, "wine-ps5: managed wallpaper %s desktop=%ux%u us=%lld\n",
++                     background ? "loaded" : "absent", screen_width, screen_height,
++                     (ended.tv_sec - began.tv_sec) * 1000000ll + (ended.tv_nsec - began.tv_nsec) / 1000 );
+         }
+     }
+     present_frame = dlsym( RTLD_DEFAULT, "pw_wine_present" );

@@ -5,6 +5,9 @@
 /* Experimental owning-title broker. Close only after Sony has ended the service. */
 /* local: offer clients device-local memory from the owner's direct pool, beside their shared host-visible memory. */
 bool proton_gpu_broker_start(bool capture,bool local=false);
+/* Called when a program's device-local (graphics) memory is refused for want of direct memory (graphics patch 0042);
+ * set before the broker starts. On the broker's thread, under its lock: it only records. */
+void proton_gpu_broker_set_local_refused(void (*hook)(int pid,unsigned long long bytes));
 int proton_gpu_broker_open(int *cookie,int pid);
 /* The slot of the one Windows program the title runs itself (docs/TITLE_CLIENT.md, graphics patch 0031). */
 int proton_gpu_broker_open_in_owner(int *cookie);

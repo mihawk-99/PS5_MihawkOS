@@ -255,7 +255,7 @@ static int warm_take_alive(int *fd, int *pid)
     return 0;
 }
 static int spawn_native(int server_fd, const struct pw_child_bootstrap *boot, int *native_pid);
-struct spawn_work { struct pw_child_spawn request; int fds[2]; };
+struct spawn_work { struct pw_child_spawn request; int fds[2]; long long received_ms; };
 static void *spawn_worker(void *opaque)
 {
     struct spawn_work *work=opaque;
@@ -285,6 +285,9 @@ static void *spawn_worker(void *opaque)
     struct pw_child_message reply={PW_CHILD_PROTOCOL,PW_CHILD_SPAWN_REPLY,work->request.message.pid,result ? errno : 0,native_pid};
     if(pw_child_send(work->fds[1],&reply,sizeof(reply),NULL,0) && !result && native_pid!=getpid()) pw_ps5_remote_close(native_pid);
     fprintf(stderr,"wine-ps5: broker requester=%d child=%d status=%d\n",reply.pid,native_pid,reply.value);
+    /* A helper's request on the title's clock (tools/start_stages.py): read from its control socket, then answered. */
+    fprintf(stderr,"wine-ps5: spawn served requester=%d native=%d received_ms=%lld replied_ms=%lld\n",reply.pid,native_pid,
+            work->received_ms,payload_ms());
     close(work->fds[0]);close(work->fds[1]);free(work);
     pthread_mutex_lock(&child_lock);--pending_spawns;pthread_mutex_unlock(&child_lock);
     return NULL;
@@ -304,7 +307,7 @@ static int accept_spawn(const struct pw_child_spawn *request, int fds[2])
     struct spawn_work *work=malloc(sizeof(*work));
     int error=ENOMEM;
     if(work) {
-        work->request=*request;memcpy(work->fds,fds,sizeof(work->fds));
+        work->request=*request;memcpy(work->fds,fds,sizeof(work->fds));work->received_ms=payload_ms();
         pthread_mutex_lock(&child_lock);++pending_spawns;pthread_mutex_unlock(&child_lock);
         pthread_t thread;
         error=pthread_create(&thread,NULL,spawn_worker,work);
@@ -471,6 +474,7 @@ static void *monitor_child(void *opaque)
             if(child->initial && !child->unloading)root_result=packet.message.value!=0;
             pthread_mutex_unlock(&child_lock);
             fprintf(stderr,"wine-ps5: child native=%d completion=%#x service=%#x\n",child->pid,(unsigned)packet.message.value,child->service);
+            fprintf(stderr,"wine-ps5: child exit received native=%d ms=%lld\n",child->pid,payload_ms());
             break;
         }
     }
@@ -1002,9 +1006,12 @@ static int spawn_through_owner(int server_fd, const struct pw_child_bootstrap *b
     if(pw_child_socketpair(pair,sizeof(struct pw_child_spawn)))return -1;
     const struct pw_child_spawn request={{PW_CHILD_PROTOCOL,PW_CHILD_SPAWN,getpid(),0,0},*boot};
     int passed[]={server_fd,pair[1]},result=-1;
+    struct pw_child_message reply={0};
+    /* When this process asked the title for a child and when it had the answer (tools/start_stages.py): the first
+     * step of a Windows CreateProcess here, and the time an installer's next custom action waits for its helper. */
+    const long long asked=payload_ms();
     if(!ready(child_control,POLLOUT) || pw_child_send(child_control,&request,sizeof(request),passed,2))goto done;
     close(pair[1]);pair[1]=-1;
-    struct pw_child_message reply;
     // The title answers once the helper is ready or refused.
     if(!ready_for(pair[0],POLLIN,60000) || recv(pair[0],&reply,sizeof(reply),0)!=sizeof(reply) ||
        reply.protocol!=PW_CHILD_PROTOCOL || reply.kind!=PW_CHILD_SPAWN_REPLY || reply.pid!=getpid()) { errno=EPROTO;goto done; }
@@ -1013,7 +1020,10 @@ static int spawn_through_owner(int server_fd, const struct pw_child_bootstrap *b
  done:
     {
         int saved=errno;
-        close(pair[0]);if(pair[1]>=0)close(pair[1]);errno=saved;
+        close(pair[0]);if(pair[1]>=0)close(pair[1]);
+        fprintf(stderr,"wine-ps5: spawn asked ms=%lld replied_ms=%lld child=%lld status=%d\n",asked,payload_ms(),
+                (long long)reply.tid,result ? saved : 0);
+        errno=saved;
     }
     return result;
 }
@@ -1330,10 +1340,34 @@ static int code_round(uint32_t kind, uint64_t hash, uint64_t bytes, int *fd)
     if(ask)*fd=fds[0];
     return 0;
 }
-int pw_ps5_code_ask(uint64_t hash, uint64_t bytes, int *fd) { return code_round(PW_CHILD_CODE_ASK,hash,bytes,fd); }
+/* The round trips' calls and nanoseconds, lock-free (pw_ps5_code_round_timing, the helper's life summary). */
+static uint64_t code_round_calls, code_round_ns;
+static int code_round_timed(int (*round)(uint32_t,const void *,uint64_t,int *),uint32_t kind,const void *key,
+                            uint64_t bytes,int *fd)
+{
+    struct timespec begin,end;
+    clock_gettime(CLOCK_MONOTONIC,&begin);
+    const int status=round(kind,key,bytes,fd);
+    const int saved=errno;
+    clock_gettime(CLOCK_MONOTONIC,&end);
+    __atomic_add_fetch(&code_round_calls,1,__ATOMIC_RELAXED);
+    __atomic_add_fetch(&code_round_ns,(uint64_t)((end.tv_sec-begin.tv_sec)*1000000000ll+(end.tv_nsec-begin.tv_nsec)),
+                       __ATOMIC_RELAXED);
+    errno=saved;
+    return status;
+}
+static int code_round_hash(uint32_t kind,const void *key,uint64_t bytes,int *fd)
+{ return code_round(kind,*(const uint64_t *)key,bytes,fd); }
+unsigned pw_ps5_code_round_timing(uint64_t *out,unsigned count)
+{
+    const uint64_t values[2]={__atomic_load_n(&code_round_calls,__ATOMIC_RELAXED),__atomic_load_n(&code_round_ns,__ATOMIC_RELAXED)};
+    for(unsigned i=0;i<count && i<2;++i)out[i]=values[i];
+    return 2;
+}
+int pw_ps5_code_ask(uint64_t hash, uint64_t bytes, int *fd) { return code_round_timed(code_round_hash,PW_CHILD_CODE_ASK,&hash,bytes,fd); }
 /* 0: the registry kept the object (fd stays the caller's to close). -1 EEXIST/ENOSPC: it did not; anything else: the
  * channel failed. */
-int pw_ps5_code_offer(uint64_t hash, uint64_t bytes, int fd) { return code_round(PW_CHILD_CODE_OFFER,hash,bytes,&fd); }
+int pw_ps5_code_offer(uint64_t hash, uint64_t bytes, int fd) { return code_round_timed(code_round_hash,PW_CHILD_CODE_OFFER,&hash,bytes,&fd); }
 /* The file cluster's object: the first helper's read is the only one; every later helper maps it. */
 static int code_round_file(unsigned kind, const uint64_t file[3], uint64_t bytes, int *fd)
 {
@@ -1361,8 +1395,10 @@ static int code_round_file(unsigned kind, const uint64_t file[3], uint64_t bytes
     if(ask)*fd=fds[0];
     return 0;
 }
-int pw_ps5_code_ask_file(const uint64_t file[3], uint64_t bytes, int *fd) { return code_round_file(PW_CHILD_CODE_ASK_FILE,file,bytes,fd); }
-int pw_ps5_code_offer_file(const uint64_t file[3], uint64_t bytes, int fd) { return code_round_file(PW_CHILD_CODE_OFFER_FILE,file,bytes,&fd); }
+static int code_round_by_file(uint32_t kind,const void *key,uint64_t bytes,int *fd)
+{ return code_round_file(kind,(const uint64_t *)key,bytes,fd); }
+int pw_ps5_code_ask_file(const uint64_t file[3], uint64_t bytes, int *fd) { return code_round_timed(code_round_by_file,PW_CHILD_CODE_ASK_FILE,file,bytes,fd); }
+int pw_ps5_code_offer_file(const uint64_t file[3], uint64_t bytes, int fd) { return code_round_timed(code_round_by_file,PW_CHILD_CODE_OFFER_FILE,file,bytes,&fd); }
 int pw_ps5_child_frame(int fd)
 {
     const struct pw_child_message message={PW_CHILD_PROTOCOL,PW_CHILD_FRAME,getpid(),0,0};

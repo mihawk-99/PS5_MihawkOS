@@ -30,6 +30,7 @@ extern "C" {
 #include "../src/pw_environment.h"
 #include "../src/pw_window_snapshot.h"
 #include "../src/pw_shader_cache.h"
+#include "../src/pw_vm_census.h"
 #include "../src/pw_fd_census.h"
 #include "../src/pw_pipe_memory.h"
 #include "../src/pw_pad_script.h"
@@ -147,6 +148,64 @@ int (*device_gone)(int, int, uint32_t) = nullptr;   // pw_ntsync_process_gone
 // The census of the console's system memory the memory helper takes (src/pw_memory_helper.h).
 int (*memory_census)(pw_memory_census *) = nullptr;
 extern "C" int sceKernelMapDirectMemory(void **, size_t, int, int, int64_t, size_t);
+extern "C" int sceKernelVirtualQuery(const void *, int, void *, size_t);
+
+// The title's own mappings, every 10 s of a session (Alpha 6, docs/PLAN.md Part 3): the GPU broker maps a game's
+// graphics memory here, which no helper's census counts (a Direct3D 12 demo: ~1,000 system page tables in game in no helper).
+static int title_vm_query(void *, uintptr_t address, uint8_t raw[PW_VM_RECORD])
+{
+    const int status = sceKernelVirtualQuery((const void *)address, 1, raw, PW_VM_RECORD);
+    if ((uint32_t)status == UINT32_C(0x8002000d)) return 1;  /* no mapping after address */
+    return status ? -1 : 0;
+}
+
+extern "C" int sceKernelAllocateDirectMemory(int64_t, int64_t, size_t, size_t, int, int64_t *);
+extern "C" int sceKernelReleaseDirectMemory(int64_t, size_t);
+extern "C" int sceKernelMunmap(void *, size_t);
+
+// PROTON_PT2M_TITLE_PROBE=1 (a probe, never a default; docs/PLAN.md Part 3): does the kernel map direct memory that is
+// 2 MiB-aligned at both ends without page-table pages? The title maps 64 MiB of CPU+GPU direct memory as a game's
+// graphics memory is mapped (RADV: type 12, 2 MiB-aligned start), once ending on a 2 MiB line and once 16 KiB past
+// it, touches every page and reads the system's free page tables around it, five rounds each. Then frees it all.
+static void title_pt2m_probe()
+{
+    const size_t mib2 = size_t(2) << 20, base = size_t(64) << 20;
+    auto free_tables = []() -> int {
+        usleep(400000);   // the memory helper's census is read every 100 ms
+        pw_memory_census fresh{};
+        return memory_census && !memory_census(&fresh) ? int(fresh.page_tables_free) : -1;
+    };
+    for (int shape = 0; shape < 2; ++shape)
+        for (int round = 0; round < 5; ++round) {
+            const size_t bytes = shape ? base + 16384 : base;
+            int64_t physical = -1;
+            void *at = nullptr;
+            const int before = free_tables();
+            int status = sceKernelAllocateDirectMemory(0, sceKernelGetDirectMemorySize(), bytes, mib2, 12, &physical);
+            if (!status) status = sceKernelMapDirectMemory(&at, bytes, 0x33, 0, physical, mib2);
+            if (!status)
+                for (size_t off = 0; off < bytes; off += 16384) ((volatile uint8_t *)at)[off] = 1;
+            const int mapped = free_tables();
+            if (!status) sceKernelMunmap(at, bytes);
+            if (physical >= 0) sceKernelReleaseDirectMemory(physical, bytes);
+            const int after = free_tables();
+            say("Wine: pt2m title probe shape=%s round=%d status=%#x at=%p aligned_start=%d free before=%d mapped=%d after=%d "
+                "cost=%d", shape ? "tail-16k" : "aligned", round, (unsigned)status, at, at && !((uintptr_t)at & (mib2 - 1)),
+                before, mapped, after, before - mapped);
+        }
+}
+
+static void title_vm_census_say()
+{
+    static PwVmCensus census;
+    char groups[640], windows[384];
+    pw_vm_census_walk(&census, title_vm_query, nullptr, nullptr);
+    pw_vm_census_format_regions(&census, 6, groups, sizeof(groups));
+    pw_vm_census_format_windows(&census, 8, windows, sizeof(windows));
+    say("Wine: title vm page tables ~%llu (2m-direct %llu) mappings=%u%s by group %s; windows %s",
+        (unsigned long long)census.regions_2m, (unsigned long long)census.regions_2m_direct, census.mappings,
+        census.truncated ? " (truncated)" : census.failed ? " (walk failed)" : "", groups, windows);
+}
 // The first and the latest cold helper start (wine/ps5/pw_wine_process.h), for STOP's slowdown trigger.
 void (*start_times)(uint64_t *, uint64_t *) = nullptr;
 // The helpers' mappings of shared code copies beyond the first of each (wine/ps5/pw_wine_codeshare.h), which the census
@@ -176,11 +235,20 @@ void (*owner_wait)() = nullptr;
 // for the launcher, which shows it after the session (PROTON_SESSION_NOTICES), in case it was missed. Each kind is said
 // once a session, from the title's loop or on the way back to the launcher; any other thread only fills its slot.
 enum NoticeKind { NOTICE_MEMORY_CLOSE, NOTICE_MEMORY_END, NOTICE_SPAWN, NOTICE_GPU, NOTICE_FOLDER,
-                  NOTICE_MEMORY_SWAP, NOTICE_TEST, NOTICE_PAYLOADS, NOTICE_KINDS };
+                  NOTICE_MEMORY_SWAP, NOTICE_TEST, NOTICE_PAYLOADS, NOTICE_GPU_MEMORY, NOTICE_KINDS };
 // 0 empty, 1 being written, 2 ready, 3 kept for the launcher and posted
 struct Notice { std::atomic<int> state{0}; char text[512]; };
 Notice notices[NOTICE_KINDS];
 std::atomic<int> spawn_errno{0}, spawn_pid{0}, gpu_lost_pid{0};   // from Wine's helpers (pw_ps5_set_child_notice), for the loop
+// The first program whose graphics memory the broker refused for want of direct memory, and its request (graphics patch
+// 0042): a game then stops on its own "out of memory", which names no cause.
+std::atomic<int> gpu_memory_pid{0};
+std::atomic<unsigned long long> gpu_memory_bytes{0};
+void gpu_memory_refused(int pid, unsigned long long bytes)
+{
+    int none = 0;
+    if (gpu_memory_pid.compare_exchange_strong(none, pid > 0 ? pid : -1)) gpu_memory_bytes.store(bytes);
+}
 std::atomic<bool> spawn_said{false};
 std::string session_prefix;                         // the session's prefix, set before Wine starts
 
@@ -241,6 +309,14 @@ void notices_post()
     }
     if (gpu_lost_pid.load(std::memory_order_relaxed))
         notice_set(NOTICE_GPU, "A program stopped: the GPU did not answer it.");
+    if (const int pid = gpu_memory_pid.load(std::memory_order_relaxed)) {
+        static std::atomic<bool> said{false};
+        if (!said.exchange(true))
+            say("Wine: process %d asked for %llu MiB more graphics memory than the console had free", pid,
+                gpu_memory_bytes.load() >> 20);
+        notice_set(NOTICE_GPU_MEMORY, "The game ran out of graphics memory: the PS5 shares its memory between the game "
+                   "and its graphics. Lower its texture quality or other graphics settings.");
+    }
     // Kept, then posted, each once (2 to 3), whichever thread gets there. The payload tip is only kept, for the
     // launcher: a system notification draws over the game's top right (the gate's window captures on the Pro,
     // memplan-pro-gate-2026-10-28-01: host-dmem64's pixel at 1801,102 read the notification's blue).
@@ -2428,6 +2504,7 @@ void proton_run_wine()
             }
             proton_gpu_broker_set_windows(window_surfaces ? server_windows : nullptr);
             if(set_windows)set_windows(window_surfaces ? proton_gpu_broker_window_attach : nullptr);
+            proton_gpu_broker_set_local_refused(gpu_memory_refused);
             if(!set_gpu || !proton_gpu_broker_start(capture && !strcmp(capture,"1"),local && !strcmp(local,"1"))) {
                 fail("PS5_PROTON_OWNER_BOOTSTRAP FAIL GPU broker startup");
             }
@@ -3405,6 +3482,9 @@ void proton_run_wine()
         // everything it wrote: a launcher ran its DirectX and Visual C++ install scripts again in the next session
         // because their markers had never reached the disk (runprocess_log.txt: two full runs, 2026-10-10 21:00 and
         // 21:22). A clean registry is skipped by the server, so the request costs nothing when nothing changed.
+        if (tick && tick % 1250 == 0) title_vm_census_say();
+        if (tick == 2500 && getenv("PROTON_PT2M_TITLE_PROBE") && !strcmp(getenv("PROTON_PT2M_TITLE_PROBE"), "1"))
+            title_pt2m_probe();
         if (tick && tick % 3750 == 0 && flush_registry) {
             const uint64_t begin = sceKernelGetProcessTime();
             const int status = flush_registry(3000);

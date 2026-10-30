@@ -110,15 +110,20 @@ int main(void)
         char text[256];
         pw_vm_census_format_regions(&counted, 8, text, sizeof(text));
         assert(!strcmp(text, "c:01=6/1 a:01=1/1 far:01=1/1"));
-        /* A direct mapping aligned to 2 MiB at both ends is counted apart (no page-table page); one that is not, as usual. */
+        /* By 1 GiB window, regions/MiB: 7 for 14 MiB in the first, 1 for a page at 2 GiB; one window shown leaves the other. */
+        pw_vm_census_format_windows(&counted, 8, text, sizeof(text));
+        assert(!strcmp(text, "0x0=7/14 0x2=1/1"));
+        pw_vm_census_format_windows(&counted, 1, text, sizeof(text));
+        assert(!strcmp(text, "0x0=7/14 +1"));
+        /* A direct mapping aligned to 2 MiB at both ends still costs its regions, and is shown apart. */
         static const Fake direct[] = {
             {0x40000000ull, 0x40800000ull, 3, 2, "dmem", 0}, {0x40900000ull, 0x40a00000ull, 3, 2, "dmem-small", 0},
         };
         Space space2 = {direct, 2, -1, 0};
         pw_vm_census_walk(&counted, query, NULL, &space2);
-        assert(counted.regions_2m_direct == 4 && counted.regions_2m == 1);
+        assert(counted.regions_2m_direct == 4 && counted.regions_2m == 5);
         pw_vm_census_format_regions(&counted, 8, text, sizeof(text));
-        assert(!strcmp(text, "dmem-small:02=1/1 dmem:02=0+2m-direct 4/1"));   /* by page-table cost first */
+        assert(!strcmp(text, "dmem:02=4 (2m-direct 4)/1 dmem-small:02=1/1"));   /* by page-table cost first */
     }
     assert(census.flexible == (64 + 512 + 64 + 1) * (uint64_t)MIB && census.direct == 600ull * MIB);
     assert(census.other == 10000ull * MIB);

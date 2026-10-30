@@ -120,7 +120,7 @@ if(PS5_HOST_REFERENCE)
 else()
 	set(platform_source src/platform.c)
 	list(APPEND platform_source
-		${ROOT}/native/proton_wine.cpp ${ROOT}/native/proton_loading.cpp ${ROOT}/src/pw_loading_art.c ${ROOT}/src/pw_steam_screen.c ${ROOT}/native/proton_limits_probe.cpp ${ROOT}/native/proton_sched_probe.cpp ${ROOT}/native/pw_audio_ps5.c
+		${ROOT}/native/proton_wine.cpp ${ROOT}/native/proton_loading.cpp ${ROOT}/src/pw_loading_art.c ${ROOT}/src/pw_steam_screen.c ${ROOT}/src/pw_vm_census.c ${ROOT}/native/proton_limits_probe.cpp ${ROOT}/native/proton_sched_probe.cpp ${ROOT}/native/pw_audio_ps5.c
 		${ROOT}/src/pw_wine_start.c ${ROOT}/src/pw_environment.c ${ROOT}/src/pw_wine_launch.c ${ROOT}/src/pw_wine_profile.c ${ROOT}/src/pw_shader_cache.c ${ROOT}/src/pw_fd_census.c ${ROOT}/src/pw_pipe_memory.c ${ROOT}/src/pw_pad_script.c ${ROOT}/src/pw_memory_guard.c ${ROOT}/src/pw_desktop_session.c ${ROOT}/src/pw_app_environment.c ${ROOT}/src/pw_shell_link.c ${ROOT}/src/pw_game_folders.c ${ROOT}/src/pw_usb_input.c ${ROOT}/src/pw_aurelia.c ${ROOT}/src/pw_steamcmd.c ${ROOT}/src/pw_steamcmd_setup.c ${ROOT}/native/pw_usb_input_ps5.c
 		${ROOT}/src/pw_elfldr.c ${ROOT}/wine/ps5/pw_wine_prx.c
 		${ROOT}/src/pw_hang_breaker.c ${ROOT}/src/pw_start_failure.c ${ROOT}/src/pw_firmware.c ${ROOT}/native/pw_firmware_ps5.c ${ROOT}/src/pw_flight_probe.c ${ROOT}/native/proton_flight_recorder.cpp)

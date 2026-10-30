@@ -1,0 +1,152 @@
+{
+ "what": "installer speed on the base PS5 (13.60), before and after: missed module opens skip the loader (pw_wine_dl.c), the wallpaper is decoded on the first desktop compose (patch 2402)",
+ "pc": {
+  "dxsetup": {
+   "install": 11977,
+   "reinstall": 11833
+  },
+  "vcredist": {
+   "install": 1274,
+   "reinstall": 1085,
+   "uninstall": 1070
+  },
+  "source": "evidence/installer-slice/host-*.json (2026-10-25, same Wine pin)"
+ },
+ "before": {
+  "build": "9f8c746931087b02",
+  "dxsetup": {
+   "ms": {
+    "install": 97928,
+    "reinstall": 89362
+   },
+   "checks": "dxsetup, 18 checks, 0 failed, 188846 ms in all",
+   "run": "installer-dxsetup-2026-10-29-163636",
+   "starts": 226,
+   "warm_starts": 223,
+   "median_warm_points": {
+    "ready": 34,
+    "first-dll": 90,
+    "last-dll": 330,
+    "exit": 422.0,
+    "ending": 454.0
+   },
+   "median_warm_life": {
+    "dl_missed_calls": 18.0,
+    "dl_missed_ms": 135.0,
+    "dl_found_ms": 18.0,
+    "convert_ms": 12.0,
+    "fonts_us": 35303.5,
+    "fonts_files_us": 22010.5,
+    "fonts_freetype_us": 9336.5,
+    "wallpaper_us": 25071
+   },
+   "median_chain": {
+    "from_end_ms": 282.0,
+    "from_exit_ms": 244.0,
+    "from_exit_received_ms": 245.0
+   }
+  },
+  "vcredist": {
+   "ms": {
+    "install": 12002,
+    "reinstall": 9268,
+    "uninstall": 9876
+   },
+   "checks": "vcredist, 22 checks, 1 failed, 34545 ms in all",
+   "run": "installer-vcredist-2026-10-29-164244",
+   "starts": 27,
+   "warm_starts": 25,
+   "median_warm_points": {
+    "ready": 35,
+    "first-dll": 103,
+    "last-dll": 1672,
+    "exit": 3913.5,
+    "ending": 3959.0
+   },
+   "median_warm_life": {
+    "dl_missed_calls": 39.0,
+    "dl_missed_ms": 293.0,
+    "dl_found_ms": 67.0,
+    "convert_ms": 39.0,
+    "fonts_us": 44846,
+    "fonts_files_us": 32560,
+    "fonts_freetype_us": 9502,
+    "wallpaper_us": 25161.0
+   },
+   "median_chain": {
+    "from_end_ms": 185,
+    "from_exit_ms": 11,
+    "from_exit_received_ms": 10.0
+   }
+  }
+ },
+ "after": {
+  "build": "3a69a890ad520904",
+  "gate": "installer-speed-base-2026-10-29-01 (47c64616de1123ef, 104/104)",
+  "dxsetup": {
+   "ms": {
+    "install": 78279,
+    "reinstall": 73238
+   },
+   "checks": "dxsetup, 18 checks, 0 failed, 152691 ms in all",
+   "run": "installer-dxsetup-2026-10-29-173516",
+   "starts": 226,
+   "warm_starts": 223,
+   "median_warm_points": {
+    "ready": 35,
+    "first-dll": 90,
+    "last-dll": 213,
+    "exit": 270.0,
+    "ending": 351
+   },
+   "median_warm_life": {
+    "dl_missed_calls": 18.0,
+    "dl_missed_ms": 1.0,
+    "dl_found_ms": 19.0,
+    "convert_ms": 12.0,
+    "fonts_us": 35278.5,
+    "fonts_files_us": 21977.0,
+    "fonts_freetype_us": 9380.5,
+    "wallpaper_us": 20547
+   },
+   "median_chain": {
+    "from_end_ms": 237,
+    "from_exit_ms": 239.0,
+    "from_exit_received_ms": 236.0
+   }
+  },
+  "vcredist": {
+   "ms": {
+    "install": 9832,
+    "reinstall": 7211,
+    "uninstall": 7617
+   },
+   "checks": "vcredist, 22 checks, 1 failed, 27863 ms in all",
+   "run": "installer-vcredist-2026-10-29-174048",
+   "starts": 27,
+   "warm_starts": 25,
+   "median_warm_points": {
+    "ready": 36,
+    "first-dll": 106,
+    "last-dll": 1330,
+    "exit": 3072,
+    "ending": 3251
+   },
+   "median_warm_life": {
+    "dl_missed_calls": 39,
+    "dl_missed_ms": 2,
+    "dl_found_ms": 70,
+    "convert_ms": 37,
+    "fonts_us": 45331,
+    "fonts_files_us": 31270,
+    "fonts_freetype_us": 9574,
+    "wallpaper_us": 21256.0
+   },
+   "median_chain": {
+    "from_end_ms": 181,
+    "from_exit_ms": 11,
+    "from_exit_received_ms": 10.5
+   }
+  }
+ }
+}

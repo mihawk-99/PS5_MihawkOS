@@ -21,7 +21,14 @@ OWNER = [
     'sent=10 ready=200',
     '[MihawkOS] wine-ps5: spawn native=788 request_ms=20000 lock=5 read=-1 answered=-1 connected=-1 attempts=0 held=-1 '
     'sent=3 ready=150 warm=1',
+    # The request's and the exit's way through the title, for a parent (900) that started 785 and then 786.
+    '[MihawkOS] wine-ps5: spawn served requester=900 native=785 received_ms=998 replied_ms=1605',
+    '[MihawkOS] wine-ps5: child exit received native=785 ms=2030',
+    '[MihawkOS] wine-ps5: spawn served requester=900 native=786 received_ms=4999 replied_ms=5505',
 ]
+PARENT_900 = """wine-ps5: spawn asked ms=997 replied_ms=1606 child=785 status=0
+wine-ps5: spawn asked ms=4998 replied_ms=5506 child=786 status=0
+"""
 CHILD_788 = """wine-child: start at=main ms=12000
 wine-child: start at=control ms=12080
 wine-child: start at=entry ms=12081
@@ -39,14 +46,16 @@ wine-child: start at=ntdll-loaded ms=1540
 wine-child: start at=wine-main ms=1610
 1.700:0020:0024:trace:loaddll:build_module Loaded L"C:\\\\windows\\\\system32\\\\iexplore.exe" at 0000000140000000: builtin
 1.950:0020:0024:trace:loaddll:build_module Loaded L"C:\\\\windows\\\\system32\\\\user32.dll" at 000000DFFF650000: builtin
-wine-child: life summary ms=2010 server_calls=900 server_ms=120 file_read_calls=40 file_read_ms=9 file_open_calls=30 file_open_ms=6 file_attributes_ms=1 file_information_ms=2 section_map_calls=12 section_map_ms=33 section_fault_calls=0 section_fault_ms=0
+wine-child: life summary ms=2010 server_calls=900 server_ms=120 file_read_calls=40 file_read_ms=9 file_open_calls=30 file_open_ms=6 file_attributes_ms=1 file_information_ms=2 section_map_calls=12 section_map_ms=33 section_fault_calls=0 section_fault_ms=0 convert_calls=29 convert_ms=180 image_read_calls=40 image_read_ms=25 code_round_calls=120 code_round_ms=60 dl_found_calls=3 dl_found_ms=12 dl_missed_calls=22 dl_missed_ms=70 exit_ms=2020
+wine-ps5: fonts ready us=58000 freetype_us=9000 files_us=41000 cache_us=8000 cache_made=0
+wine-ps5: managed wallpaper loaded desktop=1920x1080 us=45000
 wine-child: payload ending monotonic_ms=2050
 """
 
 
 class StartStages(unittest.TestCase):
     def test_points_steps_and_medians(self):
-        record = start_stages.summary(OWNER, {785: CHILD_785, 786: '', 788: CHILD_788})
+        record = start_stages.summary(OWNER, {785: CHILD_785, 786: '', 788: CHILD_788, 900: PARENT_900})
         self.assertEqual(record['starts'], 4)
         self.assertEqual(record['warm_starts'], 1)
         first = record['helpers']['785']
@@ -65,6 +74,28 @@ class StartStages(unittest.TestCase):
         self.assertEqual(sum(first['steps'].values()), first['points']['ending'])
         self.assertEqual(first['life']['section_map_ms'], 33)
         self.assertNotIn('ms', first['life'])
+        # Where module loading went, and its run medians (only helpers that printed a summary count).
+        self.assertEqual(first['life']['convert_ms'], 180)
+        self.assertEqual(record['median']['life']['dl_missed_ms'], 70)
+        self.assertEqual(record['median']['life']['convert_calls'], 29)
+        # Font setup and the wallpaper, from their own lines (patch 2153), beside the counters.
+        self.assertEqual(first['life']['fonts_us'], 58000)
+        self.assertEqual(first['life']['fonts_files_us'], 41000)
+        self.assertEqual(first['life']['fonts_freetype_us'], 9000)
+        self.assertEqual(record['median']['life']['wallpaper_us'], 45000)
+        self.assertNotIn('fonts_cache_made_us', first['life'])
+        # The parent's ask and the title's receipt come before the request; the program's own exit is a point.
+        self.assertEqual(first['points']['asked'], -3)
+        self.assertEqual(first['points']['received'], -2)
+        self.assertEqual(first['points']['replied'], 605)
+        self.assertEqual(first['points']['exit'], 1020)
+        self.assertEqual(first['points']['exit-received'], 1030)
+        self.assertNotIn('exit_ms', first['life'])
+        self.assertNotIn('asked', first['steps'])
+        # The chain: 786 was asked for 2,978 ms after 785 exited, 2,948 after it was gone.
+        self.assertEqual(record['chain'], [{'parent': 900, 'previous': 785, 'next': 786, 'from_exit_ms': 2978,
+                                            'from_exit_received_ms': 2968, 'from_end_ms': 2948}])
+        self.assertEqual(record['median_chain']['from_end_ms'], 2948)
         # A start without a helper log keeps the title's points; steps the title did not reach (-1) are absent.
         self.assertEqual(record['helpers']['786']['points']['ready'], 500)
         self.assertIsNone(record['helpers']['786']['life'])

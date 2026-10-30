@@ -34,6 +34,10 @@ static unsigned long long proton_gpu_host_limit()
     const unsigned long long mib=text && *text ? strtoull(text,nullptr,10) : 1024;
     return mib<<20;
 }
+void proton_gpu_broker_set_local_refused(void (*hook)(int pid,unsigned long long bytes))
+{
+    ps5_gpu_broker_set_local_refused(hook);
+}
 bool proton_gpu_broker_start(bool capture,bool local)
 {
     const unsigned long long host=proton_gpu_host_limit();

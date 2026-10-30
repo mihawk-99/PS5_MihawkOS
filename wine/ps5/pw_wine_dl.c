@@ -2,6 +2,7 @@
 #include "pw_wine_dl.h"
 #include "pw_wine_prx.h"
 #include <pthread.h>
+#include <time.h>
 #include <stdio.h>
 #include <stdlib.h>
 #include <string.h>
@@ -104,6 +105,9 @@ static int32_t load_one(const char *path)
 {
     int result=0;
     append(" ");append(path);
+    /* Every builtin DLL without a Unix side asks for one (18 per DirectX-setup process): asking the loader for a file
+     * that is not there cost 7.5 ms a miss, two tries each (installer-dxsetup-2026-10-29-163636); a stat costs none. */
+    if(access(path,F_OK))return -1;
     trace_load(path,1,0);
     const int32_t handle=ops.load_start?ops.load_start(path,0,NULL,0,NULL,&result):-1;
     trace_load(path,0,handle);
@@ -178,16 +182,34 @@ static void *open_locked(const char *path)
     if(start)(void)start(0,NULL);
     return module;
 }
+/* Opens that found a module and those that found none (every builtin DLL without a Unix side asks once), as calls
+ * and nanoseconds including the wait for this lock; lock-free reads for the helper's life summary. */
+static uint64_t open_found_calls,open_found_ns,open_missed_calls,open_missed_ns;
+unsigned pw_wine_dl_timing(uint64_t *out,unsigned count)
+{
+    const uint64_t values[4]={__atomic_load_n(&open_found_calls,__ATOMIC_RELAXED),__atomic_load_n(&open_found_ns,__ATOMIC_RELAXED),
+                              __atomic_load_n(&open_missed_calls,__ATOMIC_RELAXED),__atomic_load_n(&open_missed_ns,__ATOMIC_RELAXED)};
+    for(unsigned i=0;i<count && i<4;i++)out[i]=values[i];
+    return 4;
+}
 void *pw_wine_dl_open(const char *path)
 {
     if(!path || !*path || strlen(path)>=PW_WINE_DL_MAX_PATH){set_error("invalid path");return NULL;}
     char line[PW_WINE_DL_REPORT];
+    struct timespec begin,end;
+    clock_gettime(CLOCK_MONOTONIC,&begin);
     pthread_mutex_lock(&lock);
     report_used=0;report[0]=0;
     append("pw_wine_dl: cannot open ");append(path);append(", tried");
     void *handle=open_locked(path);
     if(!handle)memcpy(line,report,report_used+1);
     pthread_mutex_unlock(&lock);
+    clock_gettime(CLOCK_MONOTONIC,&end);
+    {
+        const uint64_t ns=(uint64_t)((end.tv_sec-begin.tv_sec)*1000000000ll+(end.tv_nsec-begin.tv_nsec));
+        __atomic_add_fetch(handle?&open_found_calls:&open_missed_calls,1,__ATOMIC_RELAXED);
+        __atomic_add_fetch(handle?&open_found_ns:&open_missed_ns,ns,__ATOMIC_RELAXED);
+    }
     /* One line per failure, outside the lock: the report may log. */
     if(!handle && ops.report)ops.report(line);
     return handle;

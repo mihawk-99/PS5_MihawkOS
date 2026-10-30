@@ -1,0 +1,79 @@
+From: PS5_Proton <local>
+Subject: [PATCH] gpu-broker client: say each allocation it refuses, with its reason (diagnostic)
+--- a/tooling/gpu-broker/client.c
++++ b/tooling/gpu-broker/client.c
+@@ -193,17 +193,31 @@
+ uint64_t ps5_gpu_client_local_limit(void) { return local_limit; }
+ uint64_t ps5_gpu_client_local_allocated(void) { return __atomic_load_n(&local_allocated,__ATOMIC_RELAXED); }
+ /* Device-local memory: the owner allocates and maps it for the GPU; this process gets only its address. */
++/* Every allocation this client refuses, said once with its reason (PS5_Proton patch 0040, diagnostic): a game's
++ * E_OUTOFMEMORY otherwise names no layer. The first 32, then one in 256. */
++static unsigned long refusals;
++static void refused(const char *kind,const char *why,uint64_t bytes,uint64_t alignment,uint64_t limit)
++{
++    const unsigned long n=__atomic_add_fetch(&refusals,1,__ATOMIC_RELAXED);
++    if(n<=32 || !(n%256))
++        fprintf(stderr,"gpu-client refused %s: %s bytes=%llu alignment=%llu limit=%llu (%lu refused)\n",kind,why,
++                (unsigned long long)bytes,(unsigned long long)alignment,(unsigned long long)limit,n);
++}
+ bool ps5_gpu_client_alloc_local(uint64_t bytes,uint64_t alignment,bool window32,bool zero,struct radv_ps5_memory *out)
+ {
+-    if(!local_limit || !bytes || bytes>local_limit || alignment>PW_GPU_ALIGNMENT_MAX || (alignment && (alignment&(alignment-1))))
++    if(!local_limit || !bytes || bytes>local_limit || alignment>PW_GPU_ALIGNMENT_MAX || (alignment && (alignment&(alignment-1)))) {
++        refused("local",!local_limit ? "no local memory" : bytes>local_limit ? "over the limit" :
++                alignment>PW_GPU_ALIGNMENT_MAX ? "alignment over 2 MiB" : "bad size or alignment",bytes,alignment,local_limit);
+         return false;
++    }
+     PwGpuMessage message={.operation=PW_GPU_ALLOC,.bytes=bytes,.argument={alignment,window32,PW_GPU_ALLOC_LOCAL|(zero ? PW_GPU_ALLOC_ZERO : 0)}};
+-    if(rpc(&message,NULL))return false;
++    if(rpc(&message,NULL)) { refused("local","the broker said no",bytes,alignment,local_limit);return false; }
+     const bool okay=message.bytes>=bytes && message.bytes<=local_limit && !(message.bytes&16383) && !(message.address&16383) &&
+         (!alignment || !(message.address&(alignment-1))) && message.argument[0]>0 && message.argument[0]<=UINT32_MAX &&
+         message.address>=RADV_PS5_WINDOW_BASE && message.address<=RADV_PS5_GPU_ADDRESS_LIMIT-message.bytes &&
+         (!window32 || pw_gpu_contains(RADV_PS5_WINDOW_BASE,RADV_PS5_WINDOW_BYTES,message.address,message.bytes));
+     if(!okay) {
++        refused("local","the broker's answer did not fit",bytes,alignment,local_limit);
+         message.operation=PW_GPU_FREE;rpc(&message,NULL);return false;
+     }
+     *out=(struct radv_ps5_memory){.cpu=(void *)(uintptr_t)message.address,.bytes=message.bytes,
+@@ -365,10 +379,14 @@
+ }
+ bool radv_ps5_memory_alloc(uint64_t bytes,uint64_t alignment,bool window32,struct radv_ps5_memory *out)
+ {
+-    if(!bytes || bytes>host_limit || alignment>PW_GPU_ALIGNMENT_MAX || (alignment && (alignment&(alignment-1))))return false;
++    if(!bytes || bytes>host_limit || alignment>PW_GPU_ALIGNMENT_MAX || (alignment && (alignment&(alignment-1)))) {
++        refused("host",bytes>host_limit ? "over the limit" : alignment>PW_GPU_ALIGNMENT_MAX ? "alignment over 2 MiB" :
++                "bad size or alignment",bytes,alignment,host_limit);
++        return false;
++    }
+     PwGpuMessage message={.operation=PW_GPU_ALLOC,.bytes=bytes,.argument={alignment,window32}};
+     int fd=-1;
+-    if(rpc(&message,&fd))return false;
++    if(rpc(&message,&fd)) { refused("host","the broker said no",bytes,alignment,host_limit);return false; }
+     void *at=(void *)(uintptr_t)message.address;
+     bool okay=message.bytes>=bytes && message.bytes<=host_limit && !(message.bytes&16383) &&
+         !(message.address&16383) && (!alignment || !(message.address&(alignment-1))) &&
+@@ -393,6 +411,7 @@
+         source_add((uintptr_t)at,message.argument[2] ? -1 : fd,message.argument[2]);
+     if(fd>=0 && (!kept || message.argument[2]))close(fd);
+     if(!okay) {
++        refused("host",owned ? "the broker's answer did not fit" : "no bare reservation for the mapping",bytes,alignment,host_limit);
+         message.operation=PW_GPU_FREE;rpc(&message,NULL);return false;
+     }
+     *out=(struct radv_ps5_memory){.cpu=at,.bytes=message.bytes,.physical=-1,.granule=(uint32_t)message.argument[0]};
+@@ -481,7 +500,14 @@
+     sceKernelMunmap(a,b);
+ }
+ bool radv_ps5_vrange_reserve(uint64_t b,bool w,bool r,uint64_t v,struct radv_ps5_memory *m)
+-{ (void)b;(void)w;(void)r;(void)v;(void)m;return false; }
++{
++    (void)m;
++    /* Who asked, for the diagnostic: the 32-bit window, a replay at an address, and the caller in RADV. */
++    fprintf(stderr,"gpu-client sparse range asked: bytes=%llu window32=%d replayable=%d replay_va=%#llx caller=%p\n",
++            (unsigned long long)b,(int)w,(int)r,(unsigned long long)v,__builtin_return_address(0));
++    refused("sparse range","no sparse address space in a client",b,0,0);
++    return false;
++}
+ void radv_ps5_vrange_release(struct radv_ps5_memory *m) { (void)m; }
+ bool radv_ps5_vrange_bind(void *a,uint64_t b,const struct radv_ps5_memory *m,uint64_t o)
+ { (void)a;(void)b;(void)m;(void)o;return false; }

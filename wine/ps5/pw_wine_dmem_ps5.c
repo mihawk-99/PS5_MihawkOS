@@ -893,7 +893,43 @@ extern int pw_ps5_code_offer_file(const uint64_t file[3], uint64_t bytes, int fd
  * answers every later helper with the object, mapped read-only: no read, no private copy. 0 mapped, -1 with errno. */
 static uint64_t image_asks, image_hits, image_offers, image_kept, image_offer_errors;
 
+/* Where a helper's module loading goes (installers start a helper per custom action, and its builtin DLLs took 10-50 ms
+ * each on the console, docs/PLAN.md): calls and nanoseconds of execute conversions (under the fault handler) and of
+ * image reads (at map time), lock-free, read by __wine_ps5_load_timing for the helper's life summary. */
+static uint64_t convert_calls, convert_ns, image_read_calls, image_read_ns;
+static uint64_t timing_now_ns(void)
+{
+    struct timespec now;
+    clock_gettime(CLOCK_MONOTONIC, &now);
+    return (uint64_t)now.tv_sec * 1000000000ull + (uint64_t)now.tv_nsec;
+}
+static void timing_add(uint64_t *calls, uint64_t *ns, uint64_t began)
+{
+    __atomic_add_fetch(calls, 1, __ATOMIC_RELAXED);
+    __atomic_add_fetch(ns, timing_now_ns() - began, __ATOMIC_RELAXED);
+}
+/* Execute conversions (calls, ns), then image reads (calls, ns). Returns how many counters there are. */
+unsigned int __wine_ps5_load_timing(uint64_t *out, unsigned int count)
+{
+    const uint64_t values[4] = { __atomic_load_n(&convert_calls, __ATOMIC_RELAXED),
+                                 __atomic_load_n(&convert_ns, __ATOMIC_RELAXED),
+                                 __atomic_load_n(&image_read_calls, __ATOMIC_RELAXED),
+                                 __atomic_load_n(&image_read_ns, __ATOMIC_RELAXED) };
+    for (unsigned int i = 0; i < count && i < 4; i++) out[i] = values[i];
+    return 4;
+}
+
+static int image_read(int fd, void *at, size_t bytes, off_t offset);
 int __wine_ps5_image_read(int fd, void *at, size_t bytes, off_t offset)
+{
+    const uint64_t began = timing_now_ns();
+    const int status = image_read(fd, at, bytes, offset);
+    const int saved = errno;
+    timing_add(&image_read_calls, &image_read_ns, began);
+    errno = saved;
+    return status;
+}
+static int image_read(int fd, void *at, size_t bytes, off_t offset)
 {
     /* One object per cluster: an image's whole section (221 MiB of libcef text) does not fit the JIT limits, and the
      * registry's entry budget is sized for clusters (the converter's own granularity). */
@@ -1379,14 +1415,23 @@ failed:
     errno = error;
     return convert_failed(address, bytes, unix_prot, step);
 }
+static int exec_convert_timed(void *address, size_t bytes, int unix_prot, int image)
+{
+    const uint64_t began = timing_now_ns();
+    const int status = exec_convert(address, bytes, unix_prot, image);
+    const int saved = errno;
+    timing_add(&convert_calls, &convert_ns, began);
+    errno = saved;
+    return status;
+}
 int __wine_ps5_exec_convert(void *address, size_t bytes, int unix_prot)
 {
-    return exec_convert(address, bytes, unix_prot, 0);
+    return exec_convert_timed(address, bytes, unix_prot, 0);
 }
 /* The same for an image view's code (patch 1127): shared with other helpers where the bytes are the same. */
 int __wine_ps5_exec_convert_image(void *address, size_t bytes, int unix_prot)
 {
-    return exec_convert(address, bytes, unix_prot, 1);
+    return exec_convert_timed(address, bytes, unix_prot, 1);
 }
 
 /* Patch 1127's rule under virtual_mutex: 1 when the kernel already allows access (PROT_*) at address, so the

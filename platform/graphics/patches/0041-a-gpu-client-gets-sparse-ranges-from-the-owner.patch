@@ -1,0 +1,223 @@
+From: PS5_Proton <local>
+Subject: [PATCH] gpu-broker: a client gets sparse ranges from the owner, so Direct3D 12 reserved resources work
+
+A broker client advertised no sparse resources (the overlay's has_sparse = false) and had no sparse address space,
+so vkd3d-proton reported no tiled resources, and a game that creates a reserved buffer anyway failed: a Direct3D 12 game (Steam app 2050650)
+asked for a 32 MiB sparse buffer at its start, the client refused the range ("gpu-client refused sparse range"), and
+its engine stopped with "Fatal D3D error (6, E_OUTOFMEMORY)" (PS5_Proton, the Pro, 2026-10-29, patch 0040's log).
+
+The owner already makes sparse ranges for itself (radv_ps5_vrange_*: a range of its device-memory region over the
+shared zero block, a bound piece a buffer's direct memory mapped there), and the GPU works in the owner's address
+space. A client now asks the owner for them: PW_GPU_VRANGE_RESERVE, RELEASE, BIND and UNBIND. The owner keeps each
+client's ranges (at most 256), binds only that client's own device-local buffers inside its own ranges, unmaps a
+released range once no work is in flight, and releases what is left before the client's buffers when it ends. The
+client's winsys advertises sparse resources again, bound on the CPU (client-sparse-ranges-winsys.patch, applied by
+build-gpu-broker-client.sh). Without PRT the residency status stays unsupported, so vkd3d reports tiled resources
+tier 1.
+
+--- a/tooling/gpu-broker/client.c
++++ b/tooling/gpu-broker/client.c
+@@ -318,7 +318,8 @@
+     const uint64_t used=__atomic_load_n(&allocated,__ATOMIC_RELAXED);
+     return used<host_limit ? host_limit-used : 0;
+ }
+-uint64_t radv_ps5_vrange_space_bytes(void) { return 0; }
++/* Sparse ranges come from the owner's device-memory region (patch 0041), 256 GiB shared with the owner's own. */
++uint64_t radv_ps5_vrange_space_bytes(void) { return UINT64_C(256)<<30; }
+ uint64_t radv_ps5_now_ns(void)
+ {
+     struct timespec t;clock_gettime(CLOCK_MONOTONIC,&t);
+@@ -499,16 +500,36 @@
+     }
+     sceKernelMunmap(a,b);
+ }
++/* Sparse ranges (patch 0041): the owner reserves, binds and releases them in its address space, which the GPU uses;
++ * this process keeps their addresses only, as it does for device-local buffers. Only device-local memory binds. */
+ bool radv_ps5_vrange_reserve(uint64_t b,bool w,bool r,uint64_t v,struct radv_ps5_memory *m)
+ {
+-    (void)m;
+-    /* Who asked, for the diagnostic: the 32-bit window, a replay at an address, and the caller in RADV. */
+-    fprintf(stderr,"gpu-client sparse range asked: bytes=%llu window32=%d replayable=%d replay_va=%#llx caller=%p\n",
+-            (unsigned long long)b,(int)w,(int)r,(unsigned long long)v,__builtin_return_address(0));
+-    refused("sparse range","no sparse address space in a client",b,0,0);
+-    return false;
++    *m=(struct radv_ps5_memory){.physical=-1};
++    PwGpuMessage message={.operation=PW_GPU_VRANGE_RESERVE,.bytes=b,.argument={w,r,v}};
++    if(rpc(&message,NULL) || message.bytes<b || (message.address&16383) || message.address<RADV_PS5_WINDOW_BASE ||
++       message.address>RADV_PS5_GPU_ADDRESS_LIMIT-message.bytes) {
++        refused("sparse range","the broker said no",b,0,0);
++        return false;
++    }
++    *m=(struct radv_ps5_memory){.cpu=(void *)(uintptr_t)message.address,.bytes=message.bytes,.physical=-1};
++    return true;
++}
++void radv_ps5_vrange_release(struct radv_ps5_memory *m)
++{
++    if(!m->cpu)return;
++    PwGpuMessage message={.operation=PW_GPU_VRANGE_RELEASE,.address=(uint64_t)(uintptr_t)m->cpu};
++    rpc(&message,NULL);
++    *m=(struct radv_ps5_memory){.physical=-1};
+ }
+-void radv_ps5_vrange_release(struct radv_ps5_memory *m) { (void)m; }
+ bool radv_ps5_vrange_bind(void *a,uint64_t b,const struct radv_ps5_memory *m,uint64_t o)
+-{ (void)a;(void)b;(void)m;(void)o;return false; }
+-bool radv_ps5_vrange_unbind(void *a,uint64_t b) { (void)a;(void)b;return false; }
++{
++    if(m->physical!=PS5_GPU_LOCAL_MEMORY) { refused("sparse bind","not device-local memory",b,0,0);return false; }
++    PwGpuMessage message={.operation=PW_GPU_VRANGE_BIND,.address=(uint64_t)(uintptr_t)a,.bytes=b,.argument={m->granule,o}};
++    if(rpc(&message,NULL)) { refused("sparse bind","the broker said no",b,0,0);return false; }
++    return true;
++}
++bool radv_ps5_vrange_unbind(void *a,uint64_t b)
++{
++    PwGpuMessage message={.operation=PW_GPU_VRANGE_UNBIND,.address=(uint64_t)(uintptr_t)a,.bytes=b};
++    return !rpc(&message,NULL);
++}
+--- a/tooling/gpu-broker/client-sparse-ranges-winsys.patch
++++ b/tooling/gpu-broker/client-sparse-ranges-winsys.patch
+@@ -0,0 +1,21 @@
++--- a/src/amd/vulkan/winsys/ps5/radv_ps5_winsys.c
+++++ b/src/amd/vulkan/winsys/ps5/radv_ps5_winsys.c
++@@ -372,7 +372,8 @@
++     * page table's PRT bits, so an unbound page is not known to read zero or
++     * to report itself non-resident; and a bind is a mapping change made at
++     * once, after the submission's waits. */
++-   info->has_sparse = false;
+++   /* A broker client's sparse ranges are the owner's (PS5_Proton patch 0041), bound on the CPU through it. */
+++   info->has_sparse = radv_ps5_vrange_space_bytes() != 0;
++    /* A compute and transfer queue family, as upstream offers on this family
++     * of GPUs, whose queues submit to the graphics ring through the same
++     * sceAgcDriverSubmitDcb: their work runs in turn with graphics rather than
++@@ -380,7 +381,7 @@
++     * would run it alongside; they are not used yet. */
++    info->num_compute_queues_on_gfx = 4;
++    info->has_sparse_prt = false;
++-   info->has_sparse_cpu_binds = false;
+++   info->has_sparse_cpu_binds = info->has_sparse;
++    info->max_sparse_va_bytes = radv_ps5_vrange_space_bytes();
++    /* A captured buffer can be placed at its address again
++     * (radv_ps5_memory_alloc_replayable); before that, every replay case of
+--- a/tooling/gpu-broker/protocol.h
++++ b/tooling/gpu-broker/protocol.h
+@@ -32,7 +32,13 @@
+ #define PW_GPU_RESERVE_NO_OVERWRITE 0x80
+ enum { PW_GPU_INIT=1, PW_GPU_ALLOC, PW_GPU_FREE, PW_GPU_SUBMIT,
+        PW_GPU_TESS, PW_GPU_OFFCHIP, PW_GPU_DONE, PW_GPU_IMAGE, PW_GPU_PRESENT, PW_GPU_SWAPCHAIN, PW_GPU_WINDOW_SWAPCHAIN,
+-       PW_GPU_TIMING, PW_GPU_PRESENT_LINK };
++       PW_GPU_TIMING, PW_GPU_PRESENT_LINK,
++       PW_GPU_VRANGE_RESERVE, PW_GPU_VRANGE_RELEASE, PW_GPU_VRANGE_BIND, PW_GPU_VRANGE_UNBIND };
++/* Sparse ranges for a client (PS5_Proton patch 0041), made in the owner, whose address space the GPU uses:
++ * RESERVE bytes, argument[0] the 32-bit window, [1] replayable, [2] a replay address; the reply's address and bytes
++ * are the range. RELEASE address. BIND address bytes, argument[0] the token of one of the client's device-local
++ * buffers, [1] the offset in it. UNBIND address bytes. A bind or unbind must lie in one of the client's own ranges.
++ * A client keeps at most kClientRanges; the owner releases what is left when the client ends. */
+ /* PW_GPU_PRESENT_LINK: a second connection for this client's presents (SWAPCHAIN, WINDOW_SWAPCHAIN and TIMING, nothing
+  * else), its socket in the reply. Each connection is one call at a time, so on a single one a present the display took
+  * 6.4 ms to copy held the client's submissions behind it: 8.05 ms of round trips a frame for a Direct3D 12 game with the
+--- a/tooling/gpu-broker/server.cpp
++++ b/tooling/gpu-broker/server.cpp
+@@ -186,6 +186,9 @@
+ /* The host-visible bytes each client may hold: the application's choice (ps5_gpu_broker_set_host_limit). */
+ static uint64_t host_limit=PW_GPU_LIMIT;
+ constexpr unsigned kClientBuffers=1024;
++// A client's sparse ranges (patch 0041): reserved in the owner's device-memory region, as the owner's own are.
++constexpr unsigned kClientRanges=256;
++struct Range { uint64_t address=0,bytes=0;radv_ps5_memory memory{}; };
+ struct Client {
+     int socket=-1,service=-1,pid=-1,expected_pid=0;uint32_t sequence=0,next_token=0;
+     // Its present link (PW_GPU_PRESENT_LINK): a second socket and thread for its presents, so its submissions go on
+@@ -193,6 +196,7 @@
+     int present_socket=-1;uint32_t present_sequence=0;uint64_t pin_address=0,pin_bytes=0;
+     bool present_serving=false;pthread_t presenter{};
+     Buffer buffers[kClientBuffers];unsigned submissions=0;
++    Range ranges[kClientRanges];unsigned range_count=0;
+     uint64_t allocated=0,local=0,local_peak=0,tess=0;uint32_t tess_bytes=0,granularity=0,buffering=0;
+     // Where submission time goes, in nanoseconds: staging allocation and copy, the native submit, the completion wait
+     // and the staging release.
+@@ -587,6 +591,51 @@
+ }
+ // A buffer the client let go of: released now if no work is in flight, otherwise once the fence passes the last
+ // submission so far.
++// A client's sparse range (patch 0041): the owner reserves it as it does its own (radv_ps5_vrange_reserve), so the
++// GPU, which works in the owner's address space, finds it; unbound pieces read the shared zero block.
++int vrange_reserve(Client &c,PwGpuMessage &m,FILE *log)
++{
++    if(!m.bytes || m.bytes>(UINT64_C(64)<<30) || c.range_count>=kClientRanges)return EINVAL;
++    for(auto &r:c.ranges)if(!r.address) {
++        radv_ps5_memory memory{};
++        if(!radv_ps5_vrange_reserve(m.bytes,m.argument[0]!=0,m.argument[1]!=0,m.argument[2],&memory)) {
++            fprintf(log,"gpu-wine vrange_refused=1 cookie=%d pid=%d bytes=%llu window32=%d\n",c.cookie,c.pid,
++                (unsigned long long)m.bytes,int(m.argument[0]!=0));
++            return ENOMEM;
++        }
++        r.address=(uint64_t)(uintptr_t)memory.cpu;r.bytes=memory.bytes;r.memory=memory;++c.range_count;
++        m.address=r.address;m.bytes=r.bytes;return 0;
++    }
++    return ENOSPC;
++}
++Range *vrange_of(Client &c,uint64_t address,uint64_t bytes)
++{
++    for(auto &r:c.ranges)if(r.address && pw_gpu_contains(r.address,r.bytes,address,bytes))return &r;
++    return nullptr;
++}
++int vrange_release(Client &c,PwGpuMessage &m)
++{
++    for(auto &r:c.ranges)if(r.address && r.address==m.address) {
++        // Work in flight may still read through it: it is unmapped once nothing is.
++        if(!drain(5000000000ull))return EBUSY;
++        radv_ps5_vrange_release(&r.memory);r=Range{};--c.range_count;return 0;
++    }
++    return EINVAL;
++}
++int vrange_bind(Client &c,PwGpuMessage &m,bool bind,FILE *log)
++{
++    if(!m.bytes || (m.address|m.bytes)&16383 || !vrange_of(c,m.address,m.bytes))return EINVAL;
++    void *at=(void *)(uintptr_t)m.address;
++    if(!bind)return radv_ps5_vrange_unbind(at,m.bytes) ? 0 : EIO;
++    // Only one of this client's own device-local buffers, whose direct memory the owner holds.
++    for(auto &a:c.buffers)if(a.token && a.token==m.argument[0] && a.local && a.memory.physical>=0) {
++        if(m.argument[1]>a.memory.bytes || m.bytes>a.memory.bytes-m.argument[1] || (m.argument[1]&16383))return EINVAL;
++        if(radv_ps5_vrange_bind(at,m.bytes,&a.memory,m.argument[1]))return 0;
++        fprintf(log,"gpu-wine vrange_bind_failed=1 cookie=%d pid=%d bytes=%llu\n",c.cookie,c.pid,(unsigned long long)m.bytes);
++        return EIO;
++    }
++    return EINVAL;
++}
+ void free_buffer(Client &c,Buffer &b,FILE *out)
+ {
+     (b.local ? c.local : c.allocated)-=b.bytes;
+@@ -918,6 +967,13 @@
+                     fprintf(b.log,"gpu-wine allocation_failed=1 cookie=%d pid=%d stage=%s bytes=%llu flexible_status=%#x flexible_available=%llu\n",
+                         c.cookie,c.pid,c.allocation_stage,(unsigned long long)m.bytes,unsigned(status),(unsigned long long)available);
+                 }break;
++            case PW_GPU_VRANGE_RESERVE:
++                m.status=wedged ? EIO : vrange_reserve(c,m,b.log);break;
++            case PW_GPU_VRANGE_RELEASE:
++                m.status=wedged ? EIO : vrange_release(c,m);break;
++            case PW_GPU_VRANGE_BIND:
++            case PW_GPU_VRANGE_UNBIND:
++                m.status=wedged ? EIO : vrange_bind(c,m,m.operation==PW_GPU_VRANGE_BIND,b.log);break;
+             case PW_GPU_FREE:
+                 for(auto &a:c.buffers)if(a.token && a.token==m.argument[0] && a.address==m.address && a.bytes==m.bytes) {
+                     // Its present link may be reading this buffer outside b.lock: the free waits for that present.
+@@ -1446,6 +1502,8 @@
+         fprintf(b.log,"gpu-wine cookie=%d pid=%d closed=1 absent=1 frames=%u submissions=%u backing_released=%llu "
+             "local_released=%llu local_peak=%llu flexible=%zu\n",cookie,c.pid,c.presentations,c.submissions,(unsigned long long)c.allocated,
+             (unsigned long long)c.local,(unsigned long long)c.local_peak,flexible_now());fsync(fileno(b.log));
++        // Its sparse ranges first: they may still map buffers' memory, which the release below gives back.
++        if(!wedged)for(auto &r:c.ranges)if(r.address)radv_ps5_vrange_release(&r.memory);
+         if(!wedged)for(auto &a:c.buffers)if(a.token)release(a);
+         close(c.socket);if(c.present_socket>=0)close(c.present_socket);reset(c);break;
+     }
+--- a/tools/build-gpu-broker-client.sh
++++ b/tools/build-gpu-broker-client.sh
+@@ -37,6 +37,9 @@
+ patch --batch -p1 -d "$out/source" < "$out/patches/radv-gpu-broker-local-memory.patch"
+ # Short GPU waits: a client spins briefly and sleeps in short steps (the patch's comment has what was measured).
+ patch --batch -p1 -d "$out/source" < "$out/patches/radv-gpu-broker-client-wait.patch"
++# Sparse ranges through the owner (PS5_Proton patch 0041): the client advertises sparse resources again.
++cp "$root/tooling/gpu-broker/client-sparse-ranges-winsys.patch" "$out/patches/"
++patch --batch -p1 -d "$out/source" < "$out/patches/client-sparse-ranges-winsys.patch"
+ # Reuse Mesa's generated header/include flags. Strip every output/dependency
+ # option before compilation, so the sibling build remains read-only.
+ python3 - "$radv" "$out" <<'PY'

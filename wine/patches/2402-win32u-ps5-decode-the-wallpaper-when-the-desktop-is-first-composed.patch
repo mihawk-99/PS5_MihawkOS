@@ -1,0 +1,92 @@
+From 0000000000000000000000000000000000000000 Mon Sep 17 00:00:00 2001
+From: Mihawk <163614687+mihawk-99@users.noreply.github.com>
+Date: Thu, 29 Oct 2026 17:00:00 -0400
+Subject: [PATCH] win32u: ps5: decode the wallpaper when the desktop is first composed.
+
+Patch 0966 decoded the managed wallpaper (a 1920x1080 BMP, two divisions a pixel) as the user driver was installed,
+so every process that started user32 paid for it: 25 ms each on the base PS5 in the DirectX redistributable's
+installer, whose ~110 infinst and regsvr32 runs per install never draw a desktop (installer-dxsetup-2026-10-29-163636,
+patch 2153's stamps). Only compose_screen reads the background, and a helper whose windows the title composes
+(window surfaces) never reaches it. It is now decoded there, once, on the first compose, with the same fallback to
+black and the same timing line.
+---
+--- a/dlls/win32u/ps5drv.c
++++ b/dlls/win32u/ps5drv.c
+@@ -299,6 +299,39 @@
+ {
+ }
+ 
++/* The PS5 owner has no Explorer desktop painter. The managed local BMP
++ * supplies the background under retained windows; opaque window pixels stay
++ * opaque. Decoded once, the first time the desktop is composed: a process that
++ * never composes it (a console tool, an installer's custom action, a helper whose
++ * windows the title composes) does not pay for it, 25 ms each in the DirectX
++ * redistributable's 220 helpers (installer-dxsetup-2026-10-29-163636). A missing
++ * asset keeps plain black. screen_lock held. */
++static void load_background(void)
++{
++    static BOOL tried;
++    extern int pw_wine_wallpaper_load( const char *, UINT32 *, unsigned, unsigned );
++    const char *prefix = getenv( "WINEPREFIX" );
++    char path[4096];
++    struct timespec began, ended;
++
++    if (tried) return;
++    tried = TRUE;
++    clock_gettime( CLOCK_MONOTONIC, &began );
++    if (prefix && snprintf( path, sizeof(path), "%s/drive_c/windows/web/wallpaper/proton.bmp", prefix ) < sizeof(path) &&
++        (background = malloc( (size_t)screen_width * screen_height * sizeof(*background) )))
++    {
++        if (pw_wine_wallpaper_load( path, background, screen_width, screen_height ))
++        {
++            free( background );
++            background = NULL;
++        }
++        clock_gettime( CLOCK_MONOTONIC, &ended );
++        fprintf( stderr, "wine-ps5: managed wallpaper %s desktop=%ux%u us=%lld\n",
++                 background ? "loaded" : "absent", screen_width, screen_height,
++                 (ended.tv_sec - began.tv_sec) * 1000000ll + (ended.tv_nsec - began.tv_nsec) / 1000 );
++    }
++}
++
+ /* screen_lock held. Native window systems compose retained surfaces in Z
+  * order; PS5 has only our display buffer. Wine's surface clip region excludes
+  * pixel-format children, not top-level siblings, so it cannot do this for us.
+@@ -316,6 +349,7 @@
+          hwnd = NtUserGetWindowRelative( hwnd, GW_HWNDNEXT ))
+         if ((window = find_window( hwnd )) && window->shown && window->pixels && count < PS5_MAX_WINDOWS)
+             ordered[count++] = window;
++    load_background();
+     if (background) memcpy( screen, background, (size_t)screen_width * screen_height * sizeof(*screen) );
+     else memset( screen, 0, (size_t)screen_width * screen_height * sizeof(*screen) );
+     while (count)
+@@ -1223,29 +1257,6 @@
+         ERR( "no memory for a %ux%u desktop\n", screen_width, screen_height );
+         return;
+     }
+-    /* The PS5 owner has no Explorer desktop painter. The managed local BMP
+-     * supplies the background under retained windows; opaque window pixels stay
+-     * opaque. Decode once, not on every frame. A missing asset keeps plain black. */
+-    {
+-        extern int pw_wine_wallpaper_load( const char *, UINT32 *, unsigned, unsigned );
+-        const char *prefix = getenv( "WINEPREFIX" );
+-        char path[4096];
+-        struct timespec began, ended;
+-        clock_gettime( CLOCK_MONOTONIC, &began );
+-        if (prefix && snprintf( path, sizeof(path), "%s/drive_c/windows/web/wallpaper/proton.bmp", prefix ) < sizeof(path) &&
+-            (background = malloc( (size_t)screen_width * screen_height * sizeof(*background) )))
+-        {
+-            if (pw_wine_wallpaper_load( path, background, screen_width, screen_height ))
+-            {
+-                free( background );
+-                background = NULL;
+-            }
+-            clock_gettime( CLOCK_MONOTONIC, &ended );
+-            fprintf( stderr, "wine-ps5: managed wallpaper %s desktop=%ux%u us=%lld\n",
+-                     background ? "loaded" : "absent", screen_width, screen_height,
+-                     (ended.tv_sec - began.tv_sec) * 1000000ll + (ended.tv_nsec - began.tv_nsec) / 1000 );
+-        }
+-    }
+     present_frame = dlsym( RTLD_DEFAULT, "pw_wine_present" );
+     present_origin = dlsym( RTLD_DEFAULT, "pw_wine_present_origin" );
+     /* A Windows program the title runs itself beside the broker draws as a helper does (WINE_PS5_TITLE_CLIENT,

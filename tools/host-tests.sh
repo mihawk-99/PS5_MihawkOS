@@ -126,6 +126,7 @@ declare -A sources=(
     [test_pw_release]="src/pw_release.c external/monocypher/monocypher.c external/monocypher/monocypher-ed25519.c"
     [test_pw_pe_arch]="src/pw_pe_arch.c"
     [test_pw_start_failure]="src/pw_start_failure.c"
+    [test_pw_wine_dl]="wine/ps5/pw_wine_dl.c wine/ps5/pw_wine_prx.c"
     [test_pw_firmware]="src/pw_firmware.c"
     [test_pw_game_folders]="src/pw_game_folders.c src/pw_pe_arch.c"
     [test_pw_pad_script]="src/pw_pad_script.c"

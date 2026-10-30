@@ -1,0 +1,199 @@
+From: PS5_Proton <local>
+Subject: [PATCH] gpu-broker: a game is told the video memory the console can really give, its budget follows it, and the owner hears when it runs out
+
+A Direct3D 12 game (Steam app 2050650) on the Pro was told 7.96 GiB of device-local memory, the whole room above the
+floor when it opened. Its own heaps come out of the same direct memory (3,888 MiB), so at higher settings its graphics
+memory (5,641 MiB) ran the room under the floor: the owner refused 92 allocations ("stage=local_floor") and the game
+stopped with E_OUTOFMEMORY (2026-10-29). Its settings meter had trusted a heap that could never be filled.
+
+The heap a client is told is now two thirds of the room above the floor, at most the 8 GiB offer, leaving a third for
+the game's own memory. And the budget follows the console: every ALLOC and FREE reply carries the room left now
+(argument[3], plus one), and the client's budget (VK_EXT_memory_budget, which DXGI's QueryVideoMemoryInfo reports) is
+its heap less what it holds, never more than that room (client-budget-winsys.patch, applied by
+build-gpu-broker-client.sh). A game that streams by its budget then stays inside what the console can give.
+
+A game whose settings ask for more than exists still fails (the same game at its highest textures, told 5.3 GiB, kept
+asking; a 512 MiB floor only halved the refusals, so the floor stays 1 GiB). The owner now hears of it: local_refused
+is called for a device-local allocation refused for want of memory, so the title can tell the player the cause.
+--- a/tooling/gpu-broker/client-budget-winsys.patch
++++ b/tooling/gpu-broker/client-budget-winsys.patch
+@@ -0,0 +1,23 @@
++--- a/src/amd/vulkan/winsys/ps5/radv_ps5_winsys.c
+++++ b/src/amd/vulkan/winsys/ps5/radv_ps5_winsys.c
++@@ -420,7 +420,8 @@
++       /* The budget RADV reports is the device-local heap's. */
++       const uint64_t used = ps5_gpu_client_local_allocated();
++       *pool_bytes = local;
++-      *available_bytes = local - MIN2(used, local);
+++      /* Never more than the owner's direct memory still allows (PS5_Proton patch 0042). */
+++      *available_bytes = ps5_gpu_client_local_available();
++       *driver_bytes = used;
++       return;
++    }
++--- a/src/amd/vulkan/winsys/ps5/radv_ps5_winsys.h
+++++ b/src/amd/vulkan/winsys/ps5/radv_ps5_winsys.h
++@@ -188,6 +188,8 @@
++ #define RADV_PS5_MEMORY_BROKER_LOCAL (-2)
++ uint64_t ps5_gpu_client_local_limit(void);
++ uint64_t ps5_gpu_client_local_allocated(void);
+++/* The device-local budget left: the heap less what is held, at most the owner's room (PS5_Proton patch 0042). */
+++uint64_t ps5_gpu_client_local_available(void);
++ bool ps5_gpu_client_alloc_local(uint64_t bytes, uint64_t alignment, bool window32, bool zero,
++                                    struct radv_ps5_memory *out);
++ 
+--- a/tooling/gpu-broker/client.c
++++ b/tooling/gpu-broker/client.c
+@@ -192,6 +192,22 @@
+ }
+ uint64_t ps5_gpu_client_local_limit(void) { return local_limit; }
+ uint64_t ps5_gpu_client_local_allocated(void) { return __atomic_load_n(&local_allocated,__ATOMIC_RELAXED); }
++/* The owner's device-local room at its last ALLOC or FREE reply, plus one (patch 0042; 0: not said yet). */
++static uint64_t local_room_plus_one;
++static void room_from(const PwGpuMessage *message)
++{
++    if(message->argument[3])__atomic_store_n(&local_room_plus_one,message->argument[3],__ATOMIC_RELAXED);
++}
++/* What this client's device-local budget still has: its heap less what it holds, and never more than the owner's room,
++ * which the game's own heaps and every other program draw from too. */
++uint64_t ps5_gpu_client_local_available(void)
++{
++    const uint64_t used=__atomic_load_n(&local_allocated,__ATOMIC_RELAXED);
++    uint64_t left=used<local_limit ? local_limit-used : 0;
++    const uint64_t room=__atomic_load_n(&local_room_plus_one,__ATOMIC_RELAXED);
++    if(room && room-1<left)left=room-1;
++    return left;
++}
+ /* Device-local memory: the owner allocates and maps it for the GPU; this process gets only its address. */
+ /* Every allocation this client refuses, said once with its reason (PS5_Proton patch 0040, diagnostic): a game's
+  * E_OUTOFMEMORY otherwise names no layer. The first 32, then one in 256. */
+@@ -211,7 +227,9 @@
+         return false;
+     }
+     PwGpuMessage message={.operation=PW_GPU_ALLOC,.bytes=bytes,.argument={alignment,window32,PW_GPU_ALLOC_LOCAL|(zero ? PW_GPU_ALLOC_ZERO : 0)}};
+-    if(rpc(&message,NULL)) { refused("local","the broker said no",bytes,alignment,local_limit);return false; }
++    const int status=rpc(&message,NULL);
++    room_from(&message);
++    if(status) { refused("local","the broker said no",bytes,alignment,local_limit);return false; }
+     const bool okay=message.bytes>=bytes && message.bytes<=local_limit && !(message.bytes&16383) && !(message.address&16383) &&
+         (!alignment || !(message.address&(alignment-1))) && message.argument[0]>0 && message.argument[0]<=UINT32_MAX &&
+         message.address>=RADV_PS5_WINDOW_BASE && message.address<=RADV_PS5_GPU_ADDRESS_LIMIT-message.bytes &&
+@@ -387,7 +405,9 @@
+     }
+     PwGpuMessage message={.operation=PW_GPU_ALLOC,.bytes=bytes,.argument={alignment,window32}};
+     int fd=-1;
+-    if(rpc(&message,&fd)) { refused("host","the broker said no",bytes,alignment,host_limit);return false; }
++    const int status=rpc(&message,&fd);
++    room_from(&message);
++    if(status) { refused("host","the broker said no",bytes,alignment,host_limit);return false; }
+     void *at=(void *)(uintptr_t)message.address;
+     bool okay=message.bytes>=bytes && message.bytes<=host_limit && !(message.bytes&16383) &&
+         !(message.address&16383) && (!alignment || !(message.address&(alignment-1))) &&
+@@ -438,6 +458,7 @@
+     }
+     /* Broker submissions complete before acknowledgment; no GPU references remain. */
+     if(rpc(&message,NULL)) { broker_lost("a free it did not take back",PW_GPU_FREE,message.sequence);return; }
++    room_from(&message);
+     if(memory->physical==PS5_GPU_LOCAL_MEMORY)__atomic_sub_fetch(&local_allocated,memory->bytes,__ATOMIC_RELAXED);
+     else __atomic_sub_fetch(&allocated,memory->bytes,__ATOMIC_RELAXED);
+     memset(memory,0,sizeof(*memory));
+--- a/tooling/gpu-broker/protocol.h
++++ b/tooling/gpu-broker/protocol.h
+@@ -48,6 +48,8 @@
+  * about once a second: argument[0] presents, [1] nanoseconds waiting for their fences, [2] flushing their frames,
+  * [3] in their round trips; bytes its submissions and address their round trips' nanoseconds. Sums only: the owner
+  * adds them to the client's report. */
++/* ALLOC and FREE replies (PS5_Proton patch 0042): argument[3] is the device-local room left now plus one (0: not said),
++ * the owner's direct memory above its floor, so a client's budget follows what the console can still give. */
+ typedef struct PwGpuMessage {
+     uint32_t magic, operation, sequence; int32_t status;
+     uint64_t address, bytes, argument[4];
+--- a/tooling/gpu-broker/server.cpp
++++ b/tooling/gpu-broker/server.cpp
+@@ -223,6 +223,9 @@
+     new (&c) Client();
+ }
+ bool (*client_absent)(int)=nullptr;
++// Told when a client's device-local allocation is refused for want of memory (patch 0042), so the owner can tell the
++// player why a game stops: its own "out of memory" names no cause. Called under the broker's lock: it only records.
++void (*local_refused)(int pid,unsigned long long bytes)=nullptr;
+ bool absent(int token) { return client_absent && client_absent(token); }
+ std::string output_directory;
+ std::string output_path(const char *path)
+@@ -353,12 +356,19 @@
+     if(b.dmem>=0)dmem_give_back(b.dmem,b.bytes);
+     b=Buffer{};
+ }
+-// The device-local heap a client is told it has: the offer, or what direct memory above the floor allows now.
+-uint64_t local_offer()
++// Direct memory above the floor now: what device-local memory can still be given (patch 0042).
++uint64_t local_room()
+ {
+     const uint64_t available=radv_ps5_memory_available_bytes();
+-    const uint64_t room=available>kLocalFloor ? (available-kLocalFloor)&~16383ull : 0;
+-    return room<kLocalOffer ? room : kLocalOffer;
++    return available>kLocalFloor ? (available-kLocalFloor)&~16383ull : 0;
++}
++// The device-local heap a client is told it has: two thirds of the room, at most the offer. On this console a game's own
++// heaps come out of the same direct memory as its graphics memory (a Direct3D 12 game, 2026-10-29: 3,888 MiB of its own
++// against 5,641 of graphics, told 7.96 GiB), so a heap the size of the whole room is one its settings cannot fill.
++uint64_t local_offer()
++{
++    const uint64_t share=(local_room()/3*2)&~16383ull;
++    return share<kLocalOffer ? share : kLocalOffer;
+ }
+ // A client buffer's object, sized: from the application's maker when it set one (its pages written through there, so
+ // they are not this process's when the GPU grant makes them resident), else made here. -1 on failure.
+@@ -957,11 +967,13 @@
+             } else if(c.pid>0) switch(m.operation) {
+             case PW_GPU_ALLOC:
+                 m.status=wedged ? EIO : allocate(c,m,b.window,b.high,fd);
++                if(b.local_memory)m.argument[3]=local_room()+1;
+                 {
+                     size_t flexible=0;
+                     if(!sceKernelAvailableFlexibleMemorySize(&flexible) && flexible<b.flexible_min)b.flexible_min=flexible;
+                     const uint64_t direct=radv_ps5_memory_available_bytes();if(direct<b.direct_min)b.direct_min=direct;
+                 }
++                if(m.status && local_refused && !strncmp(c.allocation_stage,"local_",6))local_refused(c.pid,m.bytes);
+                 if(m.status) {
+                     size_t available=0;const int status=sceKernelAvailableFlexibleMemorySize(&available);
+                     fprintf(b.log,"gpu-wine allocation_failed=1 cookie=%d pid=%d stage=%s bytes=%llu flexible_status=%#x flexible_available=%llu\n",
+@@ -982,6 +994,7 @@
+                     if(c.tess && pw_gpu_contains(a.address,a.bytes,c.tess,c.tess_bytes)) { c.tess=0;c.tess_bytes=0; }
+                     free_buffer(c,a,b.log);m.status=0;break;
+                 }
++                if(b.local_memory)m.argument[3]=local_room()+1;
+                 break;
+             case PW_GPU_SUBMIT:
+                 m.status=submit(c,m,b.log,c.cookie);
+@@ -1415,6 +1428,7 @@
+     host_limit=bytes;
+     return true;
+ }
++void ps5_gpu_broker_set_local_refused(void (*hook)(int pid,unsigned long long bytes)) { local_refused=hook; }
+ bool ps5_gpu_broker_start(const char *directory,bool capture,bool local,bool (*is_absent)(int))
+ {
+     auto &b=broker_state;if(b.started || !directory || !*directory || !is_absent)return false;
+--- a/tooling/gpu-broker/server.h
++++ b/tooling/gpu-broker/server.h
+@@ -8,6 +8,9 @@
+  * close takes an opaque application lifecycle token; zero means no child was
+  * started. The application owns spawning and process termination. */
+ bool ps5_gpu_broker_start(const char *directory,bool capture,bool local,bool (*is_absent)(int));
++/* Told when a client's device-local allocation is refused for want of direct memory (PS5_Proton patch 0042): the pid and
++ * the bytes asked. Called under the broker's lock, so it only records. Set before the broker starts. */
++void ps5_gpu_broker_set_local_refused(void (*hook)(int pid,unsigned long long bytes));
+ /* Before start: the host-visible bytes each client may hold, a multiple of 16 KiB up to PW_GPU_HOST_LIMIT_MAX;
+  * PW_GPU_LIMIT when not called. False, and nothing changed, for any other value or once the broker is running. */
+ bool ps5_gpu_broker_set_host_limit(unsigned long long bytes);
+--- a/tools/build-gpu-broker-client.sh
++++ b/tools/build-gpu-broker-client.sh
+@@ -40,6 +40,9 @@
+ # Sparse ranges through the owner (PS5_Proton patch 0041): the client advertises sparse resources again.
+ cp "$root/tooling/gpu-broker/client-sparse-ranges-winsys.patch" "$out/patches/"
+ patch --batch -p1 -d "$out/source" < "$out/patches/client-sparse-ranges-winsys.patch"
++# The device-local budget follows the owner's room (PS5_Proton patch 0042).
++cp "$root/tooling/gpu-broker/client-budget-winsys.patch" "$out/patches/"
++patch --batch -p1 -d "$out/source" < "$out/patches/client-budget-winsys.patch"
+ # Reuse Mesa's generated header/include flags. Strip every output/dependency
+ # option before compilation, so the sibling build remains read-only.
+ python3 - "$radv" "$out" <<'PY'

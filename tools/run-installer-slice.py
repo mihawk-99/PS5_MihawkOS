@@ -156,10 +156,11 @@ def console(kinds, name=None):
             save('console', kind, record)
             print(f"console {kind}: {(verdict or {}).get('summary', 'no verdict: ' + str(execution.get('result')))}", flush=True)
             runs.append(record)
+            # Before the stop below: a refused launch's reason (the leftover helpers it found) is only in this output.
+            if result.returncode and not checks:
+                print(re.sub(r'\b\d{1,3}(\.\d{1,3}){3}\b', '<console>', (result.stdout + result.stderr)[-1500:]), flush=True)
             if not execution.get('returned_to_launcher'):
                 raise SystemExit(f'{run}: no verified return to the launcher; the slice stops here')
-            if result.returncode and not checks:
-                print(re.sub(r'\b\d{1,3}(\.\d{1,3}){3}\b', '<console>', (result.stdout + result.stderr)[-400:]), flush=True)
     finally:
         if ' count=0 ' in ps5.ps5vkctl_command(settings, 'procs', timeout=20) + ' ':
             with connect(settings) as ftp:

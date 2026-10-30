@@ -86,11 +86,58 @@ Every warn and stop logs the resident census and the helpers' address space, so 
   against the title's root grant from the Lapy daemon and its platform layer. Its first try did not bisect: the flag
   matched the raw launch word, which never matched, so all seven runs were whole sessions (-32 to -37 each again,
   bisect-base-2026-10-28); Alpha 6 reads it from the parsed launch (proton_launch().env).
+  - Alpha 6, 2026-10-29, the Pro (10.01): the probe now reads the one-shot wine-run.txt, where the env= words are (they
+    never reach argv), and gains a stage after the USB module preload. The count's idle change per run, three runs each:
+    the title ending at its first line 0, 0, 0; after the keyboard and mouse modules load 0, 0, 0; after the Lapy grant
+    +18, +18, +18 (and +16, +18 on the next series); after the platform layer +18, +14, +18; a whole session +35, +34
+    (drift-pro-2026-10-29-02, -03). The reading rises: each granted title process leaves the count 18 page tables more
+    free than real, so a console that has run many sessions reads optimistic, never short. Our own code adds nothing.
+  - What the grant does to the title (the resident daemon, owned_root_daemon.c): uid and gids 0, every cap bit, the
+    system authid, attrs bit 0x80, a ptrace attach, and its root and jail swapped through two donor children.
+  - Variant C (platform/lapy, not shipped; built on the hotfix daemon 00006be4): after the roots move, the daemon puts
+    the title's own authid and attrs back. It works: "identity_restored error=0", the title then proves /data read and
+    write, three whole sessions passed and the owner's own session ran. It is not the cause: on a fresh Pro boot the
+    grant runs still gave +17, +18, +18 and the sessions +34, +34, +36 (drift-C-pro-2026-10-29-01). Left: the caps
+    (variant D, caps put back too), then the ids (E): both built, paused at the owner's word ("Yes, pause drift") for
+    the page-table margin test and Part 3.
 
 **Part 3, MihawkOS uses less.** Alpha 6 (the owner, 2026-10-28: "release Alpha 5 with: the new warning and stop limits;
 the crash protections; the payload tip; the conformance and installer fixes. Then the drift fix and "MihawkOS uses less"
 would go in Alpha 6"). To do then: measure MihawkOS idle and with Steam on both consoles, fewer always-on helpers (about
 140 page tables each), trim the biggest parts; before and after numbers here.
+- Before (Alpha 6, 2026-10-29, the Pro on a fresh boot; Big Picture idle, the 2D game from Steam's library with the
+  browser held, quit, Big Picture again; p2-pro-2026-10-29-01 to -03): over each run's rest value, Big Picture idle
+  +1,783 to +1,799 page tables, in game +1,160 to +1,250. Per process (each helper's own estimate, peak): the browser
+  1,000-1,225, the game 388-523, steam.exe 300-317, steamservice 74-77, steamerrorreporter64 65-68 (it ends by itself),
+  services.exe 47, winedevice 46, rpcss 43; a trivial program's floor about 37.
+- Where (the census's new "vm page-table windows" line, src/pw_vm_census.c: regions and mapped MiB per 1 GiB window): a
+  process costs about one page table per 2 MiB it has mapped, and most of it is already dense. The DLL images
+  (libcef, D3DCompiler_47, libglesv2, DXVK, steamclient64) are 162 tables for 298 MiB in the browser and 77 for 139 MiB
+  in steam.exe, read whole at load (patch 0944: 16 KiB host pages); the live browser's own heap 233 for 464 MiB; Wine's
+  allocations about 180 in the browser and 158 in steam.exe. Wine's direct memory is not the cause: off, Big Picture
+  idle took +2,212.
+- What can be cut, honestly: perhaps 100-200 at Big Picture idle (the browser's heap, by Chromium's flags, untested).
+  Not taken: steamservice's 74-77 (the owner, 2026-10-29: "Drop it"; refused, the client opens a "Steam Service Error"
+  dialog, docs/STEAM.md lean-r7, and services.exe, not the client, starts it, so the hold cannot reach it); on-demand
+  DLL pages (high risk to every game for about 30 in game: the code that ran is copied at its own address anyway,
+  patch 1127, and relocations touch the data); the browser's sparse areas (its own allocator's 2 MiB blocks, which
+  Wine does not place); the held relaunch's ~37 (refusing the start makes Steam retry every frame, which is why patch
+  2104 holds it); merging or idling Wine's services (unsupported, and rpcss serves every COM call). So Alpha 6 does
+  not cut the in-game overhead, and Big Picture idle by about 10% at most; a big cut is not reachable without changing
+  what Steam runs.
+- A big 3D game (2026-10-29/30, the Pro, Big Picture, the game from Steam's library with the browser held, 5 minutes;
+  `klog/p2re4-pro-2026-10-29-04` and `-05`): in game +3,230 to +3,450 over rest, minimum 1,589 free (1,176 in `-04`).
+  Its own process is about 2,450 of that: about 1,560 are 2 MiB-aligned direct regions, which still take a page table
+  each in a game process (the census counted them as free until 6dbeeda6; since then it lands within about 100 of the
+  pool at Big Picture idle and in game). In the title the same mapping costs the system pool nothing (a 64 MiB probe,
+  aligned or not: 0), so sizing the title's graphics memory to 2 MiB saves nothing. The remaining lever is putting a
+  game's direct memory on 2 MiB pages (promotion): the owner, 2026-10-30, "Keep it off". So this game stays a Pro
+  benchmark for now.
+- The base, projected (not run): the 3D demo's increment is the same on both consoles (Pro `p2re3-pro-2026-10-29-03`
+  +2,155 in game, peak +2,412; base, Alpha 5's proof, +2,232 and +2,467), so the big game's +3,437 to +3,691 peak on
+  the base's 2,738 at rest gives about 1,760 to 2,020 free of 8,192, above the 768 close mark. Not shown: that rest was
+  read on a drifted counter (each title session reads about 35 low), the game's settings and scenes beyond its first
+  minutes, and the base's smaller memory changing what the game maps.
 
 **Fresh-boot page tables are the baseline** (2026-10-29). Every gate of ours before that night ran on counters the drift
 had lowered (about 35 used per title session, so a gate takes about 1,700 off): the Pro's ~2,040 used before MihawkOS
@@ -211,6 +258,38 @@ the upload to websrv/elfldr alone stays one at a time (`payload_upload_lock`), a
 The spawn line says `warm=1`, and `tools/start_stages.py` keeps warm and cold medians apart. Expected: the spawn's
 share of the 0.75-1.1 s gap and of the 150-250 ms after EXEC leaves a start's path (P0's run says how much). Needs its
 own gate and a Steam end-to-end check before it ships: it changes every helper start.
+
+**Measured with P0 on the base PS5 (13.60), 2026-10-27** (start-stamps-gate-2026-10-27-01, 246 helper starts in the
+74 cases that ran before the console froze at a relaunch, kfreeze-base-2026-10-27-gate): medians after the title's
+spawn request: elfldr answered 52 ms, carrier main 65, title connected 152 (87 ms of it the 100 ms poll: 2 attempts in
+every start, P2's target), READY 200, first Windows module 258, startup modules loaded ~594. Per helper life: 2,117
+server calls in 50 ms, file I/O ~4 ms, no section maps: the ~335 ms of module loading is elsewhere.
+
+**P3, timing module loading (staged after P1).** Execute conversions and image reads (`__wine_ps5_load_timing`,
+`wine/ps5/pw_wine_dmem_ps5.c`), code-share round trips to the title (`pw_ps5_code_round_timing`,
+`pw_wine_process.c`) and module opens found and missed (`pw_wine_dl_timing`; every builtin DLL without a Unix side
+misses once: two failed loads and five log lines under the loader's lock) are counted in calls and ns, lock-free, and
+printed in the helper's `life summary`; `tools/start_stages.py` keeps their run medians (`median.life`).
+The part before the title's spawn request (about 1 s of the earlier 1.7 s per installer action) is stamped too:
+the requesting helper logs `wine-ps5: spawn asked ms= replied_ms= child=`, the title `spawn served requester= native=
+received_ms= replied_ms=` and `child exit received native= ms=`, and the life summary carries the program's own
+`exit_ms` (its EXIT doom stamp). The exit chain this measures: the program sends EXIT and parks; the title closes the
+helper; the helper sees the hangup (its watch polls every 100 ms), prints its tallies, fsyncs and exits; only then can
+the server end the process and wake the parent. `start_stages` links each start to the same parent's previous child
+(`chain`, `median_chain`: from that child's exit, the title's receipt of it, and its end, to the parent's next ask).
+Patch 2153 stamps font setup and the wallpaper decode per process (`fonts_*_us`, `wallpaper_us`).
+
+**Measured and fixed (base 13.60, 2026-10-29, `evidence/installer-speed-2026-10-29.json`).** On Alpha 5's warm
+helpers an installer process costs ~420 ms (DirectX redistributable, 223 warm starts): first DLL at 90 ms after the
+request, last at 330, exit at 422. The parent wakes at the child's EXIT, not after its teardown (exit to the next
+ask: 239 ms in dxsetup, the parent's own cab work; 11 ms in vcredist). The biggest cost was the missed module opens:
+18 per process, 135 ms (vcredist 293 ms), each two loader tries for a `.prx` that is not there. Now `pw_wine_dl.c`
+asks the loader only for a file that exists (host test `test_pw_wine_dl`): 1 ms. Second, every user32 process
+decoded the 1920x1080 wallpaper (25 ms); patch 2402 decodes it on the first desktop compose (dxsetup: 67 helpers
+decoded it, now 1). Before -> after, PC in brackets: dxsetup install 97.9 -> 78.3 s (12.0), reinstall 89.4 -> 73.2 s
+(11.8); vcredist install 12.0 -> 9.8 s (1.3), reinstall 9.3 -> 7.2 s, uninstall 9.9 -> 7.6 s; same checks; gate
+installer-speed-base-2026-10-29-01 passed 104/104. Next per process: font setup 35-45 ms (every font file opened),
+spawn to first DLL 90 ms, DLL loading itself ~120 ms.
 
 ## Helpers load Wine's modules themselves on every firmware (2026-10-27; host-tested, not yet on the console)
 

@@ -282,12 +282,16 @@ void runMenu()
 
 // PROTON_PT_EXIT=<stage> on the launch line (a probe, never a default; docs/PLAN.md "Memory plan", Part 2): the title
 // ends at that stage, to find which step of a session leaves the system's page-table count lower than it found it.
-static void pt_exit_at(int argc, char **argv, const char *stage)
+// The env= words come from the one-shot wine-run.txt, read only after these stages and never in argv: peek at it.
+static void pt_exit_at(const char *stage)
 {
-	char wanted[64];
-	snprintf(wanted, sizeof(wanted), "env=PROTON_PT_EXIT=%s", stage);
-	for (int i = 1; i < argc; i++)
-		if (argv[i] && !strcmp(argv[i], wanted)) {
+	const std::string wanted = std::string("env=PROTON_PT_EXIT=") + stage;
+	const std::string request = proton_title_path("/app0/wine-run.txt");
+	std::ifstream file(request);
+	for (std::string line; std::getline(file, line); )
+		if (line == wanted) {
+			file.close();
+			remove(request.c_str());   // consumed, as a session consumes it, so it cannot replay on the next start
 			say("page-table probe: the title ends at stage %s", stage);
 			_exit(0);
 		}
@@ -303,7 +307,7 @@ int main(int argc, char **argv)
 	if (earlyLog >= 0) platform_say_file(earlyLog);
 	say("title start: argc=%d uid=%d", argc, (int)getuid());
 	for (int i = 1; i < argc; i++) say("  arg %d: %s", i, argv[i] ? argv[i] : "(null)");
-	pt_exit_at(argc, argv, "start");
+	pt_exit_at("start");
 #if defined(PS5_TESTER_PROBE) && !defined(PS5_HOST_REFERENCE)
 	// The tester probe, title PPSA99171 (native/proton_tester_probe.h): it asks for the /data grant once itself and
 	// leaves before dev.conf, the data folder and the retries below, which are MihawkOS's.
@@ -344,9 +348,10 @@ int main(int argc, char **argv)
 	// (0x80020063, a tester's report 2026-10-24); loaded first, the session read both devices there.
 	pw_usb_input_ps5_preload([](const char *line) { say("%s", line); });
 #endif
+	pt_exit_at("preload");
 	const bool data = proton_data_grant(retried);
 	say("elevation: granted=%d status=%s uid=%d note=%s", (int)data, proton_data_status(), (int)getuid(), proton_data_note());
-	pt_exit_at(argc, argv, "granted");
+	pt_exit_at("granted");
 #if !defined(PS5_HOST_REFERENCE)
 	const auto folder = [](int error) { return error == 0 ? "made" : error == EEXIST ? "present" : strerror(error); };
 	say("first run: dev.conf %s (%d), %s %s, %s/logs %s", devConf == PW_FIRST_RUN_WRITTEN ? "written" :
@@ -379,7 +384,7 @@ int main(int argc, char **argv)
 	}
 #endif
 	platform_init(PS5_TITLE_NAME);
-	pt_exit_at(argc, argv, "platform");
+	pt_exit_at("platform");
 	// The samples report on std::cout and std::cerr: both reach klog
 	std::cout.rdbuf(std::cerr.rdbuf());
 #if !defined(PS5_HOST_REFERENCE)

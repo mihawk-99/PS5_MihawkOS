@@ -19,7 +19,7 @@
 enum {
     PW_VM_RECORD = 72,
     PW_VM_FLEXIBLE = 1u, PW_VM_DIRECT = 2u, PW_VM_STACK = 4u, PW_VM_POOLED = 8u, PW_VM_COMMITTED = 16u,
-    PW_VM_NAME = 32, PW_VM_GROUPS = 48, PW_VM_BIG = 8, PW_VM_FLEXBIG = 8,
+    PW_VM_NAME = 32, PW_VM_GROUPS = 48, PW_VM_BIG = 8, PW_VM_FLEXBIG = 8, PW_VM_WINDOWS = 32,
     PW_VM_PROTS = 4, PW_VM_SIZES = 4,   /* flexible_kind: r / rw / rx / other by <64 KiB / <1 MiB / <8 MiB / more */
     PW_VM_CLASS_FLEXIBLE = 0, PW_VM_CLASS_DIRECT = 1, PW_VM_CLASS_RESERVED = 2, PW_VM_CLASSES = 3,   /* a mapping's class, below */
     PW_VM_WALK_LIMIT = 65536,     /* mappings walked at most; a walk that reaches it says so */
@@ -42,7 +42,7 @@ typedef struct PwVmGroup {
     uint64_t bytes;
     uint64_t resident;           /* resident bytes, when the walk had a resident callback */
     uint64_t regions_2m;         /* the 2 MiB regions its accessible mappings brought first (PwVmCensus.regions_2m) */
-    uint64_t regions_2m_direct;  /* and its 2 MiB-aligned direct ones (PwVmCensus.regions_2m_direct) */
+    uint64_t regions_2m_direct;  /* of them, its 2 MiB-aligned direct ones (PwVmCensus.regions_2m_direct) */
 } PwVmGroup;
 
 /* One of the largest mappings, whole: the kernel's own map (tools/console-memory.py map=PID) lists the same ranges by
@@ -79,12 +79,16 @@ typedef struct PwVmCensus {
     uint64_t reserved_resident;  /* resident bytes of the inaccessible mappings (protection 0), asked from 2026-10-11 */
     uint64_t direct_resident;    /* resident bytes of the accessible direct mappings (asked from 2026-10-11) */
     uint64_t unkept;             /* bytes in groups that did not fit */
-    uint64_t regions_2m_direct;  /* 2 MiB regions of direct mappings aligned to 2 MiB at both ends: the kernel can map them with
-                                  * 2 MiB pages, which need no page-table page (docs/HYPERVISOR.md), so they are kept out of
-                                  * regions_2m */
+    uint64_t regions_2m_direct;  /* of regions_2m, those of direct mappings aligned to 2 MiB at both ends: in a game process each
+                                  * still takes a page-table page (2026-10-29, the Pro, a 3D game: the pool fell by about the
+                                  * census plus these), so they are counted in regions_2m and shown apart */
     uint64_t regions_2m;         /* distinct 2 MiB regions that accessible mappings touch: each holds a page-table page once a
                                   * page in it is used (the ceiling test: 8 page tables per 16 MiB filled), so about what the
                                   * process takes of the system's pool (docs/PLAN.md "Memory plan", Part 3) */
+    struct { uint32_t gib, regions; uint64_t bytes; } windows[PW_VM_WINDOWS]; /* regions_2m and accessible bytes by the 1 GiB
+                                                                            * window a mapping starts in */
+    unsigned window_count;
+    uint64_t window_other;       /* regions in windows past the PW_VM_WINDOWS kept */
     int truncated;               /* the walk stopped at PW_VM_WALK_LIMIT */
     int failed;                  /* the walk stopped at a query that failed */
 } PwVmCensus;
@@ -118,6 +122,9 @@ size_t pw_vm_census_format_flexbig(const PwVmCensus *census, char *out, size_t s
 size_t pw_vm_census_format_flexible(const PwVmCensus *census, char *out, size_t size);
 /* "name:flags=regions/mappings ..." for the n groups that brought the most 2 MiB regions, most first, into out. */
 size_t pw_vm_census_format_regions(const PwVmCensus *census, unsigned n, char *out, size_t size);
+/* "0xGIB=regions/MiB ..." for the n 1 GiB windows of the address space that brought the most 2 MiB regions, most first, then
+ * "+N" for the rest, into out: whether a process's page tables come from a few dense areas or scattered ones. */
+size_t pw_vm_census_format_windows(const PwVmCensus *census, unsigned n, char *out, size_t size);
 /* "name:flags/protection=resident/mapped MiB/mappings ..." for the n first groups with flags & mask (0: every group),
  * into out. */
 size_t pw_vm_census_format(const PwVmCensus *census, unsigned n, uint8_t mask, char *out, size_t size);

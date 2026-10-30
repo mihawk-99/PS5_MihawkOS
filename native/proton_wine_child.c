@@ -957,7 +957,7 @@ static void vm_census_report(void (*say_line)(const char *))
     /* About what this helper takes of the system's page-table pool (src/pw_vm_census.h, regions_2m). */
     {
         int at = snprintf(line, sizeof(line), "wine-child: vm page tables ~%llu (2 MiB regions its accessible mappings touch; "
-                          "2m-direct %llu more, mapped with 2 MiB pages) by group ", (unsigned long long)census.regions_2m,
+                          "of them 2m-direct %llu) by group ", (unsigned long long)census.regions_2m,
                           (unsigned long long)census.regions_2m_direct);
         if (at > 0 && (size_t)at < sizeof(line) - 2) {
             size_t used = (size_t)at + pw_vm_census_format_regions(&census, 8, line + at, sizeof(line) - (size_t)at - 2);
@@ -965,6 +965,15 @@ static void vm_census_report(void (*say_line)(const char *))
             line[used] = 0;
         }
         say_line(line);
+        /* Where those regions lie, by 1 GiB window of the address space (Alpha 6, MihawkOS uses fewer page tables): a few
+         * dense windows cannot shrink by packing, scattered ones can. */
+        at = snprintf(line, sizeof(line), "wine-child: vm page-table windows ");
+        if (at > 0 && (size_t)at < sizeof(line) - 2) {
+            size_t used = (size_t)at + pw_vm_census_format_windows(&census, 12, line + at, sizeof(line) - (size_t)at - 2);
+            line[used++] = '\n';
+            line[used] = 0;
+            say_line(line);
+        }
     }
     int at = snprintf(line, sizeof(line), "wine-child: vm resident=%llu MiB direct_resident=%llu reserved_resident=%llu flexible=%llu direct=%llu other=%llu MiB "
                       "mappings=%u groups=%u%s%s top ", (unsigned long long)(census.resident >> 20),
@@ -1033,13 +1042,24 @@ static void life_summary(void)
     void (*perf_snapshot)(PwWinePerf *) = (void *)pw_prx_lookup(wine.descriptor, "pw_wine_perf_snapshot");
     unsigned (*file_stats)(unsigned long long *, unsigned) = (void *)pw_prx_lookup(wine.descriptor, "__wine_file_call_stats");
     unsigned (*section_stats)(uint64_t *, unsigned) = (void *)pw_prx_lookup(wine.descriptor, "__wine_ps5_section_stats");
+    /* Where module loading goes (P3): execute conversions and image reads, code-share round trips, module opens. */
+    unsigned (*load_timing)(uint64_t *, unsigned) = (void *)pw_prx_lookup(wine.descriptor, "__wine_ps5_load_timing");
+    unsigned (*code_round_timing)(uint64_t *, unsigned) = (void *)pw_prx_lookup(wine.descriptor, "pw_ps5_code_round_timing");
+    unsigned (*dl_timing)(uint64_t *, unsigned) = (void *)pw_prx_lookup(wine.descriptor, "pw_wine_dl_timing");
     PwWinePerf perf = {0};
     unsigned long long files[24] = {0};
-    uint64_t section[16] = {0};
+    uint64_t section[16] = {0}, load[4] = {0}, rounds[2] = {0}, opens[4] = {0};
     if (perf_snapshot) perf_snapshot(&perf);
     if (!file_stats || file_stats(files, 24) < 24) memset(files, 0, sizeof(files));
     if (!section_stats || section_stats(section, 16) < 16) memset(section, 0, sizeof(section));
-    char line[400];
+    if (!load_timing || load_timing(load, 4) < 4) memset(load, 0, sizeof(load));
+    if (!code_round_timing || code_round_timing(rounds, 2) < 2) memset(rounds, 0, sizeof(rounds));
+    if (!dl_timing || dl_timing(opens, 4) < 4) memset(opens, 0, sizeof(opens));
+    /* The program's own exit, on the monotonic clock: its EXIT doom stamp (pw_ps5_child_exit), 0 when it never exited. */
+    int64_t dooms[PW_CHILD_DOOMS] = {0};
+    unsigned (*doom)(int64_t *, unsigned) = __atomic_load_n(&watch_doom, __ATOMIC_ACQUIRE);
+    if (doom) (void)doom(dooms, PW_CHILD_DOOMS);
+    char line[640];
     /* file kinds in __wine_file_call_stats' order: read, create, open, attributes, directory, information */
     snprintf(line, sizeof(line), "wine-child: life summary ms=%lld server_calls=%llu server_ms=%llu file_read_calls=%llu "
              "file_read_ms=%llu file_open_calls=%llu file_open_ms=%llu file_attributes_ms=%llu file_information_ms=%llu "
@@ -1049,6 +1069,14 @@ static void life_summary(void)
              files[0], files[1] / 1000000ull, files[8], files[9] / 1000000ull, files[13] / 1000000ull, files[21] / 1000000ull,
              (unsigned long long)section[8], (unsigned long long)(section[9] / 1000000ull),
              (unsigned long long)section[1], (unsigned long long)(section[2] / 1000000ull));
+    const size_t used = strlen(line) - 1;   /* before its newline */
+    snprintf(line + used, sizeof(line) - used, " convert_calls=%llu convert_ms=%llu image_read_calls=%llu image_read_ms=%llu "
+             "code_round_calls=%llu code_round_ms=%llu dl_found_calls=%llu dl_found_ms=%llu dl_missed_calls=%llu dl_missed_ms=%llu "
+             "exit_ms=%lld\n",
+             (unsigned long long)load[0], (unsigned long long)(load[1] / 1000000ull), (unsigned long long)load[2],
+             (unsigned long long)(load[3] / 1000000ull), (unsigned long long)rounds[0], (unsigned long long)(rounds[1] / 1000000ull),
+             (unsigned long long)opens[0], (unsigned long long)(opens[1] / 1000000ull), (unsigned long long)opens[2],
+             (unsigned long long)(opens[3] / 1000000ull), (long long)dooms[PW_CHILD_DOOM_EXIT - 1]);
     stage(line);
 }
 static void exec_tally(void)

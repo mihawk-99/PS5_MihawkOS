@@ -1,25 +1,25 @@
 {
  "where": "console",
  "kind": "vcredist",
- "run": "installer-vcredist-2026-10-25-080614",
- "seconds": 45.9,
+ "run": "installer-vcredist-2026-10-29-174048",
+ "seconds": 39.2,
  "console_result": "finished",
  "returned_to_launcher": true,
  "verdict": {
   "passed": false,
-  "summary": "vcredist, 22 checks, 1 failed, 33770 ms in all"
+  "summary": "vcredist, 22 checks, 1 failed, 27863 ms in all"
  },
  "checks": [
   {
    "step": "snapshot",
    "verdict": "N/A",
-   "ms": 37,
-   "detail": "entries 1721"
+   "ms": 121,
+   "detail": "entries 1743"
   },
   {
    "step": "install",
    "verdict": "PASS",
-   "ms": 11264,
+   "ms": 9832,
    "detail": "exit codes 0 0"
   },
   {
@@ -49,37 +49,37 @@
   {
    "step": "install-native",
    "verdict": "PASS",
-   "ms": 6,
+   "ms": 7,
    "detail": "not Wine's own: %SystemRoot%\\system32\\vcruntime140_1.dll"
   },
   {
    "step": "install-native",
    "verdict": "PASS",
-   "ms": 8,
+   "ms": 9,
    "detail": "not Wine's own: %SystemRoot%\\syswow64\\msvcp140.dll"
   },
   {
    "step": "install-native",
    "verdict": "PASS",
-   "ms": 10,
+   "ms": 11,
    "detail": "not Wine's own: %SystemRoot%\\syswow64\\vcruntime140.dll"
   },
   {
    "step": "install-app",
    "verdict": "PASS",
-   "ms": 519,
+   "ms": 181,
    "detail": "exit code 77 \"%FIX%\\steam-app\\pwapp32.exe\" /load msvcp140.dll _Query_perf_frequency"
   },
   {
    "step": "install-app",
    "verdict": "PASS",
-   "ms": 464,
+   "ms": 137,
    "detail": "exit code 77 \"%FIX%\\steam-app\\pwapp64.exe\" /load msvcp140.dll _Query_perf_frequency"
   },
   {
    "step": "reinstall",
    "verdict": "PASS",
-   "ms": 8834,
+   "ms": 7211,
    "detail": "exit codes 0 0"
   },
   {
@@ -103,13 +103,13 @@
   {
    "step": "reinstall-native",
    "verdict": "PASS",
-   "ms": 4,
+   "ms": 5,
    "detail": "not Wine's own: %SystemRoot%\\system32\\vcruntime140.dll"
   },
   {
    "step": "reinstall-native",
    "verdict": "PASS",
-   "ms": 6,
+   "ms": 7,
    "detail": "not Wine's own: %SystemRoot%\\system32\\vcruntime140_1.dll"
   },
   {
@@ -127,19 +127,19 @@
   {
    "step": "reinstall-app",
    "verdict": "PASS",
-   "ms": 501,
+   "ms": 180,
    "detail": "exit code 77 \"%FIX%\\steam-app\\pwapp32.exe\" /load msvcp140.dll _Query_perf_frequency"
   },
   {
    "step": "reinstall-app",
    "verdict": "PASS",
-   "ms": 466,
+   "ms": 154,
    "detail": "exit code 77 \"%FIX%\\steam-app\\pwapp64.exe\" /load msvcp140.dll _Query_perf_frequency"
   },
   {
    "step": "uninstall",
    "verdict": "PASS",
-   "ms": 9477,
+   "ms": 7617,
    "detail": "exit codes 0 0"
   },
   {
@@ -193,7 +193,7 @@
   {
    "step": "clean",
    "verdict": "FAIL",
-   "ms": 2174,
+   "ms": 2389,
    "detail": "added or changed 0, removed 24 (of the snapshot's entries)"
   },
   {
@@ -223,31 +223,31 @@
   {
    "step": "install-native",
    "verdict": "PASS",
-   "ms": 6,
+   "ms": 7,
    "detail": "not Wine's own: %SystemRoot%\\\\system32\\\\vcruntime140_1.dll"
   },
   {
    "step": "install-native",
    "verdict": "PASS",
-   "ms": 8,
+   "ms": 9,
    "detail": "not Wine's own: %SystemRoot%\\\\syswow64\\\\msvcp140.dll"
   },
   {
    "step": "install-native",
    "verdict": "PASS",
-   "ms": 10,
+   "ms": 11,
    "detail": "not Wine's own: %SystemRoot%\\\\syswow64\\\\vcruntime140.dll"
   },
   {
    "step": "install-app",
    "verdict": "PASS",
-   "ms": 519,
+   "ms": 181,
    "detail": "exit code 77 \\\"%FIX%\\\\steam-app\\\\pwapp32.exe\\\" /load msvcp140.dll _Query_perf_frequency"
   },
   {
    "step": "install-app",
    "verdict": "PASS",
-   "ms": 464,
+   "ms": 137,
    "detail": "exit code 77 \\\"%FIX%\\\\steam-app\\\\pwapp64.exe\\\" /load msvcp140.dll _Query_perf_frequency"
   },
   {
@@ -271,13 +271,13 @@
   {
    "step": "reinstall-native",
    "verdict": "PASS",
-   "ms": 4,
+   "ms": 5,
    "detail": "not Wine's own: %SystemRoot%\\\\system32\\\\vcruntime140.dll"
   },
   {
    "step": "reinstall-native",
    "verdict": "PASS",
-   "ms": 6,
+   "ms": 7,
    "detail": "not Wine's own: %SystemRoot%\\\\system32\\\\vcruntime140_1.dll"
   },
   {
@@ -295,13 +295,13 @@
   {
    "step": "reinstall-app",
    "verdict": "PASS",
-   "ms": 501,
+   "ms": 180,
    "detail": "exit code 77 \\\"%FIX%\\\\steam-app\\\\pwapp32.exe\\\" /load msvcp140.dll _Query_perf_frequency"
   },
   {
    "step": "reinstall-app",
    "verdict": "PASS",
-   "ms": 466,
+   "ms": 154,
    "detail": "exit code 77 \\\"%FIX%\\\\steam-app\\\\pwapp64.exe\\\" /load msvcp140.dll _Query_perf_frequency"
   },
   {
