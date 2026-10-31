@@ -373,7 +373,7 @@ static int foreign_op(void *context, uintptr_t address, size_t bytes, uintptr_t 
     PwWineVmEntry found;
     char line[224];
     uintptr_t lent_start, lent_end;
-    int status, lent_here;
+    int status, lent_here, failure_kind = PW_WINE_VM_FAILURE_NONE, kernel_status = 0;
     (void)context;
 
     /* A lent range is foreign by record (2: refused or gone around, not a hole, it lies in a view); the kernel is
@@ -382,7 +382,8 @@ static int foreign_op(void *context, uintptr_t address, size_t bytes, uintptr_t 
     if (lent_here && lent_start > address) bytes = lent_start - address;
     if (lent_here && lent_start <= address) status = 0;
     else if (__atomic_load_n(&signature_state, __ATOMIC_ACQUIRE) <= 0) status = 0;
-    else status = pw_wine_vm_foreign((const void *)address, bytes, &signature, &found, refill);
+    else status = pw_wine_vm_foreign_diagnostic((const void *)address, bytes, &signature, &found, refill,
+                                                &failure_kind, &kernel_status);
     if (!status && lent_here) {
         *start = lent_start;
         *end = lent_end;
@@ -400,7 +401,18 @@ static int foreign_op(void *context, uintptr_t address, size_t bytes, uintptr_t 
             say(line);
         }
     } else if (status < 0 && failures++ < 4) {
-        snprintf(line, sizeof(line), "[wine-ps5] no answer about %#lx +%#zx: refused\n", (unsigned long)address, bytes);
+        if (failure_kind == PW_WINE_VM_FAILURE_QUERY)
+            snprintf(line, sizeof(line), "[wine-ps5] no answer about %#lx +%#zx: sceKernelVirtualQuery status %#x; "
+                                         "refused\n", (unsigned long)address, bytes, (unsigned)kernel_status);
+        else if (failure_kind == PW_WINE_VM_FAILURE_ENTRY)
+            snprintf(line, sizeof(line), "[wine-ps5] no answer about %#lx +%#zx: invalid kernel entry; refused\n",
+                     (unsigned long)address, bytes);
+        else if (failure_kind == PW_WINE_VM_FAILURE_REFILL)
+            snprintf(line, sizeof(line), "[wine-ps5] no answer about %#lx +%#zx: hole refill failed twice; refused\n",
+                     (unsigned long)address, bytes);
+        else
+            snprintf(line, sizeof(line), "[wine-ps5] no answer about %#lx +%#zx: unknown guard failure; refused\n",
+                     (unsigned long)address, bytes);
         say(line);
     }
     return status;
