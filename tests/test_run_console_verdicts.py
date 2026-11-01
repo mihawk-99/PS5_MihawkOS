@@ -5,6 +5,8 @@ ending, the broker wedge, the helpers' backstop, the memory helper and the direc
 is the format its source prints, and the source is checked to still print it, so the C side and the runner cannot
 drift apart unnoticed."""
 import importlib.util
+import os
+import subprocess
 from pathlib import Path
 import unittest
 
@@ -184,8 +186,12 @@ class BrokerWedge(unittest.TestCase):
                 '"flight recorder: wedge broker_busy_s=%u: the GPU broker\'s client lock is held%s"',
                 '"the GPU broker\'s client lock held %u s"', '" phase=%s:%llu tid=%d"', '" phase=none"')
         printed('src/pw_hang_breaker.h', f'#define PW_HANG_WEDGE_S {runner.WEDGE_S}u')
-        printed('platform/graphics/patches/0017-the-broker-names-the-call-its-client-lock-s-holder-waits-in.patch',
-                'Phase hold("test-hold");', 'getenv("PROTON_TEST_BROKER_HOLD_S")')
+        # PS5_Vulkan d14e738, once PS5_Proton's graphics patch 0017 (tools/setup-graphics-foundation.sh pins the revision)
+        fork = os.environ.get('PS5_VULKAN_GIT') or str(ROOT.parent / 'PS5_Vulkan')
+        change = subprocess.run(['git', '-C', fork, 'show', 'd14e738dec4f596e1e6d060362e0d42f4a83f608'], check=True,
+                                capture_output=True, text=True).stdout
+        for fragment in ('Phase hold("test-hold");', 'getenv("PROTON_TEST_BROKER_HOLD_S")'):
+            self.assertIn(fragment, change)
 
     def test_the_recorder_ended_the_game(self):
         record = runner.helpers_ended(WEDGE_ENDING)
@@ -453,7 +459,7 @@ class TitleCrash(unittest.TestCase):
 
 class TouchpadAtStart(unittest.TestCase):
     def test_source_prints_the_pad_line(self):
-        printed('native/proton_wine.cpp', '"Wine: pad connected=%d buttons=%#x touch=%u"')
+        printed('native/proton_wine.cpp', '"Wine: pad connected=%d%s buttons=%#x touch=%u"')
 
     def test_a_contact_at_start_is_named(self):
         touched = ['[MihawkOS] Wine: pad connected=1 buttons=0 touch=1\n']
@@ -463,7 +469,42 @@ class TouchpadAtStart(unittest.TestCase):
         self.assertEqual(runner.touchpad_touched_at_start(later), 0)
         # no pad, or no line at all
         self.assertEqual(runner.touchpad_touched_at_start(['[MihawkOS] Wine: pad connected=0 buttons=0 touch=1\n']), 0)
+        # While the system holds the pad (PS menu), the line says so between connected= and buttons= (pw-01)
+        self.assertEqual(runner.touchpad_touched_at_start(
+            ['[MihawkOS] Wine: pad connected=1 (the system has it: idle to the game) buttons=0 touch=1\n']), 1)
         self.assertEqual(runner.touchpad_touched_at_start([]), 0)
+
+
+class ProbeVerdicts(unittest.TestCase):
+    MARKER = 'PS5_PROTON_D3D9_D3D11_SHARE'
+
+    def test_pass_and_fail_after_the_marker(self):
+        self.assertEqual(runner.probe_verdict(self.MARKER, f'{self.MARKER} PASS\n'), 'PASS')
+        self.assertEqual(runner.probe_verdict(self.MARKER, f'[x] {self.MARKER} FAIL: no device\n'), 'FAIL')
+
+    def test_a_named_result_is_a_verdict_of_its_own(self):
+        line = f'{self.MARKER} NOSHARE: Direct3D 11 could not open the shared handle\n'
+        self.assertEqual(runner.probe_verdict(self.MARKER, line), 'NOSHARE')
+        self.assertNotEqual(runner.probe_verdict(self.MARKER, line), 'PASS')
+        # it does not count as the probe having passed
+        self.assertFalse(runner.probe_completed('NOSHARE', None))
+
+    def test_step_lines_carry_no_verdict(self):
+        for step in (f'{self.MARKER} d3d11-open-shared hr=80070057\n', f'{self.MARKER} order=d3d11-first\n',
+                     f'{self.MARKER} d3d9-shared-handle none\n', 'unrelated line\n'):
+            self.assertIsNone(runner.probe_verdict(self.MARKER, step))
+
+    def test_a_name_belongs_to_its_own_marker(self):
+        # NOSHARE is not a result of other probes: for them the line carries no verdict, as before
+        self.assertIsNone(runner.probe_verdict('PS5_PROTON_D3D12_SHARED', 'PS5_PROTON_D3D12_SHARED NOSHARE\n'))
+        self.assertEqual(runner.probe_verdict('PS5_PROTON_D3D12_SHARED', 'PS5_PROTON_D3D12_SHARED PASS sharing=no\n'), 'PASS')
+
+    def test_the_probe_prints_the_names_the_runner_reads(self):
+        printed('tests/d3d9ex-d3d11-share-probe.c', '"NOSHARE"', 'MARKER " %s%s%s\\n"')
+        for marker, names in runner.NAMED_VERDICTS.items():
+            printed('tests/d3d9ex-d3d11-share-probe.c', marker)
+            self.assertTrue(all(name in (ROOT / 'tests/d3d9ex-d3d11-share-probe.c').read_text() for name in names))
+
 
 if __name__ == '__main__':
     unittest.main()

@@ -1,0 +1,103 @@
+From 0000000000000000000000000000000000000000 Mon Sep 17 00:00:00 2001
+From: Mihawk <163614687+mihawk-99@users.noreply.github.com>
+Date: Sun, 01 Nov 2026 16:00:00 -0400
+Subject: [PATCH] ntdll: PS5: A process's command line, its own or another's.
+
+NtQueryInformationProcess(ProcessCommandLineInformation, class 60) was not known here at all: every caller got
+STATUS_INVALID_INFO_CLASS and nothing else, for its own process as for another. Windows answers it from 8.1 on, and a
+launcher that checks the command line of the game it started (the gate's chromium-game: whether "--single-process" reached
+the child) read nothing and failed, while the child's own parameters held the switch (a diagnostic read the same child's
+PEB, ProcessParameters and CommandLine through ReadProcessMemory: 116 bytes, the switch there; 2026-11-01).
+
+The answer is laid out as Windows does: a UNICODE_STRING whose Buffer points just past it, then the text. The caller's own
+command line is copied from its parameters; another process's is read through NtReadVirtualMemory along the same path
+(PEB, ProcessParameters, CommandLine). A buffer too small gets STATUS_INFO_LENGTH_MISMATCH with the needed length in
+*ret_len. Host test: tests/test_pw_command_line.py (the layout, cut from this patch).
+---
+ dlls/ntdll/unix/process.c | 68 +++++++++++++++++++++++++++++++++++++++++++++++
+ 1 file changed, 68 insertions(+)
+
+diff --git a/dlls/ntdll/unix/process.c b/dlls/ntdll/unix/process.c
+--- a/dlls/ntdll/unix/process.c
++++ b/dlls/ntdll/unix/process.c
+@@ -1360,6 +1360,40 @@
+ }
+ #endif
+ 
++#ifdef __PROSPERO__
++/* ProcessCommandLineInformation's answer, as Windows gives it from 8.1 on: a UNICODE_STRING whose Buffer points just past
++ * it, then the text. bytes is the text's length; read copies it from wherever the process keeps it into dest (0 or a
++ * status). *needed is set either way; a buffer too small gets STATUS_INFO_LENGTH_MISMATCH and nothing else. */
++static unsigned int ps5_command_line_answer( USHORT bytes, unsigned int (*read)( void *dest, void *context ), void *context,
++                                             void *info, ULONG size, ULONG *needed )
++{
++    UNICODE_STRING *str = info;
++    unsigned int status;
++
++    *needed = sizeof(UNICODE_STRING) + bytes;
++    if (size < *needed) return STATUS_INFO_LENGTH_MISMATCH;
++    str->Length = str->MaximumLength = bytes;
++    str->Buffer = (WCHAR *)(str + 1);
++    if (bytes && (status = read( str->Buffer, context ))) return status;
++    return STATUS_SUCCESS;
++}
++
++struct ps5_command_line_source { HANDLE process; const WCHAR *text; USHORT bytes; };
++
++static unsigned int ps5_command_line_read( void *dest, void *context )
++{
++    const struct ps5_command_line_source *source = context;
++    SIZE_T done = 0;
++
++    if (source->process == GetCurrentProcess())
++    {
++        memcpy( dest, source->text, source->bytes );
++        return STATUS_SUCCESS;
++    }
++    return NtReadVirtualMemory( source->process, source->text, dest, source->bytes, &done );
++}
++#endif
++
+ #define UNIMPLEMENTED_INFO_CLASS(c) \
+     case c: \
+         FIXME( "(process=%p) Unimplemented information class: " #c "\n", handle); \
+@@ -1712,6 +1746,39 @@
+         else ret = STATUS_INFO_LENGTH_MISMATCH;
+         break;
+ 
++#ifdef __PROSPERO__
++    case ProcessCommandLineInformation:
++    {
++        /* The command line a process was started with, its own or another's, from its parameters (PEB, then
++         * ProcessParameters, then CommandLine): a launcher's check of the game it started read nothing at all, the class
++         * being unknown here (chromium-game, alpha7-gate-pro-2026-11-01). */
++        struct ps5_command_line_source source = { handle };
++
++        if (handle == GetCurrentProcess())
++        {
++            source.text = peb->ProcessParameters->CommandLine.Buffer;
++            source.bytes = peb->ProcessParameters->CommandLine.Length;
++        }
++        else
++        {
++            PROCESS_BASIC_INFORMATION pbi;
++            RTL_USER_PROCESS_PARAMETERS *params = NULL;
++            UNICODE_STRING command;
++            SIZE_T done;
++
++            if ((ret = NtQueryInformationProcess( handle, ProcessBasicInformation, &pbi, sizeof(pbi), NULL ))) break;
++            if ((ret = NtReadVirtualMemory( handle, &((PEB *)pbi.PebBaseAddress)->ProcessParameters, &params, sizeof(params),
++                                            &done ))) break;
++            if (!params) { ret = STATUS_UNSUCCESSFUL; break; }
++            if ((ret = NtReadVirtualMemory( handle, &params->CommandLine, &command, sizeof(command), &done ))) break;
++            source.text = command.Buffer;
++            source.bytes = command.Length;
++        }
++        ret = ps5_command_line_answer( source.bytes, ps5_command_line_read, &source, info, size, &len );
++        break;
++    }
++#endif
++
+     case ProcessWow64Information:
+         len = sizeof(ULONG_PTR);
+         if (size != len) return STATUS_INFO_LENGTH_MISMATCH;

@@ -18,7 +18,8 @@
 #                   (tools/fetch-cef.py)
 #   2 prx tools     tools/fetch-prx-tools.sh: the PRX converter at its pin, built with the host clang++
 #   3 lapy          tools/build-lapy-validation.py --resident (the host clang; the pin needs clang/LLD 23.1.1)
-#   4 wine          tools/fetch-runtime.sh, then tools/build-wine-runtime.sh, the host Wine build
+#   4 wine          tools/fetch-runtime.sh, then tools/build-wine-runtime.sh, the host Wine build, and VKD3D-Proton's
+#                   submodules at the revisions its pin records (tools/build-vkd3d.py)
 #   5 prefix        .deps/prefix-probe, the template of the tools' check prefix (tools/stage-wine.py): host wineboot
 #                   of step 4's build, with Wine Mono and Gecko left out (the runtime installs its own)
 set -euo pipefail
@@ -186,6 +187,9 @@ else
     bash "$root/tools/fetch-runtime.sh"   # quick when every pin is there
 fi
 step "host wine build (.deps/wine-runtime/stage)" "$deps/wine-runtime/stage" bash "$root/tools/build-wine-runtime.sh"
+# VKD3D-Proton's submodules, at the revisions its pinned commit records: tools/build-vkd3d.py exports them by revision.
+step "vkd3d-proton submodules (.deps/vkd3d-proton)" "$deps/vkd3d-proton/subprojects/dxil-spirv/third_party/SPIRV-Tools/CMakeLists.txt" \
+    git -C "$deps/vkd3d-proton" submodule update --init --recursive --depth 1
 
 # 5. The check prefix's template, once: wineboot of the host build at .deps/wine-runtime/build.
 make_prefix() {

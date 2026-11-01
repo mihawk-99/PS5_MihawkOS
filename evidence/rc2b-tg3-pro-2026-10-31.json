@@ -1,0 +1,54 @@
+{
+  "battery": "rc2b-tg3-pro-2026-10-31",
+  "expected_cases": [
+    "title-games"
+  ],
+  "revision": "7d7017dab9c8f4af334fc1f3f6aaef46f2ff1603",
+  "dirty": true,
+  "cases": [
+    {
+      "case": "title-games",
+      "run": "rc2b-tg3-pro-2026-10-31-title-games",
+      "runner_status": 0,
+      "seconds": 31.4,
+      "result": "finished",
+      "probe_verdict": "PASS",
+      "returned_to_launcher": true,
+      "exit_stall": false,
+      "passed": true,
+      "run_seconds": 30.4,
+      "launch_readiness": {
+        "ready": true,
+        "seconds": 0.148,
+        "settle_seconds": 0.0,
+        "census_seconds": 0.138,
+        "previous_cleanup_verified": true
+      },
+      "stages": {
+        "launched": 0.99,
+        "title_started": 1.58,
+        "elevated": 1.58,
+        "wine_loaded": 1.88,
+        "wineboot_started": 4.39,
+        "wineboot_ended": 5.64,
+        "program_started": 5.69,
+        "program_ended": 12.12,
+        "wine_ended": 27.51,
+        "marker": 27.51,
+        "launcher_started": 29.45,
+        "launcher_ended": 29.8,
+        "closed": 30.37
+      },
+      "runner_overhead_seconds": 1.0,
+      "layout": "launcher",
+      "fault_records": 0,
+      "helpers": 7,
+      "protocol_errors": 0,
+      "pipe_memory_exhausted": 0,
+      "search_errors": 0
+    }
+  ],
+  "complete": true,
+  "seconds": 31.5,
+  "passed": true
+}

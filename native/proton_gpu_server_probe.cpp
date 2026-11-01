@@ -12,8 +12,11 @@
 #include <signal.h>
 #include <unistd.h>
 #endif
+#include "../src/pw_gpu_identity.h"
+#include "../src/pw_memory_guard.h"
 #include <cstdio>
 #include <cstdlib>
+#include <ps5platform/kernel.h>
 extern "C" int sceSystemServiceGetLocalProcessStatusList(void *,unsigned,unsigned *);
 namespace {
 bool proton_native_absent(int token)
@@ -43,6 +46,14 @@ bool proton_gpu_broker_start(bool capture,bool local)
     const unsigned long long host=proton_gpu_host_limit();
     if(!ps5_gpu_broker_set_host_limit(host))
         fprintf(stderr,"[PS5 Proton] GPU broker: host-visible limit of %llu MiB refused; the broker's default stays\n",host>>20);
+    // The console's model, which every GPU client is told at INIT and gives games as its GPU's identity
+    // (src/pw_gpu_identity.h): the generation from the application's direct pool (src/pw_memory_guard.h), none when its
+    // size is not known.
+    const uint64_t direct=(uint64_t)sceKernelGetDirectMemorySize();
+    const unsigned model=!direct ? PW_GPU_MODEL_UNKNOWN :
+        pw_console_kind_of(direct)==PW_CONSOLE_PRO ? PW_GPU_MODEL_PRO : PW_GPU_MODEL_STANDARD;
+    if(!ps5_gpu_broker_set_console_model(model))
+        fprintf(stderr,"[PS5 Proton] GPU broker: console model %u refused; clients keep RADV's own GPU identity\n",model);
     return ps5_gpu_broker_start(proton_app_root(),capture,local,proton_native_absent);
 }
 int proton_gpu_broker_open(int *cookie,int pid) { return ps5_gpu_broker_open_for_pid(cookie,pid); }

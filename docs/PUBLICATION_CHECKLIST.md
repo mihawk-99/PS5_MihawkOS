@@ -182,12 +182,12 @@ other private LAN addresses, blocked personal e-mail addresses (`tools/privacy_c
 addresses, serial numbers and console ids, the build user's home path and Windows user folders, in the tree and in
 history; and in the tree, tracked files under `klog/` or `.claude/`, files that could hold game data, firmware or keys,
 source files without an SPDX line, the licence texts of a production build (a title or runtime without its licences
-folder fails), and what a build must never carry: a wallpaper other than the project's Bubble Earth (`proton.bmp`, drawn
-by `tools/make-aero-wallpapers.py`; its thumbnail is compared with the generator's: the build's is about 3.5 levels
-away, Glass City 41, Aqua World 49, Aero Meadow 53, Bloom farther), a native Microsoft binary (a PE without Wine's builtin
+folder fails), and what a build must never carry: a wallpaper other than the default, Bubble City by Skeuoss (`proton.bmp`,
+stamped from `themes/windows11/wallpapers/skeuoss-bubble-city.jpg`; its thumbnail is compared with the picture's: the
+build's is 0.4 levels away, Bubble Earth 68.5, Aqua World 54.7, Glass City 75.5, Aero Meadow 72.8), a native Microsoft binary (a PE without Wine's builtin
 marker that names Microsoft Corporation), and the probe prefix or test programs. Every build, the owner's own and a
-public one alike, ships the project's own wallpaper: Aero Meadow from 2026-10-18, when it replaced Windows 11's Bloom,
-and Bubble Earth from 2026-10-25. It prints counts and places, never a
+public one alike, ships a wallpaper it may redistribute: Aero Meadow from 2026-10-18, when it replaced Windows 11's Bloom,
+Bubble Earth from 2026-10-25, and Bubble City by Skeuoss, used with the artist's permission, from 2026-10-31. It prints counts and places, never a
 value; known false positives are listed in the tool and reported as allowed. `--allow '<category>'` accepts a finding
 the owner has decided to keep (for example `--allow 'home path'` while the history in section 2 stays). Its host test
 plants each category in a scratch repository and checks it is caught and not printed.

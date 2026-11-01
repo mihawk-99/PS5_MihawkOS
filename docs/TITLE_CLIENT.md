@@ -65,6 +65,64 @@ The client's per-submit cost is a helper's (one socket round trip); the game in 
 
 ## Choosing the game
 
+Alpha 7's default ("Run inside MihawkOS"): ntdll asks `pw_ps5_title_route` (patch 2403) as each program starts, with the
+image's Unix path. The first program that passes goes to the title; a second goes to a helper (EBUSY). A program passes
+when it is:
+- 64-bit, from a library (`\steamapps\common\`, `\games\`, or any program a library entry names, wherever it
+  lives: a USB drive, a folder of the player's own; passed on as `WINE_PS5_TITLE_LISTED`, the store client's
+  `steam.exe` left out), not a redistributable installer, crash reporter or
+  `*launcher*` by folder or name, and not opted out (`WINE_PS5_TITLE_GAMES=0` in its `game.json` env, passed on as
+  `WINE_PS5_TITLE_OPTOUT`) (`wine/ps5/pw_wine_title_game.h`, host-tested);
+- and a game by what it is: its import or delay-import table, or that of a DLL it imports from its own folder (an
+  engine's player DLL), reaches d3d8/9/10/11/12, dxgi, ddraw, vulkan-1 or opengl32. A program that imports a graphics
+  API itself is a game even when it also imports CEF (a game's menus); one that imports a browser shell (CEF, Qt
+  WebEngine) and no graphics API, or a .NET program, is not (`wine/ps5/pw_wine_pe_imports.h`, host-tested on fixture
+  images, including a game with its CEF web helper beside it). A launcher or a
+  bootstrap stub that only starts the game is no game, so the game it starts gets the title.
+- Or its entry picks it (`WINE_PS5_TITLE_GAME=<exe>` in `game.json` env, passed on as `WINE_PS5_TITLE_PICK`): the one
+  program of a game that runs in the title whatever the rules say, for a game that loads its renderer only at run time.
+
+A Chromium-based game (Electron, NW.js) is told by its folder: Chromium's `resources.pak`, `icudtl.dat` and a V8
+snapshot (`v8_context_snapshot.bin` or `snapshot_blob.bin`) beside the exe, and no `libcef.dll` (a CEF program is a
+launcher's browser). Its imports say nothing reliable, since it loads Direct3D at run time, so the folder decides, and
+it stays in a helper ("a Chromium-based game: a helper until one draws in the title"). It starts as one process:
+kernelbase patch 2404 appends `WINE_PS5_CHROMIUM_ARGS` (the title's default `--single-process`, the switch the store
+client's browser runs with) to its main process's command line. Its own processes (`--type=`) are helpers too.
+
+The 2D NW.js game on the standard PS5, 2026-10-31 (evidence/moonstone-base-2026-10-31-01.json, -nonone, -fallback, -helper-fallback and -helper-single):
+
+| Where, switches | Its processes | Draws | System pool, lowest free of 8,192 | End |
+| --- | --- | --- | --- | --- |
+| Alpha 6: a helper, none | 8 | yes | 915 | ended by the page-table guard |
+| The title, `--single-process` | 2 | no (no swapchain in 10 min) | 3,068 | clean close |
+| The title, none | 3 (no renderer, no GPU process) | no | 3,085 | clean close |
+| The title, in-process GPU, one renderer, network in-process | 2 | no | 3,133 | clean close |
+| A helper, in-process GPU, one renderer, network in-process | 9 | yes | 811 | ended by the page-table guard at 87 s |
+| **A helper, `--single-process` (the default)** | 2 | yes, smoothly (the owner watched) | 2,004, flat at about 2,034 after 8 min | clean close |
+
+Why such a game does not draw in the title is open: it loads d3d11, dxgi and Vulkan and never makes a swapchain.
+
+**A game the launcher starts is the session's root**, which no helper requests. The title applies the same rules to
+it from its own file (`root_in_title`) and, when it passes, runs it itself (`start_title_root`: the title client's
+environment, the root's own command line) instead of in a helper; a start that fails before Wine runs falls back to
+a helper. Before this, a library entry started from the launcher never ran in the title, wherever it lived (a big
+Direct3D 12 racing game on a USB drive, 2026-10-31). Logged as `the session's root <exe>: inside MihawkOS (…)`.
+
+Every library program's route is logged with its reason, for example `wine-ps5: game64.exe: inside MihawkOS (a 64-bit
+library game; imports a graphics API)` or `wine-ps5: start.exe: a helper (not a game; no graphics imports)`; the title
+adds `the title's place is taken; a helper`. The title turns the default on beside the GPU broker (`WINE_PS5_TITLE_GAMES=1`
+unless the launch set it).
+
+**The title's end waits for its game.** The helpers that the program in the title starts, and those they start, are its
+game's: when that program ends (a launcher that started the game and exited), the title waits for them with no time
+limit, instead of closing every helper after 15 s (`pw_ps5_wait_children`). Other helpers, Steam's among them, are still
+closed after 15 s, so closing a game in the title still restarts MihawkOS (option a). Before this, a launcher in the title
+had its game closed 15 s after it exited. Gate case `launcher-pair`: a launcher copy (no graphics import) starts the
+renderer and exits; the renderer must run in the title and end with 0. Proven on the base PS5 on 2026-10-31:
+library copies of a renderer (rung8-base-2026-10-31-fallbacks, now the gate case `title-games`) and the 3D demo started
+from Steam's Big Picture (ownerplay-base-2026-10-31).
+
+The design before the default, kept for its reasons:
 The first process a listed client (`pw_code_budget_listed`: Steam, the launchers) starts that is neither listed nor
 one of Wine's own goes to the title, if nothing runs there yet; every later one goes to a helper. A setting names it
 outright (`WINE_PS5_TITLE_PROCESS=<image>`, the by-name selection kept in the sessions' notes until something
@@ -72,6 +130,22 @@ exercises it). A 32-bit image is never chosen while the title has no WoW64 signa
 
 ## Stop and end
 
+What ships in Alpha 7 (2026-10-31):
+- **The game's end ends the session** (the first version below): MihawkOS returns to its launcher, about 10 s, and
+  Steam opens again. Closing only the game while Steam stays is not built.
+- **`end_game` never replaces the title under a game in it.** The hang breaker, the memory guard and the player's stop
+  all end a game through `end_game`. With a game in the title, it ends the helpers by SIGKILL and then the game through
+  the server (patch 0899), and returns only once the game has ended. Before this fix it replaced the title with the
+  game's threads still running, the case that powered the console off on 2026-10-03.
+- **The title watchdog** (`pw_hang_breaker_title_decide`, `src/pw_hang_breaker.h`): a game in the title that shows no
+  new frame for 180 s, once it has shown one, is ended that way. The census plays no part. 180 s is three times the
+  3D demo's longest healthy gap (60 s while it loads). Proven with a spinning and a blocked renderer
+  (rung2-base-2026-10-31-spin and -wait, at a test's 15 s).
+- **A crash of the game in the title** (a 64-bit Windows fault, even with frames in flight) goes through Wine's SEH to
+  NtTerminateProcess and the normal return, in about 0.7 s (crash-base-2026-10-31-gpu6). A broker failure
+  (`PROTON_GPU_TEST_FAIL_SUBMIT`) returns the same way with the broker left wedged (rung3-base-2026-10-31-gpufail).
+
+The design notes before Alpha 7:
 - **Steam ignores the stop request** (`fmem-isaac-intitle-2026-10-26-01`: the title was still running minutes later).
   The stop path is therefore bounded by the title itself: ask the game in the title to close; after a grace period, end
   every helper the way a helper is ended today (control EOF, native-PID absence, GPU completion); then the title

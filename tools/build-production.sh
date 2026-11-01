@@ -138,7 +138,10 @@ bash "$root/tools/build-mesa-windows-zink-i686.sh"
 # After Mesa's build: the title's Mesa licence is read from its source, which a fresh clone has only from then on.
 python3 "$root/tools/stage-licences.py" title "$root/dist/$title"
 python3 "$root/tools/build-dxvk.py" --jobs "$jobs"
-# VKD3D-Proton (d3d12) and the release DXVK, from the pinned GE-Proton archive (tools/fetch-all.sh fetches it).
+# VKD3D-Proton's d3d12 and d3d12core from source with platform/vkd3d-proton/patches (feature level 12_0 on tier 1 tiled
+# resources); stage-wine.py stages them over GE's prebuilt builds of the same revision.
+python3 "$root/tools/build-vkd3d.py" --jobs "$jobs"
+# The release DXVK and VKD3D-Proton, from the pinned GE-Proton archive (tools/fetch-all.sh fetches it).
 stage dxvk-release "${title_sources[@]}" --repo-except wine/ --input "$root/.deps/GE-Proton11-7-x86_64.tar.gz" --output "$root/.deps/dxvk-release" -- \
     python3 "$root/tools/extract-dxvk.py"
 # Read-only harness adapter built from the production control parser.
@@ -152,8 +155,8 @@ for entry in "$root"/.deps/*; do
     case ${entry##*/} in
     staged | runtime-pack | build-stamps | gate | tmp | wine-proton | wine-staging) ;;
     # Of Meson's builds it reads the products, never the build folders' own records (rewritten by every run).
-    dxvk-patched) staging_inputs+=(--input "$entry/manifest.json" --input "$entry/source" --input "$entry/x86_64"
-        --input "$entry/i386") ;;
+    dxvk-patched | vkd3d-patched) staging_inputs+=(--input "$entry/manifest.json" --input "$entry/source"
+        --input "$entry/x86_64" --input "$entry/i386") ;;
     mesa-foundation-wgl*) staging_inputs+=(--input "$entry/manifest.json" --input "$entry/source"
         --input "$entry/build/src/gallium/targets") ;;
     *) staging_inputs+=(--input "$entry") ;;

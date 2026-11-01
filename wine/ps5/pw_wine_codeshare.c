@@ -188,6 +188,31 @@ unsigned pw_wine_codeshare_forget(unsigned holder)
     return closed;
 }
 
+unsigned pw_wine_codeshare_release(unsigned count)
+{
+    static size_t cursor;   /* where the last release stopped: entries go round, not always the same home slots */
+    unsigned closed = 0;
+
+    pthread_mutex_lock(&lock);
+    for (size_t looked = 0; closed < count && counted.entries && looked < SLOTS;) {
+        Entry *entry = &table[cursor];
+        if (!entry->bytes) {
+            cursor = (cursor + 1) % SLOTS;
+            looked++;
+            continue;
+        }
+        close(entry->fd);
+        counted.entries--;
+        counted.bytes -= entry->bytes;
+        closed++;
+        vacate(cursor);   /* a later entry may move into this slot: it is looked at next */
+    }
+    counted.closed += closed;
+    counted.released += closed;
+    pthread_mutex_unlock(&lock);
+    return closed;
+}
+
 void pw_wine_codeshare_stats(PwWineCodeshareStats *stats)
 {
     pthread_mutex_lock(&lock);

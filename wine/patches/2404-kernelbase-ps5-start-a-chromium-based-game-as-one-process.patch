@@ -1,0 +1,115 @@
+From 0000000000000000000000000000000000000000 Mon Sep 17 00:00:00 2001
+From: Mihawk <163614687+mihawk-99@users.noreply.github.com>
+Date: Sat, 31 Oct 2026 15:00:00 -0400
+Subject: [PATCH] kernelbase: PS5: start a Chromium-based game as one process
+
+A 2D game built on Chromium (Electron-style) started its own renderer,
+network, storage, audio, data-decoder, metrics and crash-handler processes on
+the standard PS5, each a helper whose page tables come from the console's
+8,192-entry system pool; with the store client's browser beside it the pool
+fell to 915 free and the page-table guard ended the game (2026-10-31).
+
+A Chromium-based game in a library folder (\steamapps\common\ or \games\),
+told by Chromium's resources.pak, icudtl.dat and a V8 snapshot beside its exe
+and no libcef.dll (a CEF program is a launcher's browser, not a game), now
+gets WINE_PS5_CHROMIUM_ARGS appended to its main process's command line, as
+WINE_PS5_PROCESS_RULES' "add" does by name (patch 2070). The title's default
+is --single-process, the switch the store client's browser already runs with
+on the console: the renderer and the services run as threads of the one
+process, which stays in a helper (wine/ps5/pw_wine_title_game.h: run in the
+title, the NW.js game never drew). Measured on the standard PS5: the game drew
+smoothly as one helper and the pool's lowest was 2,004 free over 10 minutes,
+against 811 and an ended game with its 9 processes. Chromium's
+own child processes (--type=) and programs outside a library are left alone;
+an empty variable changes nothing. The check sees the whole command line in
+both of CreateProcessInternalW's paths, the image named apart or not.
+---
+--- a/dlls/kernelbase/process.c	2026-10-31 13:19:57.241456570 -0400
++++ b/dlls/kernelbase/process.c	2026-10-31 13:21:08.343292754 -0400
+@@ -676,6 +676,68 @@
+ }
+ /* PW_PROCESS_RULES_END */
+ 
++/* PW_CHROMIUM_BEGIN */
++/* A Chromium-based game (Electron, NW.js) in a library folder starts as one process: WINE_PS5_CHROMIUM_ARGS (the
++ * title's default is --single-process) is appended to its main process's command line, so its renderer, network,
++ * storage and audio run as threads of that one process, one helper (wine/ps5/pw_wine_title_game.h), instead of
++ * six or more helpers on the console's page-table pool (a 2D Chromium game ended by the page-table
++ * guard at 915 free of 8,192, 2026-10-31). A Chromium game is told by its folder: Chromium's resources.pak, icudtl.dat
++ * and a V8 snapshot beside the exe, and no libcef.dll (a CEF program is a launcher's browser, not a game). Its own
++ * child processes (--type=) and programs outside a library are left as they are. */
++static BOOL ps5_chromium_file( const WCHAR *dir, size_t len, const WCHAR *name )
++{
++    WCHAR path[MAX_PATH];
++
++    if (len + 1 + wcslen( name ) >= ARRAY_SIZE(path)) return FALSE;
++    memcpy( path, dir, len * sizeof(WCHAR) );
++    path[len] = '\\';
++    wcscpy( path + len + 1, name );
++    return GetFileAttributesW( path ) != INVALID_FILE_ATTRIBUTES;
++}
++
++/* image: the program's path when the caller named it apart (else the command line's first word); cmd: the whole
++ * command line, for Chromium's --type= of its own child processes. */
++static const WCHAR *ps5_chromium_append( const WCHAR *app, const WCHAR *cmd )
++{
++    static WCHAR append[256];
++    static volatile LONG append_state;   /* 0 not read, 1 being read, 2 read */
++    WCHAR image[MAX_PATH], lower[MAX_PATH];
++    const WCHAR *start, *end, *slash;
++    size_t len, i;
++
++    if (!cmd || wcsstr( cmd, L"--type=" )) return NULL;
++    if (!InterlockedCompareExchange( &append_state, 1, 0 ))
++    {
++        append[0] = ' ';
++        if (!GetEnvironmentVariableW( L"WINE_PS5_CHROMIUM_ARGS", append + 1, ARRAY_SIZE(append) - 1 ) ||
++            wcslen( append ) >= ARRAY_SIZE(append) - 1) append[0] = 0;
++        InterlockedExchange( &append_state, 2 );
++    }
++    while (append_state != 2) Sleep( 0 );
++    if (!append[0] || !append[1]) return NULL;
++    /* The image: the one the caller named, or the command line's first word, quoted or not. */
++    start = app ? app : cmd;
++    while (*start == ' ') start++;
++    if (app) end = NULL;
++    else if (*start == '"') { start++; end = wcschr( start, '"' ); }
++    else end = wcschr( start, ' ' );
++    len = end ? (size_t)(end - start) : wcslen( start );
++    if (!len || len >= ARRAY_SIZE(image)) return NULL;
++    memcpy( image, start, len * sizeof(WCHAR) );
++    image[len] = 0;
++    for (i = 0; i <= len; i++) lower[i] = image[i] >= 'A' && image[i] <= 'Z' ? image[i] + 32 : image[i];
++    if (!wcsstr( lower, L"\\steamapps\\common\\" ) && !wcsstr( lower, L"\\games\\" )) return NULL;
++    if (!(slash = wcsrchr( image, '\\' ))) return NULL;
++    len = slash - image;
++    if (!ps5_chromium_file( image, len, L"resources.pak" ) || !ps5_chromium_file( image, len, L"icudtl.dat" )) return NULL;
++    if (!ps5_chromium_file( image, len, L"v8_context_snapshot.bin" ) && !ps5_chromium_file( image, len, L"snapshot_blob.bin" ))
++        return NULL;
++    if (ps5_chromium_file( image, len, L"libcef.dll" )) return NULL;
++    FIXME( "HACK: appending %s to a Chromium game's command line (WINE_PS5_CHROMIUM_ARGS).\n", debugstr_w(append) );
++    return append;
++}
++/* PW_CHROMIUM_END */
++
+ /* PW_PROCESS_HOLD_BEGIN */
+ /* A rule "NAME|hold|PART": while a program this process started from a path holding PART runs (a library game, its
+  * path under "\steamapps\common\"), NAME starts suspended, and the one running when such a program starts is ended.
+@@ -920,7 +982,7 @@
+                 return FALSE;
+             swprintf( tidy_cmdline, lstrlenW(app_name) + 3, L"\"%s\"", app_name );
+         }
+-        else if ((append = hack_append_command_line( app_name )))
++        else if ((append = hack_append_command_line( app_name )) || (append = ps5_chromium_append( app_name, cmd_line )))
+         {
+             tidy_cmdline = RtlAllocateHeap( GetProcessHeap(), 0,
+                                             sizeof(WCHAR) * (lstrlenW(cmd_line) + lstrlenW(append) + 1) );
+@@ -932,7 +994,7 @@
+     {
+         WCHAR *cmdline_new = NULL;
+ 
+-        if ((append = hack_append_command_line( cmd_line )))
++        if ((append = hack_append_command_line( cmd_line )) || (append = ps5_chromium_append( NULL, cmd_line )))
+         {
+             cmdline_new = RtlAllocateHeap( GetProcessHeap(), 0, sizeof(WCHAR)
+                                            * (lstrlenW(cmd_line) + lstrlenW(append) + 1) );

@@ -120,8 +120,8 @@ if(PS5_HOST_REFERENCE)
 else()
 	set(platform_source src/platform.c)
 	list(APPEND platform_source
-		${ROOT}/native/proton_wine.cpp ${ROOT}/native/proton_loading.cpp ${ROOT}/src/pw_loading_art.c ${ROOT}/src/pw_steam_screen.c ${ROOT}/src/pw_vm_census.c ${ROOT}/native/proton_limits_probe.cpp ${ROOT}/native/proton_sched_probe.cpp ${ROOT}/native/pw_audio_ps5.c
-		${ROOT}/src/pw_wine_start.c ${ROOT}/src/pw_environment.c ${ROOT}/src/pw_wine_launch.c ${ROOT}/src/pw_wine_profile.c ${ROOT}/src/pw_shader_cache.c ${ROOT}/src/pw_fd_census.c ${ROOT}/src/pw_pipe_memory.c ${ROOT}/src/pw_pad_script.c ${ROOT}/src/pw_memory_guard.c ${ROOT}/src/pw_desktop_session.c ${ROOT}/src/pw_app_environment.c ${ROOT}/src/pw_shell_link.c ${ROOT}/src/pw_game_folders.c ${ROOT}/src/pw_usb_input.c ${ROOT}/src/pw_aurelia.c ${ROOT}/src/pw_steamcmd.c ${ROOT}/src/pw_steamcmd_setup.c ${ROOT}/native/pw_usb_input_ps5.c
+		${ROOT}/native/proton_wine.cpp ${ROOT}/native/proton_loading.cpp ${ROOT}/src/pw_loading_art.c ${ROOT}/src/pw_steam_screen.c ${ROOT}/src/pw_vm_census.c ${ROOT}/native/proton_limits_probe.cpp ${ROOT}/native/proton_sched_probe.cpp ${ROOT}/native/pw_audio_ps5.c ${ROOT}/native/pw_osk_ps5.c ${ROOT}/src/pw_osk.c
+		${ROOT}/src/pw_wine_start.c ${ROOT}/src/pw_environment.c ${ROOT}/src/pw_wine_launch.c ${ROOT}/src/pw_wine_profile.c ${ROOT}/src/pw_shader_cache.c ${ROOT}/src/pw_fd_census.c ${ROOT}/src/pw_pipe_memory.c ${ROOT}/src/pw_pad_script.c ${ROOT}/src/pw_memory_guard.c ${ROOT}/src/pw_desktop_session.c ${ROOT}/src/pw_app_environment.c ${ROOT}/src/pw_shell_link.c ${ROOT}/src/pw_game_folders.c ${ROOT}/src/pw_steam_appid.c ${ROOT}/src/pw_usb_input.c ${ROOT}/src/pw_aurelia.c ${ROOT}/src/pw_steamcmd.c ${ROOT}/src/pw_steamcmd_setup.c ${ROOT}/native/pw_usb_input_ps5.c
 		${ROOT}/src/pw_elfldr.c ${ROOT}/wine/ps5/pw_wine_prx.c
 		${ROOT}/src/pw_hang_breaker.c ${ROOT}/src/pw_start_failure.c ${ROOT}/src/pw_firmware.c ${ROOT}/native/pw_firmware_ps5.c ${ROOT}/src/pw_flight_probe.c ${ROOT}/native/proton_flight_recorder.cpp)
 	# main selects the foundation's runtime resourcePath after elevation.
@@ -184,6 +184,10 @@ if(EXISTS ${PROTON_RELEASE_KEY_FILE})
 	set_property(DIRECTORY APPEND PROPERTY CMAKE_CONFIGURE_DEPENDS ${PROTON_RELEASE_KEY_FILE})
 endif()
 set(PROTON_UPDATE_URL "" CACHE STRING "Where the signed release manifest is published; empty until the owner publishes")
+# The release this build is (VERSION, as the wallpaper's note shows it): the automatic update check offers only a newer
+# GitHub release (ps5/src/proton_update.cpp).
+file(STRINGS ${ROOT}/VERSION proton_version LIMIT_COUNT 1)
+set_property(DIRECTORY APPEND PROPERTY CMAKE_CONFIGURE_DEPENDS ${ROOT}/VERSION)
 add_library(samples OBJECT
 	${base_sources}
 	${third_party_sources}
@@ -199,6 +203,8 @@ add_library(samples OBJECT
 	${ROOT}/src/pw_https.c
 	${ROOT}/src/pw_release.c
 	${ROOT}/src/pw_update.c
+	${ROOT}/src/pw_zip.c
+	${ROOT}/src/pw_update_flow.cpp
 	${ROOT}/src/pw_steam.c
 	${ROOT}/src/pw_steam_guide.c
 	${ROOT}/src/pw_path_nocase.c
@@ -212,11 +218,15 @@ add_library(samples OBJECT
 	${ROOT}/src/pw_controller.c
 	${ROOT}/src/pw_detailed_logs.c
 	${ROOT}/src/pw_log_sessions.c
+	${ROOT}/src/pw_capped_log.c
 	${ROOT}/src/pw_setup.c
 	${ROOT}/src/pw_runtime_check.c
 	${ROOT}/src/pw_payload_check.c
 	${ROOT}/src/pw_qrcodegen.c
 	${ROOT}/src/pw_webui.cpp
+	${ROOT}/src/pw_drive_browse.c
+	${ROOT}/src/pw_home_grid.c
+	${ROOT}/src/pw_steam_memory.c
 	${ROOT}/src/pw_webui_http.cpp
 	src/proton_webui.cpp
 	src/example_ps5.cpp
@@ -232,7 +242,8 @@ target_compile_definitions(samples PRIVATE
 	VK_EXAMPLE_SHADERS_DIR="${app_root}/shaders/"
 	"MBEDTLS_USER_CONFIG_FILE=\"${ROOT}/platform/tls/pw_mbedtls_config.h\""
 	"PROTON_RELEASE_KEY=\"${release_key}\""
-	"PROTON_UPDATE_URL=\"${PROTON_UPDATE_URL}\"")
+	"PROTON_UPDATE_URL=\"${PROTON_UPDATE_URL}\""
+	"PROTON_VERSION=\"${proton_version}\"")
 target_include_directories(samples PRIVATE
 	${ROOT}/external
 	${ROOT}/external/glm

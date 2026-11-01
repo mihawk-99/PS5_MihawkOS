@@ -21,7 +21,8 @@
  * guided setup chose for the prefix (WINE_PS5_LOCALE): every Windows program but the shell's Explorer takes it (patch
  * 1230). The controller the player chose (WINE_PS5_CONTROLLER, src/pw_controller.h), which xinput reads in each
  * program (patch 2400). A game's own Game Mode (WINE_PS5_GAME_MODE, src/pw_game_mode.h), so the game a launcher starts
- * keeps the choice its library entry made. */
+ * keeps the choice its library entry made. The game's Steam ids (SteamGameId, SteamAppId): Proton's Wine changes
+ * behaviour for a game by them on its Unix side too, so a program the game starts has them as the game has. */
 static inline int pw_wine_inherited(const char *entry)
 {
     static const char *const names[]={"WINE_PS5_DESKTOP=","WINE_PS5_VIEW=","WINE_PS5_FIRMWARE=","WINE_PS5_WINDOW_SURFACES=","WINE_PS5_REFRESH=","WINE_PS5_HID=","WINE_PS5_CONTROLLER=","WINE_PS5_GAME_MODE=","WINE_PS5_LOCALE=",
@@ -30,11 +31,12 @@ static inline int pw_wine_inherited(const char *entry)
         "WINE_PS5_ASYNC_PRESENT=",   /* the broker WSI presents from its own thread (graphics patch 0024) */
         "WINE_PS5_PRESENT_LINK=",    /* presents over a connection of their own (graphics patch 0026) */
         "WINE_PS5_SCHED_CENSUS=","WINE_PS5_CENSUS_MS=","WINE_PS5_EARLY=","WINE_PS5_VMMAP=","WINE_PS5_MAPLOG_MIB=","WINE_PS5_SAMPLE=","WINE_PS5_MALLOC_TRACE=","WINE_PS5_FILE_TRACE=",   /* the helper's census budgets and its once-a-second early memory line (native/proton_wine_child.c) */
-        "WINE_PS5_DSECTION_MIN_MIB=","WINE_PS5_TITLE_PROCESS=","WINE_PS5_TITLE_PID=",   /* the title and its helpers agree on which sections are direct memory */
+        "WINE_PS5_DSECTION_MIN_MIB=","WINE_PS5_TITLE_PROCESS=","WINE_PS5_TITLE_PID=","WINE_PS5_TITLE_GAMES=","WINE_PS5_TITLE_OPTOUT=","WINE_PS5_TITLE_PICK=","WINE_PS5_TITLE_LISTED=","WINE_PS5_CHROMIUM_ARGS=",   /* the title and its helpers agree on which sections are direct memory */
         "WINE_PS5_CODE_BUDGET_MIB=","WINE_PS5_CODE_BUDGET_START_MIB=",   /* the code cache's budget and a test's start (docs/FLEXIBLE_MEMORY.md) */
         "WINE_PS5_PAYLOAD_DMEM=","WINE_PS5_PRX_LOADER=","WINE_PS5_NATIVE_SIGNALS=","WINEARCH=",   /* wow64: a 32-bit program runs in its helper (docs/IA32_DESIGN.md, M3) */
         "WINETEST_",  /* watchdog, slice and threading controls must reach payload conformance tests */
         "WINE_PS5_OPENGL=","WINE_D3D_CONFIG=","WINE_CPU_TOPOLOGY=","WINEESYNC=","WINEFSYNC=","DXVK_","VKD3D_",
+        "SteamGameId=","SteamAppId=",   /* the game's Steam ids (src/pw_steam_appid.h): what its children inherit, as under Proton */
         "DOTNET_","SDL_","WINE_ADDITIONAL_CERTS_DIR=","WINE_PS5_DNS=","WINE_PS5_SERVICES=","RADV_DEBUG=","RADV_PERFTEST=",
         "ACO_DEBUG=","GALLIUM_","ZINK_","MESA_LOG="};
     for(size_t i=0;i<sizeof(names)/sizeof(names[0]);++i)

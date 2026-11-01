@@ -19,9 +19,14 @@ int pw_wine_process_close(pid_t pid);
  * one, before its first server request and before any Windows code). 0, or -1 when the table is full; either way the
  * thread start hook, when set, then runs on that thread, outside the registry's lock. */
 int pw_wine_thread_register(long tid,pthread_t thread);
-/* The thread start hook: only a helper's payload loader sets it (native/proton_wine_child.c, its scheduling,
- * src/pw_helper_sched.h); the title never does, and it cannot be unset. 0, or -1 for NULL. */
+/* The thread start hook: a helper's payload loader sets it (native/proton_wine_child.c, its scheduling,
+ * src/pw_helper_sched.h), and so does the title before it runs a game itself (native/proton_wine.cpp,
+ * title_program_thread_start): the same plan for a game's threads wherever it runs. It cannot be unset. 0, or -1 for
+ * NULL. */
 int __wine_ps5_set_payload_thread_start(void (*hook)(void));
+/* The hook, on the calling thread, when one is set: the title's Windows threads, which register with the in-process
+ * server instead of this registry (patch 2405). */
+void pw_wine_thread_started(void);
 void pw_wine_thread_unregister(long tid);
 /* thr_kill2 on the registered threads of this process: 0, or -1 with
  * errno ESRCH for another process or an unknown id. */

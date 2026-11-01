@@ -133,6 +133,8 @@ void mainCRTStartup(void)
     const unsigned frames = env_number("PS5_PROTON_PROBE_FRAMES", 180);
     const unsigned draws = env_number("PS5_PROTON_PROBE_DRAWS", 1);
     const unsigned interval = env_number("PS5_PROTON_PROBE_VSYNC", 1);
+    const unsigned fault_frame = env_number("PS5_PROTON_PROBE_FAULT_FRAME", 0);
+    const unsigned hang_frame = env_number("PS5_PROTON_PROBE_HANG_FRAME", 0), hang_wait = env_number("PS5_PROTON_PROBE_HANG_WAIT", 0);
     LARGE_INTEGER frequency, started, ended;
     QueryPerformanceFrequency(&frequency);
     QueryPerformanceCounter(&started);
@@ -176,8 +178,15 @@ void mainCRTStartup(void)
             WCHAR capture[1024]=L"Z:\\data\\ps5proton\\logs\\d3d-probe.ppm";
 #endif
             GetEnvironmentVariableW(L"PS5_PROTON_PROBE_CAPTURE",capture,sizeof(capture)/sizeof(capture[0]));
-            HANDLE file = CreateFileW(capture, GENERIC_WRITE, 0, NULL,
-                                       CREATE_ALWAYS, FILE_ATTRIBUTE_NORMAL, NULL);
+            // Copies of this probe that run together (process-probe --title-games) write the same capture: one that
+            // finds it open waits its turn (rc2b-pro-2026-10-31-title-games: the opted-out copy exited 2 16 ms after
+            // another copy's write).
+            HANDLE file = INVALID_HANDLE_VALUE;
+            for (int tries = 0; tries < 40; ++tries) {
+                file = CreateFileW(capture, GENERIC_WRITE, 0, NULL, CREATE_ALWAYS, FILE_ATTRIBUTE_NORMAL, NULL);
+                if (file != INVALID_HANDLE_VALUE || GetLastError() != ERROR_SHARING_VIOLATION) break;
+                Sleep(50);
+            }
             DWORD written;
             char header[64];const unsigned header_bytes=wsprintfA(header,"P6\n%u %u\n255\n",width,height);
             if (file == INVALID_HANDLE_VALUE || !WriteFile(file, header, header_bytes, &written, NULL) ||
@@ -189,6 +198,21 @@ void mainCRTStartup(void)
             ID3D11Texture2D_Release(staging);
         }
         check(IDXGISwapChain_Present(swap, interval, 0), "present");
+        /* PS5_PROTON_PROBE_FAULT_FRAME=N (a crash-safety probe, off by default): fault right after frame N's Present,
+         * with submitted GPU work still in flight, to see whether a crash with live graphics returns to the launcher
+         * or hangs the console (docs/TITLE_CLIENT.md, "Stop and end"). */
+        if (frame + 1 == fault_frame) {
+            OutputDebugStringA("PS5_PROTON_D3D11_PROBE fault: writing through a null pointer with frames in flight\n");
+            *(volatile int *)0 = 0x1234;
+        }
+        /* PS5_PROTON_PROBE_HANG_FRAME=N (off by default): stop making progress right after frame N's Present, the title
+         * watchdog's case (src/pw_hang_breaker.h): a busy loop, or with PS5_PROTON_PROBE_HANG_WAIT=1 a wait that never ends. */
+        if (frame + 1 == hang_frame) {
+            OutputDebugStringA(hang_wait ? "PS5_PROTON_D3D11_PROBE hang: waiting forever after a Present\n" :
+                                           "PS5_PROTON_D3D11_PROBE hang: spinning forever after a Present\n");
+            if (hang_wait) WaitForSingleObject(CreateEventA(NULL, TRUE, FALSE, NULL), INFINITE);
+            for (volatile unsigned spin = 0;; ++spin) {}
+        }
     }
     QueryPerformanceCounter(&ended);
     {

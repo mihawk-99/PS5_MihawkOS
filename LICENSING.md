@@ -26,7 +26,7 @@ project's author on 2026-10-15, replacing the LGPL-2.1-or-later proposal.
   pinned with their notices.
 - **Patches to an upstream project keep that project's licence**, so they stay mergeable there: `wine/patches/`
   (LGPL-2.1-or-later, as Wine) and `platform/graphics/patches/` (the graphics foundation's overlay, as recorded in
-  `NOTICE.md`).
+  `NOTICE.md`; since 2026-11-01 its patches are commits of mihawk-99/PS5_Vulkan itself and the folder is empty).
 - **Imported code keeps its licence.** Four files carry upstream code and stay LGPL-2.1-or-later:
   `wine/ps5/pw_ws2_32_libc.c` and `tests/test_pw_ws2_32_libc.c` (from prospero-win), `wine/ps5/pw_dns_unix.c` (Wine's
   WoW64 marshalling) and `wine/wineps5/unix.c` (Wine's audio drivers and kernelbase). Files under `external/`, Sascha Willems'
@@ -41,6 +41,10 @@ project's author on 2026-10-15, replacing the LGPL-2.1-or-later proposal.
   orbs in `docs/media/readme/` (they draw the mark and those icons; `docs/README_ART.md`) LGPL-2.1-or-later; the README's
   badges in `docs/media/readme/badges/` hold no third-party art and are GPL-3.0-or-later; no proprietary Microsoft fonts or
   Windows icon resources are bundled, and no Windows logo is shown.
+- **The desktop's wallpaper is the exception.** Bubble City (`themes/windows11/wallpapers/skeuoss-bubble-city.jpg`) is
+  the artist Skeuoss's work (also the title's home-screen background, `ps5/sce_sys/pic0.dds` and `pic1.dds`), used and
+  redistributed with their permission (2026-10-31, [`NOTICE.md`](NOTICE.md)),
+  under no open licence: none of this project's licences cover it.
 - **Source ships with binaries.** Any binary release comes with the corresponding source, including the patch series
   and pins that produce the runtime.
 - **Game data is never distributed.** The user supplies their own copy; nothing here fetches, bundles or

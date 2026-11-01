@@ -1,0 +1,81 @@
+From 0000000000000000000000000000000000000000 Mon Sep 17 00:00:00 2001
+From: Mihawk <163614687+mihawk-99@users.noreply.github.com>
+Date: Sun, 01 Nov 2026 14:00:00 -0400
+Subject: [PATCH] win32u: PS5: Tell windows when the controller comes or goes.
+
+A title cannot run the plug and play service, which tells every top-level window that devices changed (WM_DEVICECHANGE with
+DBT_DEVNODES_CHANGED) when one is added or removed, and the controller the title gives a game does not pass through a bus
+that would: an Unreal Engine 4 game whose controller went off kept it lost after it came back, because it only looks for a lost
+XInput controller again when told.
+
+The sink counts each time the controller connects or disconnects (pw_wine_pad_changes): the title as it sets the pad, which
+also wakes the driver's input fd; a helper as the differences between its looks at the title's input page. ProcessEvents
+reads the count and, when it moved since its last look, posts WM_DEVICECHANGE with DBT_DEVNODES_CHANGED to the top-level
+windows, once for any number of changes. While the system has the DualSense the game's controller stays connected (the
+title keeps it so), so nothing is posted then.
+
+The problem was found by reading prospero-win (mpereiraesaa/prospero-win, LGPL-2.1-or-later; its patch 0984, commit 7aa5d3c);
+this change is written independently here (NOTICE.md, "prospero-win and ProsperoMC"). Not run on a console; the build of
+ps5drv.c was not compiled on the host (it needs the generated Vulkan headers).
+---
+ dlls/win32u/ps5drv.c | 19 +++++++++++++++++++
+ 1 file changed, 19 insertions(+)
+
+diff --git a/dlls/win32u/ps5drv.c b/dlls/win32u/ps5drv.c
+index 2e9bde0..34d7385 100644
+--- a/dlls/win32u/ps5drv.c
++++ b/dlls/win32u/ps5drv.c
+@@ -52,6 +52,7 @@
+ #include "ntstatus.h"
+ #include "ntgdi_private.h"
+ #include "ntuser_private.h"
++#include "dbt.h"
+ #include "wine/server.h"
+ #include "wine/debug.h"
+ #ifdef SONAME_LIBVULKAN
+@@ -112,6 +113,7 @@ static int (*present_window)( UINT hwnd, UINT64 generation, const void *pixels,
+ static void (*drop_window)( UINT hwnd );
+ static int (*next_input)( struct ps5_input *input );
+ static int (*input_fd)(void);
++static unsigned int (*pad_changes)(void);
+ 
+ static pthread_mutex_t screen_lock = PTHREAD_MUTEX_INITIALIZER;
+ static UINT screen_width = 800, screen_height = 600;
+@@ -728,6 +730,21 @@ static void move_cursor( HWND hwnd, INT dx, INT dy )
+     pthread_mutex_unlock( &screen_lock );
+ }
+ 
++/* The controller connected or disconnected since the last look (pw_wine_pad_changes). Windows then tells every
++ * top-level window that devices changed (WM_DEVICECHANGE, DBT_DEVNODES_CHANGED), through the plug and play service;
++ * some games only look for a lost XInput controller again when told. */
++static void notify_pad_changes(void)
++{
++    static unsigned int seen;
++    unsigned int changes;
++
++    if (!pad_changes) return;
++    changes = pad_changes();
++    if (__atomic_exchange_n( &seen, changes, __ATOMIC_RELAXED ) == changes) return;
++    TRACE( "controller connected or disconnected (%u): WM_DEVICECHANGE\n", changes );
++    NtUserPostMessage( HWND_BROADCAST, WM_DEVICECHANGE, DBT_DEVNODES_CHANGED, 0 );
++}
++
+ static BOOL ps5_ProcessEvents( DWORD mask )
+ {
+     static const DWORD button_flags[3][2] =
+@@ -741,6 +758,7 @@ static BOOL ps5_ProcessEvents( DWORD mask )
+     UINT processed = 0;
+ 
+     if (!next_input) return FALSE;
++    notify_pad_changes();
+     if (!hwnd && (hwnd = last_shown_window()))
+     {
+         /* no window manager activates windows here: the newest one gets
+@@ -1269,6 +1287,7 @@ void ps5_install_user_driver(void)
+                       !strcmp( getenv( "WINE_PS5_WINDOW_SURFACES" ), "1" );
+     next_input = dlsym( RTLD_DEFAULT, "pw_wine_next_input" );
+     input_fd = dlsym( RTLD_DEFAULT, "pw_wine_input_fd" );
++    pad_changes = dlsym( RTLD_DEFAULT, "pw_wine_pad_changes" );
+ #ifdef SONAME_LIBVULKAN
+     release_display = dlsym( RTLD_DEFAULT, "pw_wine_release_display" );
+ #endif

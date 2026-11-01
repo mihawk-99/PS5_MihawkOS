@@ -43,6 +43,15 @@ int main(void)
     pad.held = PAD_R1;
     pad.connected = 0;
     assert(!pw_controls_update(&controls, &mouse, &pad, events));
+    /* The shell holding the pad (pad_poll: connected false, intercepted true) is not an unplugged controller for the
+     * game; a pad that is gone, or never read, is. */
+    struct pad shell = {0}, gone = {0}, present = {.connected = 1};
+    shell.intercepted = 1;
+    assert(pw_controls_game_connected(&shell) && pw_controls_game_connected(&present) && !pw_controls_game_connected(&gone));
+    struct pad idle;
+    pw_controls_gamepad(&controls, &shell, &idle);   /* what the game is given from it: no buttons, a connected pad */
+    assert(pw_controls_game_connected(&idle) && !idle.held && !idle.pressed);
+    assert(pw_controls_update(&controls, &mouse, &shell, events) == 0);   /* the mouse emulation still lets go */
     assert(!pw_controls_assign(&controls, 1, 7));
     assert(!controls.button[0] && controls.button[1] == 7); /* conflict is unassigned */
 
@@ -80,6 +89,44 @@ int main(void)
     fputs("left no-such-button\n", file);
     fclose(file);
     assert(pw_controls_load(&loaded, path) == EINVAL && loaded.button[0] == 1);
+    /* The on-screen keyboard's gesture: Off by default, saved only when chosen, and a file from before it still reads. */
+    pw_controls_defaults(&controls);
+    assert(controls.keyboard == PW_OSK_OFF);
+    assert(!pw_controls_save(&controls, path));
+    char text[256] = {0};
+    file = fopen(path, "r");
+    assert(file && fread(text, 1, sizeof(text) - 1, file) > 0);
+    fclose(file);
+    assert(!strcmp(text, "left touchpad\nright none\nmiddle none\n"));   /* byte for byte what an earlier version wrote */
+    assert(!pw_controls_set_keyboard(&controls, PW_OSK_L3_R3) && pw_controls_set_keyboard(&controls, PW_OSK_TRIGGERS) == EINVAL);
+    assert(controls.keyboard == PW_OSK_L3_R3);
+    assert(!pw_controls_save(&controls, path));
+    memset(&loaded, 0, sizeof(loaded));
+    assert(!pw_controls_load(&loaded, path) && loaded.keyboard == PW_OSK_L3_R3 && !memcmp(&loaded, &controls, sizeof(controls)));
+    for (unsigned t = 0; t < PW_OSK_TRIGGERS; t++) {
+        pw_controls_set_keyboard(&controls, t);
+        assert(!pw_controls_save(&controls, path) && !pw_controls_load(&loaded, path) && loaded.keyboard == t);
+    }
+    controls.keyboard = PW_OSK_TRIGGERS;
+    assert(pw_controls_save(&controls, path) == EINVAL);
+    file = fopen(path, "w");
+    assert(file);
+    fputs("left touchpad\nright none\nmiddle none\n", file);   /* a file from before the keyboard */
+    fclose(file);
+    loaded.keyboard = PW_OSK_L3_R3;
+    assert(!pw_controls_load(&loaded, path) && loaded.keyboard == PW_OSK_OFF);
+    const char *bad[] = {"left touchpad\nright none\nmiddle none\nkeyboard nonsense\n",
+                         "left touchpad\nright none\nmiddle none\nkeyboard\n",
+                         "left touchpad\nright none\nmiddle none\nmouse l3-r3\n",
+                         "left touchpad\nright none\nmiddle none\nkeyboard l3-r3\nextra\n"};
+    for (unsigned i = 0; i < sizeof(bad) / sizeof(bad[0]); i++) {
+        file = fopen(path, "w");
+        assert(file);
+        fputs(bad[i], file);
+        fclose(file);
+        loaded.keyboard = PW_OSK_OPTIONS_TOUCHPAD;
+        assert(pw_controls_load(&loaded, path) == EINVAL && loaded.keyboard == PW_OSK_OFF && loaded.button[0] == 1);
+    }
     unlink(path);
     rmdir(folder);
     puts("controls: persistence, conflicts, motion, three clicks, HID consumption and disconnect PASS");

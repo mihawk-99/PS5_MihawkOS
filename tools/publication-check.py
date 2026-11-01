@@ -43,7 +43,7 @@ def load(name, file):
 
 privacy = load('privacy_check', 'privacy_check.py')
 licences = load('stage_licences', 'stage-licences.py')
-wallpaper = load('aero_wallpapers', 'make-aero-wallpapers.py')
+WALLPAPER = Path(__file__).resolve().parents[1] / 'themes/windows11/wallpapers/skeuoss-bubble-city.jpg'  # the default
 
 IPV4 = re.compile(rb'(?<![\d.])(\d{1,3})\.(\d{1,3})\.(\d{1,3})\.(\d{1,3})(?![\d.]*\d)')
 EMAIL = re.compile(rb'[A-Za-z0-9._%+-]+@[A-Za-z0-9-]+(?:\.[A-Za-z0-9-]+)+')
@@ -127,9 +127,9 @@ NAMED_LINES = [
       for n in ('2015', '2026', '2040', '2041', '2042', '2053')],
 ]
 # What a user's package must never carry (docs/SELF_INSTALL.md, phase 4), in the title folder, the runtime and run/: a
-# wallpaper other than the project's own Bubble Earth (proton.bmp is drawn by tools/make-aero-wallpapers.py since
-# 2026-10-25, before that Aero Meadow; Windows 11's Bloom, which Aero Meadow replaced, is not licensed for
-# redistribution), a native Microsoft binary (a PE without Wine's builtin
+# wallpaper other than the default, Skeuoss's Bubble City (proton.bmp is stamped from it by tools/build-wine-theme.py
+# since 2026-10-31, used with the artist's permission; before that the project's own Bubble Earth and Aero Meadow;
+# Windows 11's Bloom, which Aero Meadow replaced, is not licensed for redistribution), a native Microsoft binary (a PE without Wine's builtin
 # marker that names Microsoft Corporation, such as Microsoft's d3dcompiler_47.dll; Wine's own d3dcompiler_47.dll is
 # fine), and the probe prefix or test programs, which only the PC tools and the gate use.
 TEST_PROGRAM = re.compile(r'(?i)(-probe\.exe|_test(32)?\.exe|^gate-sequence\.exe)$')
@@ -174,7 +174,8 @@ class Findings:
 
     def text(self, data, place, path):
         for m in IPV4.finditer(data):
-            if max(int(o) for o in m.groups()) > 255:
+            # An octet over 255, or one with a leading zero (binary data reads as "08.00.00.00"), is no address as written.
+            if max(int(o) for o in m.groups()) > 255 or any(len(o) > 1 and o.startswith(b'0') for o in m.groups()):
                 continue
             ip = m.group().decode()
             if ip in self.consoles:
@@ -328,12 +329,13 @@ def check_tree(repo, findings):
     return len(files)
 
 
-def is_bubble_earth(path):
-    """Whether a wallpaper bitmap is Bubble Earth: its 192 x 108 thumbnail against the generator's own, drawn small in
-    0.6 s (the build's, stamped with its corner note, is 3.5 levels away on average; Glass City 41, Aqua World 49, Aero
-    Meadow 53, Bloom farther; measured 2026-10-25)."""
+def is_default_wallpaper(path):
+    """Whether a wallpaper bitmap is the default, Bubble City: its 192 x 108 thumbnail against the picture's own (the
+    build's, stamped with its corner note, is 0.4 levels away on average; Bubble Earth 68.5, Aqua World 54.7, Glass City
+    75.5, Aero Meadow 72.8; measured 2026-10-31)."""
     from PIL import Image
-    want = wallpaper.render('bubble-earth', 384, 216).resize((192, 108), Image.Resampling.LANCZOS)
+    with Image.open(WALLPAPER) as picture:
+        want = picture.convert('RGB').resize((192, 108), Image.Resampling.LANCZOS)
     with Image.open(path) as image:
         have = image.convert('RGB').resize((192, 108), Image.Resampling.LANCZOS)
     return float(np.abs(np.asarray(want, dtype=np.int16) - np.asarray(have, dtype=np.int16)).mean()) <= 8
@@ -350,8 +352,8 @@ def never_ship(root, label, findings):
             continue
         relative = f'{label}/{path.relative_to(root)}'
         if path.name.lower() == 'proton.bmp':
-            if not is_bubble_earth(path):
-                findings.add('file that must never ship in a build', f'{relative} (a wallpaper that is not Bubble Earth)',
+            if not is_default_wallpaper(path):
+                findings.add('file that must never ship in a build', f'{relative} (a wallpaper that is not Bubble City)',
                              relative)
         elif 'shadowmount' in path.name.lower() or (path.suffix.lower() in ('.elf', '.bin', '') and path.stat().st_size
                                                     < 64 << 20 and SMP_BINARY.search(path.read_bytes())):

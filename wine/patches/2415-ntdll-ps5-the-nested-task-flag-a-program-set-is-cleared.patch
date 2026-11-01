@@ -1,0 +1,43 @@
+From 0000000000000000000000000000000000000000 Mon Sep 17 00:00:00 2001
+From: Mihawk <163614687+mihawk-99@users.noreply.github.com>
+Date: Sat, 31 Oct 2026 15:00:00 -0400
+Subject: [PATCH] ntdll: Clear the nested-task flag a program set on its fault on the PS5.
+
+A CPU check (Far Cry's in CrySystem.dll is one) sets EFLAGS.NT with popf. The console's kernel cannot return to code with
+the flag set, so the next return to the program raised a general protection fault with error code 0, which Wine reported
+as an access violation reading 0xffffffffffffffff (Wine bug 33275). Windows and Linux clear the flag on such a fault and
+run the instruction again. segv_handler now does the same, before it decodes the instruction for the UMIP emulation (2102):
+src/pw_umip.h (pw_umip_clear_nested_task) decides, the flag is cleared in the context and the thread resumes. A fault that
+remains has another cause and is handled as before, with the flag gone, so this cannot loop.
+
+The problem was found by reading bornaradusin/PC5 (LGPL-2.1-or-later; patch 0062 of its patches/prospero-win); this
+change is written independently here (NOTICE.md, "PC5").
+---
+ dlls/ntdll/unix/signal_x86_64.c | 14 ++++++++++++++
+ 1 file changed, 14 insertions(+)
+
+diff --git a/dlls/ntdll/unix/signal_x86_64.c b/dlls/ntdll/unix/signal_x86_64.c
+index 46a5daa..7cdef8b 100644
+--- a/dlls/ntdll/unix/signal_x86_64.c
++++ b/dlls/ntdll/unix/signal_x86_64.c
+@@ -3152,6 +3152,20 @@ static void segv_handler( int signal, siginfo_t *siginfo, void *sigcontext )
+         {
+             WORD err = ERROR_sig(ucontext);
+ #ifdef __PROSPERO__
++            if (!err)
++            {
++                /* A program set the nested-task flag with popf (a CPU check does: Far Cry's), and the console's
++                 * kernel cannot return to it with the flag set. Windows and Linux clear it on such a fault and
++                 * run the instruction again, and so does this: a retry that faults again has another cause, with
++                 * the flag gone (Wine bug 33275). src/pw_umip.h decides. */
++                uint64_t eflags = EFL_sig(ucontext);
++                if (pw_umip_clear_nested_task( &eflags ))
++                {
++                    EFL_sig(ucontext) = eflags;
++                    leave_handler( ucontext );
++                    return;
++                }
++            }
+             if (!err)
+             {
+                 const int umip = ps5_umip_emulate( ucontext, &rec );

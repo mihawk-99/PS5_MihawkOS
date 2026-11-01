@@ -12,6 +12,11 @@
       title-pack.txt, the runtime's pieces and runtime-pack.txt, and mihawkos-release.txt signed with the key. --base is
       where those assets will be, the release's own tag folder (never a "latest" URL); --version defaults to the
       title's contentVersion. The manifest is checked against the public half before the command ends.
+  tools/sign-release.py sign --zip PS5_MihawkOS-v<VERSION>.zip --base URL [--out DIR] [--key ...]
+      The automatic update's form (2026-10-31): the manifest names the release zip itself (its SHA-256) and the
+      SHA-256 of the runtime-pack.txt in its PPSA99170 folder; --version defaults to that folder's contentVersion.
+      Only mihawkos-release.txt is written to --out; attach it to the GitHub release beside the zip. --base is the
+      release's download folder: https://github.com/mihawk-99/PS5_MihawkOS/releases/download/<tag>/
   tools/sign-release.py verify FILE [--public platform/update/release-key.txt]
       Check a manifest's signature and fields as the title does.
 
@@ -96,6 +101,8 @@ def sign(args):
         raise SystemExit(f'{args.key}: no release key (the owner makes it once: tools/sign-release.py keygen)')
     if not re.fullmatch(r'https?://[!-~]+/', args.base) or re.search(r'["\'\\]', args.base):
         raise SystemExit('--base: an http(s) folder URL ending in /, the release\'s own tag folder')
+    if args.zip:
+        return sign_zip(args)
     param = json.loads((args.title / 'sce_sys/param.json').read_text())
     version = args.version or param['contentVersion']
     runtime_manifest = args.title / 'runtime-pack.txt'
@@ -133,6 +140,40 @@ def sign(args):
     return 0
 
 
+def signed(body, key):
+    with tempfile.TemporaryDirectory() as work:
+        (Path(work) / 'body').write_bytes(body)
+        signature = openssl('pkeyutl', '-sign', '-rawin', '-inkey', str(key), '-in', str(Path(work) / 'body'))
+    text = body + b'signature ' + signature.hex().encode() + b'\n'
+    check(text, public_half(key))
+    return text
+
+
+def sign_zip(args):
+    import zipfile
+    prefix = 'PPSA99170/'
+    with zipfile.ZipFile(args.zip) as archive:
+        names = set(archive.namelist())
+        for needed in ('eboot.bin', 'sce_sys/param.json', 'runtime-pack.txt'):
+            if prefix + needed not in names:
+                raise SystemExit(f'{args.zip}: no {prefix}{needed}: not a MihawkOS release zip')
+        version = args.version or json.loads(archive.read(prefix + 'sce_sys/param.json'))['contentVersion']
+        runtime = hashlib.sha256(archive.read(prefix + 'runtime-pack.txt')).hexdigest()
+    digest = hashlib.sha256()
+    with open(args.zip, 'rb') as stream:
+        for block in iter(lambda: stream.read(1 << 20), b''):
+            digest.update(block)
+    if re.search(r'\s', args.zip.name):
+        raise SystemExit(f'{args.zip.name}: a name with a space cannot be a manifest field')
+    body = (f'mihawkos-release 1\nversion {version}\nbase {args.base}\n'
+            f'title {digest.hexdigest()} {args.zip.name}\n'
+            f'runtime {runtime} runtime-pack.txt\n').encode()
+    args.out.mkdir(parents=True, exist_ok=True)
+    (args.out / 'mihawkos-release.txt').write_bytes(signed(body, args.key))
+    print(f'release {version}: {args.zip.name} signed; {args.out / "mihawkos-release.txt"}; base {args.base}')
+    return 0
+
+
 def verify(args):
     public = args.public.read_text().split()[0]
     fields = check(args.file.read_bytes(), public)
@@ -153,6 +194,7 @@ def main():
     release.add_argument('--runtime', type=Path, default=ROOT / 'dist/runtime')
     release.add_argument('--out', type=Path, default=ROOT / 'dist/release')
     release.add_argument('--key', type=Path, default=KEY)
+    release.add_argument('--zip', type=Path, help='sign this release zip (the automatic update) instead of a pack folder')
     check_one = commands.add_parser('verify')
     check_one.add_argument('file', type=Path)
     check_one.add_argument('--public', type=Path, default=PUBLIC)

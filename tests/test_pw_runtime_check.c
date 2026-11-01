@@ -39,14 +39,14 @@ int main(void)
     const PwRuntimeState tester = pw_runtime_state(1, older, alpha4);
     assert(tester != PW_RUNTIME_THIS_BUILD);                 /* proton_run_wine refuses: no helper starts */
     PwSetupFacts f = facts(tester);
-    assert(pw_setup_start(&f) == PW_SETUP_METHOD);           /* the launcher opens on the install's first step */
-    assert(pw_setup_next(PW_SETUP_METHOD, &f) == PW_SETUP_USB);   /* and the install is not skipped */
+    assert(pw_setup_start(&f) == PW_SETUP_INSTALLING);       /* the launcher opens on the install, from its own folder */
+    assert(pw_setup_next(PW_SETUP_INSTALLING, &f) == PW_SETUP_NONE);   /* then the library: the setup was done */
     /* Once this build's runtime is in place, nothing is asked again. */
     f = facts(pw_runtime_state(1, alpha4, alpha4));
     assert(pw_setup_start(&f) == PW_SETUP_NONE);
     /* A missing runtime goes the same way as before. */
     f = facts(pw_runtime_state(0, NULL, alpha4));
-    assert(pw_setup_start(&f) == PW_SETUP_METHOD);
+    assert(pw_setup_start(&f) == PW_SETUP_INSTALLING);
 
     printf("runtime check passed: this build, another build, missing, unpinned; the tester's case lands on the install\n");
     return 0;

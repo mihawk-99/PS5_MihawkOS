@@ -39,6 +39,8 @@ typedef struct PwSteamScreenState {
     unsigned seconds;                /* since the session began: the elapsed line */
     unsigned long long bytes;        /* the client's downloads so far: the megabytes line */
     const char *persona;             /* the signed-in display name (UTF-8), or NULL */
+    const char *dialog_title;        /* PW_STEAM_SCREEN_DIALOG: the box's caption (UTF-8), or NULL */
+    const char *dialog_text;         /* its text, lines split by '\n' (UTF-8), or NULL; cut to what fits */
 } PwSteamScreenState;
 
 /* What a drawing did with its words (for the test): the lowest pixel row one reached, how many lines were cut because

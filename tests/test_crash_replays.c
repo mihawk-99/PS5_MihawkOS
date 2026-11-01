@@ -313,6 +313,10 @@ static NTSTATUS server_queue_process_apc(HANDLE process, const union apc_call *c
 #define wine_server_client_ptr(p) ((uint64_t)(uintptr_t)(p))
 #define wine_server_get_ptr(p) ((void *)(uintptr_t)(p))
 
+/* Patch 2420's execute-fault note: the kernel's protection of a page (wine/ps5/pw_wine_dmem_ps5.c), none here. */
+typedef int LONG;
+static int __wine_ps5_kernel_prot(const void *address) { (void)address; return -1; }
+
 /* Patch 1134's ops repair a null %fs first (docs/MMU4K.md P5); counted here. */
 static unsigned fs_repairs;
 static void signal_ps5_fs_repair(void) { fs_repairs++; }

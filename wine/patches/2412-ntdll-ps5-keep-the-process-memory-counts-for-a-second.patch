@@ -1,0 +1,103 @@
+From 0000000000000000000000000000000000000000 Mon Sep 17 00:00:00 2001
+From: Mihawk <163614687+mihawk-99@users.noreply.github.com>
+Date: Sat, 31 Oct 2026 12:00:00 -0400
+Subject: [PATCH] ntdll: Keep the process memory counts for a second on the PS5.
+
+Patch 0905 counts a process's memory (GetProcessMemoryInfo, ProcessVmCounters) by walking every view's pages with
+virtual_mutex held, and every allocation, protection change and page fault waits for that mutex. A process holding tens
+of GiB in views takes a long time to walk, and a game that asks several times in a frame from several threads (an
+Unreal Engine game checks its memory stats about every 10 ms on each) kept the mutex taken all the time: it ran on
+about one core at 0 to 1 frames a second.
+
+The six counts are kept with the time of the walk. A query within a second of it gets them without touching
+virtual_mutex; one walker runs at a time under its own lock, and the others wait for its result instead of walking
+again. The peaks are kept as before, at each walk.
+
+The problem was found by reading bornaradusin/PC5 (LGPL-2.1-or-later; patch 0075 of its patches/prospero-win); this
+change is written independently here (NOTICE.md, "PC5").
+---
+ dlls/ntdll/unix/virtual.c | 55 ++++++++++++++++++++++++++++++++++++-----------
+ 1 file changed, 43 insertions(+), 12 deletions(-)
+
+diff --git a/dlls/ntdll/unix/virtual.c b/dlls/ntdll/unix/virtual.c
+index 74a09df..66b0500 100644
+--- a/dlls/ntdll/unix/virtual.c
++++ b/dlls/ntdll/unix/virtual.c
+@@ -2030,17 +2030,46 @@ static void dump_memory_statistics(void)
+  * themselves: the console has no /proc to read them from. The address space is the views' total,
+  * the working set is everything committed (image, mapped files and private memory alike, all of
+  * it resident on the console, which does not page), and the page file usage is the committed
+- * memory that is not backed by a file. A peak is the highest value seen at a query.
++ * memory that is not backed by a file. A peak is the highest value seen at a walk.
++ *
++ * The walk holds virtual_mutex, which every allocation, protection change and page fault waits for, and it is
++ * long when the process holds tens of GiB in views. A game that asks for these counts from several threads every
++ * few milliseconds (an Unreal Engine game checks its memory in its frame loop) kept the mutex taken all the time and
++ * ran on about one core. The counts are kept for a second: a query within a second of the last walk gets that walk's.
+  */
++static pthread_mutex_t vm_counters_mutex = PTHREAD_MUTEX_INITIALIZER;
++static VM_COUNTERS_EX vm_counters_kept;
++static ULONG vm_counters_tick;
++static BOOL vm_counters_valid;
++
++static void copy_vm_counters( VM_COUNTERS_EX *dst, const VM_COUNTERS_EX *src )
++{
++    dst->VirtualSize = src->VirtualSize;
++    dst->PeakVirtualSize = src->PeakVirtualSize;
++    dst->WorkingSetSize = src->WorkingSetSize;
++    dst->PeakWorkingSetSize = src->PeakWorkingSetSize;
++    dst->PagefileUsage = src->PagefileUsage;
++    dst->PeakPagefileUsage = src->PeakPagefileUsage;
++}
++
+ void virtual_fill_vm_counters( VM_COUNTERS_EX *pvmi )
+ {
+-    static SIZE_T peak_virtual, peak_working_set, peak_pagefile;
+     SIZE_T virtual_size = 0, working_set = 0, pagefile = 0, size, c_size;
+     struct file_view *view;
+-    sigset_t sigset;
++    sigset_t sigset, kept_sigset;
++    ULONG tick = NtGetTickCount();
+     char *base;
+     BYTE vprot;
+ 
++    /* One walker at a time: the others wait for its result instead of walking again. */
++    server_enter_uninterrupted_section( &vm_counters_mutex, &kept_sigset );
++    if (vm_counters_valid && tick - vm_counters_tick < 1000)
++    {
++        copy_vm_counters( pvmi, &vm_counters_kept );
++        server_leave_uninterrupted_section( &vm_counters_mutex, &kept_sigset );
++        return;
++    }
++
+     server_enter_uninterrupted_section( &virtual_mutex, &sigset );
+     WINE_RB_FOR_EACH_ENTRY( view, &views_tree, struct file_view, entry )
+     {
+@@ -2056,16 +2085,18 @@ void virtual_fill_vm_counters( VM_COUNTERS_EX *pvmi )
+         working_set += c_size;
+         if (!(view->protect & SEC_FILE)) pagefile += c_size;
+     }
+-    if (virtual_size > peak_virtual) peak_virtual = virtual_size;
+-    if (working_set > peak_working_set) peak_working_set = working_set;
+-    if (pagefile > peak_pagefile) peak_pagefile = pagefile;
+-    pvmi->VirtualSize = virtual_size;
+-    pvmi->PeakVirtualSize = peak_virtual;
+-    pvmi->WorkingSetSize = working_set;
+-    pvmi->PeakWorkingSetSize = peak_working_set;
+-    pvmi->PagefileUsage = pagefile;
+-    pvmi->PeakPagefileUsage = peak_pagefile;
+     server_leave_uninterrupted_section( &virtual_mutex, &sigset );
++
++    if (virtual_size > vm_counters_kept.PeakVirtualSize) vm_counters_kept.PeakVirtualSize = virtual_size;
++    if (working_set > vm_counters_kept.PeakWorkingSetSize) vm_counters_kept.PeakWorkingSetSize = working_set;
++    if (pagefile > vm_counters_kept.PeakPagefileUsage) vm_counters_kept.PeakPagefileUsage = pagefile;
++    vm_counters_kept.VirtualSize = virtual_size;
++    vm_counters_kept.WorkingSetSize = working_set;
++    vm_counters_kept.PagefileUsage = pagefile;
++    vm_counters_tick = tick;
++    vm_counters_valid = TRUE;
++    copy_vm_counters( pvmi, &vm_counters_kept );
++    server_leave_uninterrupted_section( &vm_counters_mutex, &kept_sigset );
+ }
+ #endif
+ 

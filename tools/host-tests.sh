@@ -32,6 +32,8 @@ declare -A sources=(
     [test_pw_display_capture]=""
     [test_pw_log_drain]=""
     [test_pw_wine_inherit]=""
+    [test_pw_wine_title_game]=""
+    [test_pw_wine_pe_imports]=""
     [test_forwarder_worker]=""
     [test_pw_speed_defaults]=""
     [test_pw_display_rate]=""
@@ -46,11 +48,15 @@ declare -A sources=(
     [test_proton_dualsense]=""
     [test_proton_touchpad]=""
     [test_pw_controls]="src/pw_controls.c"
+    [test_pw_osk]="src/pw_osk.c native/pw_osk_ps5.c"
     [test_pw_usb_input]="src/pw_usb_input.c"
     [test_pw_game_mode]="src/pw_game_mode.c"
     [test_pw_high_refresh]="src/pw_high_refresh.c"
     [test_pw_controller]="src/pw_controller.c"
     [test_pw_setup]="src/pw_setup.c"
+    [test_pw_drive_browse]="src/pw_drive_browse.c"
+    [test_pw_home_grid]="src/pw_home_grid.c"
+    [test_pw_steam_memory]="src/pw_steam_memory.c"
     [test_pw_runtime_check]="src/pw_runtime_check.c src/pw_setup.c"
     [test_pw_payload_check]="src/pw_payload_check.c"
     [test_pw_loading_art]="src/pw_loading_art.c"
@@ -114,6 +120,10 @@ declare -A sources=(
     [test_pw_memory_guard]="src/pw_memory_guard.c"
     [test_pw_hang_breaker]="src/pw_hang_breaker.c"
     [test_pw_log_sessions]="src/pw_log_sessions.c"
+    [test_pw_parked]=""
+    [test_pw_missing_dll]=""
+    [test_pw_spawn_wait]=""
+    [test_pw_capped_log]="src/pw_capped_log.c"
     [test_pw_detailed_logs]="src/pw_detailed_logs.c src/pw_log_sessions.c"
     [test_pw_flight_probe]="src/pw_flight_probe.c"
     [test_pw_helper_sched]="src/pw_helper_sched.c"
@@ -122,13 +132,16 @@ declare -A sources=(
     [test_pw_sha256]="src/pw_sha256.c"
     [test_pw_pack]="src/pw_pack.c src/pw_sha256.c external/zstd/zstddeclib.c"
     [test_pw_first_run]="src/pw_first_run.c"
-    [test_pw_update]="src/pw_update.c src/pw_pack.c src/pw_sha256.c external/zstd/zstddeclib.c"
+    [test_pw_update]="src/pw_update.c src/pw_zip.c src/pw_pack.c src/pw_sha256.c external/zstd/zstddeclib.c"
     [test_pw_release]="src/pw_release.c external/monocypher/monocypher.c external/monocypher/monocypher-ed25519.c"
     [test_pw_pe_arch]="src/pw_pe_arch.c"
     [test_pw_start_failure]="src/pw_start_failure.c"
     [test_pw_wine_dl]="wine/ps5/pw_wine_dl.c wine/ps5/pw_wine_prx.c"
     [test_pw_firmware]="src/pw_firmware.c"
+    [test_pw_gpu_identity]=""
+    [test_pw_wine_gpu_keep]=""
     [test_pw_game_folders]="src/pw_game_folders.c src/pw_pe_arch.c"
+    [test_pw_steam_appid]="src/pw_steam_appid.c src/pw_path_nocase.c"
     [test_pw_pad_script]="src/pw_pad_script.c"
     [test_pw_thread_alert]=""
     [test_pw_ntsync]="src/pw_ntsync.c"
@@ -140,6 +153,8 @@ declare -A sources=(
     [test_pw_ia32_decode]="src/pw_ia32_isa.c src/pw_ia32_decode.c src/pw_ia32_print.c"
     [test_pw_ia32_interp]="src/pw_ia32_isa.c src/pw_ia32_decode.c src/pw_ia32_interp.c"
     [test_pw_umip]="src/pw_ia32_isa.c src/pw_ia32_decode.c src/pw_umip.c"
+    [test_pw_user_folder]=""
+    [test_pw_dialog_keys]=""
     [test_wine_fault_served]=""
     [test_wine_virtual_guard]=""
     [test_process_rules]="src/pw_steam.c"
@@ -271,7 +286,7 @@ done
 # compiled as C, then linked with it.
 if (( $# == 0 )) || [[ "$*" == *webui* ]]; then
     webui_objects=()
-    for source in pw_controller pw_controls pw_detailed_logs pw_log_sessions pw_game_mode pw_high_refresh; do
+    for source in pw_controller pw_controls pw_detailed_logs pw_log_sessions pw_game_mode pw_high_refresh pw_drive_browse; do
         "${CC:-cc}" -std=gnu11 -O2 -g -Wall -Wextra -Werror -fsanitize=address,undefined -c "$root/src/$source.c" \
             -o "$out/webui_$source.o"
         webui_objects+=("$out/webui_$source.o")
@@ -287,7 +302,7 @@ if (( $# == 0 )) || [[ "$*" == *console_guard* ]]; then
     for test in console_guard battery_runner gate_quick shell_capture window_compose_runner appearance_runner profile_report \
             desktop_session_runner desktop_input_runner tls_fixture telemetry_teardown \
             window_material_tokens window_effects_runner frame_pacing_runner deploy_folder console_setup sched_watch run_console_verdicts \
-            placed_unmap_order module_wiring helper_opengl privacy_check dll_overrides prx_exports taskbar_logo stage_licences publication_check title_icon pack_runtime pw_https mihawk_wallpaper aero_wallpapers mihawk_music browser_lines sign_release package_install check_title_imports carrier_image_probe payload_firmware lapy_patches memory_breakdown run_shared_charge webui_http webui_i18n deploy_wine_retire start_stages wineboot_install_sentinel build_stamp; do
+            placed_unmap_order module_wiring helper_opengl privacy_check dll_overrides prx_exports taskbar_logo stage_licences publication_check title_icon pack_runtime pw_https mihawk_wallpaper aero_wallpapers mihawk_music browser_lines sign_release update_rehearsal package_install check_title_imports carrier_image_probe payload_firmware lapy_patches memory_breakdown run_shared_charge webui_http webui_i18n deploy_wine_retire start_stages wineboot_install_sentinel build_stamp pw_foreign_process pw_command_line; do
         python3 "$root/tests/test_$test.py"
         ran=$((ran + 1))
     done

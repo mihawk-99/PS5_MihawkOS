@@ -11,6 +11,8 @@
 #include "../../src/pw_release.h"
 #include "../../src/pw_sha256.h"
 #include "../../src/pw_update.h"
+#include "../../src/pw_update_flow.h"
+#include "stb_image.h"   // its inflate: the title carries stb_image for its PNGs (base/VulkanglTFModel.cpp)
 
 #include <errno.h>
 #include <string.h>
@@ -21,6 +23,9 @@
 #include <chrono>
 #include <mutex>
 #include <thread>
+#include <vector>
+#include <cstdlib>
+#include <ctime>
 
 #include "json.hpp" // external/tinygltf's vendored nlohmann::json, already in the title
 
@@ -36,19 +41,31 @@ extern "C" int sceSystemServiceLoadExec(const char *path, char *const argv[]);
 #ifndef PROTON_RELEASE_KEY
 #define PROTON_RELEASE_KEY ""
 #endif
+#ifndef PROTON_VERSION
+#define PROTON_VERSION ""
+#endif
+/* Where the releases are, when no address is set: the public repository's listing, newest found by tag, never
+ * /releases/latest (every MihawkOS release is a pre-release, which "latest" skips). Only GitHub is asked; the request
+ * carries no account and nothing about the console (pw_https sends "User-Agent: MihawkOS/1"). */
+#define PROTON_RELEASES_URL "https://api.github.com/repos/mihawk-99/PS5_MihawkOS/releases?per_page=20"
+/* The release asset the title reads first: the signed manifest (src/pw_release.h, tools/sign-release.py). */
+#define PROTON_RELEASE_ASSET "mihawkos-release.txt"
 
 namespace {
 
 constexpr const char *kUpdate = PROTON_DATA_ROOT "/update";
+/* Settings > Automatic update check: "0" turns it off; on otherwise. When it last asked (seconds since the epoch), and
+ * the release it last found (kept so the main menu still says so on later starts that day). */
+constexpr const char *kAutoFile = PROTON_DATA_ROOT "/update/auto.txt";
+constexpr const char *kLastCheckFile = PROTON_DATA_ROOT "/update/last-check";
+constexpr const char *kFoundFile = PROTON_DATA_ROOT "/update/available.txt";
 constexpr uint64_t kMarginBytes = 64ull << 20;
 
 std::mutex gLock;
 std::atomic<bool> gCancel{ false };   /* shortcut: no cancel on screen; the title pack is small (about 25 MB) */
 ProtonUpdate gState;
-PwPackManifest gManifest{};
-bool gHaveManifest = false;
-std::string gBase;
-PwPack *gPack = nullptr;
+PwUpdateOffer gOffer;                 /* the release found, downloaded at once (the owner, 2026-10-31) */
+std::atomic<uint64_t> gDone{ 0 };     /* its bytes downloaded so far */
 bool gSwitchedHere = false;   /* this process switched and its restart was refused: it is not the new title */
 std::chrono::steady_clock::time_point gStarted;
 
@@ -82,27 +99,29 @@ std::string source()
 	return web && url.find_first_of(" \t\"'") == std::string::npos ? url : std::string();
 }
 
-std::string megabytes(uint64_t bytes)
+void write_file(const char *path, const std::string &text)
 {
-	char text[32];
-	snprintf(text, sizeof(text), "%.0f MB", bytes / 1e6);
-	return text;
+	mkdir(kUpdate, 0777);
+	if (FILE *file = fopen(path, "wb")) {
+		fwrite(text.data(), 1, text.size(), file);
+		fclose(file);
+	}
 }
 
-std::string fetch_text(const std::string &url, uint64_t limit, ProtonFetch &got)
+/* pw_update_flow's way to fetch: the title's own TLS (proton_fetch.h) */
+std::string fetch(const std::string &url, uint64_t limit, const std::function<bool(const void *, size_t)> &sink)
 {
-	std::string text;
-	got = proton_fetch(url, limit, [&](const void *data, size_t size) {
-		text.append(static_cast<const char *>(data), size);
-		return true;
-	});
-	return text;
+	const ProtonFetch got = proton_fetch(url, limit, sink);
+	return got.ok ? std::string() : got.error.empty() ? std::string("the download stopped.") : got.error;
 }
 
 void finish(ProtonUpdate found)
 {
 	proton_say("update: %s %s: %s", found.phase == ProtonUpdate::failed ? "failed" : "state", found.version.c_str(),
 		found.message.c_str());
+	// The main menu's notice on later starts: kept while a release is offered, dropped once none is
+	if (found.phase == ProtonUpdate::available) write_file(kFoundFile, found.version + "\n");
+	else if (found.phase == ProtonUpdate::current) remove(kFoundFile);
 	std::lock_guard<std::mutex> hold(gLock);
 	gState = found;
 }
@@ -121,102 +140,56 @@ void check()
 		return finish(found);
 	}
 	uint8_t key[32];
-	const std::string url = source();
 	if (!pw_release_hex32(PROTON_RELEASE_KEY, key)) {
 		found.message = "This build carries no release key, so it cannot check for updates.";
 		return finish(found);
 	}
-	if (url.empty()) {
-		found.message = "This build has no update address: " PS5_TITLE_NAME " is not published yet.";
+	PwUpdateOffer offer;
+	const std::string error = pw_update_find(fetch, PROTON_RELEASES_URL, source(), PROTON_VERSION, running.c_str(), key, offer);
+	if (!error.empty()) {
+		found.message = PS5_TITLE_NAME " could not check for updates: " + error;
 		return finish(found);
 	}
-	ProtonFetch got;
-	const std::string text = fetch_text(url, 16384, got);
-	if (!got.ok) {
-		found.message = got.error.empty() ? "The update check stopped." : got.error;
-		return finish(found);
-	}
-	PwRelease release;
-	const int parsed = pw_release_parse(text.data(), text.size(), key, &release);
-	if (parsed != PW_RELEASE_OK) {
-		found.message = parsed == PW_RELEASE_SIGNATURE ?
-			"The update offered is not signed with " PS5_TITLE_NAME "'s key, so none of it is installed." :
-			"The update's description is damaged, so none of it is installed.";
-		return finish(found);
-	}
-	found.version = release.version;
-	if (pw_release_version_compare(release.version, running.c_str()) <= 0) {
+	if (!offer.found) {
 		found.phase = ProtonUpdate::current;
 		found.message = PS5_TITLE_NAME " " + running + " is the newest release.";
 		return finish(found);
 	}
-	/* The title pack's manifest, by the hash the signed text gives; the runtime manifest it carries, by the other. */
-	const std::string manifest = fetch_text(std::string(release.base) + release.title, 4u << 20, got);
-	uint8_t digest[32];
-	PwSha256 hash;
-	pw_sha256_init(&hash);
-	pw_sha256_update(&hash, manifest.data(), manifest.size());
-	pw_sha256_final(&hash, digest);
-	PwPackManifest title{};
-	if (!got.ok || memcmp(digest, release.title_sha256, 32) ||
-		pw_pack_parse(manifest.data(), manifest.size(), &title) != PW_PACK_OK) {
-		found.message = got.ok ? "The update's title manifest is not the one its signed description names." : got.error;
-		return finish(found);
-	}
-	bool runtime = false;
-	for (size_t f = 0; f < title.file_count; f++)
-		runtime = runtime || (!strcmp(title.files[f].path, "runtime-pack.txt") && !memcmp(title.files[f].sha256, release.runtime_sha256, 32));
-	if (!title.title || !runtime) {
-		pw_pack_manifest_free(&title);
-		found.message = "The update's title does not pin the runtime its signed description names.";
-		return finish(found);
-	}
 	found.phase = ProtonUpdate::available;
-	found.download = title.packed;
-	found.message = PS5_TITLE_NAME " " + found.version + " is available: " + megabytes(title.packed) +
-		" to download. Press CROSS to download it; it is switched in the next time " PS5_TITLE_NAME " starts.";
+	found.version = offer.version;
+	found.download = offer.zip_size;
+	found.message = PS5_TITLE_NAME " " + found.version + " is available.";
 	{
 		std::lock_guard<std::mutex> hold(gLock);
-		if (gHaveManifest) pw_pack_manifest_free(&gManifest);
-		gManifest = title;
-		gHaveManifest = true;
-		gBase = release.base;
+		gOffer = offer;
 	}
 	finish(found);
+	proton_update_download();   /* at once, in the background, while the launcher is up (the owner, 2026-10-31) */
 }
 
-void download(std::string version)
+/* stb_image's inflate, which the title carries for its PNGs: a release zip's deflated files (src/pw_zip.h) */
+int inflate(const uint8_t *in, size_t in_size, uint8_t *out, size_t out_size)
+{
+	return stbi_zlib_decode_noheader_buffer(reinterpret_cast<char *>(out), (int)out_size, reinterpret_cast<const char *>(in),
+	                                        (int)in_size) == (int)out_size ? 0 : 1;
+}
+
+void download(PwUpdateOffer offer)
 {
 	ProtonUpdate found;
 	found.phase = ProtonUpdate::failed;
-	found.version = version;
-	// No free-space check: a title process has no statfs (proton_install.cpp); a full disk is said by ENOSPC.
-	const std::string stage = std::string(kUpdate) + "/stage";
-	mkdir(kUpdate, 0777);
-	mkdir(stage.c_str(), 0777);
-	ProtonPackJob job;
-	job.manifest = &gManifest;
-	// shortcut: the stage starts empty, so each update downloads the whole title pack (about 25 MB); link the title's
-	// unchanged files into the stage first if releases grow.
-	job.root = stage;
-	job.source = gBase;
-	job.record = PW_UPDATE_RECORD;
-	job.cancel = &gCancel;
-	job.publish = [](PwPack *pack) {
-		std::lock_guard<std::mutex> hold(gLock);
-		gPack = pack;
-	};
-	ProtonInstall::Problem problem = ProtonInstall::none;
-	const std::string message = proton_pack_install(job, problem, found.progress);
+	found.version = offer.version;
+	// No free-space check: a title process has no statfs (measured in phase 8); a full disk is said as the write fails.
+	// Leaving the launcher (a game) ends this process and so the download; the next launcher start begins it again.
+	const std::string error = pw_update_take(fetch, offer, kUpdate, inflate, [](uint64_t done) { gDone = done; });
 	found.seconds = std::chrono::duration<double>(std::chrono::steady_clock::now() - gStarted).count();
-	const int ready = message.empty() ? pw_update_mark_ready(kUpdate, version.c_str()) : 0;
-	if (!message.empty() || ready) {
-		found.message = !message.empty() ? message : std::string("The update could not be marked ready: ") + strerror(-ready) + ".";
+	if (!error.empty()) {
+		found.message = error + " " PS5_TITLE_NAME " stays as it is.";
 		return finish(found);
 	}
 	found.phase = ProtonUpdate::ready;
-	found.message = PS5_TITLE_NAME " " + version + " is downloaded and checked. Press CROSS to restart into it now, or it is "
-		"switched in the next time " PS5_TITLE_NAME " starts.";
+	found.message = PS5_TITLE_NAME " " + offer.version + " is ready. Restart now, or it is switched in the next time "
+		PS5_TITLE_NAME " starts.";
 	finish(found);
 }
 
@@ -250,11 +223,12 @@ void proton_update_check()
 void proton_update_download()
 {
 	std::lock_guard<std::mutex> hold(gLock);
-	if (gState.phase != ProtonUpdate::available || !gHaveManifest) return;
+	if (gState.phase != ProtonUpdate::available || !gOffer.found) return;
 	gState.phase = ProtonUpdate::downloading;
 	gState.message = "Downloading " PS5_TITLE_NAME " " + gState.version;
 	gStarted = std::chrono::steady_clock::now();
-	std::thread(download, gState.version).detach();
+	gDone = 0;
+	std::thread(download, gOffer).detach();
 }
 
 void proton_update_restart()
@@ -270,8 +244,9 @@ ProtonUpdate proton_update_state()
 {
 	std::lock_guard<std::mutex> hold(gLock);
 	ProtonUpdate state = gState;
-	if (gPack) {
-		pw_pack_progress(gPack, &state.progress);
+	if (state.phase == ProtonUpdate::downloading) {
+		state.progress.written = gDone;
+		state.progress.to_write = gOffer.zip_size;
 		state.seconds = std::chrono::duration<double>(std::chrono::steady_clock::now() - gStarted).count();
 	}
 	return state;
@@ -286,7 +261,7 @@ void proton_update_on_start(int argc, char **argv)
 	const std::string ready = std::string(kUpdate) + "/ready";
 	if (access(ready.c_str(), F_OK) == 0 && pw_release_version_compare(version, running_version().c_str()) <= 0) {
 		proton_say("update: %s is staged, but this title is %s already: dropped", version, running_version().c_str());
-		unlink(ready.c_str());
+		pw_update_discard(kUpdate);
 		return;
 	}
 	char failed[512];
@@ -314,4 +289,63 @@ void proton_update_started()
 	if (gSwitchedHere) return;
 	const int status = pw_update_confirm(kUpdate);
 	if (status) proton_say("update: the new title started; the previous title's files are removed (%d)", status);
+}
+
+bool proton_update_auto_enabled()
+{
+	return read_file(kAutoFile).compare(0, 1, "0") != 0;
+}
+
+void proton_update_set_auto(bool on)
+{
+	write_file(kAutoFile, on ? "1\n" : "0\n");
+	proton_say("update: automatic check %s", on ? "on" : "off");
+}
+
+void proton_update_auto()
+{
+	const int64_t now = (int64_t)time(nullptr), last = strtoll(read_file(kLastCheckFile).c_str(), nullptr, 10);
+	char staged[64];
+	// a release found earlier whose download a game cut short is taken up again at once, whatever the day's check
+	const bool unfinished = !read_file(kFoundFile).empty() && !pw_update_pending(kUpdate, staged, sizeof(staged));
+	if (!proton_update_auto_enabled() || (!pw_update_check_due(1, now, last) && !unfinished)) return;
+	write_file(kLastCheckFile, std::to_string(now) + "\n");
+	proton_say("update: the automatic check asks (last %lld%s)", (long long)last, unfinished ? ", a download to finish" : "");
+	proton_update_check();
+}
+
+std::string proton_update_notice()
+{
+	const ProtonUpdate state = proton_update_state();
+	char staged[64];
+	if (state.phase == ProtonUpdate::ready || (state.phase != ProtonUpdate::downloading && pw_update_pending(kUpdate, staged, sizeof(staged))))
+		return PS5_TITLE_NAME " " + (state.phase == ProtonUpdate::ready ? state.version : std::string(staged)) + " is ready.";
+	if (state.phase == ProtonUpdate::downloading) {
+		char line[160];
+		const double share = state.progress.to_write ? 100.0 * (double)state.progress.written / (double)state.progress.to_write : 0.0;
+		snprintf(line, sizeof(line), PS5_TITLE_NAME " %s is downloading in the background: %.0f%%.", state.version.c_str(), share);
+		return line;
+	}
+	std::string version = state.phase == ProtonUpdate::available ? state.version : std::string();
+	if (version.empty() && state.phase != ProtonUpdate::current) {
+		version = read_file(kFoundFile);
+		version = version.substr(0, version.find_first_of("\r\n"));
+		// a kept release no newer than this title (it was installed since) is not offered
+		if (pw_release_version_compare(version.c_str(), running_version().c_str()) <= 0) version.clear();
+	}
+	return version.empty() ? std::string() : PS5_TITLE_NAME " " + version + " is available: it downloads in the background.";
+}
+
+bool proton_update_restartable()
+{
+	char staged[64];
+	return proton_update_state().phase != ProtonUpdate::downloading && pw_update_pending(kUpdate, staged, sizeof(staged));
+}
+
+void proton_update_restart_now()
+{
+	if (!proton_update_restartable()) return;
+	proton_say("update: Restart now, from the main menu");
+	char *none[] = { nullptr };
+	restart(none);
 }

@@ -14,8 +14,8 @@ mkdir -p "$out"
 mhd=$(bash "$root/tools/build-webui-http.sh" host)
 mhd_include="$root/.deps/webui/libmicrohttpd-1.0.10/src/include"
 objects=()
-# The launcher's C files it saves through, as they are (their own tests hold them to -Werror)
-for source in pw_controller pw_controls pw_detailed_logs pw_log_sessions pw_game_mode pw_high_refresh; do
+# The launcher's C files it saves and browses through, as they are (their own tests hold them to -Werror)
+for source in pw_controller pw_controls pw_detailed_logs pw_log_sessions pw_game_mode pw_high_refresh pw_drive_browse; do
     "${CC:-cc}" -std=gnu11 -O2 -g -w -c "$root/src/$source.c" -o "$out/$source.o"
     objects+=("$out/$source.o")
 done

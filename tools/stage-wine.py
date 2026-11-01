@@ -14,8 +14,8 @@ ROOT = Path(__file__).resolve().parents[1]
 DEPS = ROOT / '.deps'
 # The public certificate authorities a Windows program's TLS trusts (crypt32's root store, through
 # WINE_ADDITIONAL_CERTS_DIR): Mozilla's, as curl extracts them, one dated bundle (MPL-2.0, NOTICE.md).
-CA_BUNDLE_URL = 'https://curl.se/ca/cacert-2025-09-09.pem'
-CA_BUNDLE_SHA256 = 'f290e6acaf904a4121424ca3ebdd70652780707e28e8af999221786b86bb1975'
+CA_BUNDLE_URL = 'https://curl.se/ca/cacert-2026-10-20.pem'
+CA_BUNDLE_SHA256 = '796f1389bfea13c0ed78f663b765baaff54a508e5483786bd6ece73c5e3e3cbe'
 # Wine Mono (.NET Framework) and Wine Gecko (the HTML engine), the versions and hashes this Wine's appwiz.cpl names
 # (dlls/appwiz.cpl/addons.c): wineboot installs them into every new prefix from the runtime's share folder. Without
 # them it asked to download them, in a dialog nobody answered, and a prefix made on the console never finished
@@ -64,6 +64,26 @@ def patched_dxvk_modules(arch):
         module = work / relative
         if hashlib.sha256(module.read_bytes()).hexdigest() != manifest['files'][relative]:
             raise SystemExit('Patched DXVK differs from its manifest: ' + relative)
+        modules.append(module)
+    return modules
+
+
+def patched_vkd3d_modules(arch):
+    """d3d12 and d3d12core from tools/build-vkd3d.py, refused when stale or changed, as the DXVK ones."""
+    work = DEPS / 'vkd3d-patched'
+    manifest = json.loads((work / 'manifest.json').read_text())
+    stamp = hashlib.sha256(manifest['revision'].encode())
+    for path in (ROOT / 'tools/build-vkd3d.py', *sorted((ROOT / 'platform/vkd3d-proton/patches').glob('*.patch'))):
+        stamp.update(path.read_bytes())
+    if manifest['source_stamp'] != stamp.hexdigest():
+        raise SystemExit('VKD3D-Proton source changed: run tools/build-vkd3d.py')
+    directory = 'i386' if arch == 'i386-windows' else 'x86_64'
+    modules = []
+    for name in ('d3d12', 'd3d12core'):
+        relative = directory + '/' + name + '.dll'
+        module = work / relative
+        if hashlib.sha256(module.read_bytes()).hexdigest() != manifest['files'][relative]:
+            raise SystemExit('Patched VKD3D-Proton differs from its manifest: ' + relative)
         modules.append(module)
     return modules
 
@@ -139,7 +159,7 @@ def stage_prefix_baseline(runtime, prefix):
     (fonts / '.pw-retired').write_text(''.join(name + '\n' for name in sorted(LEFT_OUT_FONTS)))
     # The source-built external-rendering fix is shared by every program.
     for arch, target in (('x86_64-windows', 'system32'), ('i386-windows', 'syswow64')):
-        for module in patched_dxvk_modules(arch):
+        for module in patched_dxvk_modules(arch) + patched_vkd3d_modules(arch):
             shutil.copy2(module, bundle / target / module.name)
     dxvk_licences = runtime / 'share/licenses/dxvk-patched'
     dxvk_licences.mkdir(parents=True, exist_ok=True)
@@ -149,6 +169,27 @@ def stage_prefix_baseline(runtime, prefix):
                          ('SPIRV-Headers', 'include/spirv/LICENSE'),
                          ('dxbc-SPIRV-Headers', 'subprojects/dxbc-spirv/submodules/spirv_headers/LICENSE')):
         shutil.copy2(DEPS / 'dxvk-patched/source' / source, dxvk_licences / (name + '.txt'))
+    vkd3d_licences = runtime / 'share/licenses/vkd3d-patched'
+    vkd3d_licences.mkdir(parents=True, exist_ok=True)
+    for name, source in (('VKD3D-Proton', 'LICENSE'), ('VKD3D-Proton-COPYING', 'COPYING'),
+                         ('dxil-spirv', 'subprojects/dxil-spirv/LICENSE.MIT'),
+                         ('dxbc-spirv', 'subprojects/dxil-spirv/subprojects/dxbc-spirv/LICENSE'),
+                         ('Vulkan-Headers', 'khronos/Vulkan-Headers/LICENSE.md'),
+                         ('SPIRV-Headers', 'khronos/SPIRV-Headers/LICENSE'),
+                         ('dxil-spirv-SPIRV-Headers', 'subprojects/dxil-spirv/third_party/spirv-headers/LICENSE')):
+        shutil.copy2(DEPS / 'vkd3d-patched/source' / source, vkd3d_licences / (name + '.txt'))
+    # dxil-spirv compiles two of its third_party folders into d3d12core (the build's own compile commands, 2026-10-31):
+    # RenderDoc's LLVM bitcode reader (bc-decoder, MIT) and glslang's SPIR-V builder (glslang-spirv, BSD-3-Clause).
+    # Neither carries a licence file, only the text atop each source, which is staged as it stands there.
+    for name, source in (('bc-decoder', 'bc-decoder/llvm_decoder.cpp'), ('glslang-spirv', 'glslang-spirv/SpvBuilder.cpp')):
+        lines = []
+        for line in (DEPS / 'vkd3d-patched/source/subprojects/dxil-spirv/third_party' / source).read_text().splitlines():
+            if not line.startswith(('/*', ' *', '//')):
+                break
+            lines.append(line)
+        if not any('Copyright' in line for line in lines):
+            raise SystemExit('No licence atop dxil-spirv third_party/' + source)
+        (vkd3d_licences / (name + '.txt')).write_text('\n'.join(lines) + '\n')
     # One redistributable UI family for both architectures and every prefix.
     # Rebuild from checked-in pins; Microsoft development fonts are never inputs.
     subprocess.run(['python3', str(ROOT / 'tools/build-proton-ui-font.py')], check=True,
@@ -384,11 +425,13 @@ def main():
             digest.update((hid32 / name).read_bytes())
         (hid32 / 'version').write_text('hid32 %s\n' % digest.hexdigest()[:16])
     for name in ('d3d11.dll', 'dxgi.dll', 'd3d10core.dll', 'd3d9.dll', 'd3d12.dll', 'd3d12core.dll'):
-        source = DEPS / 'dxvk-release' / name
+        source = (DEPS / 'vkd3d-patched/x86_64' if name.startswith('d3d12') else DEPS / 'dxvk-release') / name
         if source.is_file():
             shutil.copy2(source, prefix / 'drive_c/windows/system32' / name)
     # Their i386 builds for 32-bit programs, in syswow64 (tools/extract-dxvk.py), d3d8 among them.
     for source in sorted((DEPS / 'dxvk-release/i386').glob('*.dll')):
+        shutil.copy2(source, prefix / 'drive_c/windows/syswow64' / source.name)
+    for source in patched_vkd3d_modules('i386-windows'):   # over GE's prebuilt d3d12 of the same revision
         shutil.copy2(source, prefix / 'drive_c/windows/syswow64' / source.name)
     # Mesa's WGL over Zink: OpenGL for programs in helper processes, which cannot use the console's OpenGL. The title
     # copies these into a prefix's system32 for the launcher layout (native/proton_wine.cpp); "version" names them.
@@ -449,12 +492,12 @@ def main():
     for path in ('windows/temp', 'users/Mihawk/AppData/Local/Temp'):
         (prefix / 'drive_c' / path).mkdir(parents=True, exist_ok=True)
     for name in ('wine-probe.exe', 'xinput-probe.exe', 'hid-probe.exe', 'sync-probe.exe', 'shell-open-probe.exe', 'exit-probe.exe', 'priority-probe.exe',
-                 'hang-probe.exe', 'window-probe.exe', 'fs-probe.exe', 'stack-probe.exe', 'gl-exit-probe.exe', 'gl-present-probe.exe', 'gl-sprite-probe.exe', 'vm-protect-probe.exe', 'vm-protect32-probe.exe', 'remote-memory-probe.exe', 'mem-probe.exe', 'gl-vertex-probe.exe', 'stdout-probe.exe', 'nt-file-probe.exe', 'thread-leak-probe.exe', 'd3d11-probe.exe', 'gpu-host-memory-probe.exe', 'section-memory-probe.exe',
-                 'process-probe.exe', 'graphics-render-probe.exe', 'memory-class-probe.exe', 'desktop-probe.exe', 'desktop-overlap-probe.exe', 'mouse-controls32-probe.exe', 'virtual-query32-probe.exe', 'virtual-query64-probe.exe', 'registry-flush64-probe.exe', 'file-write32-probe.exe', 'file-write64-probe.exe', 'relative-dir32-probe.exe', 'relative-dir64-probe.exe', 'file-cost32-probe.exe', 'file-cost64-probe.exe', 'handles-paths32-probe.exe', 'handles-paths64-probe.exe', 'pipe-cancel32-probe.exe', 'pipe-cancel64-probe.exe', 'lock32-probe.exe', 'lock64-probe.exe', 'wt-session.exe', 'path-limit64-probe.exe', 'continue64-probe.exe', 'stack-limit64-probe.exe', 'aurelia_windows-fixture.exe', 'steamcmd-fixture.exe', 'syscall-cost32-probe.exe', 'syscall-cost64-probe.exe', 'net-throughput32-probe.exe', 'net-throughput64-probe.exe', 'system-memory32-probe.exe', 'system-memory64-probe.exe', 'image-protect32-probe.exe', 'image-protect64-probe.exe', 'kill-convert-probe.exe', 'guest-address-space-probe.exe', 'section-view-probe.exe', 'late-library-probe.exe', 'dnsapi32-probe.exe', 'dnsapi64-probe.exe', 'mf-video32-probe.exe', 'mf-video64-probe.exe', 'mf-video.mp4', 'mf-video.txt', 'network-adapters32-probe.exe', 'network-adapters64-probe.exe', 'socket-options32-probe.exe', 'socket-options64-probe.exe', 'memory-guard-probe.exe',
+                 'hang-probe.exe', 'window-probe.exe', 'fs-probe.exe', 'stack-probe.exe', 'gl-exit-probe.exe', 'gl-present-probe.exe', 'gl-sprite-probe.exe', 'vm-protect-probe.exe', 'vm-protect32-probe.exe', 'remote-memory-probe.exe', 'mem-probe.exe', 'gl-vertex-probe.exe', 'stdout-probe.exe', 'crash-probe.exe', 'nt-file-probe.exe', 'thread-leak-probe.exe', 'd3d11-probe.exe', 'gpu-host-memory-probe.exe', 'section-memory-probe.exe',
+                 'process-probe.exe', 'graphics-render-probe.exe', 'memory-class-probe.exe', 'desktop-probe.exe', 'desktop-overlap-probe.exe', 'mouse-controls32-probe.exe', 'virtual-query32-probe.exe', 'virtual-query64-probe.exe', 'registry-flush64-probe.exe', 'file-write32-probe.exe', 'file-write64-probe.exe', 'relative-dir32-probe.exe', 'relative-dir64-probe.exe', 'file-cost32-probe.exe', 'file-cost64-probe.exe', 'handles-paths32-probe.exe', 'handles-paths64-probe.exe', 'pipe-cancel32-probe.exe', 'pipe-cancel64-probe.exe', 'lock32-probe.exe', 'lock64-probe.exe', 'wt-session.exe', 'path-limit64-probe.exe', 'continue64-probe.exe', 'stack-limit64-probe.exe', 'aurelia_windows-fixture.exe', 'steamcmd-fixture.exe', 'syscall-cost32-probe.exe', 'syscall-cost64-probe.exe', 'net-throughput32-probe.exe', 'net-throughput64-probe.exe', 'system-memory32-probe.exe', 'system-memory64-probe.exe', 'image-protect32-probe.exe', 'image-protect64-probe.exe', 'shared-section32-probe.exe', 'shared-section64-probe.exe', 'kill-convert-probe.exe', 'guest-address-space-probe.exe', 'section-view-probe.exe', 'late-library-probe.exe', 'dnsapi32-probe.exe', 'dnsapi64-probe.exe', 'mf-video32-probe.exe', 'mf-video64-probe.exe', 'mf-video.mp4', 'mf-video.txt', 'network-adapters32-probe.exe', 'network-adapters64-probe.exe', 'socket-options32-probe.exe', 'socket-options64-probe.exe', 'memory-guard-probe.exe',
                  'dns-probe.exe', 'tls-probe.exe', 'pe32-probe.exe', 'fixed-base32-probe.exe', 'games-autodetect-probe.exe',
                  'cross32-probe.exe', 'cross64-probe.exe', 'wow64-probe.exe',
                  'hid32-probe.exe', 'vk32-probe.exe', 'vk64-probe.exe', 'gl-vertex32-probe.exe',
-                 'd3d11-32-probe.exe', 'gl-upload32-probe.exe', 'gl-upload64-probe.exe',
+                 'd3d11-32-probe.exe', 'gl-upload32-probe.exe', 'gl-upload64-probe.exe', 'd3d12-levels-probe.exe', 'd3d12-sparse-probe.exe', 'many-files-probe.exe', 'log-flood-probe.exe', 'missing-import-probe.exe', 'parent-query-probe.exe', 'd3d12-shared-probe.exe', 'd3d12-existing-heap-probe.exe', 'osk-typed-probe.exe', 'd3d9ex-d3d11-share-probe.exe',
                  'input-message32-probe.exe', 'input-message64-probe.exe',
                  'prefix-baseline32-probe.exe', 'prefix-baseline64-probe.exe',
                  'proton-ui32-probe.exe', 'proton-ui64-probe.exe',
@@ -502,7 +545,7 @@ def main():
     for name in ('lib/wine/x86_64-unix/win32u.prx', 'lib/wine/x86_64-unix/libvulkan.prx'):
         identity.update(hashlib.sha256((runtime / name).read_bytes()).digest())
     for name in ('d3d11.dll', 'dxgi.dll', 'd3d10core.dll', 'd3d9.dll', 'd3d12.dll', 'd3d12core.dll'):
-        source = (DEPS / 'dxvk-release' if name.startswith('d3d12') else DEPS / 'dxvk-patched/x86_64') / name
+        source = (DEPS / 'vkd3d-patched/x86_64' if name.startswith('d3d12') else DEPS / 'dxvk-patched/x86_64') / name
         identity.update(hashlib.sha256(source.read_bytes()).digest())
     for source in patched_dxvk_modules('i386-windows'):
         identity.update(hashlib.sha256(source.read_bytes()).digest())

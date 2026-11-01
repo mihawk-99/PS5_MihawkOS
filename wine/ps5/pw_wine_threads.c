@@ -11,6 +11,12 @@
 #include <time.h>
 #include <ucontext.h>
 #include <unistd.h>
+#ifdef __PROSPERO__
+#include <machine/sysarch.h>
+#ifndef AMD64_GET_GSBASE
+#define AMD64_GET_GSBASE 130    /* FreeBSD's number, which the SDK's header lacks (Wine's signal_x86_64.c) */
+#endif
+#endif
 
 typedef struct Entry { long tid; pthread_t thread; } Entry;
 
@@ -60,6 +66,11 @@ int pw_wine_thread_register(long tid,pthread_t thread)
     void (*hook)(void)=__atomic_load_n(&thread_start,__ATOMIC_ACQUIRE);
     if(hook)hook();
     return status;
+}
+void pw_wine_thread_started(void)
+{
+    void (*hook)(void)=__atomic_load_n(&thread_start,__ATOMIC_ACQUIRE);
+    if(hook)hook();
 }
 void pw_wine_thread_unregister(long tid)
 {
@@ -124,10 +135,14 @@ static void sample_handler(int signal,siginfo_t *info,void *context)
         slots[i].rax=(uint64_t)uc->uc_mcontext.mc_rax;
 #endif
 #ifdef __PROSPERO__
-        /* A Wine thread's %gs base is its TEB, which holds its own address at 0x30. */
+        /* A Wine thread's %gs base is its TEB, which holds its own address at 0x30. A thread registers before its first
+         * server request, before Wine sets that base: it is still 0 then, and %gs:0x30 faulted at address 0x30 (a game's
+         * helper with WINE_PS5_SAMPLE=1, 2026-11-01: its main thread, sampled in server_init_process). libkernel's
+         * sysarch reads the base, as Wine's own signal handlers do; without one the thread has no TEB yet. */
         {
-            uint64_t teb;
-            __asm__ volatile("movq %%gs:0x30,%0" : "=r"(teb));
+            void *base=NULL;
+            uint64_t teb=0;
+            if(!sysarch(AMD64_GET_GSBASE,&base)&&base)__asm__ volatile("movq %%gs:0x30,%0" : "=r"(teb));
             slots[i].teb=teb;
         }
 #else

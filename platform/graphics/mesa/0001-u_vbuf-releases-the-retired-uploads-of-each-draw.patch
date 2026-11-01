@@ -1,0 +1,35 @@
+From: Mihawk <163614687+mihawk-99@users.noreply.github.com>
+Subject: [PATCH] u_vbuf: release the retired uploader buffers of each draw of a multi-draw
+
+u_vbuf_draw_vbo hands the uploader's retired buffers back to its caller, so that they outlive the draw that last
+used them: a single slot for a translated draw (u_vbuf_translate_begin) and an array for uploaded user buffers
+(u_vbuf_upload_buffers, which writes it from its first element and sets the count). They were released once, after
+the last draw. A multi-draw takes the loop once per draw, so each draw wrote over the previous draw's slot and
+array: a buffer the uploader retired in an earlier draw was never released, and a client-array game that draws many
+pieces in one call (a block-building game with a mod renderer) ran the GPU out of buffers. Each draw now releases what it was
+given once the driver has taken its own references, before the next draw.
+
+The problem was found by reading ProsperoMC (Ayoubec/ProsperoMC, GPL-3.0; commit 03e6e27, its
+scripts/fix-mesa-upload-lifetime.py); this change is written independently here (PS5_Proton NOTICE.md,
+"prospero-win and ProsperoMC"). Not run on a console.
+---
+diff --git a/src/gallium/auxiliary/util/u_vbuf.c b/src/gallium/auxiliary/util/u_vbuf.c
+index 882f683..b9b6df1 100644
+--- a/src/gallium/auxiliary/util/u_vbuf.c
++++ b/src/gallium/auxiliary/util/u_vbuf.c
+@@ -1761,6 +1761,15 @@ void u_vbuf_draw_vbo(struct pipe_context *pipe, const struct pipe_draw_info *inf
+          pipe->draw_vbo(pipe, &new_info, drawid_offset, indirect, &new_draw, 1);
+       if (info->increment_draw_id)
+          drawid_offset++;
++
++      /* The driver holds its own references to what this draw bound, so the retired uploader buffers it was handed can
++       * go now. Kept to the end of the call, the next draw of a multi-draw would write over them (a translated draw's
++       * single slot, an upload's array from its first element) and the buffers would never be released. */
++      pipe_resource_release(pipe, releasebuf);
++      releasebuf = NULL;
++      for (unsigned i = 0; i < release_count; i++)
++         pipe_resource_release(pipe, releasebufs[i]);
++      release_count = 0;
+    }
+ 
+    if (mgr->using_translate) {

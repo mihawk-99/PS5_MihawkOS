@@ -18,8 +18,8 @@ MihawkOS does not ship or carry a patched ShadowMountPlus.
 
 **Fixed upstream (2026-10-20).** PR 139 proposed that change; upstream closed it and committed its own version of the
 same retention the same day (`35fff9fc`, "Retain ShellCore hook pages before physical writes"; it also rounds each
-range to whole 16 KiB pages). It is in 1.7beta6 and every later release. MihawkOS now requires 1.7beta10 or later
-through its payload check (`src/pw_payload_check.h`), so it carries no mlock of its own: it could not, without
+range to whole 16 KiB pages). It is in 1.7beta6 and every later release. MihawkOS asks for beta11 or newer on its payload
+check (`src/pw_payload_check.h`; since 2026-10-31 only its presence is checked), so it carries no mlock of its own: it could not, without
 ShadowMountPlus's per-firmware hook addresses, and two lockers of the same pages would add nothing. On the owner's
 base PS5 (13.60), 1.7beta10's log said `[SHELLCORE] hook pages retained: cave=1 sites=3` before installing its hooks
 (`evidence/payloads-base-2026-10-29-01.json`). The full game, launcher, close and next-homebrew sequence has not been

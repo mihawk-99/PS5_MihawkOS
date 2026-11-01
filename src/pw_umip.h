@@ -51,4 +51,18 @@ typedef struct PwUmipEffect {
 } PwUmipEffect;
 
 int pw_umip_emulate(const uint8_t *code, size_t available, const PwUmipCpu *cpu, PwUmipEffect *effect);
+
+/* The nested-task flag, EFLAGS bit 14. A program can set it with popf (a CPU check does: Far Cry's CrySystem.dll), and
+ * the console's kernel cannot return to code that has it: the next return raises #GP(0) with no instruction to blame,
+ * which Wine reported as an access violation reading 0xFFFFFFFFFFFFFFFF (Wine bug 33275). Windows and Linux clear the flag
+ * on that fault and run the instruction again; ntdll's fault handler does the same, ahead of the UMIP decoder, with this
+ * function deciding. Returns 1 and clears the flag in *eflags when it was set, else 0 and changes nothing. A retry
+ * that faults again finds the flag clear, so this cannot loop. Host test: tests/test_pw_umip.c. */
+#define PW_EFLAGS_NESTED_TASK 0x4000u
+static inline int pw_umip_clear_nested_task(uint64_t *eflags)
+{
+    if (!(*eflags & PW_EFLAGS_NESTED_TASK)) return 0;
+    *eflags &= ~(uint64_t)PW_EFLAGS_NESTED_TASK;
+    return 1;
+}
 #endif

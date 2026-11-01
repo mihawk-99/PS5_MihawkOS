@@ -9,7 +9,6 @@
 #include "../../src/pw_https.h"
 #include "proton_launch.h"
 
-#include <dirent.h>
 #include <errno.h>
 #include <fcntl.h>
 #include <string.h>
@@ -286,37 +285,20 @@ ProtonInstall proton_install_find(const char *only)
 		return gState = found;
 	}
 	found.bytes = gManifest.plain;
-	const bool usb_only = only && !strcmp(only, "usb"), folder_only = only && !strcmp(only, "install");
-	std::vector<std::string> folders;
-	if (!usb_only) folders.push_back(PROTON_DATA_ROOT "/install");
-	bool stick = false;   /* an unmounted /mnt/usbN is an empty placeholder (evidence/probe-space-payload-2026-10-18-01) */
-	for (int n = 0; n < 8 && !folder_only; n++) {
-		const std::string mount = "/mnt/usb" + std::to_string(n);
-		if (DIR *dir = opendir(mount.c_str())) {
-			while (struct dirent *entry = readdir(dir)) stick = stick || (strcmp(entry->d_name, ".") && strcmp(entry->d_name, ".."));
-			closedir(dir);
-		}
-		folders.push_back(mount + "/mihawkos");
-	}
-	size_t best = 0;
-	std::string partial;
-	for (const auto &folder : folders) {
-		const size_t have = pieces(folder);
-		if (have == gManifest.chunk_count) {
-			found.source = folder;
-			break;
-		}
-		if (have > best) best = have, partial = folder;
-	}
-	if (found.source.empty() && !best && !folder_only) found.source = release_base();
+	const bool title_only = only && !strcmp(only, "title");
+	const std::string folder = proton_title_path("/app0/runtime-pieces");
+	const size_t have = pieces(folder);
+	if (have == gManifest.chunk_count) found.source = folder;
+	else if (!have && !title_only) found.source = release_base();
 	const bool online = web(found.source);
 	found.total = gManifest.chunk_count;
-	found.have = best;
+	found.have = have;
 	if (found.source.empty()) {
-		found.problem = best ? ProtonInstall::partial : stick ? ProtonInstall::no_folder : ProtonInstall::no_stick;
-		found.message = best ? partial + " holds " + std::to_string(best) + " of the " + std::to_string(gManifest.chunk_count) +
-			" runtime pieces. Copy all of them, then try again." :
-			"No runtime pieces found. Put them in " PROTON_DATA_ROOT "/install, or in a mihawkos folder on a USB stick.";
+		found.problem = have ? ProtonInstall::partial : ProtonInstall::no_pieces;
+		found.message = have ? "The " PS5_TITLE_NAME " folder holds " + std::to_string(have) + " of the " +
+			std::to_string(gManifest.chunk_count) + " runtime pieces. Copy the whole folder again, then try again." :
+			"The " PS5_TITLE_NAME " folder holds no runtime pieces (runtime-pieces/). Copy the whole folder of the release "
+			"again, then try again.";
 		return gState = found;
 	}
 	const uint64_t needed = pw_pack_space_needed(&gManifest, kFirstPrefixBytes + kMarginBytes);

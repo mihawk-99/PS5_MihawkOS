@@ -99,13 +99,13 @@ def main():
         frame, action = press.split()
         script += f'press ps5proton {int(frame)} {action}\n'
     if args.setup:
-        # Welcome; Language: English, down to Russian, right to Chinese and Japanese; How to install: USB; Check drive
-        # (the fake engine finds the pieces); Install; the install runs about 8.6 s, then Preparing shows to the end
-        for frame, action in ((30, 'cross'), (50, 'down'), (56, 'right'), (62, 'right'), (70, 'cross'), (100, 'cross'),
-                              (130, 'cross'), (150, 'cross')):
+        # Welcome; Language: English, down to Russian, right to Chinese and Japanese; the install starts by itself from
+        # the title folder (the fake engine), runs about 8.6 s, then Preparing shows to the end
+        for frame, action in ((30, 'cross'), (50, 'down'), (56, 'right'), (62, 'right'), (70, 'cross')):
             script += f'press ps5proton {frame} {action}\n'
     if args.controls:
-        script += 'press ps5proton 2 triangle\npress ps5proton 20 cross\n'
+        # Settings is the main menu's dock tile under Mihawk OS (examples/ps5proton/home_grid.hpp): DOWN, then CROSS
+        script += 'press ps5proton 2 down\npress ps5proton 4 cross\npress ps5proton 20 cross\n'
         if args.controls != 'section':
             script += 'press ps5proton 40 cross\n'
         if args.controls == 'remapped':
@@ -262,7 +262,7 @@ def main():
                 'steps': steps, 'language_ja': '[MihawkOS] setup: language ja-JP' in current,
                 'installed': bool(re.search(r'setup: install 4 problem 0', current)),
                 'sky_gpu_ms': sky, 'fps': re.findall(r'sample ps5proton: ok, \d+ frames in [0-9.]+ s, ([0-9.]+) fps', current)}
-            evidence['passed'] = evidence['passed'] and steps == [0, 1, 2, 3, 4, 5] and evidence['setup']['language_ja'] \
+            evidence['passed'] = evidence['passed'] and steps == [0, 1, 4, 5] and evidence['setup']['language_ja'] \
                 and evidence['setup']['installed'] and bool(sky)
         if args.steam_guide_pictures:
             kept = []

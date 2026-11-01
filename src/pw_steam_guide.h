@@ -103,6 +103,7 @@ typedef enum {
     PW_STEAM_SCREEN_SLOW,       /* the same, with "taking longer than usual" and CROSS to try again */
     PW_STEAM_SCREEN_SCAN,       /* the client's browser has started: get the phone ready */
     PW_STEAM_SCREEN_SIGNED_IN,  /* the sign-in is saved: the session ends, Steam closes and reopens in Big Picture */
+    PW_STEAM_SCREEN_DIALOG,     /* a game in the title opened a dialog box: its caption and text, CROSS to answer it */
 } PwSteamScreen;
 
 enum {

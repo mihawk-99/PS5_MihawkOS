@@ -1,0 +1,21 @@
+{
+ "run": "rc7-pro-2026-11-01-title-games",
+ "what": "process-probe.exe",
+ "env": [
+  "WINE_PS5_TITLE_OPTOUT=optout64.exe",
+  "PS5_PROTON_PROBE_FRAMES=3600",
+  "PROTON_LAYOUT=launcher",
+  "WINE_PS5_CONTROLLER=xbox-360",
+  "WINE_PS5_GAME_MODE=1",
+  "PROTON_120HZ=1",
+  "PROTON_STOP_TERMINATE=0"
+ ],
+ "passed": false,
+ "result": "runner_error",
+ "error": "The console is not idle; run refused",
+ "loaded": false,
+ "probe_verdict": null,
+ "stop_requested": null,
+ "cleanup_verified": false,
+ "hooks_removed": false
+}

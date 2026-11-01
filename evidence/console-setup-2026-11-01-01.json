@@ -1,0 +1,94 @@
+{
+ "run": "console-setup-2026-11-01-01",
+ "result": "ready",
+ "stopped_at": null,
+ "steps": {
+  "S0": {
+   "step": "host",
+   "state": "done",
+   "seconds": 0.6,
+   "detail": "dist and the staged runtime are there"
+  },
+  "S1": {
+   "step": "reach",
+   "state": "done",
+   "seconds": 0.0,
+   "detail": "ftpsrv and websrv answer; klog stream open"
+  },
+  "S2": {
+   "step": "guard",
+   "state": "done",
+   "seconds": 0.0,
+   "detail": "no drop, no storage block"
+  },
+  "S3": {
+   "step": "control",
+   "state": "did",
+   "seconds": 4.6,
+   "detail": "ps5vkctl pid 101, no title running, firmware 10010000"
+  },
+  "S4": {
+   "step": "klog",
+   "state": "done",
+   "seconds": 0.0,
+   "detail": "39 lines, no storage damage, no OnionHEN"
+  },
+  "S5": {
+   "step": "salvage",
+   "state": "did",
+   "seconds": 44.2,
+   "detail": "1040 log files"
+  },
+  "S6": {
+   "step": "dev.conf",
+   "state": "done",
+   "seconds": 0.0,
+   "detail": "loopback 8080"
+  },
+  "S7": {
+   "step": "title",
+   "state": "did",
+   "seconds": 21.9,
+   "detail": "4 of 178 files sent"
+  },
+  "S8": {
+   "step": "runtime",
+   "state": "did",
+   "seconds": 17.0,
+   "detail": "Uploaded and verified 17 files; prefix probe: preserved existing state"
+  },
+  "S9": {
+   "step": "prefix",
+   "state": "done",
+   "seconds": 1.5,
+   "detail": "prefix ready, firmware 10010000"
+  },
+  "S10": {
+   "step": "read-back",
+   "state": "done",
+   "seconds": 292.3,
+   "detail": "4276 files match"
+  }
+ },
+ "klog": {
+  "connections": 1,
+  "lines": 238,
+  "storage_damage": 0,
+  "onionhen": 0
+ },
+ "build": {
+  "matches_tree": true,
+  "head": "7d7017dab9c8",
+  "time": "2026-11-01T02:09:23-0500"
+ },
+ "title_files": 178,
+ "runtime": "Uploaded and verified 17 files; prefix probe: preserved existing state",
+ "prefix_session": null,
+ "firmware": "10010000",
+ "read_back": {
+  "files": 4276,
+  "mismatches": 0
+ },
+ "last_console_write": 1793524109.53639,
+ "sync": "ok sync ms=12"
+}

@@ -13,7 +13,9 @@ NtTerminateProcess's first lock, the loader's doom path ends the process without
 prints its lock-free lines before image_stats, which waited 160 s on the virtual mutex in a run of 2026-10-15, and the
 stall watch stamps STALL and lists the helper's threads without a lookup, an allocation or a Wine lock."""
 from pathlib import Path
+import os
 import re
+import subprocess
 import unittest
 
 ROOT = Path(__file__).resolve().parents[1]
@@ -31,6 +33,17 @@ def patch_files(number, directory='wine/patches'):
     [path] = (ROOT / directory).glob(f'{number}-*.patch')
     files = {}
     for part in path.read_text().split('\ndiff --git a/')[1:]:
+        files[part.split(' ', 1)[0]] = part.splitlines()
+    return files
+
+
+def foundation_commit_files(commit):
+    """The files a PS5_Vulkan commit changes, as patch_files gives them: the graphics patches are commits there now
+    (tools/setup-graphics-foundation.sh pins the revision; the checkout is the one it exports from)."""
+    fork = os.environ.get('PS5_VULKAN_GIT') or str(ROOT.parent / 'PS5_Vulkan')
+    text = subprocess.run(['git', '-C', fork, 'show', '--format=', commit], check=True, capture_output=True, text=True).stdout
+    files = {}
+    for part in ('\n' + text).split('\ndiff --git a/')[1:]:
         files[part.split(' ', 1)[0]] = part.splitlines()
     return files
 
@@ -54,7 +67,8 @@ class HangBackstop(unittest.TestCase):
         self.assertEqual([name for name in patch_files(1135) if name.startswith('dlls/win32u/')], [])
 
     def test_0017_stamps_the_gpu_reason_once_when_the_client_gives_the_broker_up(self):
-        lines = patch_files('0017', 'platform/graphics/patches')['tooling/gpu-broker/client.c']
+        # PS5_Vulkan d14e738, once PS5_Proton's graphics patch 0017
+        lines = foundation_commit_files('d14e738dec4f596e1e6d060362e0d42f4a83f608')['tooling/gpu-broker/client.c']
         new = [line[1:] for line in lines if line[:1] in ' +']   # the patched file's lines in its hunks, in order
         # Both places that set broken (rpc's failed call, the free path) now go through broker_lost.
         self.assertEqual(sum('__atomic_store_n(&broken,1' in line for line in lines if line.startswith('-')), 2)

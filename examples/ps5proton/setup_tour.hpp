@@ -27,8 +27,8 @@
 // so the tour says it in the chosen language with a way out.
 struct SetupInstall {
 	enum Phase { unavailable, ready, checking, running, done, failed } phase{ unavailable };
-	enum Problem { none, no_manifest, no_stick, no_folder, partial, no_space, read_failed, damaged, storage_full,
-		write_failed, cancelled } problem{ none };
+	enum Problem { none, no_manifest, no_pieces, partial, no_space, read_failed, damaged, storage_full, write_failed,
+		cancelled } problem{ none };
 	uint64_t total{ 0 };                    // bytes the runtime holds (ready)
 	uint64_t needed{ 0 }, available{ 0 };   // no_space
 	size_t have{ 0 }, pieces{ 0 };          // partial
@@ -40,9 +40,8 @@ class SetupEngine
 {
 public:
 	virtual ~SetupEngine() = default;
-	// Look for the pieces on a USB drive (folder: in /data/ps5proton/install, copied there over FTP) and for the free
-	// space; not while an install runs
-	virtual SetupInstall find(bool folder = false) = 0;
+	// Look for the runtime's pieces in the title folder; not while an install runs
+	virtual SetupInstall find() = 0;
 	// Start the install find() found ready; returns at once
 	virtual void start() = 0;
 	// Stop between pieces; what is installed stays (phase failed, problem cancelled)
@@ -51,18 +50,18 @@ public:
 };
 
 // Plays an install without touching the disk: "ok" (1.19 GB at about 180 MB/s), or a problem by its name
-// ("no-stick", "partial", "damaged", ...), the first time the drive is checked or the install runs.
+// ("no-pieces", "partial", "damaged", ...), the first time the folder is checked or the install runs.
 class FakeSetupEngine : public SetupEngine
 {
 public:
 	explicit FakeSetupEngine(std::string scenario) : scenario_(std::move(scenario)) {}
-	SetupInstall find(bool = false) override
+	SetupInstall find() override
 	{
 		state_ = {};
 		state_.total = 1189920691ull;
 		const auto problem = named();
-		if (problem == SetupInstall::no_stick || problem == SetupInstall::no_folder || problem == SetupInstall::partial ||
-			problem == SetupInstall::no_space || problem == SetupInstall::no_manifest) {
+		if (problem == SetupInstall::no_pieces || problem == SetupInstall::partial || problem == SetupInstall::no_space ||
+			problem == SetupInstall::no_manifest) {
 			state_.phase = SetupInstall::unavailable;
 			state_.problem = problem;
 			state_.have = 41, state_.pieces = 52;
@@ -108,8 +107,8 @@ public:
 private:
 	SetupInstall::Problem named() const
 	{
-		static const char *const names[] = { "", "no-manifest", "no-stick", "no-folder", "partial", "no-space", "read-failed",
-			"damaged", "storage-full", "write-failed", "cancelled" };
+		static const char *const names[] = { "", "no-manifest", "no-pieces", "partial", "no-space", "read-failed", "damaged",
+			"storage-full", "write-failed", "cancelled" };
 		for (int i = 1; i < (int)(sizeof(names) / sizeof(names[0])); ++i)
 			if (scenario_ == names[i]) return (SetupInstall::Problem)i;
 		return SetupInstall::none;
@@ -125,13 +124,12 @@ private:
 	bool held_{ false };
 };
 
-// The installer's engine (ps5/src/proton_install.h, SELF_INSTALL phase 5), read from the USB sticks alone on the USB
-// step and from /data/ps5proton/install alone on the FTP step, never a download. Its phases and problems are the
-// tour's, in the same order.
+// The installer's engine (ps5/src/proton_install.h, SELF_INSTALL phase 5), from the title folder's own pieces alone,
+// never a download. Its phases and problems are the tour's, in the same order.
 class InstallSetupEngine : public SetupEngine
 {
 public:
-	SetupInstall find(bool folder) override { return convert(proton_install_find(folder ? "install" : "usb")); }
+	SetupInstall find() override { return convert(proton_install_find("title")); }
 	void start() override { proton_install_start(); }
 	void cancel() override { proton_install_cancel(); }
 	SetupInstall state() override { return convert(proton_install_state()); }
@@ -146,7 +144,7 @@ private:
 		to.problem = from.problem <= ProtonInstall::cancelled ? (SetupInstall::Problem)from.problem : SetupInstall::read_failed;
 		to.needed = from.needed, to.available = from.available, to.have = from.have, to.pieces = from.total;
 		to.written = from.progress.written, to.to_write = from.progress.to_write, to.seconds = from.seconds;
-		to.total = from.bytes;   // the manifest's size: "The drive holds 1.19 GB to install"
+		to.total = from.bytes;   // the manifest's size
 		return to;
 	}
 };
@@ -275,8 +273,8 @@ class SetupTour
 public:
 	// steam_*: the Steam guide asks the launcher to download the installer, or to restart into its install session, its
 	// sign-in session or the client in Big Picture
-	enum class Outcome { none, library, enter, prepare, steam_download, steam_install, steam_signin, steam_big_picture,
-		payload_recheck, payload_continue, payload_close };
+	enum class Outcome { none, library, steam_guide, prepare, steam_download, steam_install, steam_signin, steam_big_picture,
+		payload_recheck, payload_continue, payload_close, payload_skip };
 
 	SetupSky sky;
 	Outcome outcome{ Outcome::none };
@@ -337,10 +335,6 @@ public:
 			else proton_say("setup: no flag for %s (%s)", all[i].tag, all[i].flag);
 		}
 		for (const auto *language : shown_) loadFace(language);
-		std::string qr;
-		hui::save::read_file(assets + "setup/qr.txt", &qr, 1 << 16);
-		std::istringstream rows(qr);
-		for (std::string row; std::getline(rows, row);) if (!row.empty()) qr_.push_back(row);
 		if (step == PW_SETUP_PREPARING && facts.returning) prepareFailed_ = true;
 		useLanguage(language_);
 		go(step, false);
@@ -409,7 +403,8 @@ public:
 	// ---- The payload checklist (src/pw_payload_check.h): a page of the setup's look. Failing, it stays until Check again
 	// (Outcome::payload_recheck) passes; passing, it says so and continues by itself after kPayloadContinueS, or at
 	// CROSS (Outcome::payload_continue). CROSS counts only once it has been seen up: the press that started the title
-	// must not act on the page (the owner, 2026-10-29: "The payload check closes the screen immediately"). English only.
+	// must not act on the page (the owner, 2026-10-29: "The payload check closes the screen immediately"). Failing, TRIANGLE
+	// held PW_PAYLOAD_SKIP_SECONDS goes on anyway (Outcome::payload_skip, this start only). English only, but for that hold.
 	void beginPayloads(ps5ui::Kit &kit, const std::string &assets, const PwPayloadReport &report, const PwPayloadFacts &facts,
 		const std::string &advice)
 	{
@@ -428,6 +423,7 @@ public:
 	// A new check's report: the page comes in again; an error sound when it still fails
 	void payloads(const PwPayloadReport &report, const PwPayloadFacts &facts, const std::string &advice, bool again)
 	{
+		skipSeconds_ = 0.0f;
 		payloadReport_ = report;
 		payloadFacts_ = facts;
 		payloadAdvice_ = advice;
@@ -482,9 +478,11 @@ public:
 					doneAt_ = clock_;
 				}
 			}
-			if (install_.phase == SetupInstall::done && clock_ - doneAt_ > 1.4f) {
+			if (install_.phase == SetupInstall::done && clock_ - doneAt_ > 1.4f && outcome == Outcome::none) {
 				facts_.runtime = 1;
-				go(pw_setup_next(PW_SETUP_INSTALLING, &facts_), true);
+				const PwSetupStep next = pw_setup_next(PW_SETUP_INSTALLING, &facts_);
+				if (next == PW_SETUP_NONE) finish(Outcome::library, "runtime updated");
+				else go(next, true);
 			}
 		}
 		layout();
@@ -509,6 +507,21 @@ public:
 				outcome = Outcome::payload_continue;
 				proton_say("payload check: continues by itself");
 			}
+			// A failing check's way through: TRIANGLE held PW_PAYLOAD_SKIP_SECONDS (CROSS checks again), from a press made here
+			if (pw_payload_skip_offered(&payloadReport_) && outcome == Outcome::none) {
+				const bool held = input.is_held(hui::Action::north);
+				if (!held) skipArmed_ = true;
+				const float was = skipSeconds_;
+				if (pw_payload_skip_hold(&skipSeconds_, held && skipArmed_, dt)) {
+					char line[512];
+					pw_payload_skip_line(&payloadReport_, line, sizeof(line));
+					proton_say("checklist: %s", line);
+					feedback_.play(hui::audio::Cue::saved);
+					outcome = Outcome::payload_skip;
+				} else if (was > 0.0f && skipSeconds_ == 0.0f) {
+					proton_say("checklist: hold let go at %.1f s", was);
+				}
+			}
 		} else if (input.is_pressed(hui::Action::confirm)) activate(focus_);
 		else if (steam_) {
 			if (input.is_pressed(hui::Action::back) && steamPage_ != PW_STEAM_PAGE_DOWNLOAD && outcome == Outcome::none) {
@@ -518,9 +531,20 @@ public:
 		} else if (input.is_pressed(hui::Action::back) && pw_setup_back(step_) != PW_SETUP_NONE && !busy()) {
 			feedback_.play(hui::audio::Cue::back);
 			go(pw_setup_back(step_), true);
-		} else if (input.is_pressed(hui::Action::north) && skippable()) {
-			feedback_.play(hui::audio::Cue::back);
-			finish(Outcome::library, "skipped");
+		}
+		if (!steam_ && !payloads_ && step_ == PW_SETUP_LIMITS && outcome == Outcome::none) {
+			// The limits page: cross held PW_SETUP_HOLD_SECONDS goes on, letting go starts over, and nothing else goes on.
+			// A hold counts from a press made here (cross still down from the step before arms nothing).
+			const bool held = input.is_held(hui::Action::confirm);
+			if (!held) holdArmed_ = true;
+			const float was = holdSeconds_;
+			holdSeconds_ = pw_setup_hold(holdSeconds_, held && holdArmed_, dt);
+			if (was > 0.0f && holdSeconds_ == 0.0f) proton_say("setup: hold let go at %.1f s", was);
+			if (holdSeconds_ >= PW_SETUP_HOLD_SECONDS) {
+				feedback_.play(hui::audio::Cue::saved);
+				proton_say("setup: held %.1f s", holdSeconds_);
+				go(PW_SETUP_DONE, true);
+			}
 		}
 		for (auto &[id, amount] : glow_) amount += ((id == focus_ ? 1.0f : 0.0f) - amount) * std::min(1.0f, dt * 14.0f);
 		if (!glow_.count(focus_)) glow_[focus_] = 0.0f;
@@ -562,40 +586,6 @@ public:
 		case PW_SETUP_LANGUAGE:
 			card(list, paint, text(PW_TEXT_LANGUAGE_TITLE), text(PW_TEXT_LANGUAGE_BODY));
 			break;
-		case PW_SETUP_METHOD:
-			card(list, paint, text(PW_TEXT_METHOD_TITLE), text(PW_TEXT_METHOD_BODY));
-			if (facts_.runtime) status(list, text(PW_TEXT_METHOD_INSTALLED), look.success, kCard.y + 230);
-			qrCode(list, look, { kCard.x + 72, kCard.y + kCard.h - 72 - 168 }, 168, true);
-			break;
-		case PW_SETUP_USB:
-		case PW_SETUP_FTP: {
-			card(list, paint, routed(PW_TEXT_USB_TITLE), nullptr);
-			float y = kCard.y + 196;
-			const PwSetupText steps[] = { PW_TEXT_USB_STEP1, PW_TEXT_USB_STEP2, PW_TEXT_USB_STEP3, PW_TEXT_USB_STEP4 };
-			for (int i = 0; i < 4; ++i) {
-				const float x = kCard.x + 72;
-				list.circle(x + 22, y + 4, 22, look.primary);
-				char number[4];
-				snprintf(number, sizeof(number), "%d", i + 1);
-				hui::ui::text(list, fonts.semibold, number, x + 22, y + 13, 24, hui::ui::Painter::on(look.primary), hui::gfx::Align::center);
-				y = wrapped(list, fonts.regular, routed(steps[i]), x + 68, y + 13, 26, 680, look.text) + 26;
-			}
-			qrCode(list, look, { kCard.x + kCard.w - 72 - 300, kCard.y + 176 }, 300, false);
-			// The outcome goes under the last step (a long translation's steps reach past kStatusY), as wide as the buttons
-			// beside it allow: up to Check's left edge when Install is offered too, else up to the one button
-			const float statusY = std::max(kStatusY, y + 8), right = kCard.x + kCard.w - 72;
-			const float statusWidth = (install_.phase == SetupInstall::ready ? right - 632 : right - 300) - 24 - (kCard.x + 72);
-			if (install_.phase == SetupInstall::ready) {
-				char size[32], line[256];
-				pw_setup_gigabytes(language_, install_.total, size, sizeof(size));
-				const char *args[] = { size };
-				pw_setup_fill(line, sizeof(line), routed(PW_TEXT_FOUND), args, 1);
-				status(list, line, look.success, statusY, statusWidth);
-			} else if (install_.problem != SetupInstall::none) {
-				status(list, problem().c_str(), look.danger, statusY, statusWidth);
-			}
-			break;
-		}
 		case PW_SETUP_INSTALLING: {
 			card(list, paint, text(PW_TEXT_INSTALLING_TITLE), nullptr);
 			const float share = install_.to_write ? std::min(1.0f, (float)install_.written / (float)install_.to_write) : 0.0f;
@@ -603,10 +593,10 @@ public:
 			snprintf(percent, sizeof(percent), "%d%%", (int)(share * 100.0f));
 			paint.heading(percent, kCard.x + 72, kCard.y + 290, 104, look.text);
 			paint.progress({ kCard.x + 72, kCard.y + 330, kCard.w - 144, 26 }, share);
-			char line[256];
+			char line[256] = "";
 			if (install_.phase == SetupInstall::checking) {
 				snprintf(line, sizeof(line), "%s", text(PW_TEXT_INSTALLING_CHECKING));
-			} else {
+			} else if (install_.to_write) {
 				char done[32], total[32], speed[32];
 				snprintf(done, sizeof(done), "%llu", (unsigned long long)(install_.written / 1000000ull));
 				snprintf(total, sizeof(total), "%llu", (unsigned long long)(install_.to_write / 1000000ull));
@@ -615,12 +605,13 @@ public:
 				pw_setup_fill(line, sizeof(line), text(PW_TEXT_INSTALLING_STATS), args, 3);
 			}
 			hui::ui::text(list, fonts.semibold, line, kCard.x + 72, kCard.y + 404, 28, look.text);
-			if (install_.phase == SetupInstall::failed)
+			// A problem (pieces missing or damaged, a full disk) stays until Try again finds none: no way past it
+			if (install_.problem != SetupInstall::none)
 				status(list, problem().c_str(), look.danger, kCard.y + 500);
 			else if (install_.phase == SetupInstall::done)
 				status(list, text(PW_TEXT_INSTALLED), look.success, kCard.y + 500);
 			else
-				wrapped(list, fonts.regular, routed(PW_TEXT_INSTALLING_BODY), kCard.x + 72, kCard.y + 470, 26, 1100, look.text_muted);
+				wrapped(list, fonts.regular, text(PW_TEXT_INSTALLING_BODY), kCard.x + 72, kCard.y + 470, 26, 1100, look.text_muted);
 			break;
 		}
 		case PW_SETUP_PREPARING: {
@@ -635,10 +626,31 @@ public:
 			break;
 		}
 		case PW_SETUP_DONE:
-			paint.heading(text(PW_TEXT_DONE_TITLE), 960, 470, fitted(paint, text(PW_TEXT_DONE_TITLE), 92, 1640), ink,
-				hui::gfx::Align::center);
-			wrapped(list, fonts.regular, text(PW_TEXT_DONE_BODY), 960, 538, 32, 1500, muted, hui::gfx::Align::center);
+			card(list, paint, text(PW_TEXT_DONE_TITLE), text(PW_TEXT_DONE_BODY));
 			break;
+		case PW_SETUP_LIMITS: {
+			card(list, paint, text(PW_TEXT_LIMITS_TITLE), text(PW_TEXT_LIMITS_BODY));
+			// The games it cannot run, in the warning note the Preparing page uses: a heading, two points, what happens.
+			// Under the body's last line (three in German), as card() wraps it.
+			const float bodyEnd = kCard.y + 166 + lines(fonts.regular, text(PW_TEXT_LIMITS_BODY), 27, 1120).size() * 27 * 1.42f;
+			const hui::gfx::Rect note{ kCard.x + 72, std::max(kCard.y + 268, bodyEnd + 12), kCard.w - 144, 268 };
+			list.rounded_rect(note, look.radius, look.warning.with_alpha(0.14f));
+			list.bordered_rect(note, look.radius, hui::gfx::Color{ 0, 0, 0, 0 }, 1.5f, look.warning.with_alpha(0.7f));
+			list.circle(note.x + 48, note.y + 50, 20, look.warning);
+			hui::ui::text(list, fonts.semibold, "!", note.x + 48, note.y + 60, 28, hui::gfx::Color::rgb(0x1b2430), hui::gfx::Align::center);
+			hui::ui::text(list, fonts.semibold, text(PW_TEXT_LIMITS_NOTE_TITLE), note.x + 92, note.y + 60, 28, look.text);
+			float y = note.y + 108;
+			for (const PwSetupText point : { PW_TEXT_LIMITS_DRM, PW_TEXT_LIMITS_ANTICHEAT }) {
+				list.circle(note.x + 104, y - 8, 5, look.text);
+				y = wrapped(list, fonts.regular, text(point), note.x + 124, y, 26, note.w - 164, look.text) + 6;
+			}
+			wrapped(list, fonts.regular, text(PW_TEXT_LIMITS_RESULT), note.x + 92, y + 8, 26, note.w - 130, look.text_muted);
+			// Hold cross: a ring around its glyph fills over PW_SETUP_HOLD_SECONDS; the words before it, the glyph where
+			// the text says {1}, with the text's own spaces around it (none before a comma: "Удерживайте ✕, чтобы")
+			const float cx = kCard.x + kCard.w - 72 - 52, cy = kCard.y + kCard.h - 72 - 40;
+			holdRing(list, fonts_, look, cx, cy, holdSeconds_ / PW_SETUP_HOLD_SECONDS, hui::ui::Button::cross, text(PW_TEXT_LIMITS_HOLD));
+			break;
+		}
 		default:
 			break;
 		}
@@ -656,8 +668,8 @@ public:
 	}
 
 private:
-	enum Id { T_NONE = 0, T_START, T_SKIP, T_USB, T_FTP, T_INTERNET, T_CONTINUE, T_CHECK, T_INSTALL, T_STOP, T_BACK, T_PREPARE,
-		T_ENTER, T_STEAM_START, T_STEAM_NOT_NOW, T_STEAM_RETRY, T_PAYLOAD_CHECK, T_LANGUAGE = 100 };
+	enum Id { T_NONE = 0, T_START, T_CONTINUE, T_CHECK, T_STOP, T_BACK, T_PREPARE,
+		T_DONE_STEAM, T_DONE_LIBRARY, T_STEAM_START, T_STEAM_NOT_NOW, T_STEAM_RETRY, T_PAYLOAD_CHECK, T_LANGUAGE = 100 };
 	struct Target {
 		int id;
 		hui::gfx::Rect rect;
@@ -668,14 +680,11 @@ private:
 	static constexpr float kStatusY = 930 - 190;
 
 	const char *text(PwSetupText key) const { return pw_setup_text(language_, key); }
-	// A text of the install's pages, in the words of the route the pieces come by (no drive on the FTP route)
-	const char *routed(PwSetupText key) const { return text(pw_setup_route_text(route_ == PW_SETUP_FTP, key)); }
 	bool busy() const
 	{
 		return step_ == PW_SETUP_INSTALLING &&
 			(install_.phase == SetupInstall::checking || install_.phase == SetupInstall::running || install_.phase == SetupInstall::done);
 	}
-	bool skippable() const { return step_ != PW_SETUP_DONE && !busy(); }
 
 	// A language's own face (Chinese, Japanese), once: every role of the kit's set points at it (one weight)
 	void loadFace(const PwSetupLanguage *language)
@@ -706,18 +715,15 @@ private:
 	{
 		step_ = step;
 		entered_ = animate ? 0.0f : 1.0f;
-		if (step != PW_SETUP_USB && step != PW_SETUP_FTP && step != PW_SETUP_INSTALLING) install_ = {};
-		if (step == PW_SETUP_USB || step == PW_SETUP_FTP) route_ = step;
-		// The folder FTP copies into is made here, so the user only opens it (a test run writes nothing)
-		if (step == PW_SETUP_FTP && !test_ && mkdir(PROTON_DATA_ROOT "/install", 0777) != 0 && errno != EEXIST)
-			proton_say("setup: %s/install not made (%d)", PROTON_DATA_ROOT, errno);
+		holdSeconds_ = 0.0f, holdArmed_ = false;
+		install_ = {};
+		if (step == PW_SETUP_INSTALLING) install();   // nothing to choose: the pieces are the title's own
 		layout();
 		focus_ = targets_.empty() ? T_NONE : targets_.front().id;
 		if (step == PW_SETUP_LANGUAGE)
 			for (size_t i = 0; i < shown_.size(); ++i) if (shown_[i] == language_) focus_ = T_LANGUAGE + (int)i;
-		if (step == PW_SETUP_METHOD && facts_.runtime) focus_ = T_CONTINUE;
 		if (step == PW_SETUP_DONE) save(true);
-		proton_say("setup: step %d", (int)step);
+		proton_say("setup: step %d, %d of 6", (int)step, stepIndex() + 1);   // what the counter shows
 	}
 
 	void save(bool done)
@@ -761,7 +767,6 @@ private:
 		switch (step_) {
 		case PW_SETUP_WELCOME:
 			targets_.push_back({ T_START, { 960 - 200, 596, 400, 84 } });
-			targets_.push_back({ T_SKIP, { 960 - 170, 704, 340, 60 } });
 			break;
 		case PW_SETUP_LANGUAGE: {
 			// Up to four large tiles in a row; more in two rows (nine: five and four), six at most a row
@@ -778,24 +783,9 @@ private:
 			}
 			break;
 		}
-		case PW_SETUP_METHOD: {
-			// Three tiles in a row, clear of the QR code below them (its top is kCard.y + kCard.h - 240)
-			const float y = kCard.y + (facts_.runtime ? 290 : 250), w = (kCard.w - 144 - 64) / 3.0f;
-			if (facts_.runtime) targets_.push_back({ T_CONTINUE, { right - 300, bottom - 68, 300, 68 } });
-			targets_.push_back({ T_USB, { kCard.x + 72, y, w, kTileH } });
-			targets_.push_back({ T_FTP, { kCard.x + 72 + w + 32, y, w, kTileH } });
-			targets_.push_back({ T_INTERNET, { kCard.x + 72 + 2 * (w + 32), y, w, kTileH }, true });
-			break;
-		}
-		case PW_SETUP_USB:
-		case PW_SETUP_FTP:
-			if (install_.phase == SetupInstall::ready) targets_.push_back({ T_INSTALL, { right - 300, bottom - 68, 300, 68 } });
-			targets_.push_back({ T_CHECK, { right - (install_.phase == SetupInstall::ready ? 632 : 300), bottom - 68, 300, 68 } });
-			break;
 		case PW_SETUP_INSTALLING:
-			if (install_.phase == SetupInstall::failed) {
-				targets_.push_back({ T_CHECK, { right - 300, bottom - 68, 300, 68 } });
-				targets_.push_back({ T_BACK, { right - 632, bottom - 68, 300, 68 } });
+			if (install_.problem != SetupInstall::none) {
+				targets_.push_back({ T_CHECK, { right - 300, bottom - 68, 300, 68 } });   // Try again, and nothing else
 			} else if (install_.phase != SetupInstall::done) {
 				targets_.push_back({ T_STOP, { right - 260, bottom - 68, 260, 68 } });
 			}
@@ -803,9 +793,14 @@ private:
 		case PW_SETUP_PREPARING:
 			targets_.push_back({ T_PREPARE, { right - 300, bottom - 68, 300, 68 } });
 			break;
-		case PW_SETUP_DONE:
-			targets_.push_back({ T_ENTER, { 960 - 230, 596, 460, 84 } });
+		case PW_SETUP_DONE: {
+			// What to do first, two tiles: Steam's guide or the library (the shell is a press away from it). Taller than the
+			// method's: a line runs to three in French, German and Japanese.
+			const float w = (kCard.w - 144 - 32) / 2.0f, h = kTileH + 40, y = kCard.y + 250 + (kCard.h - 250 - 72 - h) * 0.5f;
+			targets_.push_back({ T_DONE_STEAM, { kCard.x + 72, y, w, h } });
+			targets_.push_back({ T_DONE_LIBRARY, { kCard.x + 72 + w + 32, y, w, h } });
 			break;
+		}
 		default:
 			break;
 		}
@@ -899,22 +894,8 @@ private:
 		}
 		switch (id) {
 		case T_START: go(PW_SETUP_LANGUAGE, true); break;
-		case T_SKIP: finish(Outcome::library, "skipped"); break;
-		case T_CONTINUE: go(pw_setup_next(PW_SETUP_METHOD, &facts_), true); break;
-		case T_USB: go(PW_SETUP_USB, true); break;
-		case T_FTP: go(PW_SETUP_FTP, true); break;
-		case T_CHECK:
-			if (step_ == PW_SETUP_INSTALLING) go(route_, true);
-			check();
-			break;
-		case T_INSTALL:
-			if (engine_) engine_->start();
-			install_ = engine_ ? engine_->state() : SetupInstall{};
-			proton_say("setup: install starts");
-			go(PW_SETUP_INSTALLING, true);
-			break;
+		case T_CHECK: install(); break;
 		case T_STOP: if (engine_) engine_->cancel(); break;
-		case T_BACK: go(route_, true); break;
 		case T_PREPARE:
 			if (!test_) {
 				if (FILE *marker = fopen(preparingMarker, "w")) fclose(marker);
@@ -923,7 +904,8 @@ private:
 			this->outcome = Outcome::prepare;
 			proton_say("setup: the first Mihawk OS session starts");
 			break;
-		case T_ENTER: finish(Outcome::enter, "finished"); break;
+		case T_DONE_STEAM: finish(Outcome::steam_guide, "Install Steam"); break;
+		case T_DONE_LIBRARY: finish(Outcome::library, "the library"); break;
 		default: break;
 		}
 	}
@@ -1102,21 +1084,28 @@ private:
 		}
 	}
 
-	void check()
+	// The runtime from the title folder's pieces (the owner, 2026-10-31: one folder to copy): look, and start at once;
+	// Try again does the same after a problem
+	void install()
 	{
-		install_ = engine_ ? engine_->find(route_ == PW_SETUP_FTP) : SetupInstall{};
-		proton_say("setup: %s check: phase %d problem %d, %llu bytes", route_ == PW_SETUP_FTP ? "folder" : "drive",
-			(int)install_.phase, (int)install_.problem, (unsigned long long)install_.total);
-		if (install_.phase != SetupInstall::ready) feedback_.play(hui::audio::Cue::error);
+		install_ = engine_ ? engine_->find() : SetupInstall{};
+		proton_say("setup: title folder check: phase %d problem %d, %llu bytes", (int)install_.phase, (int)install_.problem,
+			(unsigned long long)install_.total);
+		if (install_.phase == SetupInstall::ready) {
+			engine_->start();
+			install_ = engine_->state();
+			proton_say("setup: install starts");
+		} else {
+			feedback_.play(hui::audio::Cue::error);
+		}
 		layout();
-		if (install_.phase == SetupInstall::ready) focus_ = T_INSTALL;
+		focus_ = targets_.empty() ? T_NONE : targets_.front().id;
 	}
 
 	std::string problem() const
 	{
-		static const PwSetupText keys[] = { PW_TEXT_COUNT, PW_TEXT_ERR_BUILD, PW_TEXT_ERR_NO_STICK, PW_TEXT_ERR_NO_FOLDER,
-			PW_TEXT_ERR_PARTIAL, PW_TEXT_ERR_NO_SPACE, PW_TEXT_ERR_READ, PW_TEXT_ERR_DAMAGED, PW_TEXT_ERR_FULL,
-			PW_TEXT_ERR_WRITE, PW_TEXT_ERR_CANCELLED };
+		static const PwSetupText keys[] = { PW_TEXT_COUNT, PW_TEXT_ERR_BUILD, PW_TEXT_ERR_NO_PIECES, PW_TEXT_ERR_PARTIAL,
+			PW_TEXT_ERR_NO_SPACE, PW_TEXT_ERR_READ, PW_TEXT_ERR_DAMAGED, PW_TEXT_ERR_FULL, PW_TEXT_ERR_WRITE, PW_TEXT_ERR_CANCELLED };
 		if (install_.problem == SetupInstall::none) return "";
 		char a[32], b[32], out[512];
 		if (install_.problem == SetupInstall::partial) {
@@ -1127,11 +1116,33 @@ private:
 			pw_setup_gigabytes(language_, install_.available, b, sizeof(b));
 		}
 		const char *args[] = { a, b };
-		pw_setup_fill(out, sizeof(out), routed(keys[install_.problem]), args, 2);
+		pw_setup_fill(out, sizeof(out), text(keys[install_.problem]), args, 2);
 		return out;
 	}
 
 	// ---- drawing ----
+public:   // the main menu breaks its lines the same way (home_grid.hpp)
+	// (the launcher's Steam memory warning draws the same one)
+	// A hold's ring around its button's glyph, filled by share; the words before it, the glyph where the text says {1}, with
+	// the text's own spaces around it (none before a comma: "Удерживайте ✕, чтобы")
+	static void holdRing(hui::gfx::DrawList &list, const hui::ui::Fonts &fonts, const hui::ui::Theme &look, float cx, float cy,
+		float share, hui::ui::Button button, const char *value)
+	{
+		list.ring(cx, cy, 46, 8, look.primary.with_alpha(0.18f));
+		if (share > 0.0f) list.arc(cx, cy, 46, 8, -1.5707963f, 6.2831853f * std::min(1.0f, share), look.primary);
+		hui::ui::GlyphStyle glyphs = look.dark ? hui::ui::GlyphStyle::dark() : hui::ui::GlyphStyle::light();
+		hui::ui::draw_button(list, fonts, glyphs, button, cx - hui::ui::button_width(button, 46) * 0.5f, cy, 46);
+		const std::string words = value;
+		const size_t at = std::min(words.find("{1}"), words.size());
+		const std::string before = words.substr(0, at), after = words.substr(std::min(at + 3, words.size()));
+		const float size = 30, glyph = 36, pad = 4, wb = fonts.semibold.measure(before.c_str(), size),
+			wa = fonts.semibold.measure(after.c_str(), size), wg = hui::ui::button_width(button, glyph);
+		const float x = cx - 46 - 32 - (wb + pad + wg + pad + wa);
+		hui::ui::text(list, fonts.semibold, before.c_str(), x, cy + size * 0.36f, size, look.text);
+		hui::ui::draw_button(list, fonts, glyphs, button, x + wb + pad, cy, glyph);
+		hui::ui::text(list, fonts.semibold, after.c_str(), x + wb + pad + wg + pad, cy + size * 0.36f, size, look.text);
+	}
+
 	// Lines no wider than width. Breaks at spaces, and between Chinese and Japanese characters, which have no spaces;
 	// closing punctuation stays on the line before it (the kit's own wrap breaks at spaces alone)
 	static std::vector<std::string> lines(const hui::ui::FontRef &font, std::string_view text, float size, float width)
@@ -1173,6 +1184,7 @@ private:
 		return out;
 	}
 
+private:
 	float wrapped(hui::gfx::DrawList &list, const hui::ui::FontRef &font, const char *value, float x, float y, float size,
 		float width, hui::gfx::Color color, hui::gfx::Align align = hui::gfx::Align::left) const
 	{
@@ -1218,12 +1230,12 @@ private:
 			std::string state;
 			if (r.ok[k]) state = std::string("Ready") + (*version ? std::string(" \u00b7 ") + version : "");
 			else if (!r.running[k] && !r.listed) state = "Not checked: no access to /data yet";
+			else if (!r.running[k] && k == PW_PAYLOAD_NANODNS) state = "Not detected: optional, nothing to do";
 			else if (!r.running[k]) state = "Missing: load it";
-			else if (k == PW_PAYLOAD_SHADOWMOUNT && *version) state = std::string("Too old (") + version + "): needs 1.7beta10 or later";
-			else if (k == PW_PAYLOAD_SHADOWMOUNT) state = "Not answering: turn its web API on";
 			else state = "Not answering";
 			if (r.running[k] && r.listed) state += " \u00b7 " + mib(r.resident[k]);   // a loopback answer has no size
-			const bool unseen = !r.listed && !r.running[k];   // not checked: a neutral mark, never "missing"
+			// not checked, or the optional NanoDNS: a neutral mark, never "missing"
+			const bool unseen = (!r.listed || k == PW_PAYLOAD_NANODNS) && !r.running[k];
 			row(left, top + 44 + k * 56, pw_payload_label(k), state, r.ok[k] ? 1 : unseen ? 0 : -1,
 				r.ok[k] ? look.success : unseen ? look.outline : look.danger);
 		}
@@ -1232,8 +1244,12 @@ private:
 		for (int k = PW_PAYLOAD_REQUIRED; k < PW_PAYLOAD_KNOWN; ++k, ++at)
 			row(right, top + 44 + at * 56, pw_payload_label(k), r.running[k] ? "Running \u00b7 " + mib(r.resident[k]) : r.listed ? "Not loaded" : "Not checked", 0,
 				r.running[k] ? look.primary : look.outline);
-		// Each extra payload by name, as room allows (two rows); a third or more share the second row
-		const unsigned named = r.others <= 2 ? r.others : 1;
+		// What the kernel lists only as "payload": one warning row, never a guess at what it is
+		if (r.unnamed)
+			row(right, top + 44 + at++ * 56, (std::to_string(r.unnamed) + (r.unnamed == 1 ? " unknown payload" : " unknown payloads")).c_str(),
+				"Shown only as \"payload\" \u00b7 " + mib(r.unnamed_resident), -1, look.warning);
+		// Each extra payload by name, as room allows (two rows, one beside an unknown one); more share the last row
+		const unsigned room = r.unnamed ? 1 : 2, named = r.others <= room ? r.others : room - 1;
 		for (unsigned k = 0; k < named; ++k, ++at)
 			row(right, top + 44 + at * 56, r.other_names[k], "Not allowed: close it \u00b7 " + mib(r.other_each[k]), -1, look.danger);
 		if (r.others > named) {
@@ -1243,8 +1259,15 @@ private:
 				"Not allowed: close them \u00b7 " + mib(rest), -1, look.danger);
 		}
 		const float statusWidth = kCard.w - 144 - 300 - 24;
-		if (!payloadAdvice_.empty()) status(list, payloadAdvice_.c_str(), look.danger, kStatusY + 10, statusWidth);
+		// A pass may still carry a warning (no NanoDNS, an unknown payload): it reads as one, not as a failure
+		if (!payloadAdvice_.empty())
+			status(list, payloadAdvice_.c_str(), r.pass ? look.warning : look.danger, kStatusY + 10, statusWidth);
 		else status(list, "Everything " PS5_TITLE_NAME " needs is ready.", look.success, kStatusY + 10, statusWidth);
+		// Failing: hold TRIANGLE to go on anyway, the limits page's ring (its look and fill) on the hints' line at the right,
+		// clear of the card (a failing check's advice can fill its status box)
+		if (pw_payload_skip_offered(&r))
+			holdRing(list, fonts_, look, 1920 - 96 - 46, 1010, skipSeconds_ / PW_PAYLOAD_SKIP_SECONDS, hui::ui::Button::triangle,
+				text(PW_TEXT_PAYLOAD_SKIP_HOLD));
 	}
 
 	void card(hui::gfx::DrawList &list, hui::ui::Painter &paint, const char *title, const char *body)
@@ -1275,28 +1298,19 @@ private:
 		wrapped(list, fonts.semibold, value, box.x + 70, box.y + 49, 25, textWidth, hui::gfx::mix(color, hui::gfx::Color::rgb(0x1b2430), 0.45f));
 	}
 
-	void qrCode(hui::gfx::DrawList &list, const hui::ui::Theme &look, hui::gfx::Rect at, float size, bool captionBeside)
+	// Where the step stands among the setup's six on the counter: Welcome, Language, the install, Preparing, Before you
+	// play, Done
+	int stepIndex() const
 	{
-		if (qr_.empty()) return;
-		const float quiet = 4.0f, module = size / ((float)qr_.size() + quiet * 2.0f);
-		list.shadow({ at.x, at.y + 2, size, size }, 14, 10, look.shadow.with_alpha(0.25f));
-		list.rounded_rect({ at.x, at.y, size, size }, 14, hui::gfx::Color::rgb(0xffffff));
-		for (size_t r = 0; r < qr_.size(); ++r)
-			for (size_t c = 0; c < qr_[r].size(); ++c)
-				if (qr_[r][c] == '1')
-					list.rounded_rect({ at.x + (quiet + c) * module, at.y + (quiet + r) * module, module + 0.4f, module + 0.4f }, 0,
-						hui::gfx::Color::rgb(0x1b2430));
-		if (captionBeside) wrapped(list, fonts_.regular, text(PW_TEXT_QR_CAPTION), at.x + size + 32, at.y + size * 0.5f + 8, 24, 520, look.text_muted);
-		else wrapped(list, fonts_.regular, text(PW_TEXT_QR_CAPTION), at.x + size * 0.5f, at.y + size + 44, 22, size + 40, look.text_muted, hui::gfx::Align::center);
+		return step_ == PW_SETUP_WELCOME ? 0 : step_ == PW_SETUP_LANGUAGE ? 1 : step_ == PW_SETUP_INSTALLING ? 2 :
+			step_ == PW_SETUP_PREPARING ? 3 : step_ == PW_SETUP_LIMITS ? 4 : 5;
 	}
 
-	// The setup's five steps (index from the step), or the Steam guide's four stages
+	// The setup's six steps (stepIndex), or the Steam guide's four stages
 	void progressDots(hui::gfx::DrawList &list, hui::ui::Painter &paint, const hui::ui::Theme &look, int index = -1,
-		int count = 5)
+		int count = 6)
 	{
-		if (index < 0)
-			index = step_ == PW_SETUP_LANGUAGE ? 1 : step_ <= PW_SETUP_INSTALLING || step_ == PW_SETUP_FTP ? 2 :
-				step_ == PW_SETUP_PREPARING ? 3 : 4;
+		if (index < 0) index = stepIndex();
 		char a[4], b[4], line[64];
 		snprintf(a, sizeof(a), "%d", index + 1);
 		snprintf(b, sizeof(b), "%d", count);
@@ -1346,17 +1360,11 @@ private:
 		}
 		switch (t.id) {
 		case T_START: button(text(PW_TEXT_GET_STARTED), hui::ui::ButtonKind::primary, 30); break;
-		case T_SKIP: button(text(PW_TEXT_SKIP_SETUP), hui::ui::ButtonKind::ghost, 24); break;
 		case T_CONTINUE: button(text(PW_TEXT_CONTINUE), hui::ui::ButtonKind::primary, 26); break;
-		case T_CHECK:
-			button(install_.problem != SetupInstall::none ? text(PW_TEXT_RETRY) : routed(PW_TEXT_CHECK_DRIVE),
-				install_.phase == SetupInstall::ready ? hui::ui::ButtonKind::secondary : hui::ui::ButtonKind::primary, 26);
-			break;
-		case T_INSTALL: button(text(PW_TEXT_INSTALL), hui::ui::ButtonKind::primary, 26); break;
+		case T_CHECK: button(text(PW_TEXT_RETRY), hui::ui::ButtonKind::primary, 26); break;
 		case T_STOP: button(text(PW_TEXT_STOP), hui::ui::ButtonKind::secondary, 26); break;
 		case T_BACK: button(text(PW_TEXT_HINT_BACK), hui::ui::ButtonKind::secondary, 26); break;
 		case T_PREPARE: button(text(PW_TEXT_PREPARE_START), hui::ui::ButtonKind::primary, 26); break;
-		case T_ENTER: button(text(PW_TEXT_ENTER), hui::ui::ButtonKind::primary, 30); break;
 		case T_STEAM_START: button(text(PW_TEXT_STEAM_START), hui::ui::ButtonKind::primary, 26); break;
 		case T_STEAM_NOT_NOW: button(text(PW_TEXT_STEAM_NOT_NOW), hui::ui::ButtonKind::secondary, 26); break;
 		case T_STEAM_RETRY: button(text(PW_TEXT_RETRY), hui::ui::ButtonKind::primary, 26); break;
@@ -1366,48 +1374,32 @@ private:
 			button(payloadReport_.pass ? label : "Check again", hui::ui::ButtonKind::primary, 26);
 			break;
 		}
-		case T_USB:
-		case T_FTP:
-		case T_INTERNET: {
-			// Three across: the icon and the name on top, a short line under them; "Coming soon" under the name
-			if (t.disabled) list.push_opacity(0.6f);
+		case T_DONE_STEAM:
+		case T_DONE_LIBRARY: {
+			// Two in a row: the icon and the name on top, a short line under them
 			const auto &r = t.rect;
 			paint.surface(r, look.radius_card, look.surface, look.outline, 1.0f - (t.id == pressed_ ? press_ : 0.0f));
 			const float cx = r.x + 66, cy = r.y + 68, k = 0.8f;   // the icons, drawn at 0.8 of their first size
 			list.circle(cx, cy, 44, look.primary.with_alpha(0.12f));
-			if (t.id == T_USB) {
-				// A USB drive, plug up
-				list.rounded_rect({ cx - 18 * k, cy - 14 * k, 36 * k, 50 * k }, 8 * k, look.primary);
-				list.rounded_rect({ cx - 12 * k, cy - 34 * k, 24 * k, 22 * k }, 3 * k, look.outline);
-				list.rounded_rect({ cx - 6 * k, cy - 28 * k, 4 * k, 6 * k }, 1, look.surface);
-				list.rounded_rect({ cx + 2 * k, cy - 28 * k, 4 * k, 6 * k }, 1, look.surface);
-			} else if (t.id == T_FTP) {
-				// A computer and the console, an arrow between them
-				list.rounded_rect({ cx - 30 * k, cy - 22 * k, 26 * k, 20 * k }, 3 * k, look.primary);
-				list.rounded_rect({ cx - 21 * k, cy - 1 * k, 8 * k, 6 * k }, 1, look.primary);
-				list.rounded_rect({ cx + 8 * k, cy - 4 * k, 20 * k, 30 * k }, 4 * k, look.primary);
-				list.line(cx - 14 * k, cy + 16 * k, cx + 2 * k, cy + 16 * k, 3, look.primary);
-				list.line(cx - 4 * k, cy + 10 * k, cx + 2 * k, cy + 16 * k, 3, look.primary);
-				list.line(cx - 4 * k, cy + 22 * k, cx + 2 * k, cy + 16 * k, 3, look.primary);
+			if (t.id == T_DONE_STEAM) {
+				// A download: an arrow into a tray
+				list.rounded_rect({ cx - 4 * k, cy - 32 * k, 8 * k, 36 * k }, 4 * k, look.primary);
+				list.line(cx - 16 * k, cy - 6 * k, cx, cy + 10 * k, 7 * k, look.primary);
+				list.line(cx + 16 * k, cy - 6 * k, cx, cy + 10 * k, 7 * k, look.primary);
+				list.line(cx - 28 * k, cy + 14 * k, cx - 28 * k, cy + 30 * k, 5 * k, look.primary);
+				list.line(cx - 28 * k, cy + 30 * k, cx + 28 * k, cy + 30 * k, 5 * k, look.primary);
+				list.line(cx + 28 * k, cy + 30 * k, cx + 28 * k, cy + 14 * k, 5 * k, look.primary);
 			} else {
-				// A globe
-				list.ring(cx, cy, 30 * k, 4, look.primary);
-				list.line(cx - 30 * k, cy, cx + 30 * k, cy, 3, look.primary);
-				list.rounded_rect({ cx - 1.5f, cy - 30 * k, 3, 60 * k }, 1.5f, look.primary);
-				list.arc(cx, cy, 17 * k, 3, 0.0f, 6.2831853f, look.primary);
+				// The library: four game tiles
+				for (int i = 0; i < 4; ++i)
+					list.rounded_rect({ cx + (i % 2 ? 3 : -27) * k, cy + (i / 2 ? 3 : -27) * k, 24 * k, 24 * k }, 5 * k, look.primary);
 			}
-			const char *name = text(t.id == T_USB ? PW_TEXT_METHOD_USB : t.id == T_FTP ? PW_TEXT_METHOD_FTP : PW_TEXT_METHOD_INTERNET);
+			const PwSetupText word[2] = { t.id == T_DONE_STEAM ? PW_TEXT_DONE_STEAM : PW_TEXT_DONE_LIBRARY,
+				t.id == T_DONE_STEAM ? PW_TEXT_DONE_STEAM_BODY : PW_TEXT_DONE_LIBRARY_BODY };
+			const char *name = text(word[0]);
 			const float nameWidth = r.w - 150, measured = fonts.semibold.measure(name, 32);
 			hui::ui::text(list, fonts.semibold, name, r.x + 128, r.y + 80, measured > nameWidth ? 32 * nameWidth / measured : 32, look.text);
-			wrapped(list, fonts.regular, text(t.id == T_USB ? PW_TEXT_METHOD_USB_BODY : t.id == T_FTP ? PW_TEXT_METHOD_FTP_BODY :
-				PW_TEXT_METHOD_INTERNET_BODY), r.x + 32, r.y + 150, 21, r.w - 64, look.text_muted);
-			if (t.disabled) {
-				const char *soon = text(PW_TEXT_COMING_SOON);
-				const float w = fonts.semibold.measure(soon, 17) + 24;
-				list.rounded_rect({ r.x + 128, r.y + 94, w, 30 }, 15, look.surface_high);
-				hui::ui::text(list, fonts.semibold, soon, r.x + 128 + w * 0.5f, r.y + 115, 17, look.text, hui::gfx::Align::center);
-				list.pop_opacity();
-			}
+			wrapped(list, fonts.regular, text(word[1]), r.x + 32, r.y + 150, 21, r.w - 64, look.text_muted);
 			paint.focus_ring(r, look.radius_card, focus);
 			break;
 		}
@@ -1426,7 +1418,6 @@ private:
 			if (steamPage_ != PW_STEAM_PAGE_DOWNLOAD) row.push_back({ hui::ui::Button::circle, text(PW_TEXT_HINT_BACK) });
 		} else {
 			if (pw_setup_back(step_) != PW_SETUP_NONE && !busy()) row.push_back({ hui::ui::Button::circle, text(PW_TEXT_HINT_BACK) });
-			if (skippable() && step_ != PW_SETUP_WELCOME) row.push_back({ hui::ui::Button::triangle, text(PW_TEXT_SKIP_SETUP) });
 		}
 		hui::ui::GlyphStyle style = look.dark ? hui::ui::GlyphStyle::dark() : hui::ui::GlyphStyle::light();
 		style.label = hui::ui::Painter(list, fonts_, look).page_text(); // full ink: the row lies on the green hill
@@ -1445,17 +1436,19 @@ private:
 	std::unique_ptr<SetupEngine> engine_;
 	PwSetupFacts facts_{};
 	PwSetupStep step_{ PW_SETUP_WELCOME };
-	PwSetupStep route_{ PW_SETUP_USB };                           // the way the pieces come: the USB or the FTP step
 	const PwSetupLanguage *language_{ nullptr };
 	std::vector<const PwSetupLanguage *> shown_;
 	std::vector<uint32_t> flags_;
-	std::vector<std::string> qr_;
 	std::vector<Target> targets_;
 	std::unordered_map<int, float> glow_;
 	hui::ui::Feedback feedback_;
 	SetupInstall install_;
 	int focus_{ T_NONE }, pressed_{ T_NONE };
 	float clock_{ 0.0f }, entered_{ 1.0f }, press_{ 0.0f }, doneAt_{ 0.0f };
+	float holdSeconds_{ 0.0f };   // the limits page's hold (pw_setup_hold)
+	float skipSeconds_{ 0.0f };   // the payload checklist's hold through a fail (pw_payload_skip_hold)
+	bool skipArmed_{ false };     // triangle was up since the page showed
+	bool holdArmed_{ false };     // cross was up since the page showed
 	float pointerX_{ 960.0f }, pointerY_{ 540.0f }, pointerShown_{ 0.0f }, lastTouchX_{ 0.0f }, lastTouchY_{ 0.0f };
 	bool touching_{ false }, prepareFailed_{ false }, simulated_{ false }, test_{ false }, cover_{ false };
 	std::string assets_;                                          // the title's assets folder (the faces, the flags)

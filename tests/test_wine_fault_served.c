@@ -91,7 +91,13 @@ static void host_prot_record(const void *addr, size_t len, unsigned char value)
 {
     for (size_t at = 0; at < len; at += HOST) cache[index_of((const char *)addr + at) / 4] = value;
 }
+/* Patch 2420's execute-fault note comes along with the handler it sits beside; what it reads, none of it here. */
+typedef int LONG;
+static const uintptr_t host_page_mask = HOST - 1;
+static unsigned get_host_page_vprot(const void *page) { (void)page; return 0; }
+static int __wine_ps5_kernel_prot(const void *address) { (void)address; return -1; }
 #include "fault_hook.inc"
+static void (*const exec_fault_note)(void *, const void *) __attribute__((unused)) = ps5_note_exec_fault;
 /* The window is the patch's (256 KiB, or 16 KiB on trial: docs/MIHAWK_BROWSER.md); expectations follow it. */
 enum { W = PS5_EXEC_CLUSTER / HOST };
 _Static_assert(PS5_EXEC_CLUSTER % HOST == 0 && W >= 1 && W <= 16, "a window of 1 to 16 host pages");

@@ -1,0 +1,44 @@
+From 0000000000000000000000000000000000000000 Mon Sep 17 00:00:00 2001
+From: Mihawk <163614687+mihawk-99@users.noreply.github.com>
+Date: Sat, 31 Oct 2026 16:00:00 -0400
+Subject: [PATCH] ntdll: PS5: a game in the title is scheduled as in a helper
+
+A strategy game run in the title (Alpha 7's default, a tester's standard PS5,
+2026-10-31) froze the whole console after 282 s. The title's own main loop
+had been kept off its CPUs for 1 to 2.8 s at a time, 38 times and more often
+each minute, and nothing ended the game. Every thread of a PS5 title is
+SCHED_FIFO at 700, the console's own level and that of the payloads, and
+equal FIFO threads never share a CPU: the game's 13 threads and DXVK's 13
+compiler threads, at that level on the title's 13 CPUs, kept the title and
+the payloads from running. A helper's Windows threads take SCHED_RR at 767,
+the lowest priority, as they register (src/pw_helper_sched.h, measured on
+2026-10-16 after the same stalls in helpers); a game in the title had no such
+plan.
+
+The title's Windows threads register with the in-process server, not the
+helpers' registry, so the thread start hook (wine/ps5/pw_wine_threads.h) never
+ran on them. It now does: register_inprocess_thread calls
+pw_wine_thread_started after registering, and the title sets the hook to the
+helpers' program plan before it runs a game itself. Without a hook nothing
+changes.
+---
+--- a/dlls/ntdll/unix/server.c	2026-10-31 15:34:02.185690521 -0400
++++ b/dlls/ntdll/unix/server.c	2026-10-31 15:34:02.196088392 -0400
+@@ -1709,8 +1709,15 @@
+         extern int pw_wine_thread_register(long, pthread_t);
+         if (pw_wine_thread_register(tid, pthread_self())) ERR("child thread registration failed\n");
+     }
+-    else if (register_server_thread && register_server_thread( tid, pthread_self() ))
+-        ERR( "cannot register thread %d with the in-process server\n", tid );
++    else
++    {
++        /* The title's own Windows threads: its thread start hook, set when the title runs a game itself, gives them a
++         * helper's scheduling (wine/ps5/pw_wine_threads.h; their default, SCHED_FIFO 700, starved the console). */
++        extern void pw_wine_thread_started(void);
++        if (register_server_thread && register_server_thread( tid, pthread_self() ))
++            ERR( "cannot register thread %d with the in-process server\n", tid );
++        pw_wine_thread_started();
++    }
+ }
+ #endif
+ 

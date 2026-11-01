@@ -1,5 +1,189 @@
 # Plan
 
+## Steam warns first when the console's memory leaves it too little room (2026-10-31; host-tested; not on the console)
+
+The owner: "I want for situations like this a warning screen that says something like 'Steam will likely not work under
+your configuration, please follow these steps ...'". An Alpha 6 tester's console used 1,277 MB before MihawkOS.
+- **When:** before Steam installs or starts, from Steam's tile, the setup's Install Steam and Files' `steam.exe`. The
+  desktop's Steam shortcut runs inside the shell and is not covered.
+- **The check** (`src/pw_steam_memory.h`): the memory helper's census (every process's resident memory but the title's)
+  is taken by the launcher at that moment, so a fresh start is covered too. It warns when the census plus Steam's need
+  passes the 1,800 MiB swap point.
+  - Steam's need, from the memory session's records: 500 MiB until it is signed in, and 450 MiB after.
+  - The first install's first start measured +396 MiB (steam-signin-real-2026-10-24-01); +100 margin.
+  - Big Picture with a download measured +328 MiB (tester-steam-download-2026-10-31); +120 margin.
+  - So it warns above 1,300 or 1,350 MiB. The tester's 1,277 MB would not have warned, and their failure was not
+    memory.
+  - With no /data or no figure, there is no warning.
+- **The page:** "Steam will likely not work right now", the numbers, then the steps:
+  - fully close games and apps (rest mode is not enough);
+  - close other payloads, when the checklist counts extra ones;
+  - restart the PS5 with only the official payloads;
+  - install or open Steam before anything else.
+- **Buttons:** ○ goes back. △ held 5 s goes on, with the checklist's ring. Both choices are logged.
+- **Not proven:** that `sceKernelGetResidentFmemCount` answers for other processes when the title itself calls it; the
+  memory helper calls it today. If it does not, the census is unknown and nothing warns. The console check should look
+  for `steam memory:` lines.
+- **Proof, PC only.** `tests/test_pw_steam_memory.c` covers the edges (1,300/1,301 for an install, 1,350/1,351 signed
+  in), the tester's figures, and no census. `tools/test-launcher-ui.py --render` uses a made-up census
+  (`PROTON_MEMORY_TEST`) and covers every path, in English and Japanese.
+
+## A failing payload checklist can be passed by holding TRIANGLE for 5 s (2026-10-31; host-tested; not on the console)
+
+The owner: "Payload checklist: add a hold button for 5 seconds to skip it in case the user doesn't pass the checklist.
+Not giving a way through causes frustration".
+- Only a failing check offers it. "Hold △ for 5 seconds to continue anyway" sits at the bottom right with the
+  "Before you play" page's ring, which fills as △ is held. Letting go starts over, and ✕ still checks again.
+- Held 5 s, the launcher goes on as after a pass, to the guided setup when it is due or else the menu. The menu's top
+  line says once, for this start: "Some payloads are missing or extra, so games may not start or may close."
+- The title log names what failed, for example: `checklist: skipped by the player after 5 s hold; missing: Kstuff Lite
+  1.11 Beta or later; extra: extra.elf`.
+- Nothing remembers a skip: the next start checks again.
+- `src/pw_payload_check.h`: `pw_payload_skip_offered`, `pw_payload_skip_hold` and `pw_payload_skip_line`, host-tested.
+  The hint and the line are in the setup's ten languages; the rest of the checklist page is still English.
+- **Proof, PC only.** `tests/test_pw_payload_check.c` checks that a pass offers nothing, that letting go at 4.875 s
+  starts over, that the skip lands on the 40th 0.125 s frame, and the log line.
+  `tools/test-launcher-ui.py --render` uses a made-up failing table (`PROTON_PAYLOAD_TEST=fail`, PC build only). It
+  checks the skip into the menu, a release at 4 s that does nothing, and that the next start checks again. The hint is
+  rendered in English and Japanese.
+
+## The main menu is a grid of tiles, with Files and a game's own options (2026-10-31; host-tested; not on the console)
+
+The owner chose the tile-grid mockup (v2), a Frutiger Aero tile grid, and asked for: the QR code big, "users must be
+able to find it easily"; Mihawk OS "always Leftmost and big"; Steam on its own tile; a pointer the left stick moves (not
+the touchpad). Then: the setup's sky behind it; Files: "Main menu
+should have its own file explorer where a user can simply launch an executable without even needing to open the
+desktop shell"; Triangle: a game's options, with Settings moved to the dock.
+- **The grid** (`src/pw_home_grid.h`, drawn by `examples/ps5proton/home_grid.hpp`): five columns, two rows a page.
+  - Page 1: Mihawk OS over two columns and both rows, always first; Steam's tile; three games (four without Steam);
+    the Web UI's QR code, a column two rows tall. Later pages: ten games each.
+  - The dock under every page: Settings, Files, Payloads.
+  - The D-pad moves to the nearest tile that way, pages at the grid's edges, and goes down into the dock. L1/R1 page.
+    The left stick moves a pointer (the Mihawk hand in Aero glass); the tile under it takes the focus. The D-pad hides
+    it. The touchpad does not move it.
+  - Steam's tile is always there; without /data it says "Needs access to /data". It shows the word Steam and our own
+    icon, a store bag carrying a controller (the owner's pick of three), never Valve's logo or a likeness of it (Legal,
+    2026-10-31: that logo is licensed to Steamworks partners only and would imply endorsement).
+  - The dock's Settings is a cog (the owner, 2026-10-31). The hint row is centred under the dock on the menu, Files
+    and Options ("I want them centered"); a run checks its left and right margins from the picture, in every language.
+  - Across the top: why the focused game cannot start, then Steam's or the runtime's problem, a newer release (R2
+    restarts into a downloaded one), the payloads' memory.
+  - Themes (Square) now style Settings' pages only; the menu, Files and Options keep the sky and the gloss look.
+- **Files** (`src/pw_drive_browse.h`, shared with the WebUI's browser): the mihawk prefix's `drive_c`, read only.
+  - Folders first, then programs (`.exe`, any case), each by name; other files are counted, links and hidden names
+    left out. Every path is checked part by part: no `..`, no separator, no link on the way out of `drive_c`.
+  - Cross on a program queues `profile=mihawk-os` with `path=C:\...` (wine-run.txt). The session runs it with the
+    entry's prefix, but none of the desktop's words, and checks it and picks in-title or a helper from its image, as
+    for a library game (`native/proton_wine.cpp`). The launcher runs the same check first, so a program that cannot
+    start says why on the page.
+  - Plain words for: no /data, no C: drive yet, an empty folder, a folder gone, a program that cannot start.
+- **Options** (Triangle on a game): Game Mode (as Settings, on, off), Controller (as Settings, then each), Run inside
+  MihawkOS (`WINE_PS5_TITLE_GAMES=0` when off). Saved in the entry's `game.json` `env`, the words the WebUI's editor
+  writes (`proton_game_set_env`: temporary file, fsync, rename). A scripted run previews and writes nothing.
+- **Languages** (the owner, 2026-10-31: the whole menu in the setup's languages, in Alpha 7). The menu, Files, Options,
+  Steam's tile, the QR tile, the dock and the hints use 74 keys in `src/pw_setup.c`'s table, in all ten languages. The
+  language is the one recorded in `setup.txt`.
+  - Chinese and Japanese draw in their own Noto face, baked from that table. The menu loads it only for those
+    languages, only once it shows, and frees it when the language changes. Its cost while loaded is the atlas, once in
+    memory and once as an R8 texture (the `home: face ... loaded` line).
+  - Names are never translated: games, files, Steam, Mihawk OS, addresses. A name is drawn in the language's face
+    when that face carries every character, else in the kit's.
+  - Settings, Controls and the theme picker followed (113 more keys): every row, its line and badge, every panel,
+    the hints, the music plate and the close ring.
+    - The About page's licence notices are translated too; the English wording stays the reference.
+    - The 30 themes' names, families and summaries are in the table too (90 keys), read by the theme's id. Names
+      taken from a framework (Daisy, Pico, Chakra, Material) and the "after ..." credits keep the framework's name.
+      English is the kit's own words, and each run checks it still is.
+  - Still English: reasons that come from deeper layers (a game's complaint from the program check, the runtime and
+    /data problems, update and payload notices, the installer's and updater's own messages).
+  - The setup's Done page now says Settings is in the main menu's dock and Steam installs from its tile (it said "in
+    the library"), in every language.
+- **Proof, PC only.** `tests/test_pw_home_grid.c` (layouts, no overlap, moves, every tile reachable, L1/R1, the
+  pointer's hit test and speed); `tests/test_pw_drive_browse.c` (listing, order, the `.exe` filter, the guard, the
+  Windows path); `tools/test-launcher-ui.py --render` (D-pad, pointer, pages, the dock, Options previews with
+  `game.json` unchanged, Files' listing and launch request with `drive_c` unchanged, no C: drive yet; the menu in each
+  of the ten languages, About in all ten, Files and Settings in five, each run checking every word against its face's
+  glyphs: none missing).
+  `tools/run-launcher.py --controls` reaches Settings by Down, Cross.
+- **Not proven yet:** on the console (the pointer's feel at 120 Hz, a program from Files started in-title and in a
+  helper, Options read by the next session).
+
+## The runtime ships in the title folder; the setup installs it by itself (2026-10-31; host-tested; not on the console)
+
+The owner: "It doesn't make sense to have a usb zip file and FTP/USB installation screen. Why not package everything in
+a single PPSA title file, and have the setup place the runtime by itself".
+- **One folder.** `tools/package-install.py` puts the runtime's pieces in `PPSA99170/runtime-pieces/` and makes one
+  zip, `PS5_MihawkOS-v<version>.zip`, with `SHA256SUMS` and the README.
+  - On Alpha 6's build: 137 pieces, 508 MiB packed, 1.52 GiB installed.
+  - The folder grows from 55 MB to about 0.6 GB.
+  - The development and gate builds (`dist/PPSA99170`) keep no pieces; the gate installs the runtime with
+    `tools/deploy-wine.py` as before.
+- **The setup.** How to install, USB and FTP are gone: Welcome, Language, Installing (starts by itself), Preparing,
+  Before you play, Done. Steps 2, 3 and 7 are not reused.
+  - The engine reads the pieces only from `/app0/runtime-pieces` (`proton_install_find("title")`). It checks every
+    piece's and every file's SHA-256 against `runtime-pack.txt` as it streams.
+  - A problem (no pieces, some missing, damaged, a full disk) shows its sentence and Try again only.
+  - A set-up console whose runtime is another build's (the folder replaced by a newer release) starts at Installing,
+    copies, and closes into the library. The launcher then clears its "games cannot start" note without a restart.
+- **Measured on the PC** (`src/pw_pack.c`'s loop over Alpha 6's real pieces, read from disk):
+  - 532 MB read and 1.60 GB in 2,556 files written and checked in 17.5 s;
+  - the same again over it (an update where nothing changed) in 7.8 s.
+- **Expected on the console:** the USB and FTP installs, the same engine, took 44-48 s for 1.55 GB
+  (`first-install-unattended-2026-10-19-02/04/05`), and a check where only the stamp changed took 9.9 s
+  (`setup-ftp-pro-2026-10-24-01`). Reading the pieces from the internal SSD instead of a USB stick (114 MiB/s) should
+  not be slower.
+- **Free space.** The title cannot read it (statfs and statvfs are null imports). A full disk is the write's ENOSPC,
+  "storage full", with Try again. The docs ask for about 4 GB free: 0.6 GB for the folder, 1.6 GB for the runtime,
+  1.4 GB for the first Windows drive.
+- **Not changed:** the signed online updater (`tools/sign-release.py`). Its title pack does not carry the pieces, so
+  after an online update the folder would hold the previous release's. No release key exists yet; decide before one
+  does.
+- **Not proven yet:** any of it on the console.
+
+## The guided setup cannot be skipped, and says what MihawkOS cannot run (2026-10-31; host-tested; not on the console)
+
+The owner's two Alpha 7 changes, by their own words:
+- "Make it mandatory and remove the Skip button": there is no Skip button and no △ shortcut, and the text key is gone.
+- A screen with MihawkOS's limits that the player must hold ✕ for 10 seconds to pass.
+
+**Before you play** (`PW_SETUP_LIMITS`, step 8) comes after Preparing and before Done.
+- It says what MihawkOS is: a compatibility layer, an alpha.
+- A warning box lists what it cannot run: games with DRM such as Denuvo, and games with anti-cheat or kernel-level
+  protection such as Easy Anti-Cheat or BattlEye. Such games won't start, or they close.
+- A ring around the ✕ fills over `PW_SETUP_HOLD_SECONDS`. Letting go empties it, and a hold counts only if it starts on
+  the page.
+- `done=1` is still written only at Done, so a console turned off on the way comes back to the tour. A re-run from
+  Settings cannot be left either: Settings clears `done` as it starts it. A failed step keeps its own Try again and
+  Back, and nothing moves past it.
+- The counter has six steps: Before you play is 5 of 6, Done is 6 of 6. Each step's log line says what it shows.
+- A test run may hold a button over frames: `hold <program> <first> <last> <action>` in test-run.txt.
+
+Proven on the PC only:
+- `test_pw_setup` covers the way through, the hold (9 s held does not go on; let go, it starts over; an unbroken 10 s
+  goes on) and all ten languages.
+- `tools/test-setup-ui.py` adds the page in ten languages, a short hold, a full hold that reaches Done, and △ on
+  Welcome and Language ending nothing.
+- `tools/run-setup-unattended.py` holds ✕ for 1,500 frames before Done.
+
+Not proven yet: any of it on the console.
+
+## The guided setup ends on a choice: Install Steam or the game library (2026-10-31; host-tested; not on the console)
+
+The owner's Alpha 7 change. Done used to restart straight into the Mihawk OS shell; it now shows "You're all set" and
+two tiles (`examples/ps5proton/setup_tour.hpp`, `PW_TEXT_DONE_*` in `src/pw_setup.c`, all ten languages). **Install
+Steam**, which is focused first, opens the Steam row's guide at its intro page. "Not now" there lands in the library.
+**Go to the game library** closes the tour into the library with Mihawk OS focused, one press from the shell. A
+player who skips Steam finds it later on the library's Steam row.
+
+- Proven on the PC only. `tools/test-setup-ui.py` (lavapipe) passes with 128 pictures. It renders Done in every
+  language and presses both tiles: the library tile logs `setup: ends (the library)`, and Install Steam logs
+  `steam guide: starts at page 0`. `test_pw_setup` checks every key is present and drawable in all ten languages.
+  The PC library has only Mihawk OS, so the focus moving to Mihawk OS among other games is not shown yet.
+- `tools/run-setup-unattended.py` now goes Done → library → Mihawk OS. A scripted launcher may launch from the library
+  only in that unattended run.
+- Not proven yet: any of it on the console. The next standard-PS5 slot runs the guided-setup walk and the unattended
+  rehearsal.
+
 ## A title never runs another build's runtime or helper (2026-10-29; host-tested, built, not yet on the console)
 
 **Why.** A tester on firmware 11.00 "reinstalled Alpha 4" and still hit errno 92. The klog showed the kernel loader's

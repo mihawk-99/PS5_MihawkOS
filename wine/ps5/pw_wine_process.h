@@ -20,6 +20,14 @@
  * loader gives the carrier's image at 0x400000 back before Wine starts (native/proton_payload_child.c). */
 enum { PW_CHILD_INITIAL = 1, PW_CHILD_GRAPHICS = 2, PW_CHILD_GPU = 4, PW_CHILD_INPUT = 8, PW_CHILD_AUDIO = 16,
        PW_CHILD_MEMORY = 32, PW_CHILD_FIXED_BASE = 64 };
+/* Alpha 7's default, "Run inside MihawkOS": ntdll asks this as a program starts (patch 2403) and passes its answer as
+ * the request's flags: PW_CHILD_GRAPHICS for a program the title runs itself (wine/ps5/pw_wine_title_game.h, by its
+ * path, its name, the per-game lists and what it imports, wine/ps5/pw_wine_pe_imports.h), else 0. Every library program's
+ * route is logged with its reason. unix_name is the image's Unix path (NULL: its imports are not read); command_line tells a
+ * Chromium game's own processes (--type=) from its main one. */
+unsigned int pw_ps5_title_route(const char *unix_name, unsigned short machine, const char *image, const char *command_line);
+/* The title runs the session's root itself: the helpers it starts are its game's (pw_ps5_wait_children). */
+void pw_ps5_set_title_client_live(void);
 struct pw_child_bootstrap {
     uint32_t protocol, size;
     uint32_t flags, argc;

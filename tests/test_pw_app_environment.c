@@ -8,8 +8,34 @@
 #include <stdio.h>
 #include <string.h>
 
+/* A game's WINEDLLOVERRIDES joins the title's, which Wine reads last-wins (pw_app_environment_join_overrides). */
+static void join_overrides(void)
+{
+    static const char title[] = "opengl32=n,b;d3d11,dxgi,d3d10core,d3d9,d3d12,d3d12core=n;bcrypt=b";
+    char out[256], small[24];
+    assert(pw_app_environment_join_overrides(title, "WINEDLLOVERRIDES=dinput8=n,b", out, sizeof(out)) == 1);
+    assert(!strcmp(out, "WINEDLLOVERRIDES=opengl32=n,b;d3d11,dxgi,d3d10core,d3d9,d3d12,d3d12core=n;bcrypt=b;dinput8=n,b"));
+    /* the game still decides a DLL the title names: its entry comes last */
+    assert(pw_app_environment_join_overrides(title, "WINEDLLOVERRIDES=d3d12=b", out, sizeof(out)) == 1);
+    assert(strstr(out, ";d3d12=b") == out + strlen(out) - strlen(";d3d12=b"));
+    /* other settings, a name that only starts alike, and no title stay as they are */
+    assert(!pw_app_environment_join_overrides(title, "WINE_PS5_OPENGL=1", out, sizeof(out)));
+    assert(!pw_app_environment_join_overrides(title, "WINEDLLOVERRIDES_X=1", out, sizeof(out)));
+    assert(!pw_app_environment_join_overrides(NULL, "WINEDLLOVERRIDES=dinput8=n", out, sizeof(out)));
+    assert(!pw_app_environment_join_overrides("", "WINEDLLOVERRIDES=dinput8=n", out, sizeof(out)));
+    /* too small: refused, nothing half written */
+    small[0] = 'x';
+    assert(pw_app_environment_join_overrides(title, "WINEDLLOVERRIDES=dinput8=n", small, sizeof(small)) == -1);
+    assert(small[0] == 'x');
+    /* exactly the room it needs, and one byte short */
+    const size_t need = strlen("WINEDLLOVERRIDES=a;b") + 1;
+    assert(pw_app_environment_join_overrides("a", "WINEDLLOVERRIDES=b", out, need) == 1 && !strcmp(out, "WINEDLLOVERRIDES=a;b"));
+    assert(pw_app_environment_join_overrides("a", "WINEDLLOVERRIDES=b", out, need - 1) == -1);
+}
+
 int main(void)
 {
+    join_overrides();
     const char *game_env[] = {"WINE_PS5_OPENGL=1", "SDL_XINPUT_ENABLED=0"};
     const char *java_env[] = {"WINE_PS5_OPENGL=1", "PROTON_120HZ=1", "WINE_PS5_NTSYNC=1"};
     const PwAppEntry catalog[] = {

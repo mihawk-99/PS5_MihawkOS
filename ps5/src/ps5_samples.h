@@ -39,6 +39,7 @@ int ps5_run_launcher(int selected, const std::string &message, uint32_t frameBud
 	const std::string &screenshotPath = "");
 
 // Scripted pad input for deterministic UI runs.
-struct Ps5Press { std::string program; uint32_t frame; std::string action; };
+// until: a hold's last frame (a "hold" line), the action held down from frame to it; 0 for a press
+struct Ps5Press { std::string program; uint32_t frame; std::string action; uint32_t until = 0; };
 extern std::vector<Ps5Press> ps5Presses;
 extern bool ps5TestRun;

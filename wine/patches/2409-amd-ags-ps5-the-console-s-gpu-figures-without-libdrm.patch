@@ -1,0 +1,57 @@
+From 0000000000000000000000000000000000000000 Mon Sep 17 00:00:00 2001
+From: Mihawk <163614687+mihawk-99@users.noreply.github.com>
+Date: Sun, 1 Nov 2026 03:30:00 -0400
+Subject: [PATCH] amd_ags: PS5: the console's GPU figures without libdrm
+
+AGS takes an AMD GPU's family, compute units and clocks from libdrm, through
+its Unix library, which the console's Wine does not have. It then reported a
+GCN4 GPU with no compute units, no clocks and no TFLOPS, a GPU below every
+game's minimum. When Vulkan's device is the console's GPU (its PCI ID and the
+name win32u gives it, PS5_Proton src/pw_gpu_identity.h), AGS now reports that
+model's figures: RDNA2, 36 compute units at 2,230 MHz, 1,750 MHz memory and
+448 GB/s on the standard PS5, and 60 at 2,175 MHz, 2,250 MHz and 576 GB/s on
+the Pro. A PC's own Radeon, named as such, keeps the earlier behaviour.
+---
+--- a/dlls/amd_ags_x64/amd_ags_x64_main.c
++++ b/dlls/amd_ags_x64/amd_ags_x64_main.c
+@@ -29,6 +29,7 @@
+ #include "amd_ags.h"
+ 
+ #include "unixlib.h"
++#include "pw_gpu_identity.h"   /* PS5_Proton src/pw_gpu_identity.h, copied beside this file */
+ 
+ WINE_DEFAULT_DEBUG_CHANNEL(amd_ags);
+ 
+@@ -771,6 +772,7 @@
+         const VkPhysicalDeviceProperties *vk_properties = &context->properties[i];
+         const VkPhysicalDeviceMemoryProperties *vk_memory_properties = &context->memory_properties[i];
+         struct AGSDeviceInfo_600 *device_600 = (struct AGSDeviceInfo_600 *)device;
++        const PwGpuIdentity *identity;
+         VkDeviceSize local_memory_size = 0;
+ 
+         for (j = 0; j < vk_memory_properties->memoryHeapCount; j++)
+@@ -809,6 +811,22 @@
+                 SET_DEVICE_FIELD(device, memoryBandwidth, int, context->version, params.memory_bandwidth);
+                 SET_DEVICE_FIELD(device, teraFlops, float, context->version, params.teraflops);
+             }
++            else if ((identity = pw_gpu_identity_of_device(vk_properties->vendorID, vk_properties->deviceID,
++                                                           vk_properties->deviceName)))
++            {
++                /* No libdrm to ask (the console's Wine has none): the console's GPU, which says what it is by its PCI
++                 * ID and name (PS5_Proton src/pw_gpu_identity.h). Before, it was a GCN4 GPU with no compute units
++                 * and no clocks. */
++                SET_DEVICE_FIELD(device, asicFamily, AsicFamily, context->version,
++                        min(AsicFamily_RDNA2, amd_ags_info[context->version].max_asicFamily));
++                SET_DEVICE_FIELD(device, numCUs, int, context->version, identity->compute_units);
++                SET_DEVICE_FIELD(device, numWGPs, int, context->version, identity->compute_units / 2);
++                SET_DEVICE_FIELD(device, numROPs, int, context->version, identity->rops);
++                SET_DEVICE_FIELD(device, coreClock, int, context->version, identity->engine_mhz);
++                SET_DEVICE_FIELD(device, memoryClock, int, context->version, identity->memory_mhz);
++                SET_DEVICE_FIELD(device, memoryBandwidth, int, context->version, identity->bandwidth_mbs);
++                SET_DEVICE_FIELD(device, teraFlops, float, context->version, identity->teraflops);
++            }
+             else
+             {
+                 SET_DEVICE_FIELD(device, asicFamily, AsicFamily, context->version, AsicFamily_GCN4);
+-- 
+2.56.0

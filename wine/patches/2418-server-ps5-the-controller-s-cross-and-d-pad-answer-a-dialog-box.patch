@@ -1,0 +1,86 @@
+From 0000000000000000000000000000000000000000 Mon Sep 17 00:00:00 2001
+From: Mihawk <163614687+mihawk-99@users.noreply.github.com>
+Date: Sat, 31 Oct 2026 18:00:00 -0400
+Subject: [PATCH] server: PS5: the controller's Cross and D-pad answer a dialog box.
+
+A game's pop-up (a minimum-specifications warning, a Yes/No question) is a Windows dialog box. With the controller as the
+game's XInput pad or DualSense there is no keyboard, so it could not be answered. The title now sends Cross and the D-pad's
+presses and releases as input events of a new type (PW_WINE_INPUT_DIALOG_KEY, type 9 of pw_wineserver_input), carrying the
+key codes of Enter and the arrows. ps5_inject_input delivers a press as a key only while the active window of the
+foreground input is a dialog box (class #32770, ps5_window_is_dialog), and the release of a key it delivered; a game that uses
+these buttons itself never gets a stray Enter or arrow. src/pw_dialog_keys.h (staged beside queue.c by
+tools/build-wine-ps5.sh) decides, and tests/test_pw_dialog_keys.c covers it.
+
+The problem was found by reading bornaradusin/PC5 (LGPL-2.1-or-later; patch 0013 of its patches/prospero-win, which carries
+its Wine patch 0911); this change is written independently here, in the server where this tree injects the title's input
+(NOTICE.md, "PC5").
+---
+ server/queue.c  | 15 +++++++++++++++
+ server/user.h   |  1 +
+ server/window.c |  8 ++++++++
+ 3 files changed, 24 insertions(+)
+
+diff --git a/server/queue.c b/server/queue.c
+index e7596ab..b8bd608 100644
+--- a/server/queue.c
++++ b/server/queue.c
+@@ -47,6 +47,7 @@
+ #include "user.h"
+ #ifdef __PROSPERO__
+ #include "pw_wine_cursor.h"
++#include "pw_dialog_keys.h"
+ #endif
+ 
+ #define QS_DRIVER       0x80000000
+@@ -3550,6 +3551,20 @@ void ps5_inject_input( unsigned int type, unsigned int code, int x, int y, unsig
+         release_object( process );
+         break;
+     }
++    case 9:
++    {
++        /* The controller's Cross and D-pad as Enter and the arrows (src/pw_dialog_keys.h): a KEY's code, delivered
++         * as a key only while the active window is a dialog box, and the release of one that was. */
++        static PwDialogKeys dialog_keys;
++
++        if (!pw_dialog_key_deliver( &dialog_keys, code, down, ps5_window_is_dialog( ps5_foreground_active( desktop ) ) )) break;
++        input.kbd.type  = INPUT_KEYBOARD;
++        input.kbd.vkey  = code & 0xff;
++        input.kbd.scan  = (code >> 8) & 0xff;
++        input.kbd.flags = (down ? 0 : KEYEVENTF_KEYUP) | ((code >> 16) & 1 ? KEYEVENTF_EXTENDEDKEY : 0);
++        queue_keyboard_message( desktop, 0, &input, IMO_HARDWARE, NULL, 0, 0 );
++        break;
++    }
+     case 6:
+         /* the wheels, in WHEEL_DELTA units: y the vertical one (> 0 away from the user), x the horizontal one */
+         input.mouse.type = INPUT_MOUSE;
+diff --git a/server/user.h b/server/user.h
+index 00a5734..c14acd4 100644
+--- a/server/user.h
++++ b/server/user.h
+@@ -174,6 +174,7 @@ extern struct process *get_top_window_owner( struct desktop *desktop );
+ #ifdef __PROSPERO__
+ extern unsigned int ps5_close_process_windows( struct desktop *desktop, struct process *process );
+ extern user_handle_t ps5_shell_window( struct desktop *desktop );
++extern int ps5_window_is_dialog( user_handle_t handle );
+ #endif
+ extern void get_virtual_screen_rect( struct desktop *desktop, struct rectangle *rect, int is_raw );
+ extern void post_desktop_message( struct desktop *desktop, unsigned int message,
+diff --git a/server/window.c b/server/window.c
+index cdc4faf..0c1a6bc 100644
+--- a/server/window.c
++++ b/server/window.c
+@@ -1335,6 +1335,14 @@ user_handle_t ps5_shell_window( struct desktop *desktop )
+ {
+     return desktop->shell_window ? desktop->shell_window->handle : 0;
+ }
++
++/* Whether a window is a dialog box (class #32770), for the title's controller keys (queue.c, ps5_inject_input). */
++int ps5_window_is_dialog( user_handle_t handle )
++{
++    struct window *win = handle ? get_user_object( handle, NTUSER_OBJ_WINDOW ) : NULL;
++
++    return win && get_class_atom( win->class ) == 32770 /* DIALOG_CLASS_ATOM */;
++}
+ #endif
+ 
+ /* same as is_visible but takes a window handle */

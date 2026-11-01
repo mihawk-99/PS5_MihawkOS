@@ -20,6 +20,7 @@ import pw_caption_buttons
 ROOT = Path(__file__).resolve().parents[1]
 SOURCE = ROOT / 'themes/windows11/source'
 OUTPUT = ROOT / '.deps/windows11-theme'
+WALLPAPER = ROOT / 'themes/windows11/wallpapers/skeuoss-bubble-city.jpg'  # the desktop's default (NOTICE.md)
 
 
 def rgb(value):
@@ -343,24 +344,22 @@ def main():
     record = {'resources':len(actual),'bitmap_references':len(refs),'variants':['Blue','Dark'],
               'target':appearance['target'],'sha256':hashlib.sha256(theme.read_bytes()).hexdigest(),'passed':True,'runtime_qualified':False, 'appearance_revision':appearance_revision}
     (OUTPUT/'build.json').write_text(json.dumps(record,indent=1)+'\n')
-    # The desktop's wallpaper is the project's own Bubble Earth (tools/make-aero-wallpapers.py, original artwork; the
-    # owner's choice on 2026-10-25, replacing Aero Meadow, which had replaced the owner's local copy of Windows 11's
-    # Bloom on 2026-10-18), drawn again only when its generators or its corner note changed. The note, top right, is the
-    # release's version (VERSION) and the community link (the owner's choice, 2026-10-20), stamped by Aero Meadow's
-    # stamp(); Bubble Earth's bubbles are Aero Meadow's too, so both generators are in the stamp.
+    # The desktop's wallpaper is Bubble City by Skeuoss (themes/windows11/wallpapers/skeuoss-bubble-city.jpg, used with
+    # the artist's permission, the owner's choice on 2026-10-31: NOTICE.md), which replaced the project's own Bubble Earth
+    # (tools/make-aero-wallpapers.py, 2026-10-25). It is 1920x1080, the desktop's size; the build stamps it again only
+    # when the picture, the stamp's generator or the corner note changed. The note, top right, is the release's version
+    # (VERSION) and the community link (the owner's choice, 2026-10-20), drawn by Aero Meadow's stamp().
     destination = OUTPUT / 'proton.bmp'
     stamp = OUTPUT / 'proton.bmp.sha256'
-    generators = [ROOT / 'tools/make-aero-wallpapers.py', ROOT / 'tools/make-mihawk-wallpaper.py']
+    picture, generator = WALLPAPER, ROOT / 'tools/make-mihawk-wallpaper.py'
     note = [f'MihawkOS v{(ROOT / "VERSION").read_text().strip()}', 'https://discord.gg/mihawk']
-    want = hashlib.sha256(b''.join(g.read_bytes() for g in generators) + '\n'.join(note).encode()).hexdigest()
+    want = hashlib.sha256(picture.read_bytes() + generator.read_bytes() + '\n'.join(note).encode()).hexdigest()
     if not destination.is_file() or not stamp.is_file() or stamp.read_text().strip() != want:
-        modules = []
-        for name, path in (('aero_wallpapers', generators[0]), ('mihawk_wallpaper', generators[1])):
-            spec = importlib.util.spec_from_file_location(name, path)
-            modules.append(importlib.util.module_from_spec(spec))
-            spec.loader.exec_module(modules[-1])
-        aero, meadow = modules
-        meadow.stamp(aero.render('bubble-earth', 1920, 1080), note).save(destination)
+        spec = importlib.util.spec_from_file_location('mihawk_wallpaper', generator)
+        meadow = importlib.util.module_from_spec(spec)
+        spec.loader.exec_module(meadow)
+        with Image.open(picture) as image:
+            meadow.stamp(image.convert('RGB').resize((1920, 1080), Image.Resampling.LANCZOS), note).save(destination)
         stamp.write_text(want + '\n')
     print(json.dumps(record,indent=1))
 

@@ -141,8 +141,22 @@ static void test_bounds(void)
     assert(pw_umip_emulate(sgdt, sizeof(sgdt), &cpu, &effect) == PW_OK && !memcmp(effect.data, GDT64, 10));
 }
 
+static void test_nested_task_flag(void)
+{
+    uint64_t eflags = 0x246;                         /* ZF PF IF and the always-set bit 1: nothing to clear */
+    assert(!pw_umip_clear_nested_task(&eflags) && eflags == 0x246);
+    eflags = 0x246 | PW_EFLAGS_NESTED_TASK;          /* popf with NT set */
+    assert(pw_umip_clear_nested_task(&eflags) && eflags == 0x246);
+    assert(!pw_umip_clear_nested_task(&eflags) && eflags == 0x246);   /* the retry finds it clear: no loop */
+    eflags = 0xffffffffffffffffull;                  /* every other bit stays */
+    assert(pw_umip_clear_nested_task(&eflags) && eflags == (0xffffffffffffffffull & ~0x4000ull));
+    eflags = 0x100000000ull | PW_EFLAGS_NESTED_TASK; /* bits above 32 are not touched */
+    assert(pw_umip_clear_nested_task(&eflags) && eflags == 0x100000000ull);
+}
+
 int main(void)
 {
+    test_nested_task_flag();
     test_cases();
     test_32_bit_wrap();
     test_bounds();

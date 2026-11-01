@@ -1,5 +1,40 @@
 # Console validation queue
 
+## Steam ids for Proton's per-game fixes (2026-10-31, uncommitted worktree nostalgic-babbage, any console)
+
+Staged, not committed: the title now gives a game `SteamGameId` and `SteamAppId` from Steam's `appmanifest_*.acf` (or
+`steam_appid.txt`), helpers inherit them (docs/PROTON_GAME_KNOWLEDGE.md §1.4). Host tests pass. Needs the usual gate on
+the exact tree before it is committed; these are the questions that report left open, in one session:
+
+1. **Library game, the 2D platformer (504230) then the 2D roguelike (250900)**, each one run with the Steam entry's usual setup. Pass = the
+   title log has `Wine: Steam id from the installation: SteamGameId=<id>` and `SteamAppId=<id>`, the game reaches its
+   menu as it did before, and no new `steam://` or client start appears in the process list.
+2. **Unix side of a title game:** `python3 tools/run-console.py --profile <any> --env SteamGameId=292120` shows
+   `HACK: fsync: yield to waiters` from `hacks_init` in the helper/title log.
+3. **Unix side of a Steam-started child (decides whether the Wine patch of §5 step 3 is needed):** start a probe from
+   Steam's console or a parent program with `SteamGameId=292120` in its `CreateProcess` environment only; the same
+   `HACK:` line appears in the child's log or it does not. Also record whether Steam itself sets both names for its games
+   (print the child's Windows environment, as `tests/initial-environment-probe.c` does).
+
+## Alpha 7 rung 2: a game hung in the title (2026-10-31, branch alpha7-integration, the standard PS5): done 2026-10-31
+
+Run on 2026-10-31 after the owner approved it (the first try was refused by the permission check). All three cases
+passed: rung2-base-2026-10-31-spin, -wait and -healthy. Its script, in the session's scratchpad (`rung2-run.sh`), does
+the following.
+
+- **Gates:** it checks the console identity (the standard PS5's key, never the Pro's), that the console is idle, and
+  that FTP is fast. Then it deploys this branch's build (the title watchdog in `native/proton_wine.cpp`, the hang knob
+  in `tests/d3d11-probe.c`).
+- **Runs:** three sessions, one at a time, each with `PROTON_LAYOUT=launcher`,
+  `WINE_PS5_TITLE_PROCESS=graphics-render-probe.exe` and `PROTON_HANG_STALL_MS=15000`:
+  1. `PS5_PROTON_PROBE_HANG_FRAME=4`: the in-title renderer spins after frame 4.
+  2. The same with `PS5_PROTON_PROBE_HANG_WAIT=1`: it waits forever instead.
+  3. `PS5_PROTON_PROBE_FRAMES=10800`: a healthy 3-minute draw.
+- **PASS:** cases 1 and 2 log `title watchdog`, the game in the title is ended through the server, and the console
+  returns to the launcher within about 30 s and answers with count=0. Case 3 never logs `title watchdog`.
+- **Stop:** at once on a stuck title or a hung console, without restoring.
+- **After:** it restores Alpha 6 and verifies it (staged files against the reference, title files by sha256).
+
 ## Helper start stamps: where an installer's process start goes (2026-10-27, branch start-path, the Pro)
 
 Staged as P0 of the installer-speed plan (docs/PLAN.md, section of 2026-10-27): the title's `wine-ps5: spawn native=`

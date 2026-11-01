@@ -36,6 +36,12 @@ int main(void)
     /* The code cache reaches the helpers a program starts, not only the first (fmem-steam-b32-2026-10-25-01: the web helper ran without it). */
     assert(pw_wine_inherited("WINE_PS5_CODE_BUDGET_MIB=32") && pw_wine_inherited("WINE_PS5_CODE_BUDGET_START_MIB=16"));
     assert(pw_wine_inherited("WINE_PS5_DSECTION_MIN_MIB=16") && pw_wine_inherited("WINE_PS5_TITLE_PROCESS=game.exe"));
+    assert(pw_wine_inherited("WINE_PS5_TITLE_GAMES=1") && pw_wine_inherited("WINE_PS5_TITLE_OPTOUT=a.exe"));
+    assert(pw_wine_inherited("WINE_PS5_TITLE_PICK=game.exe") && pw_wine_inherited("WINE_PS5_CHROMIUM_ARGS=--single-process") &&
+           pw_wine_inherited("WINE_PS5_TITLE_LISTED=game.exe"));
+    /* The game's Steam ids reach the programs it starts (Proton's Wine reads them on the Unix side too); a lookalike does not. */
+    assert(pw_wine_inherited("SteamGameId=250900") && pw_wine_inherited("SteamAppId=250900"));
+    assert(!pw_wine_inherited("SteamGameIdX=1") && !pw_wine_inherited("STEAMGAMEID=1") && !pw_wine_inherited("SteamPath=/x"));
     /* The setup's language, for every Windows program (patch 1230); never the C library's own LC_ variables. */
     assert(pw_wine_inherited("WINE_PS5_LOCALE=fr_FR.UTF-8") && !pw_wine_inherited("LC_MESSAGES=fr_FR.UTF-8"));
     /* A game's own controller and Game Mode reach the game its launcher starts (src/pw_window_direct.h). */

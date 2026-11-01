@@ -1,0 +1,61 @@
+From 0000000000000000000000000000000000000000 Mon Sep 17 00:00:00 2001
+From: Mihawk <163614687+mihawk-99@users.noreply.github.com>
+Date: Sun, 01 Nov 2026 14:00:00 -0400
+Subject: [PATCH] server: PS5: The title types text as Unicode keys.
+
+A game that asks for text has no keyboard unless one is plugged in. The title's on-screen keyboard (the system's IME dialog,
+opened by a trigger the player chose in Settings) returns a line of text, which has to reach the game as typing. The input
+the title injects (patch 0931, 1001, 2418) had keys by virtual key only, and most characters have none on the key
+layout the console is set to (accents, Cyrillic, CJK). A new input type, 10 (PW_WINE_INPUT_CHAR), carries one UTF-16 unit as a
+KEYEVENTF_UNICODE key: the server queues it as a VK_PACKET key for the focused window (queue_keyboard_message already
+turns that into WM_CHAR), and the in-process driver sends the same with NtUserSendHardwareInput. down 1 and down 0 are
+the key's press and release.
+
+The idea of typing the accepted line into the game was found by reading prospero-win (mpereiraesaa/prospero-win,
+LGPL-2.1-or-later; commit d5a1601, which types virtual keys for a US layout); the Unicode route is written independently
+here (NOTICE.md, "prospero-win and ProsperoMC"). Not run on a console.
+---
+ dlls/win32u/ps5drv.c |  8 ++++++++
+ server/queue.c       | 10 ++++++++++
+ 2 files changed, 18 insertions(+)
+
+diff --git a/dlls/win32u/ps5drv.c b/dlls/win32u/ps5drv.c
+index 34d7385..04958e6 100644
+--- a/dlls/win32u/ps5drv.c
++++ b/dlls/win32u/ps5drv.c
+@@ -801,6 +801,14 @@ static BOOL ps5_ProcessEvents( DWORD mask )
+                 NtUserSendHardwareInput( hwnd, 0, &button, 0 );
+             }
+             break;
++        case 10:
++            /* one UTF-16 unit of typed text (the on-screen keyboard's) */
++            if (!event.code || event.code > 0xffff) break;
++            input.ki.wVk = 0;
++            input.ki.wScan = event.code;
++            input.ki.dwFlags = KEYEVENTF_UNICODE | (event.down ? 0 : KEYEVENTF_KEYUP);
++            NtUserSendHardwareInput( hwnd, 0, &input, 0 );
++            break;
+         case 6:
+         {
+             /* the wheels, in WHEEL_DELTA units */
+diff --git a/server/queue.c b/server/queue.c
+index e7596ab..8543638 100644
+--- a/server/queue.c
++++ b/server/queue.c
+@@ -3539,6 +3539,16 @@ void ps5_inject_input( unsigned int type, unsigned int code, int x, int y, unsig
+         if (code >= 3) input.mouse.data = code == 3 ? XBUTTON1 : XBUTTON2;
+         queue_mouse_message( desktop, 0, &input, IMO_HARDWARE, NULL, 0 );
+         break;
++    case 10:
++        /* one UTF-16 unit of typed text (the on-screen keyboard's), as a KEYEVENTF_UNICODE key: it reaches the focused
++         * window as a VK_PACKET key, then WM_CHAR, as a text-input device's would */
++        if (!code || code > 0xffff) break;
++        input.kbd.type  = INPUT_KEYBOARD;
++        input.kbd.vkey  = 0;
++        input.kbd.scan  = code;
++        input.kbd.flags = KEYEVENTF_UNICODE | (down ? 0 : KEYEVENTF_KEYUP);
++        queue_keyboard_message( desktop, 0, &input, IMO_HARDWARE, NULL, 0, 0 );
++        break;
+     case 7:
+     {
+         /* one process, named by its native helper's pid (code), for the title's memory guard in the desktop session:

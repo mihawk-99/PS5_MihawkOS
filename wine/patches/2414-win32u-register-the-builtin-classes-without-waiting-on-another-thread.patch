@@ -1,0 +1,66 @@
+From 0000000000000000000000000000000000000000 Mon Sep 17 00:00:00 2001
+From: Mihawk <163614687+mihawk-99@users.noreply.github.com>
+Date: Sat, 31 Oct 2026 14:00:00 -0400
+Subject: [PATCH] win32u: Register the builtin classes without waiting on another thread.
+
+register_builtin_classes() ran its body in a pthread_once. The body takes the loader lock: it loads each class's cursor
+through a callback into user32, and user32's part (NtUserInitBuiltinClasses) loads uxtheme.dll. A thread that holds the
+loader lock, in a DllMain, and creates its first window waited in the once for the thread that held the once and waited
+for the loader lock: neither could go on. A Source engine game's vgui2.dll initializer does this (it calls OleInitialize
+under the loader lock while another thread creates the window of a plug and play device).
+
+No thread waits now. The first runs the registration and user32's part, and says it is done when it has; a thread that
+arrives while it runs registers the classes itself, which refuses a class already there and drops its cursor, and leaves
+user32's part to the first. Once done, a call is a load and a compare.
+
+The problem was found by reading bornaradusin/PC5 (LGPL-2.1-or-later; patch 0066 of its patches/prospero-win, carrying
+Leo Lobato's prospero-win patch 0981); this change is written independently here (NOTICE.md, "PC5").
+---
+ dlls/win32u/class.c | 20 ++++++++++++++++----
+ 1 file changed, 16 insertions(+), 4 deletions(-)
+
+diff --git a/dlls/win32u/class.c b/dlls/win32u/class.c
+index dc1a42b..e2d4dc9 100644
+--- a/dlls/win32u/class.c
++++ b/dlls/win32u/class.c
+@@ -1218,7 +1218,7 @@ static void register_builtin( const struct builtin_class_descr *descr )
+         NtUserDestroyCursor( class.hCursor, 0 );
+ }
+ 
+-static void register_builtins(void)
++static void register_builtins( BOOL init_user32 )
+ {
+     ULONG ret_len, i;
+     void *ret_ptr;
+@@ -1236,7 +1236,7 @@ static void register_builtins(void)
+ 
+     for (i = 0; i < ARRAYSIZE(builtin_classes); i++) register_builtin( &builtin_classes[i] );
+     register_builtin( &edit_class );
+-    KeUserModeCallback( NtUserInitBuiltinClasses, NULL, 0, &ret_ptr, &ret_len );
++    if (init_user32) KeUserModeCallback( NtUserInitBuiltinClasses, NULL, 0, &ret_ptr, &ret_len );
+ }
+ 
+ /***********************************************************************
+@@ -1244,8 +1244,20 @@ static void register_builtins(void)
+  */
+ void register_builtin_classes(void)
+ {
+-    static pthread_once_t init_once = PTHREAD_ONCE_INIT;
+-    pthread_once( &init_once, register_builtins );
++    /* 0: nobody started, 1: one thread is registering and running user32's part, 2: done. A thread that finds it
++     * running does not wait for it: the body loads the classes' cursors and user32's part loads uxtheme, through
++     * callbacks that take the loader lock, so a thread holding the lock (in a DllMain) that makes its first window
++     * would wait for a thread that waits for the lock. It registers the classes itself instead (one that is already
++     * there is refused, and its cursor dropped), and leaves user32's part to the first. */
++    static LONG state;
++
++    if (ReadAcquire( &state ) == 2) return;
++    if (!InterlockedCompareExchange( &state, 1, 0 ))
++    {
++        register_builtins( TRUE );
++        InterlockedExchange( &state, 2 );
++    }
++    else register_builtins( FALSE );
+ }
+ 
+ /***********************************************************************

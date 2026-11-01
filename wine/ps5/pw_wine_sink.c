@@ -29,6 +29,8 @@ static PwWineSinkStats stats;
 static pthread_once_t wake_once=PTHREAD_ONCE_INIT;
 static int wake[2]={-1,-1};
 static PwWinePad pad_state;
+static uint32_t pad_changes;      /* times the pad connected or disconnected (lock) */
+static int pad_seen=-1;           /* a helper: whether it saw the pad connected at its last look; -1 before the first */
 /* The title's pad, for its Windows child processes (docs/GRAPHICS_PROCESS_BROKER.md). A child has a sink of its own,
  * which no title sets: each child makes an input page (src/pw_shared_page.h) and gives it to the title, whose sink
  * keeps a copy of its pad in every page it adopted (pw_wine_input_page_adopt); a child's sink reads the pad from its
@@ -63,6 +65,9 @@ static int child_ring_tried;
 static pthread_mutex_t ring_lock=PTHREAD_MUTEX_INITIALIZER;
 static PwAudioRing *rings[PW_WINE_AUDIO_RINGS];
 static pthread_once_t mixer_once=PTHREAD_ONCE_INIT;
+/* The title's own process, while helpers play: its grains go into this ring, read by the mixer like theirs. */
+static PwAudioRing local_ring;
+static int local_ring_ready,mixer_in_flight;   /* in_flight: ring_lock */
 
 static void create_wake_pipe(void)
 {
@@ -198,8 +203,16 @@ static int valid(const PwWineInput *e)
     case PW_WINE_INPUT_MOUSE_BUTTON:return e->code<=4 && e->down<=1;
     case PW_WINE_INPUT_CLOSE:case PW_WINE_INPUT_TERMINATE:return 1;
     case PW_WINE_INPUT_END_PROCESS:return e->code>0 && e->down<=1;
+    case PW_WINE_INPUT_CHAR:return e->code>0 && e->code<=0xffff && e->down<=1;
     default:return 0;
     }
+}
+/* A full pipe is already readable: nothing is lost. */
+static void wake_driver(void)
+{
+    char byte=1;
+    pthread_once(&wake_once,create_wake_pipe);
+    if(wake[1]!=-1 && write(wake[1],&byte,1)<0){}
 }
 int pw_wine_post_input(const PwWineInput *event)
 {
@@ -211,12 +224,7 @@ int pw_wine_post_input(const PwWineInput *event)
     }
     else stats.inputs_dropped++;
     pthread_mutex_unlock(&lock);
-    if(!status) {
-        char byte=1;
-        pthread_once(&wake_once,create_wake_pipe);
-        /* a full pipe is already readable: nothing is lost */
-        if(wake[1]!=-1 && write(wake[1],&byte,1)<0){}
-    }
+    if(!status)wake_driver();
     return status;
 }
 int pw_wine_next_input(PwWineInput *event)
@@ -269,16 +277,45 @@ int pw_wine_audio_available(void)
     pthread_mutex_unlock(&audio_lock);
     return available;
 }
-int pw_wine_audio_output(const int16_t *frames)
+/* One grain to the sink, or to the helper's ring; audio_lock held. */
+static int audio_write_locked(const int16_t *frames)
 {
     int status=-1;
-    /* The lock also serialises grains: the sink, or the ring, sees one at a time. */
-    pthread_mutex_lock(&audio_lock);
     if(!audio_sink)child_ring_attach_locked();
     if(audio_sink && frames)status=audio_sink(audio_context,frames);
     else if(child_ring && frames)status=pw_audio_ring_write(child_ring,frames,100,ring_now_ms,ring_wait)==PW_OK ? 0 : -1;
     if(status)grains_dropped++;
     else grains++;
+    return status;
+}
+/* The title's own process plays through the mixer's ring while any helper has one, or grains of it still wait or are
+ * on their way to the port, so the mixer is the only writer to the port: two writers, each blocked a grain, would
+ * alternate and halve each other's rate (a launcher that starts the game as a helper and stays alive for seconds).
+ * This takes ring_lock, not audio_lock: the mixer holds that for a grain and takes it again at once, and a thread
+ * waiting for it would starve. */
+static int audio_via_mixer(void)
+{
+    int via=0;
+    pthread_mutex_lock(&ring_lock);
+    if(local_ring_ready) {
+        via=mixer_in_flight || pw_audio_ring_fill(&local_ring)>0;
+        for(unsigned i=0;i<PW_WINE_AUDIO_RINGS && !via;i++)via=rings[i]!=NULL;
+    }
+    pthread_mutex_unlock(&ring_lock);
+    return via;
+}
+int pw_wine_audio_output(const int16_t *frames)
+{
+    int status;
+    if(frames && audio_sink && audio_via_mixer()) {
+        /* One writer: the process's own mixer thread. The wait is the port's clock, through the mixer. */
+        status=pw_audio_ring_write(&local_ring,frames,100,ring_now_ms,ring_wait)==PW_OK ? 0 : -1;
+        if(status)__atomic_fetch_add(&grains_dropped,1,__ATOMIC_RELAXED);
+        return status;
+    }
+    /* The lock also serialises grains: the sink, or the ring, sees one at a time. */
+    pthread_mutex_lock(&audio_lock);
+    status=audio_write_locked(frames);
     pthread_mutex_unlock(&audio_lock);
     return status;
 }
@@ -289,21 +326,30 @@ static void *audio_mixer(void *unused)
 {
     static int16_t grain[PW_AUDIO_RING_GRAIN*2],mixed[PW_AUDIO_RING_GRAIN*2];
     static int32_t sum[PW_AUDIO_RING_GRAIN*2];
+    int failed;
     (void)unused;
     for(;;) {
         int any=0;
         memset(sum,0,sizeof(sum));
         pthread_mutex_lock(&ring_lock);
-        for(unsigned i=0;i<PW_WINE_AUDIO_RINGS;i++) {
-            if(!rings[i] || pw_audio_ring_read(rings[i],grain)!=1)continue;
+        for(unsigned i=0;i<=PW_WINE_AUDIO_RINGS;i++) {
+            PwAudioRing *ring=i<PW_WINE_AUDIO_RINGS ? rings[i] : local_ring_ready ? &local_ring : NULL;
+            if(!ring || pw_audio_ring_read(ring,grain)!=1)continue;
             any=1;
             for(unsigned s=0;s<PW_AUDIO_RING_GRAIN*2;s++)sum[s]+=grain[s];
         }
+        mixer_in_flight=any;
         pthread_mutex_unlock(&ring_lock);
         if(!any) { const struct timespec pause={0,2000000};nanosleep(&pause,NULL);continue; }
         for(unsigned s=0;s<PW_AUDIO_RING_GRAIN*2;s++)
             mixed[s]=(int16_t)(sum[s]>32767 ? 32767 : sum[s]<-32768 ? -32768 : sum[s]);
-        if(pw_wine_audio_output(mixed)) { const struct timespec pause={0,5000000};nanosleep(&pause,NULL); }
+        pthread_mutex_lock(&audio_lock);
+        failed=audio_write_locked(mixed);
+        pthread_mutex_unlock(&audio_lock);
+        pthread_mutex_lock(&ring_lock);
+        mixer_in_flight=0;
+        pthread_mutex_unlock(&ring_lock);
+        if(failed) { const struct timespec pause={0,5000000};nanosleep(&pause,NULL); }
     }
     return NULL;
 }
@@ -321,6 +367,7 @@ void *pw_wine_audio_ring_adopt(int fd)
     if(ring==MAP_FAILED)return NULL;
     if(pw_audio_ring_init(ring,PW_WINE_AUDIO_RING_BYTES)!=PW_OK) { munmap(ring,PW_WINE_AUDIO_RING_BYTES);return NULL; }
     pthread_mutex_lock(&ring_lock);
+    if(!local_ring_ready && pw_audio_ring_init(&local_ring,sizeof(local_ring))==PW_OK)local_ring_ready=1;
     while(slot<PW_WINE_AUDIO_RINGS && rings[slot])slot++;
     if(slot<PW_WINE_AUDIO_RINGS)rings[slot]=ring;
     pthread_mutex_unlock(&ring_lock);
@@ -344,7 +391,7 @@ void pw_wine_sink_stats(PwWineSinkStats *out)
     *out=stats;
     pthread_mutex_unlock(&lock);
     pthread_mutex_lock(&audio_lock);
-    out->grains=grains;out->grains_dropped=grains_dropped;
+    out->grains=grains;out->grains_dropped=__atomic_load_n(&grains_dropped,__ATOMIC_RELAXED);
     pthread_mutex_unlock(&audio_lock);
 }
 
@@ -420,8 +467,11 @@ static void input_page_attach_locked(void)
 }
 void pw_wine_set_pad(const PwWinePad *pad)
 {
+    int changed;
     pthread_mutex_lock(&lock);
     pad_set=1;
+    changed=(pad && pad->connected)!=(pad_state.connected!=0);
+    if(changed)pad_changes++;
     if(!pad || !pad->connected)pad_state.connected=0;
     else if(!pad_state.connected || !same_pad(pad,&pad_state)) {
         uint32_t packet=pad_state.packet+1;
@@ -430,6 +480,27 @@ void pw_wine_set_pad(const PwWinePad *pad)
     }
     input_page_publish_locked();
     pthread_mutex_unlock(&lock);
+    if(changed)wake_driver();   /* the driver tells the game's windows */
+}
+uint32_t pw_wine_pad_changes(void)
+{
+    PwWinePad copy;
+    uint32_t changes;
+    int connected,helper;
+    pthread_mutex_lock(&lock);
+    helper=!pad_set;
+    pthread_mutex_unlock(&lock);
+    /* A helper does not set the pad: it sees the title's through the input page, so a change is the page showing a
+     * different state than at the last look (the first look is the baseline). */
+    connected=helper ? pw_wine_pad(&copy)!=0 : 0;
+    pthread_mutex_lock(&lock);
+    if(helper) {
+        if(pad_seen>=0 && pad_seen!=connected)pad_changes++;
+        pad_seen=connected;
+    }
+    changes=pad_changes;
+    pthread_mutex_unlock(&lock);
+    return changes;
 }
 int pw_wine_pad(PwWinePad *pad)
 {

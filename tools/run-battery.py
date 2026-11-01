@@ -102,8 +102,10 @@ CASES = [
     ('host-dmem64', ['--arch','64','--graphics','--backend','dxvk','--dmem']),
     # The helper refuses every range after the first 20: the broker makes the rest as shared memory, and the program still passes.
     ('host-dmem-fallback64', ['--arch','64','--graphics','--backend','dxvk','--dmem','--fallback','--env','PROTON_GPU_TEST_DMEM_REFUSE=20']),
-    ('window-compose32', ['--arch','32']),
-    ('window-compose64', ['--arch','64']),
+    # Judged with the fast copy off: their layered-window blends read wrong in the after-flip capture while the screen showed
+    # them right (the owner, every gate; alpha7-gate-pro-2026-11-01 failed, wc64-fastcopy0-pro-2026-11-01 passed).
+    ('window-compose32', ['--arch','32', '--env', 'PROTON_GPU_FAST_COPY=0']),
+    ('window-compose64', ['--arch','64', '--env', 'PROTON_GPU_FAST_COPY=0']),
     # DWM corners, borders, shadows, acrylic/Mica glass and live thumbnails on the displayed frame.
     ('window-effects32', ['--arch','32']),
     ('window-effects64', ['--arch','64']),
@@ -124,6 +126,31 @@ CASES = [
                         '--args=--hold-ms=0'] + LAUNCHER),
     ('graphics-teardown', ['--exe', 'process-probe.exe', '--marker', 'PS5_PROTON_OWNER_BOOTSTRAP',
                            '--args=--graphics-teardown', '--watchdog', '120'] + LAUNCHER),
+    # Alpha 7's default, "Run inside MihawkOS": library copies of the renderer, none named. game64.exe must run in the
+    # title; a second 64-bit copy (the title takes one), the 32-bit copy and the opted-out copy in helpers, each drawing
+    # and ending with 0 (process-probe --title-games). First passed on the base, rung8-base-2026-10-31-fallbacks.
+    ('title-games', ['--exe', 'process-probe.exe', '--marker', 'PS5_PROTON_OWNER_BOOTSTRAP', '--args=--title-games',
+                     '--env', 'WINE_PS5_TITLE_OPTOUT=optout64.exe', '--env', 'PS5_PROTON_PROBE_FRAMES=3600',
+                     '--expect-title-game', 'game64.exe', '--watchdog', '150'] + LAUNCHER),
+    # A game's launcher in a library folder (a copy of process-probe: no graphics import) starts the renderer and exits:
+    # its imports keep the launcher in a helper, the renderer takes the title, and the session outlives the launcher.
+    ('launcher-pair', ['--exe', 'process-probe.exe', '--marker', 'PS5_PROTON_OWNER_BOOTSTRAP', '--args=--launcher-pair',
+                       '--env', 'PS5_PROTON_PROBE_FRAMES=1200', '--expect-title-game', 'game64.exe', '--watchdog', '180'] + LAUNCHER),
+    # A game in the title whose parent is alive in a helper (tests/parent-query-probe.c, Wine 2426): what it learns of the
+    # parent (basic, WoW64 and memory counters, the PEB read, its modules and their names) is as good as of itself.
+    ('parent-query64-title', ['--exe', 'process-probe.exe', '--marker', 'PS5_PROTON_OWNER_BOOTSTRAP', '--args=--parent-query',
+                              '--expect-title-game', 'game64.exe', '--watchdog', '180'] + LAUNCHER),
+    # A library game whose DLL is missing (tests/missing-import-probe.c): the title takes it, Wine's loader fails at once
+    # (c0000135), and the session must end in order with the title alive, not with MihawkOS (a tester's demo, 2026-11-01).
+    # The overlay beside it is held at its start (WINE_PS5_TEST_SPAWN_STALL, wine/ps5/pw_spawn_wait.h), as the console's
+    # wedged loader held the store overlay's: the title's end lets that start go after 30 s instead of waiting for it.
+    ('missing-import64-title', ['--exe', 'process-probe.exe', '--marker', 'PS5_PROTON_OWNER_BOOTSTRAP', '--args=--missing-import',
+                                '--env', 'WINE_PS5_TEST_SPAWN_STALL=overlay64.exe',
+                                '--expect-title-game', 'game64.exe', '--watchdog', '150'] + LAUNCHER),
+    # A Chromium-based game (a renderer copy with Chromium's resources beside it): started as one process (patch 2404's
+    # --single-process), in a helper, drawing and ending with 0. The 2D NW.js game this stands for: evidence/moonstone-base-2026-10-31-helper-single.json.
+    ('chromium-game', ['--exe', 'process-probe.exe', '--marker', 'PS5_PROTON_OWNER_BOOTSTRAP', '--args=--chromium-game',
+                       '--env', 'PS5_PROTON_PROBE_FRAMES=240', '--watchdog', '150'] + LAUNCHER),
     ('dnsapi32', ['--exe', 'dnsapi32-probe.exe', '--marker', 'PS5_PROTON_DNSAPI'] + LAUNCHER),
     ('dnsapi64', ['--exe', 'dnsapi64-probe.exe', '--marker', 'PS5_PROTON_DNSAPI'] + LAUNCHER),
     # Media Foundation playback of a generated 1080p60 H.264 + AAC MP4 (winedmo over FFmpeg, patches 2001-2063): a
@@ -171,6 +198,9 @@ CASES = [
     # A written image page reports PAGE_READWRITE (Chromium's protected-memory check; a game launcher's renderers).
     ('image-protect32', ['--exe', 'image-protect32-probe.exe', '--marker', 'PS5_PROTON_IMAGE_PROTECT']),
     ('image-protect64', ['--exe', 'image-protect64-probe.exe', '--marker', 'PS5_PROTON_IMAGE_PROTECT']),
+    # A small shared writable section off the 16 KiB host page (GameMaker's .mydata): the image starts (patch 2406).
+    ('shared-section32', ['--exe', 'shared-section32-probe.exe', '--marker', 'PS5_PROTON_SHARED_SECTION']),
+    ('shared-section64', ['--exe', 'shared-section64-probe.exe', '--marker', 'PS5_PROTON_SHARED_SECTION']),
     # A suspended thread's context is on its stack (patch 1172): CEF's stack sampler read from one in the Unix stack
     # and died (browser-cluster16k-2026-10-16-01), and every GC or crash reporter that walks a stack would.
     ('suspend-context64', ['--exe', 'stack-probe.exe', '--marker', 'PS5_PROTON_STACK_PROBE']),
@@ -249,7 +279,48 @@ CASES = [
     ('gl-upload32', ['--exe', 'gl-upload32-probe.exe', '--marker', 'PS5_PROTON_GL_UPLOAD_PROBE', '--watchdog', '240'] + LAUNCHER),
     ('gl-upload64', ['--exe', 'gl-upload64-probe.exe', '--marker', 'PS5_PROTON_GL_UPLOAD_PROBE', '--watchdog', '240'] + LAUNCHER),
     ('d3d11-32', ['--exe', 'd3d11-32-probe.exe', '--marker', 'PS5_PROTON_D3D11_PROBE'] + LAUNCHER),
+    # Direct3D 12's feature levels (tests/d3d12-levels-probe.c): in a helper, then in the title beside the broker.
+    ('d3d12-levels64', ['--exe', 'd3d12-levels-probe.exe', '--marker', 'PS5_PROTON_D3D12_LEVELS'] + LAUNCHER),
+    ('d3d12-levels64-title', ['--exe', 'd3d12-levels-probe.exe', '--marker', 'PS5_PROTON_D3D12_LEVELS',
+                              '--env', 'WINE_PS5_TITLE_PROCESS=d3d12-levels-probe.exe'] + LAUNCHER),
+    # 10,000 files open for writing at once from a helper (tests/many-files-probe.c): the title's descriptor table keeps
+    # room for them (wine/ps5/pw_wine_codeshare.h's cap and release).
+    ('many-files64', ['--exe', 'many-files-probe.exe', '--marker', 'PS5_PROTON_MANY_FILES', '--watchdog', '600'] + LAUNCHER),
+    # Direct3D 12 reserved resources past the old 4096-range cap (tests/d3d12-sparse-probe.c, graphics patch 0044):
+    # in a helper, as the racing game that hit it ran, and in the title.
+    # 20 MB of a game's Wine output in the title (tests/log-flood-probe.c): the session's logs keep their start and their
+    # end, and stay bounded (src/pw_capped_log.h).
+    ('log-flood64-title', ['--exe', 'log-flood-probe.exe', '--marker', 'PS5_PROTON_LOG_FLOOD', '--watchdog', '600',
+                           '--expect-log-ends', '--expect-title-game', 'log-flood-probe.exe', '--env', 'WINEDEBUG=warn+debugstr',
+                           '--env', 'WINE_PS5_TITLE_PROCESS=log-flood-probe.exe'] + LAUNCHER),
+    ('d3d12-sparse64', ['--exe', 'd3d12-sparse-probe.exe', '--marker', 'PS5_PROTON_D3D12_SPARSE'] + LAUNCHER),
+    ('d3d12-sparse64-title', ['--exe', 'd3d12-sparse-probe.exe', '--marker', 'PS5_PROTON_D3D12_SPARSE',
+                              '--env', 'WINE_PS5_TITLE_PROCESS=d3d12-sparse-probe.exe'] + LAUNCHER),
+    # Direct3D 12's shared resources without Win32 external memory (tests/d3d12-shared-probe.c), in the title as games are.
+    ('d3d12-shared64-title', ['--exe', 'd3d12-shared-probe.exe', '--marker', 'PS5_PROTON_D3D12_SHARED',
+                              '--env', 'WINE_PS5_TITLE_PROCESS=d3d12-shared-probe.exe'] + LAUNCHER),
+    # Direct3D 12's heaps over a program's own memory (tests/d3d12-existing-heap-probe.c, Wine patch 2425), in the title,
+    # the only process whose memory the GPU reaches: GPU copies both ways, through the program's protection changes.
+    ('d3d12-existing-heap64-title', ['--exe', 'd3d12-existing-heap-probe.exe', '--marker', 'PS5_PROTON_D3D12_EXISTING_HEAP',
+                                     '--env', 'WINE_PS5_TITLE_PROCESS=d3d12-existing-heap-probe.exe'] + LAUNCHER),
+    # A texture shared between a Direct3D 9Ex and a Direct3D 11 device of one process (tests/d3d9ex-d3d11-share-probe.c): the
+    # measurement before a DXVK change; PASS, NOSHARE and FAIL are all recorded, none is a gate case yet.
+    ('d3d9ex-d3d11-share64', ['--exe', 'd3d9ex-d3d11-share-probe.exe', '--marker', 'PS5_PROTON_D3D9_D3D11_SHARE'] + LAUNCHER),
+    # The on-screen keyboard's text reaching a game window, no person (tests/osk-typed-probe.c): the title types the fixed line
+    # 20 s in (WINE_PS5_OSK_TEST=type, native/proton_wine.cpp), in a game in the title and in one in a helper. And the system
+    # dialog itself: WINE_PS5_OSK_TEST=open shows it and ends it 3 s later; read the title log for "keyboard opened" and
+    # "keyboard ended by=title" (no marker: nothing in the game can see the dialog).
+    ('osk-typed64-title', ['--exe', 'osk-typed-probe.exe', '--marker', 'PS5_PROTON_OSK_TYPED',
+                           '--env', 'WINE_PS5_TITLE_PROCESS=osk-typed-probe.exe', '--env', 'WINE_PS5_OSK_TEST=type'] + LAUNCHER),
+    ('osk-typed64-helper', ['--exe', 'osk-typed-probe.exe', '--marker', 'PS5_PROTON_OSK_TYPED',
+                            '--env', 'WINE_PS5_OSK_TEST=type'] + LAUNCHER),
+    ('osk-open64', ['--exe', 'window-probe.exe', '--marker', 'PS5_PROTON_WINDOW_PROBE', '--env', 'WINE_PS5_OSK_TEST=open'] + LAUNCHER),
     ('d3d11', ['--exe', 'd3d11-probe.exe', '--marker', 'PS5_PROTON_D3D11_PROBE']),
+    # The broker's fast copy (src/pw_speed_defaults.h), on by default since Alpha 7: the frame a Direct3D 11 program presents
+    # reaches the screen. Its capture reads what was scanned out and must show the frame, not black (w3-ab-b-pro-2026-11-01).
+    ('fast-copy-capture', ['--exe', 'd3d11-probe.exe', '--marker', 'PS5_PROTON_D3D11_PROBE', '--env', 'PROTON_GPU_FAST_COPY=1',
+                           '--env', 'PS5_PROTON_PROBE_FRAMES=1200', '--pad-script', 'tests/pad-scripts/fast-copy-capture.txt',
+                           '--expect-captures-lit', '90']),
     ('opengl', ['--exe', 'gl-vertex-probe.exe', '--marker', 'PS5_PROTON_GL_VERTEX_PROBE', '--env', 'WINE_PS5_OPENGL=1']),
     ('children', ['--exe', 'process-probe.exe', '--marker', 'PS5_PROTON_PROCESS_PROBE']),
     ('payload-eight', ['--exe', 'process-probe.exe', '--marker', 'PS5_PROTON_PROCESS_PROBE',
@@ -365,7 +436,7 @@ ON_REQUEST = {'section-dmem', 'memory-stall', 'payload-vm-contention', 'vm-speed
 
 # The gate (tools/gate.py): what every commit of code needs the console to pass first. A new required check is added
 # here, and from then on no code is committed without it.
-GATE_CASES = ['shell32', 'shell64', 'work-area32', 'work-area64', 'wallpaper32', 'wallpaper64', 'cursor-scheme32', 'cursor-scheme64', 'theme-parts32', 'theme-parts64', 'monospace32', 'monospace64', 'gpu-window32', 'gpu-window64', 'dxvk-window32', 'dxvk-window64', 'host-dmem64', 'host-dmem-fallback64', 'window-compose32', 'window-compose64', 'window-effects32', 'window-effects64', 'window-snapshot32', 'window-snapshot64', 'initial-env32', 'initial-env64', 'locale64', 'appearance32', 'appearance64', 'theme-notify32', 'theme-notify64', 'proton-ui32', 'proton-ui64', 'memory-classes', 'graphics-teardown', 'dnsapi32', 'dnsapi64', 'mf-video32', 'mf-video64', 'network-adapters32', 'network-adapters64', 'socket-options32', 'socket-options64', 'late-library', 'large-shared-section', 'virtual-query32', 'virtual-query64', 'image-protect32', 'image-protect64', 'suspend-context64', 'kill-convert', 'stack-limit64', 'remote-memory64', 'system-memory32', 'system-memory64', 'file-write32', 'file-write64', 'relative-dir32', 'relative-dir64', 'umip32', 'umip64', 'manual-stdout', 'redirected-stdout', 'prefix-fresh64', 'prefix-fresh32',
+GATE_CASES = ['shell32', 'shell64', 'work-area32', 'work-area64', 'wallpaper32', 'wallpaper64', 'cursor-scheme32', 'cursor-scheme64', 'theme-parts32', 'theme-parts64', 'monospace32', 'monospace64', 'gpu-window32', 'gpu-window64', 'dxvk-window32', 'dxvk-window64', 'host-dmem64', 'host-dmem-fallback64', 'window-compose32', 'window-compose64', 'window-effects32', 'window-effects64', 'window-snapshot32', 'window-snapshot64', 'initial-env32', 'initial-env64', 'locale64', 'appearance32', 'appearance64', 'theme-notify32', 'theme-notify64', 'proton-ui32', 'proton-ui64', 'memory-classes', 'graphics-teardown', 'title-games', 'launcher-pair', 'chromium-game', 'dnsapi32', 'dnsapi64', 'mf-video32', 'mf-video64', 'network-adapters32', 'network-adapters64', 'socket-options32', 'socket-options64', 'late-library', 'large-shared-section', 'virtual-query32', 'virtual-query64', 'image-protect32', 'image-protect64', 'shared-section32', 'shared-section64', 'suspend-context64', 'kill-convert', 'stack-limit64', 'remote-memory64', 'system-memory32', 'system-memory64', 'file-write32', 'file-write64', 'relative-dir32', 'relative-dir64', 'umip32', 'umip64', 'manual-stdout', 'redirected-stdout', 'prefix-fresh64', 'prefix-fresh32',
               'pe64', 'payload-eight', 'payload-memory', 'payload-vm', 'descendants', 'launcher-render', 'launcher-tls',
               'sync64', 'shell-open64',
               # A write tracker's truth on 16 KiB host pages (patch 1134): no write reported that did not happen,
@@ -390,7 +461,7 @@ GATE_CASES = ['shell32', 'shell64', 'work-area32', 'work-area64', 'wallpaper32',
               'broker-wedge64',
               # HID's nested INPUT32 must be widened too (0955); otherwise device reports become message zero
               # and a normal PeekMessage loop stalls even when texture uploads and SwapBuffers succeed.
-              'input32', 'gl-upload32']
+              'input32', 'gl-upload32', 'osk-typed64-title', 'osk-typed64-helper', 'osk-open64', 'many-files64', 'log-flood64-title', 'd3d12-existing-heap64-title', 'parent-query64-title', 'missing-import64-title', 'fast-copy-capture']
 
 
 # Grouped launches (--grouped). A short probe spends about 1 s of its 14 s launch on its own checks
@@ -409,7 +480,7 @@ GROUPS = {
                'proton-ui32', 'proton-ui64', 'dnsapi32', 'dnsapi64', 'mf-video32', 'mf-video64',
                'network-adapters32', 'network-adapters64',
                'socket-options32', 'socket-options64', 'virtual-query32', 'virtual-query64', 'file-write32',
-               'file-write64', 'relative-dir32', 'relative-dir64', 'system-memory32', 'system-memory64', 'image-protect32', 'image-protect64',
+               'file-write64', 'relative-dir32', 'relative-dir64', 'system-memory32', 'system-memory64', 'image-protect32', 'image-protect64', 'shared-section32', 'shared-section64',
                'suspend-context64', 'kill-convert', 'stack-limit64', 'remote-memory64', 'late-library', 'pe64', 'pe32', 'fixed-base32', 'wow64', 'input32',
                'payload-vm',
                'vm-truth32', 'vm-truth64', 'descendants', 'payload-eight', 'memory-classes', 'sync64',

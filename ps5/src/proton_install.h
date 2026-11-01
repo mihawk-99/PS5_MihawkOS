@@ -1,10 +1,11 @@
 /*
  * MihawkOS - "Install runtime from storage" (docs/SELF_INSTALL.md, phase 5).
  *
- * The title folder pins the runtime's manifest (runtime-pack.txt, tools/pack-runtime.py). Its pieces are looked for
- * in /data/ps5proton/install, then in mihawkos/ on each USB stick, and src/pw_pack.h installs them into
- * /data/ps5proton on a thread of its own while the launcher draws its progress. Every failure is a sentence for the
- * screen; the log gets the same line with the code and errno.
+ * The title folder pins the runtime's manifest (runtime-pack.txt, tools/pack-runtime.py) and carries its pieces, in
+ * runtime-pieces/ (tools/package-install.py puts them there: one folder to copy, the owner, 2026-10-31). Game helpers
+ * cannot read the title folder, so src/pw_pack.h installs the pieces into /data/ps5proton on a thread of its own while
+ * the launcher draws its progress, checking every piece's and every file's SHA-256 against the manifest. Every failure
+ * is a sentence for the screen; the log gets the same line with the code and errno.
  *
  * Copyright (C) 2026 Mihawk
  * SPDX-License-Identifier: GPL-3.0-or-later
@@ -25,8 +26,7 @@ struct ProtonInstall {
 	enum Problem {
 		none,
 		no_manifest,     /* this build pins no runtime manifest, or a damaged one */
-		no_stick,        /* no folder holds pieces, and no /mnt/usbN holds anything */
-		no_folder,       /* a stick, but no mihawkos folder of pieces on it */
+		no_pieces,       /* the title folder holds none of the pieces (a development build, or a copy without them) */
 		partial,         /* `have` of `total` pieces */
 		no_space,        /* never reported by the title: it cannot learn the free space (a full disk is storage_full) */
 		read_failed,     /* a piece could not be read */
@@ -48,9 +48,8 @@ struct ProtonInstall {
 	double seconds{ 0.0 };   /* since the install started */
 };
 
-/* Look again for the pieces and the free space (not while an install runs). Needs /data. `only` "usb": the sticks'
- * mihawkos folders alone, not /data/ps5proton/install; "install": that folder alone (copied there over FTP), with no
- * download in its place when it is empty. */
+/* Look again for the pieces (not while an install runs). Needs /data. The title folder's runtime-pieces/, then the
+ * release's download when it holds none; `only` "title": that folder alone, never a download (the guided setup). */
 ProtonInstall proton_install_find(const char *only = nullptr);
 /* Start the install proton_install_find found ready; returns at once. */
 void proton_install_start();

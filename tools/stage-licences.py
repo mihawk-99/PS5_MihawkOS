@@ -55,7 +55,10 @@ DOWNLOADS = {
 # What tools/stage-wine.py stages itself, under the runtime's share/licenses (for the checks of a staged tree).
 STAGE_WINE = ['ge-proton/LICENSE', 'ge-proton/LICENSE.OFL', 'dxvk-patched/DXVK.txt', 'dxvk-patched/dxbc-spirv.txt',
               'dxvk-patched/libdisplay-info.txt', 'dxvk-patched/Vulkan-Headers.txt', 'dxvk-patched/SPIRV-Headers.txt',
-              'dxvk-patched/dxbc-SPIRV-Headers.txt', 'proton-ui/OFL.txt', 'proton-ui/theme-LGPL.txt',
+              'dxvk-patched/dxbc-SPIRV-Headers.txt', 'vkd3d-patched/VKD3D-Proton.txt',
+              'vkd3d-patched/VKD3D-Proton-COPYING.txt', 'vkd3d-patched/dxil-spirv.txt', 'vkd3d-patched/dxbc-spirv.txt',
+              'vkd3d-patched/Vulkan-Headers.txt', 'vkd3d-patched/SPIRV-Headers.txt',
+              'vkd3d-patched/dxil-spirv-SPIRV-Headers.txt', 'vkd3d-patched/bc-decoder.txt', 'vkd3d-patched/glslang-spirv.txt', 'proton-ui/OFL.txt', 'proton-ui/theme-LGPL.txt',
               'proton-ui/CascadiaMono-OFL.txt', 'proton-ui/Fluent-LICENSE', 'proton-ui/Fluent-NOTICE', 'cares/LICENSE.md',
               'ffmpeg/LICENSE.md', 'ffmpeg/COPYING.LGPLv2.1']
 

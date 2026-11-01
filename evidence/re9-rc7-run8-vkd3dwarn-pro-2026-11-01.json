@@ -1,0 +1,3927 @@
+{
+ "telemetry_hold": null,
+ "launch_readiness": {
+  "ready": true,
+  "seconds": 0.146,
+  "settle_seconds": 0.0,
+  "census_seconds": 0.137,
+  "previous_cleanup_verified": true
+ },
+ "native_close_failures": [],
+ "run": "re9-rc7-run8-vkd3dwarn-pro-2026-11-01",
+ "what": "profile steam",
+ "env": [
+  "VKD3D_DEBUG=warn",
+  "PROTON_WINEDEBUG=+timestamp,+pid,+tid,+debugstr,+loaddll,+win,+amd_ags,+seh,warn+explorer",
+  "PROTON_STOP_TERMINATE=0"
+ ],
+ "result": "finished",
+ "seconds": 522.7,
+ "probe_verdict": null,
+ "stages": {
+  "launched": 1.01,
+  "title_started": 1.5,
+  "elevated": 1.5,
+  "wine_loaded": 1.9,
+  "wineboot_started": 4.43,
+  "wineboot_ended": 5.59,
+  "program_started": 5.64,
+  "launcher_started": 521.68,
+  "launcher_ended": 522.03,
+  "closed": 522.68
+ },
+ "clean_owner_restart": false,
+ "launcher_end_status": 0,
+ "initial_status": null,
+ "closed_on_request": false,
+ "child_logs": [
+  "klog/re9-rc7-run8-vkd3dwarn-pro-2026-11-01-wine-child-172.log",
+  "klog/re9-rc7-run8-vkd3dwarn-pro-2026-11-01-wine-child-173.log",
+  "klog/re9-rc7-run8-vkd3dwarn-pro-2026-11-01-wine-child-174.log",
+  "klog/re9-rc7-run8-vkd3dwarn-pro-2026-11-01-wine-child-175.log",
+  "klog/re9-rc7-run8-vkd3dwarn-pro-2026-11-01-wine-child-176.log",
+  "klog/re9-rc7-run8-vkd3dwarn-pro-2026-11-01-wine-child-177.log",
+  "klog/re9-rc7-run8-vkd3dwarn-pro-2026-11-01-wine-child-178.log",
+  "klog/re9-rc7-run8-vkd3dwarn-pro-2026-11-01-wine-child-179.log",
+  "klog/re9-rc7-run8-vkd3dwarn-pro-2026-11-01-wine-child-180.log",
+  "klog/re9-rc7-run8-vkd3dwarn-pro-2026-11-01-wine-child-181.log",
+  "klog/re9-rc7-run8-vkd3dwarn-pro-2026-11-01-wine-child-182.log"
+ ],
+ "child_logs_missing": [],
+ "session_logs_status": 0,
+ "storage_errors": 0,
+ "stop_terminate": "0",
+ "injected_fault": null,
+ "exec_protection": {
+  "refused": 0,
+  "conversions": 12729,
+  "converted_kib": 203664,
+  "convert_failed": 0,
+  "exec_refused": 0,
+  "grant_retries": 453,
+  "modules": 0,
+  "sdk_refused": 0
+ },
+ "code_share": {
+  "shared": 1856,
+  "shared_kib": 29696,
+  "offered": 2092,
+  "mismatched": 0,
+  "failed": 0,
+  "private_writes": 2,
+  "private_kib": 32
+ },
+ "helpers": [
+  {
+   "program": null,
+   "libcef": false,
+   "resident_peak_mib": null,
+   "resident_last_mib": null,
+   "images_held_mib": null,
+   "vm_last": null,
+   "exec": null
+  },
+  {
+   "program": "steam.exe",
+   "libcef": false,
+   "resident_peak_mib": 72,
+   "resident_last_mib": 72,
+   "images_held_mib": 151,
+   "vm_last": {
+    "resident_mib": 32,
+    "direct_resident_mib": 266,
+    "flexible_mib": 85
+   },
+   "exec": {
+    "refused": 0,
+    "conversions": 2262,
+    "converted_kib": 36192,
+    "convert_failed": 0,
+    "exec_refused": 0,
+    "grant_retries": 4,
+    "modules": 0,
+    "sdk_refused": 0
+   }
+  },
+  {
+   "program": null,
+   "libcef": false,
+   "resident_peak_mib": 15,
+   "resident_last_mib": 15,
+   "images_held_mib": 6,
+   "vm_last": {
+    "resident_mib": 9,
+    "direct_resident_mib": 45,
+    "flexible_mib": 26
+   },
+   "exec": {
+    "refused": 0,
+    "conversions": 30,
+    "converted_kib": 480,
+    "convert_failed": 0,
+    "exec_refused": 0,
+    "grant_retries": 0,
+    "modules": 0,
+    "sdk_refused": 0
+   }
+  },
+  {
+   "program": null,
+   "libcef": false,
+   "resident_peak_mib": null,
+   "resident_last_mib": null,
+   "images_held_mib": null,
+   "vm_last": null,
+   "exec": {
+    "refused": 0,
+    "conversions": 153,
+    "converted_kib": 2448,
+    "convert_failed": 0,
+    "exec_refused": 0,
+    "grant_retries": 0,
+    "modules": 0,
+    "sdk_refused": 0
+   }
+  },
+  {
+   "program": null,
+   "libcef": false,
+   "resident_peak_mib": 15,
+   "resident_last_mib": 15,
+   "images_held_mib": 7,
+   "vm_last": {
+    "resident_mib": 9,
+    "direct_resident_mib": 43,
+    "flexible_mib": 26
+   },
+   "exec": {
+    "refused": 0,
+    "conversions": 29,
+    "converted_kib": 464,
+    "convert_failed": 0,
+    "exec_refused": 0,
+    "grant_retries": 0,
+    "modules": 0,
+    "sdk_refused": 0
+   }
+  },
+  {
+   "program": "steamwebhelper.exe",
+   "libcef": true,
+   "resident_peak_mib": 161,
+   "resident_last_mib": 161,
+   "images_held_mib": 312,
+   "vm_last": {
+    "resident_mib": 56,
+    "direct_resident_mib": 414,
+    "flexible_mib": 210
+   },
+   "exec": {
+    "refused": 0,
+    "conversions": 9923,
+    "converted_kib": 158768,
+    "convert_failed": 0,
+    "exec_refused": 0,
+    "grant_retries": 449,
+    "modules": 0,
+    "sdk_refused": 0
+   }
+  },
+  {
+   "program": "steamservice.exe",
+   "libcef": false,
+   "resident_peak_mib": 24,
+   "resident_last_mib": 24,
+   "images_held_mib": 31,
+   "vm_last": {
+    "resident_mib": 20,
+    "direct_resident_mib": 76,
+    "flexible_mib": 37
+   },
+   "exec": {
+    "refused": 0,
+    "conversions": 329,
+    "converted_kib": 5264,
+    "convert_failed": 0,
+    "exec_refused": 0,
+    "grant_retries": 0,
+    "modules": 0,
+    "sdk_refused": 0
+   }
+  },
+  {
+   "program": null,
+   "libcef": false,
+   "resident_peak_mib": 15,
+   "resident_last_mib": 15,
+   "images_held_mib": 6,
+   "vm_last": {
+    "resident_mib": 9,
+    "direct_resident_mib": 40,
+    "flexible_mib": 26
+   },
+   "exec": {
+    "refused": 0,
+    "conversions": 2,
+    "converted_kib": 32,
+    "convert_failed": 0,
+    "exec_refused": 0,
+    "grant_retries": 0,
+    "modules": 0,
+    "sdk_refused": 0
+   }
+  },
+  {
+   "program": null,
+   "libcef": false,
+   "resident_peak_mib": null,
+   "resident_last_mib": null,
+   "images_held_mib": null,
+   "vm_last": null,
+   "exec": {
+    "refused": 0,
+    "conversions": 0,
+    "converted_kib": 0,
+    "convert_failed": 0,
+    "exec_refused": 0,
+    "grant_retries": 0,
+    "modules": 0,
+    "sdk_refused": 0
+   }
+  },
+  {
+   "program": null,
+   "libcef": false,
+   "resident_peak_mib": 8,
+   "resident_last_mib": 8,
+   "images_held_mib": 7,
+   "vm_last": {
+    "resident_mib": 5,
+    "direct_resident_mib": 33,
+    "flexible_mib": 19
+   },
+   "exec": {
+    "refused": 0,
+    "conversions": 1,
+    "converted_kib": 16,
+    "convert_failed": 0,
+    "exec_refused": 0,
+    "grant_retries": 0,
+    "modules": 0,
+    "sdk_refused": 0
+   }
+  },
+  {
+   "program": null,
+   "libcef": false,
+   "resident_peak_mib": null,
+   "resident_last_mib": null,
+   "images_held_mib": null,
+   "vm_last": null,
+   "exec": {
+    "refused": 0,
+    "conversions": 0,
+    "converted_kib": 0,
+    "convert_failed": 0,
+    "exec_refused": 0,
+    "grant_retries": 0,
+    "modules": 0,
+    "sdk_refused": 0
+   }
+  }
+ ],
+ "start_stages": {
+  "starts": 8,
+  "warm_starts": 5,
+  "median": {
+   "points": {
+    "answered": 98,
+    "answered-parent": 233.5,
+    "asked": -1.0,
+    "bootstrap": 150,
+    "connected": 114,
+    "control": 114,
+    "ending": 1295,
+    "entry": 145,
+    "exit": 1197,
+    "exit-received": 1198,
+    "first-dll": 859.5,
+    "held": 114,
+    "last-dll": 138614.0,
+    "lock": 114,
+    "main": 109,
+    "ntdll-loaded": 174,
+    "ntdll-loading": 164,
+    "payload-entry": 160,
+    "read": 1,
+    "ready": 181,
+    "received": -1.0,
+    "replied": 233.5,
+    "sent": 114,
+    "wine-main": 182
+   },
+   "steps": {
+    "answered": 78,
+    "answered-parent": 0.0,
+    "bootstrap": 5,
+    "connected": 0,
+    "control": 0,
+    "ending": 97,
+    "entry": 31,
+    "exit": 5,
+    "exit-received": 1,
+    "first-dll": 704.5,
+    "held": 0,
+    "last-dll": 137754.5,
+    "lock": 5,
+    "main": 11,
+    "ntdll-loaded": 11,
+    "ntdll-loading": 3,
+    "payload-entry": 10,
+    "read": 1,
+    "ready": 7,
+    "replied": 0.0,
+    "sent": 0,
+    "wine-main": 1
+   },
+   "life": {
+    "code_round_calls": 307,
+    "code_round_ms": 6,
+    "convert_calls": 156,
+    "convert_ms": 22,
+    "dl_found_calls": 6,
+    "dl_found_ms": 45,
+    "dl_missed_calls": 55,
+    "dl_missed_ms": 4,
+    "file_attributes_ms": 0,
+    "file_information_ms": 0,
+    "file_open_calls": 118,
+    "file_open_ms": 11,
+    "file_read_calls": 1,
+    "file_read_ms": 0,
+    "fonts_cache_us": 3603.0,
+    "fonts_files_us": 57090.0,
+    "fonts_freetype_us": 9804.0,
+    "fonts_us": 70497.0,
+    "image_read_calls": 0,
+    "image_read_ms": 0,
+    "section_fault_calls": 0,
+    "section_fault_ms": 0,
+    "section_map_calls": 0,
+    "section_map_ms": 0,
+    "server_calls": 2842,
+    "server_ms": 200
+   }
+  },
+  "median_warm": {
+   "points": {
+    "answered-parent": 41,
+    "asked": 0,
+    "bootstrap": 3,
+    "control": -2610,
+    "ending": 266067,
+    "entry": -2574,
+    "first-dll": 107,
+    "last-dll": 240,
+    "lock": 1,
+    "main": -2615,
+    "ntdll-loaded": 34,
+    "ntdll-loading": 18,
+    "payload-entry": 14,
+    "ready": 41,
+    "received": 0,
+    "replied": 41,
+    "sent": 1,
+    "wine-main": 43
+   },
+   "steps": {
+    "answered-parent": 0,
+    "asked": 0.0,
+    "bootstrap": 1,
+    "ending": 181014,
+    "first-dll": 67,
+    "last-dll": 150,
+    "lock": 1,
+    "ntdll-loaded": 13,
+    "ntdll-loading": 4,
+    "payload-entry": 10,
+    "ready": 8,
+    "received": 0.0,
+    "replied": 0,
+    "sent": 0,
+    "wine-main": 1
+   },
+   "life": {
+    "code_round_calls": 20618,
+    "code_round_ms": 554,
+    "convert_calls": 11235,
+    "convert_ms": 4926,
+    "dl_found_calls": 16,
+    "dl_found_ms": 156,
+    "dl_missed_calls": 88,
+    "dl_missed_ms": 7,
+    "file_attributes_ms": 7664,
+    "file_information_ms": 55388,
+    "file_open_calls": 666,
+    "file_open_ms": 30911,
+    "file_read_calls": 5466,
+    "file_read_ms": 49832,
+    "fonts_cache_us": 4792.0,
+    "fonts_files_us": 121069.0,
+    "fonts_freetype_us": 10259.5,
+    "fonts_us": 136120.5,
+    "image_read_calls": 0,
+    "image_read_ms": 0,
+    "section_fault_calls": 256,
+    "section_fault_ms": 37,
+    "section_map_calls": 236,
+    "section_map_ms": 36,
+    "server_calls": 221996,
+    "server_ms": 1235841
+   }
+  },
+  "chain": [
+   {
+    "parent": 173,
+    "previous": 175,
+    "next": 177,
+    "from_exit_ms": 2607,
+    "from_exit_received_ms": 2606,
+    "from_end_ms": 2509
+   },
+   {
+    "parent": 174,
+    "previous": 176,
+    "next": 178
+   },
+   {
+    "parent": 174,
+    "previous": 178,
+    "next": 179
+   },
+   {
+    "parent": 173,
+    "previous": 177,
+    "next": 181,
+    "from_end_ms": 1880
+   }
+  ],
+  "median_chain": {
+   "from_end_ms": 2194.5,
+   "from_exit_ms": 2607,
+   "from_exit_received_ms": 2606
+  },
+  "helpers": {
+   "173": {
+    "warm": false,
+    "attempts": 5,
+    "points": {
+     "read": 0,
+     "answered": 43,
+     "main": 53,
+     "lock": 59,
+     "connected": 59,
+     "held": 59,
+     "sent": 59,
+     "control": 59,
+     "entry": 90,
+     "bootstrap": 95,
+     "payload-entry": 106,
+     "ntdll-loading": 109,
+     "ntdll-loaded": 120,
+     "ready": 127,
+     "wine-main": 128,
+     "first-dll": 1480,
+     "last-dll": 276036
+    },
+    "steps": {
+     "read": 0,
+     "answered": 43,
+     "main": 10,
+     "lock": 6,
+     "connected": 0,
+     "held": 0,
+     "sent": 0,
+     "control": 0,
+     "entry": 31,
+     "bootstrap": 5,
+     "payload-entry": 11,
+     "ntdll-loading": 3,
+     "ntdll-loaded": 11,
+     "ready": 7,
+     "wine-main": 1,
+     "first-dll": 1352,
+     "last-dll": 274556
+    },
+    "life": {
+     "fonts_us": 35422,
+     "fonts_freetype_us": 9399,
+     "fonts_files_us": 22448,
+     "fonts_cache_us": 3575
+    }
+   },
+   "174": {
+    "warm": true,
+    "attempts": 0,
+    "points": {
+     "main": -339,
+     "control": -334,
+     "entry": -259,
+     "received": -1,
+     "asked": -1,
+     "lock": 0,
+     "sent": 0,
+     "bootstrap": 1,
+     "payload-entry": 11,
+     "ntdll-loading": 14,
+     "ntdll-loaded": 38,
+     "ready": 45,
+     "replied": 46,
+     "answered-parent": 46,
+     "wine-main": 47,
+     "first-dll": 102,
+     "last-dll": 152
+    },
+    "steps": {
+     "lock": 0,
+     "sent": 0,
+     "bootstrap": 1,
+     "payload-entry": 10,
+     "ntdll-loading": 3,
+     "ntdll-loaded": 24,
+     "ready": 7,
+     "replied": 1,
+     "answered-parent": 0,
+     "wine-main": 1,
+     "first-dll": 55,
+     "last-dll": 50
+    },
+    "life": null
+   },
+   "175": {
+    "warm": false,
+    "attempts": 5,
+    "points": {
+     "received": -1,
+     "asked": -1,
+     "read": 1,
+     "answered": 98,
+     "main": 109,
+     "lock": 114,
+     "connected": 114,
+     "held": 114,
+     "sent": 114,
+     "control": 114,
+     "entry": 145,
+     "bootstrap": 150,
+     "payload-entry": 160,
+     "ntdll-loading": 164,
+     "ntdll-loaded": 174,
+     "ready": 181,
+     "replied": 181,
+     "answered-parent": 181,
+     "wine-main": 182,
+     "first-dll": 239,
+     "last-dll": 1192,
+     "exit": 1197,
+     "exit-received": 1198,
+     "ending": 1295
+    },
+    "steps": {
+     "read": 1,
+     "answered": 97,
+     "main": 11,
+     "lock": 5,
+     "connected": 0,
+     "held": 0,
+     "sent": 0,
+     "control": 0,
+     "entry": 31,
+     "bootstrap": 5,
+     "payload-entry": 10,
+     "ntdll-loading": 4,
+     "ntdll-loaded": 10,
+     "ready": 7,
+     "replied": 0,
+     "answered-parent": 0,
+     "wine-main": 1,
+     "first-dll": 57,
+     "last-dll": 953,
+     "exit": 5,
+     "exit-received": 1,
+     "ending": 97
+    },
+    "life": {
+     "server_calls": 2842,
+     "server_ms": 200,
+     "file_read_calls": 1,
+     "file_read_ms": 0,
+     "file_open_calls": 118,
+     "file_open_ms": 11,
+     "file_attributes_ms": 0,
+     "file_information_ms": 0,
+     "section_map_calls": 0,
+     "section_map_ms": 0,
+     "section_fault_calls": 0,
+     "section_fault_ms": 0,
+     "convert_calls": 156,
+     "convert_ms": 22,
+     "image_read_calls": 0,
+     "image_read_ms": 0,
+     "code_round_calls": 307,
+     "code_round_ms": 6,
+     "dl_found_calls": 6,
+     "dl_found_ms": 45,
+     "dl_missed_calls": 55,
+     "dl_missed_ms": 4,
+     "fonts_us": 105572,
+     "fonts_freetype_us": 10209,
+     "fonts_files_us": 91732,
+     "fonts_cache_us": 3631
+    }
+   },
+   "176": {
+    "warm": true,
+    "attempts": 0,
+    "points": {
+     "main": -88,
+     "control": -84,
+     "entry": -51,
+     "received": 0,
+     "asked": 0,
+     "lock": 1,
+     "sent": 1,
+     "bootstrap": 2,
+     "payload-entry": 12,
+     "ntdll-loading": 16,
+     "ntdll-loaded": 26,
+     "ready": 34,
+     "replied": 34,
+     "answered-parent": 34,
+     "wine-main": 35,
+     "first-dll": 90,
+     "last-dll": 240
+    },
+    "steps": {
+     "received": 0,
+     "asked": 0,
+     "lock": 1,
+     "sent": 0,
+     "bootstrap": 1,
+     "payload-entry": 10,
+     "ntdll-loading": 4,
+     "ntdll-loaded": 10,
+     "ready": 8,
+     "replied": 0,
+     "answered-parent": 0,
+     "wine-main": 1,
+     "first-dll": 55,
+     "last-dll": 150
+    },
+    "life": null
+   },
+   "177": {
+    "warm": true,
+    "attempts": 0,
+    "points": {
+     "main": -3140,
+     "control": -3136,
+     "entry": -3104,
+     "received": 0,
+     "asked": 0,
+     "lock": 2,
+     "sent": 3,
+     "bootstrap": 4,
+     "payload-entry": 14,
+     "ntdll-loading": 18,
+     "ntdll-loaded": 31,
+     "ready": 39,
+     "replied": 39,
+     "answered-parent": 39,
+     "wine-main": 40,
+     "first-dll": 107,
+     "last-dll": 85053,
+     "ending": 266067
+    },
+    "steps": {
+     "received": 0,
+     "asked": 0,
+     "lock": 2,
+     "sent": 1,
+     "bootstrap": 1,
+     "payload-entry": 10,
+     "ntdll-loading": 4,
+     "ntdll-loaded": 13,
+     "ready": 8,
+     "replied": 0,
+     "answered-parent": 0,
+     "wine-main": 1,
+     "first-dll": 67,
+     "last-dll": 84946,
+     "ending": 181014
+    },
+    "life": {
+     "server_calls": 221996,
+     "server_ms": 1235841,
+     "file_read_calls": 5466,
+     "file_read_ms": 49832,
+     "file_open_calls": 666,
+     "file_open_ms": 30911,
+     "file_attributes_ms": 7664,
+     "file_information_ms": 55388,
+     "section_map_calls": 236,
+     "section_map_ms": 36,
+     "section_fault_calls": 256,
+     "section_fault_ms": 37,
+     "convert_calls": 11235,
+     "convert_ms": 4926,
+     "image_read_calls": 0,
+     "image_read_ms": 0,
+     "code_round_calls": 20618,
+     "code_round_ms": 554,
+     "dl_found_calls": 16,
+     "dl_found_ms": 156,
+     "dl_missed_calls": 88,
+     "dl_missed_ms": 7,
+     "fonts_us": 139344,
+     "fonts_freetype_us": 10186,
+     "fonts_files_us": 125676,
+     "fonts_cache_us": 3482
+    }
+   },
+   "178": {
+    "warm": true,
+    "attempts": 0,
+    "points": {
+     "main": -2615,
+     "control": -2610,
+     "entry": -2574,
+     "received": 0,
+     "asked": 0,
+     "lock": 1,
+     "sent": 1,
+     "bootstrap": 3,
+     "payload-entry": 17,
+     "ntdll-loading": 21,
+     "ntdll-loaded": 34,
+     "ready": 42,
+     "replied": 42,
+     "answered-parent": 42,
+     "wine-main": 44,
+     "first-dll": 134,
+     "last-dll": 125941
+    },
+    "steps": {
+     "received": 0,
+     "asked": 0,
+     "lock": 1,
+     "sent": 0,
+     "bootstrap": 2,
+     "payload-entry": 14,
+     "ntdll-loading": 4,
+     "ntdll-loaded": 13,
+     "ready": 8,
+     "replied": 0,
+     "answered-parent": 0,
+     "wine-main": 2,
+     "first-dll": 90,
+     "last-dll": 125807
+    },
+    "life": {
+     "fonts_us": 132897,
+     "fonts_freetype_us": 10333,
+     "fonts_files_us": 116462,
+     "fonts_cache_us": 6102
+    }
+   },
+   "179": {
+    "warm": true,
+    "attempts": 0,
+    "points": {
+     "main": -13547,
+     "control": -13542,
+     "entry": -13508,
+     "received": 0,
+     "asked": 0,
+     "lock": 2,
+     "sent": 2,
+     "bootstrap": 4,
+     "payload-entry": 17,
+     "ntdll-loading": 21,
+     "ntdll-loaded": 34,
+     "ready": 41,
+     "replied": 41,
+     "answered-parent": 41,
+     "wine-main": 43,
+     "first-dll": 111,
+     "last-dll": 159
+    },
+    "steps": {
+     "received": 0,
+     "asked": 0,
+     "lock": 2,
+     "sent": 0,
+     "bootstrap": 2,
+     "payload-entry": 13,
+     "ntdll-loading": 4,
+     "ntdll-loaded": 13,
+     "ready": 7,
+     "replied": 0,
+     "answered-parent": 0,
+     "wine-main": 2,
+     "first-dll": 68,
+     "last-dll": 48
+    },
+    "life": null
+   },
+   "181": {
+    "warm": false,
+    "attempts": 5,
+    "points": {
+     "received": -1,
+     "asked": -1,
+     "read": 108,
+     "answered": 186,
+     "main": 205,
+     "lock": 208,
+     "connected": 208,
+     "held": 208,
+     "sent": 208,
+     "control": 208,
+     "entry": 247,
+     "bootstrap": 253,
+     "payload-entry": 263,
+     "ntdll-loading": 266,
+     "ntdll-loaded": 278,
+     "ready": 286,
+     "replied": 286,
+     "answered-parent": 286,
+     "wine-main": 291
+    },
+    "steps": {
+     "read": 108,
+     "answered": 78,
+     "main": 19,
+     "lock": 3,
+     "connected": 0,
+     "held": 0,
+     "sent": 0,
+     "control": 0,
+     "entry": 39,
+     "bootstrap": 6,
+     "payload-entry": 10,
+     "ntdll-loading": 3,
+     "ntdll-loaded": 12,
+     "ready": 8,
+     "replied": 0,
+     "answered-parent": 0,
+     "wine-main": 5
+    },
+    "life": null
+   }
+  }
+ },
+ "foreign_mappings": {
+  "found": 0,
+  "skipped_unmaps": 0,
+  "refused_maps": 0,
+  "query_failed": 0,
+  "holes": 0,
+  "hole_list": []
+ },
+ "helper_sched": {
+  "helpers": [
+   {
+    "kind": "memory",
+    "mode": "rr",
+    "main_tid": "101609",
+    "entry": "1/700",
+    "entry_kernel": "10/700",
+    "entry_cpus": "0xea00",
+    "plain": "1/700",
+    "plain_kernel": "10/700",
+    "plain_cpus": "0xea00",
+    "service": "700",
+    "program": "767",
+    "program_cpus": "0",
+    "census": "0",
+    "error": "0",
+    "service_status": "0",
+    "now": "3/700",
+    "now_kernel": "2/700"
+   },
+   {
+    "kind": "program",
+    "mode": "rr",
+    "main_tid": "101431",
+    "entry": "1/700",
+    "entry_kernel": "10/700",
+    "entry_cpus": "0xffff",
+    "plain": "1/700",
+    "plain_kernel": "10/700",
+    "plain_cpus": "0xffff",
+    "service": "700",
+    "program": "767",
+    "program_cpus": "0",
+    "census": "0",
+    "error": "0",
+    "service_status": "0",
+    "now": "3/700",
+    "now_kernel": "2/700"
+   },
+   {
+    "kind": "program",
+    "mode": "rr",
+    "main_tid": "101583",
+    "entry": "1/700",
+    "entry_kernel": "10/700",
+    "entry_cpus": "0xffff",
+    "plain": "1/700",
+    "plain_kernel": "10/700",
+    "plain_cpus": "0xffff",
+    "service": "700",
+    "program": "767",
+    "program_cpus": "0",
+    "census": "0",
+    "error": "0",
+    "service_status": "0",
+    "now": "3/700",
+    "now_kernel": "2/700"
+   },
+   {
+    "kind": "program",
+    "mode": "rr",
+    "main_tid": "101598",
+    "entry": "1/700",
+    "entry_kernel": "10/700",
+    "entry_cpus": "0xffff",
+    "plain": "1/700",
+    "plain_kernel": "10/700",
+    "plain_cpus": "0xffff",
+    "service": "700",
+    "program": "767",
+    "program_cpus": "0",
+    "census": "0",
+    "error": "0",
+    "service_status": "0",
+    "now": "3/700",
+    "now_kernel": "2/700"
+   },
+   {
+    "kind": "program",
+    "mode": "rr",
+    "main_tid": "100218",
+    "entry": "1/700",
+    "entry_kernel": "10/700",
+    "entry_cpus": "0xffff",
+    "plain": "1/700",
+    "plain_kernel": "10/700",
+    "plain_cpus": "0xffff",
+    "service": "700",
+    "program": "767",
+    "program_cpus": "0",
+    "census": "0",
+    "error": "0",
+    "service_status": "0",
+    "now": "3/700",
+    "now_kernel": "2/700"
+   },
+   {
+    "kind": "program",
+    "mode": "rr",
+    "main_tid": "101891",
+    "entry": "1/700",
+    "entry_kernel": "10/700",
+    "entry_cpus": "0xffff",
+    "plain": "1/700",
+    "plain_kernel": "10/700",
+    "plain_cpus": "0xffff",
+    "service": "700",
+    "program": "767",
+    "program_cpus": "0",
+    "census": "0",
+    "error": "0",
+    "service_status": "0",
+    "now": "3/700",
+    "now_kernel": "2/700"
+   },
+   {
+    "kind": "program",
+    "mode": "rr",
+    "main_tid": "101682",
+    "entry": "1/700",
+    "entry_kernel": "10/700",
+    "entry_cpus": "0xffff",
+    "plain": "1/700",
+    "plain_kernel": "10/700",
+    "plain_cpus": "0xffff",
+    "service": "700",
+    "program": "767",
+    "program_cpus": "0",
+    "census": "0",
+    "error": "0",
+    "service_status": "0",
+    "now": "3/700",
+    "now_kernel": "2/700"
+   },
+   {
+    "kind": "program",
+    "mode": "rr",
+    "main_tid": "101474",
+    "entry": "1/700",
+    "entry_kernel": "10/700",
+    "entry_cpus": "0xffff",
+    "plain": "1/700",
+    "plain_kernel": "10/700",
+    "plain_cpus": "0xffff",
+    "service": "700",
+    "program": "767",
+    "program_cpus": "0",
+    "census": "0",
+    "error": "0",
+    "service_status": "0",
+    "now": "3/700",
+    "now_kernel": "2/700"
+   },
+   {
+    "kind": "program",
+    "mode": "rr",
+    "main_tid": "101787",
+    "entry": "1/700",
+    "entry_kernel": "10/700",
+    "entry_cpus": "0xffff",
+    "plain": "1/700",
+    "plain_kernel": "10/700",
+    "plain_cpus": "0xffff",
+    "service": "700",
+    "program": "767",
+    "program_cpus": "0",
+    "census": "0",
+    "error": "0",
+    "service_status": "0",
+    "now": "3/700",
+    "now_kernel": "2/700"
+   }
+  ],
+  "workers": [
+   {
+    "worker": "3/767",
+    "worker_kernel": "2/767",
+    "worker_cpus": "0xffff",
+    "status": "0",
+    "inherit": "3/767",
+    "inherit_kernel": "2/767",
+    "inherit_cpus": "0xffff"
+   },
+   {
+    "worker": "3/767",
+    "worker_kernel": "2/767",
+    "worker_cpus": "0xffff",
+    "status": "0",
+    "inherit": "3/767",
+    "inherit_kernel": "2/767",
+    "inherit_cpus": "0xffff"
+   },
+   {
+    "worker": "3/767",
+    "worker_kernel": "2/767",
+    "worker_cpus": "0xffff",
+    "status": "0",
+    "inherit": "3/767",
+    "inherit_kernel": "2/767",
+    "inherit_cpus": "0xffff"
+   },
+   {
+    "worker": "3/767",
+    "worker_kernel": "2/767",
+    "worker_cpus": "0xffff",
+    "status": "0",
+    "inherit": "3/767",
+    "inherit_kernel": "2/767",
+    "inherit_cpus": "0xffff"
+   },
+   {
+    "worker": "3/767",
+    "worker_kernel": "2/767",
+    "worker_cpus": "0xffff",
+    "status": "0",
+    "inherit": "3/767",
+    "inherit_kernel": "2/767",
+    "inherit_cpus": "0xffff"
+   },
+   {
+    "worker": "3/767",
+    "worker_kernel": "2/767",
+    "worker_cpus": "0xffff",
+    "status": "0",
+    "inherit": "3/767",
+    "inherit_kernel": "2/767",
+    "inherit_cpus": "0xffff"
+   },
+   {
+    "worker": "3/767",
+    "worker_kernel": "2/767",
+    "worker_cpus": "0xffff",
+    "status": "0",
+    "inherit": "3/767",
+    "inherit_kernel": "2/767",
+    "inherit_cpus": "0xffff"
+   },
+   {
+    "worker": "3/767",
+    "worker_kernel": "2/767",
+    "worker_cpus": "0xffff",
+    "status": "0",
+    "inherit": "3/767",
+    "inherit_kernel": "2/767",
+    "inherit_cpus": "0xffff"
+   }
+  ],
+  "program_threads": {
+   "set": 123,
+   "failed": 0
+  },
+  "census": null,
+  "census_processes": 0,
+  "row": null,
+  "scheduled": {
+   "ok": true,
+   "reasons": []
+  }
+ },
+ "helpers_ended": {
+  "why": "stop",
+  "count": 6,
+  "signals": {
+   "173": {
+    "outcome": "sent",
+    "errno": 0
+   },
+   "181": {
+    "outcome": "sent",
+    "errno": 0
+   },
+   "174": {
+    "outcome": "sent",
+    "errno": 0
+   },
+   "176": {
+    "outcome": "sent",
+    "errno": 0
+   },
+   "178": {
+    "outcome": "sent",
+    "errno": 0
+   },
+   "179": {
+    "outcome": "sent",
+    "errno": 0
+   }
+  },
+  "gone_ms": {
+   "173": 262,
+   "181": 262,
+   "174": 262,
+   "176": 262,
+   "178": 262,
+   "179": 262
+  },
+  "still_there": [],
+  "after_kill": {
+   "census_ms": 334,
+   "frames": 1,
+   "ms": 266
+  },
+  "stalled": null,
+  "wedge_s": null,
+  "recorder_rows": "process rows from kern.proc (the title's own: state=3 pri=10/0 cpu=11 threads=22)"
+ },
+ "helper_doom": [
+  {
+   "seen": [
+    "exit"
+   ],
+   "doomed": null,
+   "stamped_ms_ago": null,
+   "ended": true
+  }
+ ],
+ "broker_phases": null,
+ "memory_helper_slowest": null,
+ "memory_helper": {
+  "dead": [],
+  "stall_tests": 0,
+  "sections_mib": [
+   25,
+   25,
+   8,
+   16,
+   16
+  ],
+  "given_back": 2,
+  "lost": 0,
+  "gave_back_lines": 1
+ },
+ "assertion": false,
+ "chunk_maps": 30,
+ "mapped_mib": 54,
+ "ask_failures_max": 0,
+ "misplaced_max": 0,
+ "rep_step_us": null,
+ "exec_rewrites_us": null,
+ "exit_stall": false,
+ "stop_requested": "run budget reached",
+ "returned_to_launcher": true,
+ "touchpad_touched_at_start": 0,
+ "passed": true,
+ "bench": {},
+ "steady": {
+  "server": {
+   "calls": 6280.0,
+   "per_s": 1006.0,
+   "avg_us": 4.5,
+   "selects": 0.0,
+   "blocked": 0.0,
+   "block_avg_us": 0.0,
+   "waits": 1125.5,
+   "handles_avg": 1.145,
+   "wait_all": 0.0,
+   "polled": 558.0,
+   "delays": 82.5,
+   "yields": 0.0,
+   "intervals": 90
+  }
+ },
+ "intervals": {
+  "frames": [],
+  "server": [
+   {
+    "calls": 0.0,
+    "per_s": 0.0,
+    "avg_us": 0.0,
+    "selects": 0.0,
+    "blocked": 0.0,
+    "block_avg_us": 0.0,
+    "waits": 0.0,
+    "handles_avg": 0.0,
+    "wait_all": 0.0,
+    "polled": 0.0,
+    "delays": 0.0,
+    "yields": 0.0
+   },
+   {
+    "calls": 0.0,
+    "per_s": 0.0,
+    "avg_us": 0.0,
+    "selects": 0.0,
+    "blocked": 0.0,
+    "block_avg_us": 0.0,
+    "waits": 0.0,
+    "handles_avg": 0.0,
+    "wait_all": 0.0,
+    "polled": 0.0,
+    "delays": 0.0,
+    "yields": 0.0
+   },
+   {
+    "calls": 0.0,
+    "per_s": 0.0,
+    "avg_us": 0.0,
+    "selects": 0.0,
+    "blocked": 0.0,
+    "block_avg_us": 0.0,
+    "waits": 0.0,
+    "handles_avg": 0.0,
+    "wait_all": 0.0,
+    "polled": 0.0,
+    "delays": 0.0,
+    "yields": 0.0
+   },
+   {
+    "calls": 0.0,
+    "per_s": 0.0,
+    "avg_us": 0.0,
+    "selects": 0.0,
+    "blocked": 0.0,
+    "block_avg_us": 0.0,
+    "waits": 0.0,
+    "handles_avg": 0.0,
+    "wait_all": 0.0,
+    "polled": 0.0,
+    "delays": 0.0,
+    "yields": 0.0
+   },
+   {
+    "calls": 0.0,
+    "per_s": 0.0,
+    "avg_us": 0.0,
+    "selects": 0.0,
+    "blocked": 0.0,
+    "block_avg_us": 0.0,
+    "waits": 0.0,
+    "handles_avg": 0.0,
+    "wait_all": 0.0,
+    "polled": 0.0,
+    "delays": 0.0,
+    "yields": 0.0
+   },
+   {
+    "calls": 0.0,
+    "per_s": 0.0,
+    "avg_us": 0.0,
+    "selects": 0.0,
+    "blocked": 0.0,
+    "block_avg_us": 0.0,
+    "waits": 0.0,
+    "handles_avg": 0.0,
+    "wait_all": 0.0,
+    "polled": 0.0,
+    "delays": 0.0,
+    "yields": 0.0
+   },
+   {
+    "calls": 0.0,
+    "per_s": 0.0,
+    "avg_us": 0.0,
+    "selects": 0.0,
+    "blocked": 0.0,
+    "block_avg_us": 0.0,
+    "waits": 0.0,
+    "handles_avg": 0.0,
+    "wait_all": 0.0,
+    "polled": 0.0,
+    "delays": 0.0,
+    "yields": 0.0
+   },
+   {
+    "calls": 0.0,
+    "per_s": 0.0,
+    "avg_us": 0.0,
+    "selects": 0.0,
+    "blocked": 0.0,
+    "block_avg_us": 0.0,
+    "waits": 0.0,
+    "handles_avg": 0.0,
+    "wait_all": 0.0,
+    "polled": 0.0,
+    "delays": 0.0,
+    "yields": 0.0
+   },
+   {
+    "calls": 0.0,
+    "per_s": 0.0,
+    "avg_us": 0.0,
+    "selects": 0.0,
+    "blocked": 0.0,
+    "block_avg_us": 0.0,
+    "waits": 0.0,
+    "handles_avg": 0.0,
+    "wait_all": 0.0,
+    "polled": 0.0,
+    "delays": 0.0,
+    "yields": 0.0
+   },
+   {
+    "calls": 0.0,
+    "per_s": 0.0,
+    "avg_us": 0.0,
+    "selects": 0.0,
+    "blocked": 0.0,
+    "block_avg_us": 0.0,
+    "waits": 0.0,
+    "handles_avg": 0.0,
+    "wait_all": 0.0,
+    "polled": 0.0,
+    "delays": 0.0,
+    "yields": 0.0
+   },
+   {
+    "calls": 0.0,
+    "per_s": 0.0,
+    "avg_us": 0.0,
+    "selects": 0.0,
+    "blocked": 0.0,
+    "block_avg_us": 0.0,
+    "waits": 0.0,
+    "handles_avg": 0.0,
+    "wait_all": 0.0,
+    "polled": 0.0,
+    "delays": 0.0,
+    "yields": 0.0
+   },
+   {
+    "calls": 0.0,
+    "per_s": 0.0,
+    "avg_us": 0.0,
+    "selects": 0.0,
+    "blocked": 0.0,
+    "block_avg_us": 0.0,
+    "waits": 0.0,
+    "handles_avg": 0.0,
+    "wait_all": 0.0,
+    "polled": 0.0,
+    "delays": 0.0,
+    "yields": 0.0
+   },
+   {
+    "calls": 0.0,
+    "per_s": 0.0,
+    "avg_us": 0.0,
+    "selects": 0.0,
+    "blocked": 0.0,
+    "block_avg_us": 0.0,
+    "waits": 0.0,
+    "handles_avg": 0.0,
+    "wait_all": 0.0,
+    "polled": 0.0,
+    "delays": 0.0,
+    "yields": 0.0
+   },
+   {
+    "calls": 0.0,
+    "per_s": 0.0,
+    "avg_us": 0.0,
+    "selects": 0.0,
+    "blocked": 0.0,
+    "block_avg_us": 0.0,
+    "waits": 0.0,
+    "handles_avg": 0.0,
+    "wait_all": 0.0,
+    "polled": 0.0,
+    "delays": 0.0,
+    "yields": 0.0
+   },
+   {
+    "calls": 0.0,
+    "per_s": 0.0,
+    "avg_us": 0.0,
+    "selects": 0.0,
+    "blocked": 0.0,
+    "block_avg_us": 0.0,
+    "waits": 0.0,
+    "handles_avg": 0.0,
+    "wait_all": 0.0,
+    "polled": 0.0,
+    "delays": 0.0,
+    "yields": 0.0
+   },
+   {
+    "calls": 0.0,
+    "per_s": 0.0,
+    "avg_us": 0.0,
+    "selects": 0.0,
+    "blocked": 0.0,
+    "block_avg_us": 0.0,
+    "waits": 0.0,
+    "handles_avg": 0.0,
+    "wait_all": 0.0,
+    "polled": 0.0,
+    "delays": 0.0,
+    "yields": 0.0
+   },
+   {
+    "calls": 0.0,
+    "per_s": 0.0,
+    "avg_us": 0.0,
+    "selects": 0.0,
+    "blocked": 0.0,
+    "block_avg_us": 0.0,
+    "waits": 0.0,
+    "handles_avg": 0.0,
+    "wait_all": 0.0,
+    "polled": 0.0,
+    "delays": 0.0,
+    "yields": 0.0
+   },
+   {
+    "calls": 0.0,
+    "per_s": 0.0,
+    "avg_us": 0.0,
+    "selects": 0.0,
+    "blocked": 0.0,
+    "block_avg_us": 0.0,
+    "waits": 0.0,
+    "handles_avg": 0.0,
+    "wait_all": 0.0,
+    "polled": 0.0,
+    "delays": 0.0,
+    "yields": 0.0
+   },
+   {
+    "calls": 0.0,
+    "per_s": 0.0,
+    "avg_us": 0.0,
+    "selects": 0.0,
+    "blocked": 0.0,
+    "block_avg_us": 0.0,
+    "waits": 0.0,
+    "handles_avg": 0.0,
+    "wait_all": 0.0,
+    "polled": 0.0,
+    "delays": 0.0,
+    "yields": 0.0
+   },
+   {
+    "calls": 0.0,
+    "per_s": 0.0,
+    "avg_us": 0.0,
+    "selects": 0.0,
+    "blocked": 0.0,
+    "block_avg_us": 0.0,
+    "waits": 0.0,
+    "handles_avg": 0.0,
+    "wait_all": 0.0,
+    "polled": 0.0,
+    "delays": 0.0,
+    "yields": 0.0
+   },
+   {
+    "calls": 0.0,
+    "per_s": 0.0,
+    "avg_us": 0.0,
+    "selects": 0.0,
+    "blocked": 0.0,
+    "block_avg_us": 0.0,
+    "waits": 0.0,
+    "handles_avg": 0.0,
+    "wait_all": 0.0,
+    "polled": 0.0,
+    "delays": 0.0,
+    "yields": 0.0
+   },
+   {
+    "calls": 0.0,
+    "per_s": 0.0,
+    "avg_us": 0.0,
+    "selects": 0.0,
+    "blocked": 0.0,
+    "block_avg_us": 0.0,
+    "waits": 0.0,
+    "handles_avg": 0.0,
+    "wait_all": 0.0,
+    "polled": 0.0,
+    "delays": 0.0,
+    "yields": 0.0
+   },
+   {
+    "calls": 0.0,
+    "per_s": 0.0,
+    "avg_us": 0.0,
+    "selects": 0.0,
+    "blocked": 0.0,
+    "block_avg_us": 0.0,
+    "waits": 0.0,
+    "handles_avg": 0.0,
+    "wait_all": 0.0,
+    "polled": 0.0,
+    "delays": 0.0,
+    "yields": 0.0
+   },
+   {
+    "calls": 0.0,
+    "per_s": 0.0,
+    "avg_us": 0.0,
+    "selects": 0.0,
+    "blocked": 0.0,
+    "block_avg_us": 0.0,
+    "waits": 0.0,
+    "handles_avg": 0.0,
+    "wait_all": 0.0,
+    "polled": 0.0,
+    "delays": 0.0,
+    "yields": 0.0
+   },
+   {
+    "calls": 0.0,
+    "per_s": 0.0,
+    "avg_us": 0.0,
+    "selects": 0.0,
+    "blocked": 0.0,
+    "block_avg_us": 0.0,
+    "waits": 0.0,
+    "handles_avg": 0.0,
+    "wait_all": 0.0,
+    "polled": 0.0,
+    "delays": 0.0,
+    "yields": 0.0
+   },
+   {
+    "calls": 0.0,
+    "per_s": 0.0,
+    "avg_us": 0.0,
+    "selects": 0.0,
+    "blocked": 0.0,
+    "block_avg_us": 0.0,
+    "waits": 0.0,
+    "handles_avg": 0.0,
+    "wait_all": 0.0,
+    "polled": 0.0,
+    "delays": 0.0,
+    "yields": 0.0
+   },
+   {
+    "calls": 0.0,
+    "per_s": 0.0,
+    "avg_us": 0.0,
+    "selects": 0.0,
+    "blocked": 0.0,
+    "block_avg_us": 0.0,
+    "waits": 0.0,
+    "handles_avg": 0.0,
+    "wait_all": 0.0,
+    "polled": 0.0,
+    "delays": 0.0,
+    "yields": 0.0
+   },
+   {
+    "calls": 0.0,
+    "per_s": 0.0,
+    "avg_us": 0.0,
+    "selects": 0.0,
+    "blocked": 0.0,
+    "block_avg_us": 0.0,
+    "waits": 0.0,
+    "handles_avg": 0.0,
+    "wait_all": 0.0,
+    "polled": 0.0,
+    "delays": 0.0,
+    "yields": 0.0
+   },
+   {
+    "calls": 0.0,
+    "per_s": 0.0,
+    "avg_us": 0.0,
+    "selects": 0.0,
+    "blocked": 0.0,
+    "block_avg_us": 0.0,
+    "waits": 0.0,
+    "handles_avg": 0.0,
+    "wait_all": 0.0,
+    "polled": 0.0,
+    "delays": 0.0,
+    "yields": 0.0
+   },
+   {
+    "calls": 0.0,
+    "per_s": 0.0,
+    "avg_us": 0.0,
+    "selects": 0.0,
+    "blocked": 0.0,
+    "block_avg_us": 0.0,
+    "waits": 0.0,
+    "handles_avg": 0.0,
+    "wait_all": 0.0,
+    "polled": 0.0,
+    "delays": 0.0,
+    "yields": 0.0
+   },
+   {
+    "calls": 0.0,
+    "per_s": 0.0,
+    "avg_us": 0.0,
+    "selects": 0.0,
+    "blocked": 0.0,
+    "block_avg_us": 0.0,
+    "waits": 0.0,
+    "handles_avg": 0.0,
+    "wait_all": 0.0,
+    "polled": 0.0,
+    "delays": 0.0,
+    "yields": 0.0
+   },
+   {
+    "calls": 0.0,
+    "per_s": 0.0,
+    "avg_us": 0.0,
+    "selects": 0.0,
+    "blocked": 0.0,
+    "block_avg_us": 0.0,
+    "waits": 0.0,
+    "handles_avg": 0.0,
+    "wait_all": 0.0,
+    "polled": 0.0,
+    "delays": 0.0,
+    "yields": 0.0
+   },
+   {
+    "calls": 0.0,
+    "per_s": 0.0,
+    "avg_us": 0.0,
+    "selects": 0.0,
+    "blocked": 0.0,
+    "block_avg_us": 0.0,
+    "waits": 0.0,
+    "handles_avg": 0.0,
+    "wait_all": 0.0,
+    "polled": 0.0,
+    "delays": 0.0,
+    "yields": 0.0
+   },
+   {
+    "calls": 0.0,
+    "per_s": 0.0,
+    "avg_us": 0.0,
+    "selects": 0.0,
+    "blocked": 0.0,
+    "block_avg_us": 0.0,
+    "waits": 0.0,
+    "handles_avg": 0.0,
+    "wait_all": 0.0,
+    "polled": 0.0,
+    "delays": 0.0,
+    "yields": 0.0
+   },
+   {
+    "calls": 0.0,
+    "per_s": 0.0,
+    "avg_us": 0.0,
+    "selects": 0.0,
+    "blocked": 0.0,
+    "block_avg_us": 0.0,
+    "waits": 0.0,
+    "handles_avg": 0.0,
+    "wait_all": 0.0,
+    "polled": 0.0,
+    "delays": 0.0,
+    "yields": 0.0
+   },
+   {
+    "calls": 0.0,
+    "per_s": 0.0,
+    "avg_us": 0.0,
+    "selects": 0.0,
+    "blocked": 0.0,
+    "block_avg_us": 0.0,
+    "waits": 0.0,
+    "handles_avg": 0.0,
+    "wait_all": 0.0,
+    "polled": 0.0,
+    "delays": 0.0,
+    "yields": 0.0
+   },
+   {
+    "calls": 0.0,
+    "per_s": 0.0,
+    "avg_us": 0.0,
+    "selects": 0.0,
+    "blocked": 0.0,
+    "block_avg_us": 0.0,
+    "waits": 0.0,
+    "handles_avg": 0.0,
+    "wait_all": 0.0,
+    "polled": 0.0,
+    "delays": 0.0,
+    "yields": 0.0
+   },
+   {
+    "calls": 0.0,
+    "per_s": 0.0,
+    "avg_us": 0.0,
+    "selects": 0.0,
+    "blocked": 0.0,
+    "block_avg_us": 0.0,
+    "waits": 0.0,
+    "handles_avg": 0.0,
+    "wait_all": 0.0,
+    "polled": 0.0,
+    "delays": 0.0,
+    "yields": 0.0
+   },
+   {
+    "calls": 0.0,
+    "per_s": 0.0,
+    "avg_us": 0.0,
+    "selects": 0.0,
+    "blocked": 0.0,
+    "block_avg_us": 0.0,
+    "waits": 0.0,
+    "handles_avg": 0.0,
+    "wait_all": 0.0,
+    "polled": 0.0,
+    "delays": 0.0,
+    "yields": 0.0
+   },
+   {
+    "calls": 0.0,
+    "per_s": 0.0,
+    "avg_us": 0.0,
+    "selects": 0.0,
+    "blocked": 0.0,
+    "block_avg_us": 0.0,
+    "waits": 0.0,
+    "handles_avg": 0.0,
+    "wait_all": 0.0,
+    "polled": 0.0,
+    "delays": 0.0,
+    "yields": 0.0
+   },
+   {
+    "calls": 0.0,
+    "per_s": 0.0,
+    "avg_us": 0.0,
+    "selects": 0.0,
+    "blocked": 0.0,
+    "block_avg_us": 0.0,
+    "waits": 0.0,
+    "handles_avg": 0.0,
+    "wait_all": 0.0,
+    "polled": 0.0,
+    "delays": 0.0,
+    "yields": 0.0
+   },
+   {
+    "calls": 0.0,
+    "per_s": 0.0,
+    "avg_us": 0.0,
+    "selects": 0.0,
+    "blocked": 0.0,
+    "block_avg_us": 0.0,
+    "waits": 0.0,
+    "handles_avg": 0.0,
+    "wait_all": 0.0,
+    "polled": 0.0,
+    "delays": 0.0,
+    "yields": 0.0
+   },
+   {
+    "calls": 0.0,
+    "per_s": 0.0,
+    "avg_us": 0.0,
+    "selects": 0.0,
+    "blocked": 0.0,
+    "block_avg_us": 0.0,
+    "waits": 0.0,
+    "handles_avg": 0.0,
+    "wait_all": 0.0,
+    "polled": 0.0,
+    "delays": 0.0,
+    "yields": 0.0
+   },
+   {
+    "calls": 0.0,
+    "per_s": 0.0,
+    "avg_us": 0.0,
+    "selects": 0.0,
+    "blocked": 0.0,
+    "block_avg_us": 0.0,
+    "waits": 0.0,
+    "handles_avg": 0.0,
+    "wait_all": 0.0,
+    "polled": 0.0,
+    "delays": 0.0,
+    "yields": 0.0
+   },
+   {
+    "calls": 9.0,
+    "per_s": 1.0,
+    "avg_us": 45.7,
+    "selects": 0.0,
+    "blocked": 0.0,
+    "block_avg_us": 0.0,
+    "waits": 0.0,
+    "handles_avg": 0.0,
+    "wait_all": 0.0,
+    "polled": 0.0,
+    "delays": 0.0,
+    "yields": 0.0
+   },
+   {
+    "calls": 7243.0,
+    "per_s": 1089.0,
+    "avg_us": 461.1,
+    "selects": 9.0,
+    "blocked": 1.0,
+    "block_avg_us": 1251403.6,
+    "waits": 553.0,
+    "handles_avg": 1.16,
+    "wait_all": 0.0,
+    "polled": 172.0,
+    "delays": 18.0,
+    "yields": 13.0
+   },
+   {
+    "calls": 11747.0,
+    "per_s": 2298.0,
+    "avg_us": 302.4,
+    "selects": 268.0,
+    "blocked": 0.0,
+    "block_avg_us": 0.0,
+    "waits": 1698.0,
+    "handles_avg": 1.25,
+    "wait_all": 0.0,
+    "polled": 944.0,
+    "delays": 147.0,
+    "yields": 0.0
+   },
+   {
+    "calls": 13000.0,
+    "per_s": 2519.0,
+    "avg_us": 14.0,
+    "selects": 148.0,
+    "blocked": 34.0,
+    "block_avg_us": 371.9,
+    "waits": 5803.0,
+    "handles_avg": 1.28,
+    "wait_all": 0.0,
+    "polled": 2819.0,
+    "delays": 6799.0,
+    "yields": 5916.0
+   },
+   {
+    "calls": 6334.0,
+    "per_s": 1241.0,
+    "avg_us": 4.7,
+    "selects": 11.0,
+    "blocked": 0.0,
+    "block_avg_us": 0.0,
+    "waits": 2222.0,
+    "handles_avg": 1.28,
+    "wait_all": 0.0,
+    "polled": 1259.0,
+    "delays": 630.0,
+    "yields": 0.0
+   },
+   {
+    "calls": 6326.0,
+    "per_s": 923.0,
+    "avg_us": 280.2,
+    "selects": 0.0,
+    "blocked": 0.0,
+    "block_avg_us": 0.0,
+    "waits": 2350.0,
+    "handles_avg": 1.27,
+    "wait_all": 0.0,
+    "polled": 1271.0,
+    "delays": 846.0,
+    "yields": 0.0
+   },
+   {
+    "calls": 6300.0,
+    "per_s": 1234.0,
+    "avg_us": 4.6,
+    "selects": 0.0,
+    "blocked": 0.0,
+    "block_avg_us": 0.0,
+    "waits": 2224.0,
+    "handles_avg": 1.28,
+    "wait_all": 0.0,
+    "polled": 1261.0,
+    "delays": 630.0,
+    "yields": 0.0
+   },
+   {
+    "calls": 6280.0,
+    "per_s": 1232.0,
+    "avg_us": 4.5,
+    "selects": 0.0,
+    "blocked": 0.0,
+    "block_avg_us": 0.0,
+    "waits": 2218.0,
+    "handles_avg": 1.28,
+    "wait_all": 0.0,
+    "polled": 1258.0,
+    "delays": 629.0,
+    "yields": 0.0
+   },
+   {
+    "calls": 6300.0,
+    "per_s": 1232.0,
+    "avg_us": 4.5,
+    "selects": 0.0,
+    "blocked": 0.0,
+    "block_avg_us": 0.0,
+    "waits": 2224.0,
+    "handles_avg": 1.28,
+    "wait_all": 0.0,
+    "polled": 1261.0,
+    "delays": 630.0,
+    "yields": 0.0
+   },
+   {
+    "calls": 6290.0,
+    "per_s": 1234.0,
+    "avg_us": 4.5,
+    "selects": 0.0,
+    "blocked": 0.0,
+    "block_avg_us": 0.0,
+    "waits": 2221.0,
+    "handles_avg": 1.28,
+    "wait_all": 0.0,
+    "polled": 1259.0,
+    "delays": 629.0,
+    "yields": 0.0
+   },
+   {
+    "calls": 6310.0,
+    "per_s": 1234.0,
+    "avg_us": 4.6,
+    "selects": 0.0,
+    "blocked": 0.0,
+    "block_avg_us": 0.0,
+    "waits": 2230.0,
+    "handles_avg": 1.28,
+    "wait_all": 0.0,
+    "polled": 1263.0,
+    "delays": 631.0,
+    "yields": 0.0
+   },
+   {
+    "calls": 6280.0,
+    "per_s": 1232.0,
+    "avg_us": 4.6,
+    "selects": 0.0,
+    "blocked": 0.0,
+    "block_avg_us": 0.0,
+    "waits": 2217.0,
+    "handles_avg": 1.28,
+    "wait_all": 0.0,
+    "polled": 1257.0,
+    "delays": 629.0,
+    "yields": 0.0
+   },
+   {
+    "calls": 6310.0,
+    "per_s": 1234.0,
+    "avg_us": 4.6,
+    "selects": 0.0,
+    "blocked": 0.0,
+    "block_avg_us": 0.0,
+    "waits": 2228.0,
+    "handles_avg": 1.28,
+    "wait_all": 0.0,
+    "polled": 1263.0,
+    "delays": 631.0,
+    "yields": 0.0
+   },
+   {
+    "calls": 6280.0,
+    "per_s": 1232.0,
+    "avg_us": 4.5,
+    "selects": 0.0,
+    "blocked": 0.0,
+    "block_avg_us": 0.0,
+    "waits": 2221.0,
+    "handles_avg": 1.28,
+    "wait_all": 0.0,
+    "polled": 1257.0,
+    "delays": 629.0,
+    "yields": 0.0
+   },
+   {
+    "calls": 6300.0,
+    "per_s": 1233.0,
+    "avg_us": 4.5,
+    "selects": 0.0,
+    "blocked": 0.0,
+    "block_avg_us": 0.0,
+    "waits": 2223.0,
+    "handles_avg": 1.28,
+    "wait_all": 0.0,
+    "polled": 1261.0,
+    "delays": 630.0,
+    "yields": 0.0
+   },
+   {
+    "calls": 6290.0,
+    "per_s": 1234.0,
+    "avg_us": 4.5,
+    "selects": 0.0,
+    "blocked": 0.0,
+    "block_avg_us": 0.0,
+    "waits": 2221.0,
+    "handles_avg": 1.28,
+    "wait_all": 0.0,
+    "polled": 1259.0,
+    "delays": 629.0,
+    "yields": 0.0
+   },
+   {
+    "calls": 6300.0,
+    "per_s": 1232.0,
+    "avg_us": 4.6,
+    "selects": 0.0,
+    "blocked": 0.0,
+    "block_avg_us": 0.0,
+    "waits": 2223.0,
+    "handles_avg": 1.28,
+    "wait_all": 0.0,
+    "polled": 1261.0,
+    "delays": 631.0,
+    "yields": 0.0
+   },
+   {
+    "calls": 6290.0,
+    "per_s": 1234.0,
+    "avg_us": 4.5,
+    "selects": 0.0,
+    "blocked": 0.0,
+    "block_avg_us": 0.0,
+    "waits": 2222.0,
+    "handles_avg": 1.28,
+    "wait_all": 0.0,
+    "polled": 1259.0,
+    "delays": 629.0,
+    "yields": 0.0
+   },
+   {
+    "calls": 6300.0,
+    "per_s": 1232.0,
+    "avg_us": 4.5,
+    "selects": 0.0,
+    "blocked": 0.0,
+    "block_avg_us": 0.0,
+    "waits": 2225.0,
+    "handles_avg": 1.28,
+    "wait_all": 0.0,
+    "polled": 1261.0,
+    "delays": 631.0,
+    "yields": 0.0
+   },
+   {
+    "calls": 6290.0,
+    "per_s": 1234.0,
+    "avg_us": 4.6,
+    "selects": 0.0,
+    "blocked": 0.0,
+    "block_avg_us": 0.0,
+    "waits": 2221.0,
+    "handles_avg": 1.28,
+    "wait_all": 0.0,
+    "polled": 1259.0,
+    "delays": 629.0,
+    "yields": 0.0
+   },
+   {
+    "calls": 6300.0,
+    "per_s": 1232.0,
+    "avg_us": 4.7,
+    "selects": 0.0,
+    "blocked": 0.0,
+    "block_avg_us": 0.0,
+    "waits": 2226.0,
+    "handles_avg": 1.28,
+    "wait_all": 0.0,
+    "polled": 1261.0,
+    "delays": 631.0,
+    "yields": 0.0
+   },
+   {
+    "calls": 6290.0,
+    "per_s": 1234.0,
+    "avg_us": 4.6,
+    "selects": 0.0,
+    "blocked": 0.0,
+    "block_avg_us": 0.0,
+    "waits": 2221.0,
+    "handles_avg": 1.28,
+    "wait_all": 0.0,
+    "polled": 1259.0,
+    "delays": 628.0,
+    "yields": 0.0
+   },
+   {
+    "calls": 6300.0,
+    "per_s": 1232.0,
+    "avg_us": 4.6,
+    "selects": 0.0,
+    "blocked": 0.0,
+    "block_avg_us": 0.0,
+    "waits": 2223.0,
+    "handles_avg": 1.28,
+    "wait_all": 0.0,
+    "polled": 1261.0,
+    "delays": 631.0,
+    "yields": 0.0
+   },
+   {
+    "calls": 6290.0,
+    "per_s": 1234.0,
+    "avg_us": 4.6,
+    "selects": 0.0,
+    "blocked": 0.0,
+    "block_avg_us": 0.0,
+    "waits": 2222.0,
+    "handles_avg": 1.28,
+    "wait_all": 0.0,
+    "polled": 1259.0,
+    "delays": 629.0,
+    "yields": 0.0
+   },
+   {
+    "calls": 6300.0,
+    "per_s": 1232.0,
+    "avg_us": 4.6,
+    "selects": 0.0,
+    "blocked": 0.0,
+    "block_avg_us": 0.0,
+    "waits": 2225.0,
+    "handles_avg": 1.28,
+    "wait_all": 0.0,
+    "polled": 1261.0,
+    "delays": 631.0,
+    "yields": 0.0
+   },
+   {
+    "calls": 6290.0,
+    "per_s": 1234.0,
+    "avg_us": 4.6,
+    "selects": 0.0,
+    "blocked": 0.0,
+    "block_avg_us": 0.0,
+    "waits": 2221.0,
+    "handles_avg": 1.28,
+    "wait_all": 0.0,
+    "polled": 1259.0,
+    "delays": 629.0,
+    "yields": 0.0
+   },
+   {
+    "calls": 6310.0,
+    "per_s": 1234.0,
+    "avg_us": 4.5,
+    "selects": 0.0,
+    "blocked": 0.0,
+    "block_avg_us": 0.0,
+    "waits": 2228.0,
+    "handles_avg": 1.28,
+    "wait_all": 0.0,
+    "polled": 1263.0,
+    "delays": 631.0,
+    "yields": 0.0
+   },
+   {
+    "calls": 6280.0,
+    "per_s": 1232.0,
+    "avg_us": 4.6,
+    "selects": 0.0,
+    "blocked": 0.0,
+    "block_avg_us": 0.0,
+    "waits": 2219.0,
+    "handles_avg": 1.28,
+    "wait_all": 0.0,
+    "polled": 1257.0,
+    "delays": 629.0,
+    "yields": 0.0
+   },
+   {
+    "calls": 6310.0,
+    "per_s": 1234.0,
+    "avg_us": 4.5,
+    "selects": 0.0,
+    "blocked": 0.0,
+    "block_avg_us": 0.0,
+    "waits": 2229.0,
+    "handles_avg": 1.28,
+    "wait_all": 0.0,
+    "polled": 1263.0,
+    "delays": 630.0,
+    "yields": 0.0
+   },
+   {
+    "calls": 6280.0,
+    "per_s": 1232.0,
+    "avg_us": 4.6,
+    "selects": 0.0,
+    "blocked": 0.0,
+    "block_avg_us": 0.0,
+    "waits": 2218.0,
+    "handles_avg": 1.28,
+    "wait_all": 0.0,
+    "polled": 1257.0,
+    "delays": 629.0,
+    "yields": 0.0
+   },
+   {
+    "calls": 6300.0,
+    "per_s": 1232.0,
+    "avg_us": 4.5,
+    "selects": 0.0,
+    "blocked": 0.0,
+    "block_avg_us": 0.0,
+    "waits": 2226.0,
+    "handles_avg": 1.28,
+    "wait_all": 0.0,
+    "polled": 1261.0,
+    "delays": 631.0,
+    "yields": 0.0
+   },
+   {
+    "calls": 6290.0,
+    "per_s": 1234.0,
+    "avg_us": 4.5,
+    "selects": 0.0,
+    "blocked": 0.0,
+    "block_avg_us": 0.0,
+    "waits": 2221.0,
+    "handles_avg": 1.28,
+    "wait_all": 0.0,
+    "polled": 1259.0,
+    "delays": 628.0,
+    "yields": 0.0
+   },
+   {
+    "calls": 6290.0,
+    "per_s": 1232.0,
+    "avg_us": 4.7,
+    "selects": 0.0,
+    "blocked": 0.0,
+    "block_avg_us": 0.0,
+    "waits": 2221.0,
+    "handles_avg": 1.28,
+    "wait_all": 0.0,
+    "polled": 1259.0,
+    "delays": 630.0,
+    "yields": 0.0
+   },
+   {
+    "calls": 6300.0,
+    "per_s": 1234.0,
+    "avg_us": 4.7,
+    "selects": 0.0,
+    "blocked": 0.0,
+    "block_avg_us": 0.0,
+    "waits": 2226.0,
+    "handles_avg": 1.28,
+    "wait_all": 0.0,
+    "polled": 1261.0,
+    "delays": 630.0,
+    "yields": 0.0
+   },
+   {
+    "calls": 6290.0,
+    "per_s": 1233.0,
+    "avg_us": 4.5,
+    "selects": 0.0,
+    "blocked": 0.0,
+    "block_avg_us": 0.0,
+    "waits": 2220.0,
+    "handles_avg": 1.28,
+    "wait_all": 0.0,
+    "polled": 1259.0,
+    "delays": 630.0,
+    "yields": 0.0
+   },
+   {
+    "calls": 6300.0,
+    "per_s": 1234.0,
+    "avg_us": 4.5,
+    "selects": 0.0,
+    "blocked": 0.0,
+    "block_avg_us": 0.0,
+    "waits": 2226.0,
+    "handles_avg": 1.28,
+    "wait_all": 0.0,
+    "polled": 1261.0,
+    "delays": 630.0,
+    "yields": 0.0
+   },
+   {
+    "calls": 6290.0,
+    "per_s": 1232.0,
+    "avg_us": 4.4,
+    "selects": 0.0,
+    "blocked": 0.0,
+    "block_avg_us": 0.0,
+    "waits": 2226.0,
+    "handles_avg": 1.28,
+    "wait_all": 0.0,
+    "polled": 1259.0,
+    "delays": 630.0,
+    "yields": 0.0
+   },
+   {
+    "calls": 6300.0,
+    "per_s": 1234.0,
+    "avg_us": 4.6,
+    "selects": 0.0,
+    "blocked": 0.0,
+    "block_avg_us": 0.0,
+    "waits": 2226.0,
+    "handles_avg": 1.28,
+    "wait_all": 0.0,
+    "polled": 1261.0,
+    "delays": 629.0,
+    "yields": 0.0
+   },
+   {
+    "calls": 6300.0,
+    "per_s": 1234.0,
+    "avg_us": 4.5,
+    "selects": 0.0,
+    "blocked": 0.0,
+    "block_avg_us": 0.0,
+    "waits": 2225.0,
+    "handles_avg": 1.28,
+    "wait_all": 0.0,
+    "polled": 1261.0,
+    "delays": 630.0,
+    "yields": 0.0
+   },
+   {
+    "calls": 6290.0,
+    "per_s": 1232.0,
+    "avg_us": 4.5,
+    "selects": 0.0,
+    "blocked": 0.0,
+    "block_avg_us": 0.0,
+    "waits": 2222.0,
+    "handles_avg": 1.28,
+    "wait_all": 0.0,
+    "polled": 1259.0,
+    "delays": 630.0,
+    "yields": 0.0
+   },
+   {
+    "calls": 6300.0,
+    "per_s": 1234.0,
+    "avg_us": 4.6,
+    "selects": 0.0,
+    "blocked": 0.0,
+    "block_avg_us": 0.0,
+    "waits": 2222.0,
+    "handles_avg": 1.28,
+    "wait_all": 0.0,
+    "polled": 1261.0,
+    "delays": 630.0,
+    "yields": 0.0
+   },
+   {
+    "calls": 6290.0,
+    "per_s": 1232.0,
+    "avg_us": 4.5,
+    "selects": 0.0,
+    "blocked": 0.0,
+    "block_avg_us": 0.0,
+    "waits": 2224.0,
+    "handles_avg": 1.28,
+    "wait_all": 0.0,
+    "polled": 1259.0,
+    "delays": 630.0,
+    "yields": 0.0
+   },
+   {
+    "calls": 6300.0,
+    "per_s": 1234.0,
+    "avg_us": 4.5,
+    "selects": 0.0,
+    "blocked": 0.0,
+    "block_avg_us": 0.0,
+    "waits": 2227.0,
+    "handles_avg": 1.28,
+    "wait_all": 0.0,
+    "polled": 1261.0,
+    "delays": 630.0,
+    "yields": 0.0
+   },
+   {
+    "calls": 6290.0,
+    "per_s": 1232.0,
+    "avg_us": 4.6,
+    "selects": 0.0,
+    "blocked": 0.0,
+    "block_avg_us": 0.0,
+    "waits": 2221.0,
+    "handles_avg": 1.28,
+    "wait_all": 0.0,
+    "polled": 1259.0,
+    "delays": 629.0,
+    "yields": 0.0
+   },
+   {
+    "calls": 6300.0,
+    "per_s": 1234.0,
+    "avg_us": 4.6,
+    "selects": 0.0,
+    "blocked": 0.0,
+    "block_avg_us": 0.0,
+    "waits": 2226.0,
+    "handles_avg": 1.28,
+    "wait_all": 0.0,
+    "polled": 1261.0,
+    "delays": 630.0,
+    "yields": 0.0
+   },
+   {
+    "calls": 6310.0,
+    "per_s": 1235.0,
+    "avg_us": 4.5,
+    "selects": 0.0,
+    "blocked": 0.0,
+    "block_avg_us": 0.0,
+    "waits": 4788.0,
+    "handles_avg": 1.13,
+    "wait_all": 0.0,
+    "polled": 3309.0,
+    "delays": 631.0,
+    "yields": 0.0
+   },
+   {
+    "calls": 6290.0,
+    "per_s": 1233.0,
+    "avg_us": 4.5,
+    "selects": 0.0,
+    "blocked": 0.0,
+    "block_avg_us": 0.0,
+    "waits": 2219.0,
+    "handles_avg": 1.28,
+    "wait_all": 0.0,
+    "polled": 1259.0,
+    "delays": 629.0,
+    "yields": 0.0
+   }
+  ],
+  "top": [
+   {
+    "get_startup_info": {
+     "count": 1,
+     "avg_us": 121.8
+    },
+    "close_handle": {
+     "count": 2,
+     "avg_us": 54.3
+    },
+    "init_first_thread": {
+     "count": 1,
+     "avg_us": 49.1
+    },
+    "open_mapping": {
+     "count": 1,
+     "avg_us": 35.8
+    },
+    "get_handle_fd": {
+     "count": 1,
+     "avg_us": 33.0
+    }
+   },
+   {
+    "create_mapping": {
+     "count": 357,
+     "avg_us": 4772.2
+    },
+    "create_file": {
+     "count": 380,
+     "avg_us": 2206.7
+    },
+    "map_view": {
+     "count": 88,
+     "avg_us": 6497.5
+    },
+    "close_handle": {
+     "count": 1243,
+     "avg_us": 63.8
+    },
+    "map_image_view": {
+     "count": 79,
+     "avg_us": 699.4
+    }
+   },
+   {
+    "close_handle": {
+     "count": 2901,
+     "avg_us": 575.9
+    },
+    "create_file": {
+     "count": 533,
+     "avg_us": 3004.7
+    },
+    "create_mapping": {
+     "count": 489,
+     "avg_us": 131.0
+    },
+    "send_hardware_message": {
+     "count": 444,
+     "avg_us": 74.1
+    },
+    "get_handle_fd": {
+     "count": 550,
+     "avg_us": 45.7
+    }
+   },
+   {
+    "create_mapping": {
+     "count": 154,
+     "avg_us": 128.9
+    },
+    "get_thread_info": {
+     "count": 841,
+     "avg_us": 23.1
+    },
+    "set_thread_info": {
+     "count": 467,
+     "avg_us": 36.3
+    },
+    "send_hardware_message": {
+     "count": 636,
+     "avg_us": 24.8
+    },
+    "close_handle": {
+     "count": 2911,
+     "avg_us": 5.1
+    }
+   },
+   {
+    "send_hardware_message": {
+     "count": 629,
+     "avg_us": 21.6
+    },
+    "close_handle": {
+     "count": 1898,
+     "avg_us": 2.9
+    },
+    "create_event": {
+     "count": 1887,
+     "avg_us": 2.7
+    },
+    "get_inproc_sync_fd": {
+     "count": 1887,
+     "avg_us": 2.5
+    },
+    "get_thread_info": {
+     "count": 11,
+     "avg_us": 49.7
+    }
+   },
+   {
+    "close_handle": {
+     "count": 1897,
+     "avg_us": 922.0
+    },
+    "send_hardware_message": {
+     "count": 635,
+     "avg_us": 21.8
+    },
+    "create_event": {
+     "count": 1897,
+     "avg_us": 2.7
+    },
+    "get_inproc_sync_fd": {
+     "count": 1897,
+     "avg_us": 2.6
+    }
+   },
+   {
+    "send_hardware_message": {
+     "count": 630,
+     "avg_us": 21.5
+    },
+    "close_handle": {
+     "count": 1890,
+     "avg_us": 2.9
+    },
+    "create_event": {
+     "count": 1890,
+     "avg_us": 2.7
+    },
+    "get_inproc_sync_fd": {
+     "count": 1890,
+     "avg_us": 2.5
+    }
+   },
+   {
+    "send_hardware_message": {
+     "count": 628,
+     "avg_us": 21.7
+    },
+    "close_handle": {
+     "count": 1884,
+     "avg_us": 2.8
+    },
+    "create_event": {
+     "count": 1884,
+     "avg_us": 2.6
+    },
+    "get_inproc_sync_fd": {
+     "count": 1884,
+     "avg_us": 2.5
+    }
+   },
+   {
+    "send_hardware_message": {
+     "count": 630,
+     "avg_us": 21.5
+    },
+    "close_handle": {
+     "count": 1890,
+     "avg_us": 2.8
+    },
+    "create_event": {
+     "count": 1890,
+     "avg_us": 2.5
+    },
+    "get_inproc_sync_fd": {
+     "count": 1890,
+     "avg_us": 2.4
+    }
+   },
+   {
+    "send_hardware_message": {
+     "count": 629,
+     "avg_us": 21.1
+    },
+    "close_handle": {
+     "count": 1887,
+     "avg_us": 2.8
+    },
+    "create_event": {
+     "count": 1887,
+     "avg_us": 2.6
+    },
+    "get_inproc_sync_fd": {
+     "count": 1887,
+     "avg_us": 2.5
+    }
+   },
+   {
+    "send_hardware_message": {
+     "count": 631,
+     "avg_us": 21.5
+    },
+    "close_handle": {
+     "count": 1893,
+     "avg_us": 3.0
+    },
+    "create_event": {
+     "count": 1893,
+     "avg_us": 2.7
+    },
+    "get_inproc_sync_fd": {
+     "count": 1893,
+     "avg_us": 2.5
+    }
+   },
+   {
+    "send_hardware_message": {
+     "count": 628,
+     "avg_us": 21.2
+    },
+    "close_handle": {
+     "count": 1884,
+     "avg_us": 2.9
+    },
+    "create_event": {
+     "count": 1884,
+     "avg_us": 2.7
+    },
+    "get_inproc_sync_fd": {
+     "count": 1884,
+     "avg_us": 2.5
+    }
+   },
+   {
+    "send_hardware_message": {
+     "count": 631,
+     "avg_us": 20.8
+    },
+    "close_handle": {
+     "count": 1893,
+     "avg_us": 3.0
+    },
+    "create_event": {
+     "count": 1893,
+     "avg_us": 2.7
+    },
+    "get_inproc_sync_fd": {
+     "count": 1893,
+     "avg_us": 2.5
+    }
+   },
+   {
+    "send_hardware_message": {
+     "count": 628,
+     "avg_us": 21.2
+    },
+    "close_handle": {
+     "count": 1884,
+     "avg_us": 2.9
+    },
+    "create_event": {
+     "count": 1884,
+     "avg_us": 2.6
+    },
+    "get_inproc_sync_fd": {
+     "count": 1884,
+     "avg_us": 2.5
+    }
+   },
+   {
+    "send_hardware_message": {
+     "count": 630,
+     "avg_us": 21.5
+    },
+    "close_handle": {
+     "count": 1890,
+     "avg_us": 2.7
+    },
+    "create_event": {
+     "count": 1890,
+     "avg_us": 2.6
+    },
+    "get_inproc_sync_fd": {
+     "count": 1890,
+     "avg_us": 2.4
+    }
+   },
+   {
+    "send_hardware_message": {
+     "count": 629,
+     "avg_us": 22.0
+    },
+    "close_handle": {
+     "count": 1887,
+     "avg_us": 2.8
+    },
+    "create_event": {
+     "count": 1887,
+     "avg_us": 2.6
+    },
+    "get_inproc_sync_fd": {
+     "count": 1887,
+     "avg_us": 2.5
+    }
+   },
+   {
+    "send_hardware_message": {
+     "count": 630,
+     "avg_us": 21.9
+    },
+    "close_handle": {
+     "count": 1890,
+     "avg_us": 2.8
+    },
+    "create_event": {
+     "count": 1890,
+     "avg_us": 2.6
+    },
+    "get_inproc_sync_fd": {
+     "count": 1890,
+     "avg_us": 2.5
+    }
+   },
+   {
+    "send_hardware_message": {
+     "count": 629,
+     "avg_us": 21.9
+    },
+    "close_handle": {
+     "count": 1887,
+     "avg_us": 2.8
+    },
+    "create_event": {
+     "count": 1887,
+     "avg_us": 2.6
+    },
+    "get_inproc_sync_fd": {
+     "count": 1887,
+     "avg_us": 2.4
+    }
+   },
+   {
+    "send_hardware_message": {
+     "count": 630,
+     "avg_us": 21.9
+    },
+    "close_handle": {
+     "count": 1890,
+     "avg_us": 2.7
+    },
+    "create_event": {
+     "count": 1890,
+     "avg_us": 2.5
+    },
+    "get_inproc_sync_fd": {
+     "count": 1890,
+     "avg_us": 2.5
+    }
+   },
+   {
+    "send_hardware_message": {
+     "count": 629,
+     "avg_us": 22.4
+    },
+    "close_handle": {
+     "count": 1887,
+     "avg_us": 2.8
+    },
+    "create_event": {
+     "count": 1887,
+     "avg_us": 2.5
+    },
+    "get_inproc_sync_fd": {
+     "count": 1887,
+     "avg_us": 2.5
+    }
+   },
+   {
+    "send_hardware_message": {
+     "count": 630,
+     "avg_us": 22.9
+    },
+    "close_handle": {
+     "count": 1890,
+     "avg_us": 2.8
+    },
+    "create_event": {
+     "count": 1890,
+     "avg_us": 2.6
+    },
+    "get_inproc_sync_fd": {
+     "count": 1890,
+     "avg_us": 2.5
+    }
+   },
+   {
+    "send_hardware_message": {
+     "count": 629,
+     "avg_us": 23.0
+    },
+    "close_handle": {
+     "count": 1887,
+     "avg_us": 2.8
+    },
+    "create_event": {
+     "count": 1887,
+     "avg_us": 2.6
+    },
+    "get_inproc_sync_fd": {
+     "count": 1887,
+     "avg_us": 2.5
+    }
+   },
+   {
+    "send_hardware_message": {
+     "count": 630,
+     "avg_us": 22.9
+    },
+    "close_handle": {
+     "count": 1890,
+     "avg_us": 2.8
+    },
+    "create_event": {
+     "count": 1890,
+     "avg_us": 2.5
+    },
+    "get_inproc_sync_fd": {
+     "count": 1890,
+     "avg_us": 2.5
+    }
+   },
+   {
+    "send_hardware_message": {
+     "count": 629,
+     "avg_us": 22.7
+    },
+    "close_handle": {
+     "count": 1887,
+     "avg_us": 2.8
+    },
+    "create_event": {
+     "count": 1887,
+     "avg_us": 2.6
+    },
+    "get_inproc_sync_fd": {
+     "count": 1887,
+     "avg_us": 2.5
+    }
+   },
+   {
+    "send_hardware_message": {
+     "count": 630,
+     "avg_us": 22.8
+    },
+    "close_handle": {
+     "count": 1890,
+     "avg_us": 2.8
+    },
+    "create_event": {
+     "count": 1890,
+     "avg_us": 2.6
+    },
+    "get_inproc_sync_fd": {
+     "count": 1890,
+     "avg_us": 2.5
+    }
+   },
+   {
+    "send_hardware_message": {
+     "count": 629,
+     "avg_us": 22.6
+    },
+    "close_handle": {
+     "count": 1887,
+     "avg_us": 2.8
+    },
+    "create_event": {
+     "count": 1887,
+     "avg_us": 2.6
+    },
+    "get_inproc_sync_fd": {
+     "count": 1887,
+     "avg_us": 2.5
+    }
+   },
+   {
+    "send_hardware_message": {
+     "count": 631,
+     "avg_us": 22.2
+    },
+    "close_handle": {
+     "count": 1893,
+     "avg_us": 2.7
+    },
+    "create_event": {
+     "count": 1893,
+     "avg_us": 2.5
+    },
+    "get_inproc_sync_fd": {
+     "count": 1893,
+     "avg_us": 2.4
+    }
+   },
+   {
+    "send_hardware_message": {
+     "count": 628,
+     "avg_us": 22.4
+    },
+    "close_handle": {
+     "count": 1884,
+     "avg_us": 2.8
+    },
+    "create_event": {
+     "count": 1884,
+     "avg_us": 2.6
+    },
+    "get_inproc_sync_fd": {
+     "count": 1884,
+     "avg_us": 2.4
+    }
+   },
+   {
+    "send_hardware_message": {
+     "count": 631,
+     "avg_us": 21.8
+    },
+    "close_handle": {
+     "count": 1893,
+     "avg_us": 2.7
+    },
+    "create_event": {
+     "count": 1893,
+     "avg_us": 2.5
+    },
+    "get_inproc_sync_fd": {
+     "count": 1893,
+     "avg_us": 2.5
+    }
+   },
+   {
+    "send_hardware_message": {
+     "count": 628,
+     "avg_us": 21.6
+    },
+    "close_handle": {
+     "count": 1884,
+     "avg_us": 2.9
+    },
+    "create_event": {
+     "count": 1884,
+     "avg_us": 2.7
+    },
+    "get_inproc_sync_fd": {
+     "count": 1884,
+     "avg_us": 2.6
+    }
+   },
+   {
+    "send_hardware_message": {
+     "count": 630,
+     "avg_us": 21.9
+    },
+    "close_handle": {
+     "count": 1890,
+     "avg_us": 2.7
+    },
+    "create_event": {
+     "count": 1890,
+     "avg_us": 2.6
+    },
+    "get_inproc_sync_fd": {
+     "count": 1890,
+     "avg_us": 2.5
+    }
+   },
+   {
+    "send_hardware_message": {
+     "count": 629,
+     "avg_us": 21.8
+    },
+    "close_handle": {
+     "count": 1887,
+     "avg_us": 2.8
+    },
+    "create_event": {
+     "count": 1887,
+     "avg_us": 2.6
+    },
+    "get_inproc_sync_fd": {
+     "count": 1887,
+     "avg_us": 2.5
+    }
+   },
+   {
+    "send_hardware_message": {
+     "count": 629,
+     "avg_us": 21.1
+    },
+    "close_handle": {
+     "count": 1887,
+     "avg_us": 3.1
+    },
+    "create_event": {
+     "count": 1887,
+     "avg_us": 2.8
+    },
+    "get_inproc_sync_fd": {
+     "count": 1887,
+     "avg_us": 2.6
+    }
+   },
+   {
+    "send_hardware_message": {
+     "count": 630,
+     "avg_us": 21.2
+    },
+    "close_handle": {
+     "count": 1890,
+     "avg_us": 3.0
+    },
+    "create_event": {
+     "count": 1890,
+     "avg_us": 2.9
+    },
+    "get_inproc_sync_fd": {
+     "count": 1890,
+     "avg_us": 2.6
+    }
+   },
+   {
+    "send_hardware_message": {
+     "count": 629,
+     "avg_us": 21.3
+    },
+    "close_handle": {
+     "count": 1887,
+     "avg_us": 2.8
+    },
+    "create_event": {
+     "count": 1887,
+     "avg_us": 2.6
+    },
+    "get_inproc_sync_fd": {
+     "count": 1887,
+     "avg_us": 2.5
+    }
+   },
+   {
+    "send_hardware_message": {
+     "count": 630,
+     "avg_us": 21.7
+    },
+    "close_handle": {
+     "count": 1890,
+     "avg_us": 2.9
+    },
+    "create_event": {
+     "count": 1890,
+     "avg_us": 2.6
+    },
+    "get_inproc_sync_fd": {
+     "count": 1890,
+     "avg_us": 2.4
+    }
+   },
+   {
+    "send_hardware_message": {
+     "count": 629,
+     "avg_us": 21.7
+    },
+    "close_handle": {
+     "count": 1887,
+     "avg_us": 2.7
+    },
+    "create_event": {
+     "count": 1887,
+     "avg_us": 2.5
+    },
+    "get_inproc_sync_fd": {
+     "count": 1887,
+     "avg_us": 2.4
+    }
+   },
+   {
+    "send_hardware_message": {
+     "count": 630,
+     "avg_us": 21.6
+    },
+    "close_handle": {
+     "count": 1890,
+     "avg_us": 3.0
+    },
+    "create_event": {
+     "count": 1890,
+     "avg_us": 2.8
+    },
+    "get_inproc_sync_fd": {
+     "count": 1890,
+     "avg_us": 2.6
+    }
+   },
+   {
+    "send_hardware_message": {
+     "count": 630,
+     "avg_us": 21.8
+    },
+    "close_handle": {
+     "count": 1890,
+     "avg_us": 2.7
+    },
+    "create_event": {
+     "count": 1890,
+     "avg_us": 2.5
+    },
+    "get_inproc_sync_fd": {
+     "count": 1890,
+     "avg_us": 2.4
+    }
+   },
+   {
+    "send_hardware_message": {
+     "count": 629,
+     "avg_us": 21.7
+    },
+    "close_handle": {
+     "count": 1887,
+     "avg_us": 2.8
+    },
+    "create_event": {
+     "count": 1887,
+     "avg_us": 2.5
+    },
+    "get_inproc_sync_fd": {
+     "count": 1887,
+     "avg_us": 2.4
+    }
+   },
+   {
+    "send_hardware_message": {
+     "count": 630,
+     "avg_us": 21.3
+    },
+    "close_handle": {
+     "count": 1890,
+     "avg_us": 3.0
+    },
+    "create_event": {
+     "count": 1890,
+     "avg_us": 2.7
+    },
+    "get_inproc_sync_fd": {
+     "count": 1890,
+     "avg_us": 2.5
+    }
+   },
+   {
+    "send_hardware_message": {
+     "count": 629,
+     "avg_us": 21.5
+    },
+    "close_handle": {
+     "count": 1887,
+     "avg_us": 2.9
+    },
+    "create_event": {
+     "count": 1887,
+     "avg_us": 2.6
+    },
+    "get_inproc_sync_fd": {
+     "count": 1887,
+     "avg_us": 2.4
+    }
+   },
+   {
+    "send_hardware_message": {
+     "count": 630,
+     "avg_us": 21.8
+    },
+    "close_handle": {
+     "count": 1890,
+     "avg_us": 2.8
+    },
+    "create_event": {
+     "count": 1890,
+     "avg_us": 2.6
+    },
+    "get_inproc_sync_fd": {
+     "count": 1890,
+     "avg_us": 2.5
+    }
+   },
+   {
+    "send_hardware_message": {
+     "count": 629,
+     "avg_us": 22.0
+    },
+    "close_handle": {
+     "count": 1887,
+     "avg_us": 2.8
+    },
+    "create_event": {
+     "count": 1887,
+     "avg_us": 2.6
+    },
+    "get_inproc_sync_fd": {
+     "count": 1887,
+     "avg_us": 2.5
+    }
+   },
+   {
+    "send_hardware_message": {
+     "count": 630,
+     "avg_us": 22.6
+    },
+    "close_handle": {
+     "count": 1890,
+     "avg_us": 2.8
+    },
+    "create_event": {
+     "count": 1890,
+     "avg_us": 2.6
+    },
+    "get_inproc_sync_fd": {
+     "count": 1890,
+     "avg_us": 2.5
+    }
+   },
+   {
+    "send_hardware_message": {
+     "count": 630,
+     "avg_us": 21.7
+    },
+    "close_handle": {
+     "count": 1890,
+     "avg_us": 2.7
+    },
+    "create_event": {
+     "count": 1890,
+     "avg_us": 2.6
+    },
+    "get_inproc_sync_fd": {
+     "count": 1890,
+     "avg_us": 2.4
+    },
+    "get_message": {
+     "count": 3,
+     "avg_us": 17.9
+    }
+   },
+   {
+    "send_hardware_message": {
+     "count": 629,
+     "avg_us": 21.9
+    },
+    "close_handle": {
+     "count": 1887,
+     "avg_us": 2.7
+    },
+    "create_event": {
+     "count": 1887,
+     "avg_us": 2.5
+    },
+    "get_inproc_sync_fd": {
+     "count": 1887,
+     "avg_us": 2.4
+    }
+   }
+  ]
+ },
+ "shown": {
+  "frames": 1893,
+  "per_10s": [
+   1,
+   78,
+   54,
+   2,
+   5,
+   16,
+   4,
+   39,
+   121,
+   8,
+   36,
+   105,
+   234,
+   131,
+   121,
+   241,
+   174,
+   29,
+   197,
+   76,
+   3,
+   1,
+   139,
+   27,
+   51,
+   0,
+   0,
+   0,
+   0,
+   0,
+   0,
+   0,
+   0,
+   0,
+   0,
+   0,
+   0,
+   0,
+   0,
+   0,
+   0,
+   0,
+   0,
+   0,
+   0,
+   0
+  ],
+  "longest_gap_ms": 15518
+ },
+ "broker": {
+  "local_offer": 8286502912,
+  "host_limit": 1073741824,
+  "windows": null,
+  "refused": [],
+  "refused_count": 0,
+  "clients": [
+   {
+    "pid": -1,
+    "frames": 0,
+    "submissions": 0
+   },
+   {
+    "pid": 177,
+    "frames": 1540,
+    "submissions": 4684
+   },
+   {
+    "pid": -1,
+    "frames": 0,
+    "submissions": 0
+   },
+   {
+    "pid": -1,
+    "frames": 0,
+    "submissions": 0
+   },
+   {
+    "pid": -1,
+    "frames": 0,
+    "submissions": 0
+   },
+   {
+    "pid": -1,
+    "frames": 0,
+    "submissions": 0
+   },
+   {
+    "pid": 173,
+    "frames": 0,
+    "submissions": 0
+   },
+   {
+    "pid": -1,
+    "frames": 0,
+    "submissions": 0
+   }
+  ],
+  "wedged": false,
+  "failure_reasons": [],
+  "host_peak": null,
+  "local_peak": null
+ },
+ "pacing": {
+  "windows": [
+   {
+    "cookie": 5,
+    "pid": 177,
+    "route": "independent",
+    "final": false,
+    "refused": "none",
+    "direct": 42.0,
+    "composed": 0.0,
+    "ranges": 0.0,
+    "ranges_peak": 1.0,
+    "seconds": 12.0,
+    "frames": 42.0,
+    "hidden": 0.0,
+    "fps": 3.5,
+    "mean": 293.85,
+    "p50": 16.0,
+    "p95": 4607.84,
+    "p99": 4607.84,
+    "max": 4607.84,
+    "over20": 15.0,
+    "over34": 8.0,
+    "present_avg": 7.29,
+    "present_max": 11.67
+   },
+   {
+    "cookie": 5,
+    "pid": 177,
+    "route": "independent",
+    "final": false,
+    "refused": "none",
+    "direct": 29.0,
+    "composed": 0.0,
+    "ranges": 0.0,
+    "ranges_peak": 1.0,
+    "seconds": 11.1,
+    "frames": 29.0,
+    "hidden": 0.0,
+    "fps": 2.6,
+    "mean": 382.21,
+    "p50": 8.75,
+    "p95": 4579.13,
+    "p99": 4579.13,
+    "max": 4579.13,
+    "over20": 8.0,
+    "over34": 6.0,
+    "present_avg": 7.41,
+    "present_max": 10.78
+   },
+   {
+    "cookie": 5,
+    "pid": 177,
+    "route": "independent",
+    "final": false,
+    "refused": "none",
+    "direct": 108.0,
+    "composed": 0.0,
+    "ranges": 0.0,
+    "ranges_peak": 1.0,
+    "seconds": 10.9,
+    "frames": 108.0,
+    "hidden": 0.0,
+    "fps": 9.9,
+    "mean": 101.23,
+    "p50": 16.75,
+    "p95": 1555.1,
+    "p99": 1555.1,
+    "max": 1555.1,
+    "over20": 19.0,
+    "over34": 6.0,
+    "present_avg": 7.07,
+    "present_max": 8.3
+   },
+   {
+    "cookie": 5,
+    "pid": 177,
+    "route": "independent",
+    "final": false,
+    "refused": "none",
+    "direct": 145.0,
+    "composed": 0.0,
+    "ranges": 0.0,
+    "ranges_peak": 1.0,
+    "seconds": 11.5,
+    "frames": 145.0,
+    "hidden": 0.0,
+    "fps": 12.6,
+    "mean": 79.16,
+    "p50": 17.0,
+    "p95": 26.25,
+    "p99": 1549.96,
+    "max": 1549.96,
+    "over20": 22.0,
+    "over34": 7.0,
+    "present_avg": 7.09,
+    "present_max": 9.21
+   },
+   {
+    "cookie": 5,
+    "pid": 177,
+    "route": "independent",
+    "final": false,
+    "refused": "none",
+    "direct": 216.0,
+    "composed": 0.0,
+    "ranges": 0.0,
+    "ranges_peak": 1.0,
+    "seconds": 13.0,
+    "frames": 216.0,
+    "hidden": 0.0,
+    "fps": 16.6,
+    "mean": 60.18,
+    "p50": 17.0,
+    "p95": 25.5,
+    "p99": 4825.4,
+    "max": 4825.4,
+    "over20": 25.0,
+    "over34": 4.0,
+    "present_avg": 7.03,
+    "present_max": 7.88
+   },
+   {
+    "cookie": 5,
+    "pid": 177,
+    "route": "independent",
+    "final": false,
+    "refused": "none",
+    "direct": 121.0,
+    "composed": 0.0,
+    "ranges": 0.0,
+    "ranges_peak": 1.0,
+    "seconds": 11.0,
+    "frames": 121.0,
+    "hidden": 0.0,
+    "fps": 11.0,
+    "mean": 90.63,
+    "p50": 17.0,
+    "p95": 41.0,
+    "p99": 3080.46,
+    "max": 3080.46,
+    "over20": 17.0,
+    "over34": 7.0,
+    "present_avg": 7.12,
+    "present_max": 9.52
+   },
+   {
+    "cookie": 5,
+    "pid": 177,
+    "route": "independent",
+    "final": false,
+    "refused": "none",
+    "direct": 192.0,
+    "composed": 0.0,
+    "ranges": 0.0,
+    "ranges_peak": 1.0,
+    "seconds": 10.9,
+    "frames": 192.0,
+    "hidden": 0.0,
+    "fps": 17.7,
+    "mean": 56.55,
+    "p50": 17.0,
+    "p95": 25.75,
+    "p99": 1557.02,
+    "max": 1557.02,
+    "over20": 31.0,
+    "over34": 6.0,
+    "present_avg": 7.05,
+    "present_max": 8.03
+   },
+   {
+    "cookie": 5,
+    "pid": 177,
+    "route": "independent",
+    "final": false,
+    "refused": "none",
+    "direct": 214.0,
+    "composed": 0.0,
+    "ranges": 0.0,
+    "ranges_peak": 1.0,
+    "seconds": 11.2,
+    "frames": 214.0,
+    "hidden": 0.0,
+    "fps": 19.1,
+    "mean": 52.45,
+    "p50": 17.0,
+    "p95": 25.5,
+    "p99": 3068.24,
+    "max": 3068.24,
+    "over20": 27.0,
+    "over34": 4.0,
+    "present_avg": 7.08,
+    "present_max": 8.94
+   },
+   {
+    "cookie": 5,
+    "pid": 177,
+    "route": "independent",
+    "final": false,
+    "refused": "none",
+    "direct": 30.0,
+    "composed": 0.0,
+    "ranges": 0.0,
+    "ranges_peak": 1.0,
+    "seconds": 11.0,
+    "frames": 30.0,
+    "hidden": 0.0,
+    "fps": 2.7,
+    "mean": 366.65,
+    "p50": 16.5,
+    "p95": 3112.57,
+    "p99": 3112.57,
+    "max": 3112.58,
+    "over20": 6.0,
+    "over34": 5.0,
+    "present_avg": 7.09,
+    "present_max": 7.97
+   },
+   {
+    "cookie": 5,
+    "pid": 177,
+    "route": "independent",
+    "final": false,
+    "refused": "none",
+    "direct": 160.0,
+    "composed": 0.0,
+    "ranges": 0.0,
+    "ranges_peak": 1.0,
+    "seconds": 10.0,
+    "frames": 160.0,
+    "hidden": 0.0,
+    "fps": 16.0,
+    "mean": 62.55,
+    "p50": 16.5,
+    "p95": 25.75,
+    "p99": 2965.07,
+    "max": 2965.08,
+    "over20": 20.0,
+    "over34": 5.0,
+    "present_avg": 7.06,
+    "present_max": 9.36
+   },
+   {
+    "cookie": 5,
+    "pid": 177,
+    "route": "independent",
+    "final": false,
+    "refused": "none",
+    "direct": 54.0,
+    "composed": 0.0,
+    "ranges": 0.0,
+    "ranges_peak": 1.0,
+    "seconds": 10.0,
+    "frames": 54.0,
+    "hidden": 0.0,
+    "fps": 5.4,
+    "mean": 186.1,
+    "p50": 16.75,
+    "p95": 4551.01,
+    "p99": 4551.01,
+    "max": 4551.01,
+    "over20": 13.0,
+    "over34": 3.0,
+    "present_avg": 7.07,
+    "present_max": 8.87
+   },
+   {
+    "cookie": 5,
+    "pid": 177,
+    "route": "independent",
+    "final": false,
+    "refused": "none",
+    "direct": 76.0,
+    "composed": 0.0,
+    "ranges": 0.0,
+    "ranges_peak": 1.0,
+    "seconds": 22.2,
+    "frames": 76.0,
+    "hidden": 0.0,
+    "fps": 3.4,
+    "mean": 291.52,
+    "p50": 16.25,
+    "p95": 56.25,
+    "p99": 15520.09,
+    "max": 15520.09,
+    "over20": 16.0,
+    "over34": 4.0,
+    "present_avg": 7.09,
+    "present_max": 8.65
+   },
+   {
+    "cookie": 5,
+    "pid": 177,
+    "route": "independent",
+    "final": false,
+    "refused": "none",
+    "direct": 3.0,
+    "composed": 0.0,
+    "ranges": 0.0,
+    "ranges_peak": 1.0,
+    "seconds": 12.6,
+    "frames": 3.0,
+    "hidden": 0.0,
+    "fps": 0.2,
+    "mean": 4214.82,
+    "p50": 65.25,
+    "p95": 12567.8,
+    "p99": 12567.8,
+    "max": 12567.8,
+    "over20": 2.0,
+    "over34": 2.0,
+    "present_avg": 8.02,
+    "present_max": 8.51
+   },
+   {
+    "cookie": 5,
+    "pid": 177,
+    "route": "independent",
+    "final": false,
+    "refused": "none",
+    "direct": 126.0,
+    "composed": 0.0,
+    "ranges": 0.0,
+    "ranges_peak": 1.0,
+    "seconds": 10.0,
+    "frames": 126.0,
+    "hidden": 1.0,
+    "fps": 12.6,
+    "mean": 79.39,
+    "p50": 8.5,
+    "p95": 12.0,
+    "p99": 6302.1,
+    "max": 6302.1,
+    "over20": 2.0,
+    "over34": 2.0,
+    "present_avg": 7.64,
+    "present_max": 9.15
+   },
+   {
+    "cookie": 5,
+    "pid": 177,
+    "route": "independent",
+    "final": false,
+    "refused": "none",
+    "direct": 20.0,
+    "composed": 0.0,
+    "ranges": 0.0,
+    "ranges_peak": 1.0,
+    "seconds": 10.7,
+    "frames": 20.0,
+    "hidden": 0.0,
+    "fps": 1.9,
+    "mean": 535.07,
+    "p50": 9.25,
+    "p95": 3060.51,
+    "p99": 3060.51,
+    "max": 3060.51,
+    "over20": 8.0,
+    "over34": 6.0,
+    "present_avg": 7.47,
+    "present_max": 8.76
+   },
+   {
+    "cookie": 5,
+    "pid": 177,
+    "route": "independent",
+    "final": true,
+    "refused": "none",
+    "direct": 3.0,
+    "composed": 0.0,
+    "ranges": 0.0,
+    "ranges_peak": 1.0,
+    "seconds": 4.6,
+    "frames": 3.0,
+    "hidden": 0.0,
+    "fps": 0.6,
+    "mean": 526.98,
+    "p50": 7.5,
+    "p95": 1566.51,
+    "p99": 1566.51,
+    "max": 1566.51,
+    "over20": 1.0,
+    "over34": 1.0,
+    "present_avg": 7.38,
+    "present_max": 8.12
+   }
+  ],
+  "clients": {
+   "5": {
+    "pid": 177,
+    "route": "independent",
+    "routes": {
+     "independent": 1539
+    },
+    "windows": 16,
+    "seconds": 182.7,
+    "frames": 1539,
+    "hidden": 1,
+    "direct": 1539,
+    "composed": 0,
+    "refused": [],
+    "fps": 8.4,
+    "p50_median_ms": 16.625,
+    "p95_worst_ms": 12567.8,
+    "p99_worst_ms": 15520.09,
+    "max_ms": 15520.09,
+    "over20": 232,
+    "over34": 76,
+    "present_avg_ms": 7.14,
+    "present_max_ms": 11.67
+   }
+  }
+ },
+ "captures": [],
+ "cleanup_verified": true,
+ "hooks_removed": true
+}

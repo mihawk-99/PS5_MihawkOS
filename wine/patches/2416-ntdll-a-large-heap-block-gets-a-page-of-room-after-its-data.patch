@@ -1,0 +1,31 @@
+From 0000000000000000000000000000000000000000 Mon Sep 17 00:00:00 2001
+From: Mihawk <163614687+mihawk-99@users.noreply.github.com>
+Date: Sat, 31 Oct 2026 16:00:00 -0400
+Subject: [PATCH] ntdll: A large heap block gets a page of room after its data.
+
+A large heap block is a region of its own whose size is rounded up to 64 KiB. When the data ended exactly where the region
+did, a program that wrote one element past the end of the block faulted: it does no harm on Windows, whose heap leaves
+slack. The size is now rounded up after a page more than the block needs, so there is always room for a stray write; the
+overflow check is unchanged and HeapSize and the block's data size are as before.
+
+The problem was found by reading bornaradusin/PC5 (LGPL-2.1-or-later; patch 0077 of its patches/prospero-win, which
+carries its Wine patch 0991); this change is written independently here (NOTICE.md, "PC5").
+---
+ dlls/ntdll/heap.c | 4 +++-
+ 1 file changed, 3 insertions(+), 1 deletion(-)
+
+diff --git a/dlls/ntdll/heap.c b/dlls/ntdll/heap.c
+index 1e99799..693f1a1 100644
+--- a/dlls/ntdll/heap.c
++++ b/dlls/ntdll/heap.c
+@@ -1016,7 +1016,9 @@ static NTSTATUS heap_allocate_large( struct heap *heap, ULONG flags, SIZE_T bloc
+                                      SIZE_T size, void **ret )
+ {
+     ARENA_LARGE *arena;
+-    SIZE_T total_size = ROUND_SIZE( sizeof(*arena) + size, REGION_ALIGN - 1 );
++    /* A page of room after the data: Windows' heap leaves some, and a program that writes one element past the end of
++     * a large block (it does no harm there) faulted here when the block ended exactly where its memory did. */
++    SIZE_T total_size = ROUND_SIZE( sizeof(*arena) + size + 0x1000, REGION_ALIGN - 1 );
+     struct block *block;
+ 
+     if (total_size < size) return STATUS_NO_MEMORY;  /* overflow */

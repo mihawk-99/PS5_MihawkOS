@@ -510,12 +510,90 @@ clang --target=i686-windows --no-default-config -fuse-ld=lld -Wl,/timestamp:0 -n
     "$wine/build/dlls/msvcrt/i386-windows/libmsvcrt.a" \
     "$wine/build/dlls/ntdll/i386-windows/libntdll.a" \
     -o "$root/.deps/probes/d3d11-32-probe.exe"
+# Direct3D 12's feature levels, as a game gets them (tests/d3d12-levels-probe.c, platform/vkd3d-proton/patches/0001).
+clang --target=x86_64-windows --no-default-config -fuse-ld=lld -Wl,/timestamp:0 -nostdlib -O2 -Wall -Wextra -Werror \
+    -I"$wine/source/include" -I"$wine/build/include" -I"$wine/source/include/msvcrt" \
+    -Wl,/entry:mainCRTStartup -Wl,/subsystem:console \
+    "$root/tests/d3d12-levels-probe.c" "$wine/build/dlls/kernel32/x86_64-windows/libkernel32.a" \
+    "$wine/build/dlls/user32/x86_64-windows/libuser32.a" "$wine/build/dlls/d3d12/x86_64-windows/libd3d12.a" \
+    "$wine/build/dlls/dxgi/x86_64-windows/libdxgi.a" \
+    -o "$root/.deps/probes/d3d12-levels-probe.exe"
+# How many files a program may hold open for writing (tests/many-files-probe.c, wine/ps5/pw_wine_codeshare.h's release).
+clang --target=x86_64-windows --no-default-config -fuse-ld=lld -Wl,/timestamp:0 -nostdlib -O2 -Wall -Wextra -Werror \
+    -I"$wine/source/include" -I"$wine/build/include" -I"$wine/source/include/msvcrt" \
+    -Wl,/entry:mainCRTStartup -Wl,/subsystem:console \
+    "$root/tests/many-files-probe.c" "$wine/build/dlls/kernel32/x86_64-windows/libkernel32.a" \
+    "$wine/build/dlls/user32/x86_64-windows/libuser32.a" \
+    -o "$root/.deps/probes/many-files-probe.exe"
+# Whether a game's Wine output keeps the end of the session's logs (tests/log-flood-probe.c, src/pw_capped_log.h).
+clang --target=x86_64-windows --no-default-config -fuse-ld=lld -Wl,/timestamp:0 -nostdlib -O2 -Wall -Wextra -Werror \
+    -I"$wine/source/include" -I"$wine/build/include" -I"$wine/source/include/msvcrt" \
+    -Wl,/entry:mainCRTStartup -Wl,/subsystem:console \
+    "$root/tests/log-flood-probe.c" "$wine/build/dlls/kernel32/x86_64-windows/libkernel32.a" \
+    "$wine/build/dlls/user32/x86_64-windows/libuser32.a" \
+    -o "$root/.deps/probes/log-flood-probe.exe"
+# A game whose DLL is missing (tests/missing-import-probe.c): its import library names a DLL no folder has.
+printf 'LIBRARY pw-missing-import.dll\nEXPORTS\npw_missing_import\n' >"$root/.deps/probes/pw-missing-import.def"
+llvm-dlltool -m i386:x86-64 -d "$root/.deps/probes/pw-missing-import.def" -l "$root/.deps/probes/pw-missing-import.lib"
+clang --target=x86_64-windows --no-default-config -fuse-ld=lld -Wl,/timestamp:0 -nostdlib -O2 -Wall -Wextra -Werror \
+    -I"$wine/source/include" -I"$wine/build/include" -I"$wine/source/include/msvcrt" \
+    -Wl,/entry:mainCRTStartup -Wl,/subsystem:console \
+    "$root/tests/missing-import-probe.c" "$wine/build/dlls/kernel32/x86_64-windows/libkernel32.a" \
+    "$wine/build/dlls/d3d11/x86_64-windows/libd3d11.a" "$root/.deps/probes/pw-missing-import.lib" \
+    -o "$root/.deps/probes/missing-import-probe.exe"
+# What a game in the title learns of its live parent in another helper (tests/parent-query-probe.c, Wine patch 2426).
+clang --target=x86_64-windows --no-default-config -fuse-ld=lld -Wl,/timestamp:0 -nostdlib -O2 -Wall -Wextra -Werror \
+    -I"$wine/source/include" -I"$wine/build/include" -I"$wine/source/include/msvcrt" \
+    -Wl,/entry:mainCRTStartup -Wl,/subsystem:console \
+    "$root/tests/parent-query-probe.c" "$wine/build/dlls/kernel32/x86_64-windows/libkernel32.a" \
+    "$wine/build/dlls/user32/x86_64-windows/libuser32.a" "$wine/build/dlls/d3d11/x86_64-windows/libd3d11.a" \
+    "$wine/build/dlls/msvcrt/x86_64-windows/libmsvcrt.a" \
+    -o "$root/.deps/probes/parent-query-probe.exe"
+# How many Direct3D 12 reserved resources a game may hold (tests/d3d12-sparse-probe.c, graphics patch 0044).
+clang --target=x86_64-windows --no-default-config -fuse-ld=lld -Wl,/timestamp:0 -nostdlib -O2 -Wall -Wextra -Werror \
+    -I"$wine/source/include" -I"$wine/build/include" -I"$wine/source/include/msvcrt" \
+    -Wl,/entry:mainCRTStartup -Wl,/subsystem:console \
+    "$root/tests/d3d12-sparse-probe.c" "$wine/build/dlls/kernel32/x86_64-windows/libkernel32.a" \
+    "$wine/build/dlls/user32/x86_64-windows/libuser32.a" "$wine/build/dlls/d3d12/x86_64-windows/libd3d12.a" \
+    -o "$root/.deps/probes/d3d12-sparse-probe.exe"
+# Direct3D 12's shared resources without Win32 external memory (tests/d3d12-shared-probe.c, Wine patch 2407).
+clang --target=x86_64-windows --no-default-config -fuse-ld=lld -Wl,/timestamp:0 -nostdlib -O2 -Wall -Wextra -Werror \
+    -I"$wine/source/include" -I"$wine/build/include" -I"$wine/source/include/msvcrt" \
+    -Wl,/entry:mainCRTStartup -Wl,/subsystem:console \
+    "$root/tests/d3d12-shared-probe.c" "$wine/build/dlls/kernel32/x86_64-windows/libkernel32.a" \
+    "$wine/build/dlls/user32/x86_64-windows/libuser32.a" "$wine/build/dlls/d3d12/x86_64-windows/libd3d12.a" \
+    -o "$root/.deps/probes/d3d12-shared-probe.exe"
+# Direct3D 12's heaps over a program's own memory (tests/d3d12-existing-heap-probe.c, Wine patch 2425).
+clang --target=x86_64-windows --no-default-config -fuse-ld=lld -Wl,/timestamp:0 -nostdlib -O2 -Wall -Wextra -Werror \
+    -I"$wine/source/include" -I"$wine/build/include" -I"$wine/source/include/msvcrt" \
+    -Wl,/entry:mainCRTStartup -Wl,/subsystem:console \
+    "$root/tests/d3d12-existing-heap-probe.c" "$wine/build/dlls/kernel32/x86_64-windows/libkernel32.a" \
+    "$wine/build/dlls/user32/x86_64-windows/libuser32.a" "$wine/build/dlls/d3d12/x86_64-windows/libd3d12.a" \
+    -o "$root/.deps/probes/d3d12-existing-heap-probe.exe"
+# A texture shared between a Direct3D 9Ex and a Direct3D 11 device of one process (tests/d3d9ex-d3d11-share-probe.c).
+# The on-screen keyboard's text reaching a game window without a person (tests/osk-typed-probe.c; WINE_PS5_OSK_TEST=type).
+clang --target=x86_64-windows --no-default-config -fuse-ld=lld -Wl,/timestamp:0 -nostdlib -O2 -Wall -Wextra -Werror \
+    -I"$wine/source/include" -I"$wine/build/include" -I"$wine/source/include/msvcrt" \
+    -Wl,/entry:mainCRTStartup -Wl,/subsystem:console \
+    "$root/tests/osk-typed-probe.c" "$wine/build/dlls/kernel32/x86_64-windows/libkernel32.a" \
+    "$wine/build/dlls/user32/x86_64-windows/libuser32.a" -o "$root/.deps/probes/osk-typed-probe.exe"
+clang --target=x86_64-windows --no-default-config -fuse-ld=lld -Wl,/timestamp:0 -nostdlib -O2 -Wall -Wextra -Werror \
+    -I"$wine/source/include" -I"$wine/build/include" -I"$wine/source/include/msvcrt" \
+    -Wl,/entry:mainCRTStartup -Wl,/subsystem:console \
+    "$root/tests/d3d9ex-d3d11-share-probe.c" "$wine/build/dlls/kernel32/x86_64-windows/libkernel32.a" \
+    "$wine/build/dlls/user32/x86_64-windows/libuser32.a" "$wine/build/dlls/d3d9/x86_64-windows/libd3d9.a" \
+    "$wine/build/dlls/d3d11/x86_64-windows/libd3d11.a" -o "$root/.deps/probes/d3d9ex-d3d11-share-probe.exe"
 clang --target=x86_64-windows --no-default-config -fuse-ld=lld -Wl,/timestamp:0 -nostdlib -O2 \
     -I"$wine/source/include" -I"$wine/build/include" -I"$wine/source/include/msvcrt" \
     -Wl,/entry:mainCRTStartup -Wl,/subsystem:console \
     "$root/tests/stdout-probe.c" "$wine/build/dlls/kernel32/x86_64-windows/libkernel32.a" \
     "$wine/build/dlls/user32/x86_64-windows/libuser32.a" \
     -o "$root/.deps/probes/stdout-probe.exe"
+clang --target=x86_64-windows --no-default-config -fuse-ld=lld -Wl,/timestamp:0 -nostdlib -O2 \
+    -I"$wine/source/include" -I"$wine/build/include" -I"$wine/source/include/msvcrt" \
+    -Wl,/entry:mainCRTStartup -Wl,/subsystem:console \
+    "$root/tests/crash-probe.c" "$wine/build/dlls/kernel32/x86_64-windows/libkernel32.a" \
+    -o "$root/.deps/probes/crash-probe.exe"
 clang --target=x86_64-windows --no-default-config -fuse-ld=lld -Wl,/timestamp:0 -nostdlib -O2 \
     -I"$wine/source/include" -I"$wine/build/include" -I"$wine/source/include/msvcrt" \
     -Wl,/entry:mainCRTStartup -Wl,/subsystem:console \
@@ -737,6 +815,23 @@ for arch in x86_64-windows i386-windows; do
         "$root/tests/image-protect-probe.c" "$wine/build/dlls/kernel32/$arch/libkernel32.a" \
         "$wine/build/dlls/user32/$arch/libuser32.a" \
         -o "$root/.deps/probes/image-protect$suffix-probe.exe"
+done
+
+# A small shared writable section off the host page maps private and the image starts (Wine patch 2406; GameMaker's
+# .mydata). The layout is checked here: a .mydata whose start and size were both 16 KiB aligned would test nothing.
+for arch in x86_64-windows i386-windows; do
+    target=x86_64-windows; suffix=64
+    if [[ $arch == i386-windows ]]; then target=i686-windows; suffix=32; fi
+    clang --target="$target" --no-default-config -fuse-ld=lld -Wl,/timestamp:0 -nostdlib -O2 -Wall -Wextra -Werror \
+        -I"$wine/source/include" -I"$wine/build/include" -I"$wine/source/include/msvcrt" \
+        -Wl,/entry:mainCRTStartup -Wl,/subsystem:console -Xlinker /section:.mydata,RWS \
+        "$root/tests/shared-section-probe.c" "$wine/build/dlls/kernel32/$arch/libkernel32.a" \
+        "$wine/build/dlls/user32/$arch/libuser32.a" \
+        -o "$root/.deps/probes/shared-section$suffix-probe.exe"
+    llvm-objdump -h "$root/.deps/probes/shared-section$suffix-probe.exe" | awk '
+        $2 == ".mydata" { found = 1; vma = strtonum("0x" $4) % 0x100000000; size = strtonum("0x" $3)
+                          size = int((size + 4095) / 4096) * 4096; if (vma % 16384 == 0 && size % 16384 == 0) exit 2 }
+        END { if (!found) exit 3 }' || { echo "shared-section$suffix-probe.exe: .mydata missing or 16 KiB aligned" >&2; exit 1; }
 done
 
 # A thread killed mid-conversion keeps no lock (patch 1171).

@@ -14,6 +14,14 @@ int pw_hang_breaker_decide(const PwHangSample *sample, PwHangVerdict *verdict)
     return 0;
 }
 
+int pw_hang_breaker_title_decide(const PwHangSample *sample, int shown, PwHangVerdict *verdict)
+{
+    if (!sample || !verdict) return EINVAL;
+    const uint64_t stall = sample->stall_ms && sample->stall_ms < PW_HANG_TITLE_STALL_MS ? sample->stall_ms : PW_HANG_TITLE_STALL_MS;
+    *verdict = shown && sample->present_age_ms >= stall ? PW_HANG_STALLED : PW_HANG_FINE;
+    return 0;
+}
+
 int pw_hang_breaker_wedged(unsigned samples, uint64_t span_ms)
 {
     return samples >= PW_HANG_WEDGE_S && span_ms >= (PW_HANG_WEDGE_S - 1) * 1000ull;

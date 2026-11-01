@@ -1525,8 +1525,8 @@ struct Guide {
     PwSteamFace *faces[3] = {};
     PwSteamFaces set{};
     const PwSetupLanguage *language = nullptr;
-    PwSteamScreenState wanted{};           // under state_lock, with persona
-    std::string persona;
+    PwSteamScreenState wanted{};           // under state_lock, with persona and the dialog's words
+    std::string persona, dialog_title, dialog_text;
     std::vector<uint32_t> backdrop, still, frames[2];
     uint64_t started = 0;
     unsigned shown = 0, refused = 0, drawn = 0;
@@ -1557,18 +1557,22 @@ void *guide_run(void *)
     scePthreadSetprio(pthread_self(), 690);
     int back = 0;
     PwSteamScreenState drawn{};
-    std::string drawn_persona;
+    std::string drawn_persona, drawn_dialog;
     bool any = false;
     for (unsigned tick = 0; !guide.stop.load(); ++tick) {
         PwSteamScreenState now;
-        std::string persona;
+        std::string persona, dialog_title, dialog_text;
         {
             std::lock_guard<std::mutex> hold(guide.state_lock);
             now = guide.wanted;
             persona = guide.persona;
+            dialog_title = guide.dialog_title;
+            dialog_text = guide.dialog_text;
         }
         now.language = guide.language;
         now.persona = persona.empty() ? nullptr : persona.c_str();
+        now.dialog_title = dialog_title.c_str();
+        now.dialog_text = dialog_text.c_str();
         if (now.screen == PW_STEAM_SCREEN_NONE) {
             if (guide.covering && guide.show(nullptr)) {
                 guide.covering = false;
@@ -1576,12 +1580,14 @@ void *guide_run(void *)
             }
         } else {
             if (!any || now.screen != drawn.screen || now.seconds != drawn.seconds ||
-                now.bytes / 1000000 != drawn.bytes / 1000000 || persona != drawn_persona) {
+                now.bytes / 1000000 != drawn.bytes / 1000000 || persona != drawn_persona ||
+                dialog_title + '\n' + dialog_text != drawn_dialog) {
                 if (!any || now.screen != drawn.screen) say("steam guide: screen %d, %u s in", int(now.screen), now.seconds);
                 pw_steam_screen_draw(guide.still.data(), guide.backdrop.data(), &now, &guide.set, nullptr);
                 ++guide.drawn;
                 drawn = now;
                 drawn_persona = persona;
+                drawn_dialog = dialog_title + '\n' + dialog_text;
                 any = true;
             }
             memcpy(guide.frames[back].data(), guide.still.data(), guide.still.size() * sizeof(uint32_t));
@@ -1642,6 +1648,14 @@ void proton_guide_show(PwSteamScreen screen, unsigned seconds, unsigned long lon
     guide.wanted.seconds = seconds;
     guide.wanted.bytes = bytes;
     guide.persona = persona ? persona : "";
+}
+
+void proton_guide_dialog(const char *title, const char *text)
+{
+    std::lock_guard<std::mutex> hold(guide.state_lock);
+    guide.wanted.screen = title ? PW_STEAM_SCREEN_DIALOG : PW_STEAM_SCREEN_NONE;
+    guide.dialog_title = title ? title : "";
+    guide.dialog_text = text ? text : "";
 }
 
 std::string proton_guide_stop(const char *why)

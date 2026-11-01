@@ -9,6 +9,7 @@
 #include "../../src/pw_runtime_check.h"
 #include "../../src/pw_memory_helper.h"
 #include "../../src/pw_steam.h"
+#include "../../src/pw_parked.h"
 #include <functional>
 #include "platform.h"
 
@@ -23,6 +24,7 @@
 #include <unistd.h>
 
 #include <algorithm>
+#include <ctime>
 #include <exception>
 #include <utility>
 
@@ -40,6 +42,7 @@
 #include "../../src/pw_pe_arch.h"
 #include "../../src/pw_firmware.h"
 #include "../../src/pw_path_nocase.h"
+#include "../../src/pw_steam_appid.h"
 extern "C" {
 #include "../../src/pw_wine_launch.h"
 }
@@ -354,6 +357,12 @@ bool start_daemon(std::string &note)
 		return false;
 	}
 	note = "started the resident Lapy daemon (" + std::to_string(elf.size()) + " bytes)";
+	// When it started, for the payload check: the daemon is listed as "payload" like others (src/pw_payload_check.h). The
+	// title folder is writable before root, and the record outlives this process (the daemon stays resident).
+	if (FILE *record = fopen(proton_title_path(PROTON_DAEMON_STARTED).c_str(), "w")) {
+		fprintf(record, "%lld\n", (long long)time(nullptr));
+		fclose(record);
+	}
 	return true;
 }
 
@@ -608,6 +617,7 @@ ProtonGame read_game(const std::string &id, const std::string &directory)
 	ProtonGame game;
 	game.id = id;
 	game.name = id;
+	game.folder = directory;
 
 	const std::string path = directory + "/game.json";
 	FILE *file = fopen(path.c_str(), "rb");
@@ -666,67 +676,7 @@ ProtonGame read_game(const std::string &id, const std::string &directory)
 				}
 			}
 		}
-		if (!game.executable.empty()) {
-			const bool absolute = absolute_windows_path(game.executable);
-			if (!absolute) {
-				game.complaint = "executable is not an absolute Windows path (C:\\... or Z:\\...): " +
-					game.executable;
-			} else if (game.executable.size() > 3) {
-				/* Wine maps Z: onto the host root and C: onto the game's prefix
-				 * (dosdevices: c: is ../drive_c), so both can be checked here: a
-				 * typo, or a C:\\data path that names the prefix instead of /data
-				 * (2026-10-04: three library entries did, and each launch ended at
-				 * "failed to open"), shows in the library instead of in a run. */
-				const char drive = (char)(game.executable[0] | 0x20);
-				std::string rest = game.executable.substr(2);
-				for (char &character : rest) {
-					if (character == '\\') {
-						character = '/';
-					}
-				}
-				const std::string prefix = proton_game_prefix(game) + "/drive_c";
-				std::string host = drive == 'z' ? rest : drive == 'c' ? prefix + rest : std::string();
-				struct stat status;
-				/* Windows finds "client.exe" where an installer wrote "Client.exe"; the file system does not (src/pw_path_nocase.h). */
-				char held[4096];
-				if (!host.empty() && stat(host.c_str(), &status) != 0 && pw_path_nocase(host.c_str(), held, sizeof(held))) host = held;
-				if (!host.empty() && stat(host.c_str(), &status) != 0) {
-					game.complaint = "the executable is not there: " + host;
-					if (drive == 'c' && stat(rest.c_str(), &status) == 0) {
-						game.complaint += " (C: is the game's prefix; this file is Z:" +
-							game.executable.substr(2) + ")";
-					}
-				} else if (!host.empty()) {
-					/* A 32-bit program runs under WoW64 when the runtime ships its i386
-					 * modules (docs/IA32_DESIGN.md); without them it is refused here, not
-					 * started: the first launch of a 32-bit-required .NET game (an FNA game,
-					 * 2026-10-06), on a runtime without them, restarted the console. */
-					struct PwPeInfo pe;
-					const enum PwPeArch arch = pw_pe_arch_file(host.c_str(), &pe);
-					struct stat i386_modules;
-					const std::string i386_dir = std::string(PROTON_DATA_ROOT) + "/runtime/ge11-7/lib/wine/i386-windows";
-					if (arch == PW_PE_X86) {
-						game.x86_32 = true;
-						if (stat(i386_dir.c_str(), &i386_modules) != 0 || !S_ISDIR(i386_modules.st_mode)) {
-							game.complaint = pe.clr ?
-								"a 32-bit .NET program (it requires 32 bits), and this runtime has no 32-bit modules" :
-								"a 32-bit Windows program, and this runtime has no 32-bit modules";
-						} else {
-							/* Under WoW64 a program runs in a helper only: its signals and 32-bit TEBs
-							 * rest on the payload loader and the helper's address space. The launcher
-							 * layout, then, whatever game.json chose (a test's own override still wins). */
-							for (auto it = game.env.begin(); it != game.env.end();)
-								it = it->rfind("PROTON_LAYOUT=", 0) == 0 ? game.env.erase(it) : it + 1;
-							game.env.push_back("PROTON_LAYOUT=launcher");
-						}
-					} else if (arch == PW_PE_OTHER) {
-						char machine[16];
-						snprintf(machine, sizeof(machine), "0x%04x", pe.machine);
-						game.complaint = std::string("not an x86-64 program (machine ") + machine + ")";
-					}
-				}
-			}
-		}
+		proton_check_program(game);
 		if (game.executable.empty()) {
 			game.complaint = "no executable in game.json: the launcher lists it, the runtime cannot run it";
 		}
@@ -741,6 +691,107 @@ ProtonGame read_game(const std::string &id, const std::string &directory)
 }
 
 } // namespace
+
+/* A program's checks, for a library entry and for a program run by path (the launcher's Files, ProtonGame::run_path):
+ * an absolute Windows path that is there (found ignoring case), and a 64-bit program, or a 32-bit one where the runtime
+ * ships its i386 modules (then in the launcher layout, as WoW64 runs only in a helper). What fails is game.complaint. */
+void proton_check_program(ProtonGame &game)
+{
+	if (!game.executable.empty()) {
+		const bool absolute = absolute_windows_path(game.executable);
+		if (!absolute) {
+			game.complaint = "executable is not an absolute Windows path (C:\\... or Z:\\...): " +
+				game.executable;
+		} else if (game.executable.size() > 3) {
+			/* Wine maps Z: onto the host root and C: onto the game's prefix
+			 * (dosdevices: c: is ../drive_c), so both can be checked here: a
+			 * typo, or a C:\\data path that names the prefix instead of /data
+			 * (2026-10-04: three library entries did, and each launch ended at
+			 * "failed to open"), shows in the library instead of in a run. */
+			const char drive = (char)(game.executable[0] | 0x20);
+			std::string rest = game.executable.substr(2);
+			for (char &character : rest) {
+				if (character == '\\') {
+					character = '/';
+				}
+			}
+			const std::string prefix = proton_game_prefix(game) + "/drive_c";
+			std::string host = drive == 'z' ? rest : drive == 'c' ? prefix + rest : std::string();
+			struct stat status;
+			/* Windows finds "client.exe" where an installer wrote "Client.exe"; the file system does not (src/pw_path_nocase.h). */
+			char held[4096];
+			if (!host.empty() && stat(host.c_str(), &status) != 0 && pw_path_nocase(host.c_str(), held, sizeof(held))) host = held;
+			if (!host.empty() && stat(host.c_str(), &status) != 0) {
+				game.complaint = "the executable is not there: " + host;
+				if (drive == 'c' && stat(rest.c_str(), &status) == 0) {
+					game.complaint += " (C: is the game's prefix; this file is Z:" +
+						game.executable.substr(2) + ")";
+				}
+			} else if (!host.empty()) {
+				/* A 32-bit program runs under WoW64 when the runtime ships its i386
+				 * modules (docs/IA32_DESIGN.md); without them it is refused here, not
+				 * started: the first launch of a 32-bit-required .NET game (an FNA game,
+				 * 2026-10-06), on a runtime without them, restarted the console. */
+				struct PwPeInfo pe;
+				const enum PwPeArch arch = pw_pe_arch_file(host.c_str(), &pe);
+				struct stat i386_modules;
+				const std::string i386_dir = std::string(PROTON_DATA_ROOT) + "/runtime/ge11-7/lib/wine/i386-windows";
+				if (arch == PW_PE_X86) {
+					game.x86_32 = true;
+					if (stat(i386_dir.c_str(), &i386_modules) != 0 || !S_ISDIR(i386_modules.st_mode)) {
+						game.complaint = pe.clr ?
+							"a 32-bit .NET program (it requires 32 bits), and this runtime has no 32-bit modules" :
+							"a 32-bit Windows program, and this runtime has no 32-bit modules";
+					} else {
+						/* Under WoW64 a program runs in a helper only: its signals and 32-bit TEBs
+						 * rest on the payload loader and the helper's address space. The launcher
+						 * layout, then, whatever game.json chose (a test's own override still wins). */
+						for (auto it = game.env.begin(); it != game.env.end();)
+							it = it->rfind("PROTON_LAYOUT=", 0) == 0 ? game.env.erase(it) : it + 1;
+						game.env.push_back("PROTON_LAYOUT=launcher");
+					}
+				} else if (arch == PW_PE_OTHER) {
+					char machine[16];
+					snprintf(machine, sizeof(machine), "0x%04x", pe.machine);
+					game.complaint = std::string("not an x86-64 program (machine ") + machine + ")";
+				}
+			}
+		}
+	}
+}
+
+/* A game's own setting: its game.json's env word NAME=value, or none of NAME's when value is empty. Atomic: the file is
+ * written beside and renamed over. "" when saved, else why not. */
+std::string proton_game_set_env(const ProtonGame &game, const std::string &name, const std::string &value)
+{
+	if (game.folder.empty()) return "this entry has no game.json";
+	const std::string path = game.folder + "/game.json", temporary = path + ".tmp";
+	nlohmann::json entry = nlohmann::json::object();
+	if (FILE *file = fopen(path.c_str(), "rb")) {
+		std::string text;
+		char buffer[4096];
+		for (size_t got; (got = fread(buffer, 1, sizeof(buffer), file)) > 0;) text.append(buffer, got);
+		fclose(file);
+		entry = nlohmann::json::parse(text, nullptr, false);
+		if (!entry.is_object()) return "game.json is not readable json";
+	}
+	nlohmann::json env = nlohmann::json::array();
+	if (entry.count("env") && entry["env"].is_array())
+		for (const auto &word : entry["env"])
+			if (!word.is_string() || word.get<std::string>().rfind(name + "=", 0) != 0) env.push_back(word);
+	if (!value.empty()) env.push_back(name + "=" + value);
+	if (env.empty()) entry.erase("env");
+	else entry["env"] = env;
+	const std::string text = entry.dump(2) + "\n";
+	FILE *file = fopen(temporary.c_str(), "wb");
+	bool saved = file && fwrite(text.data(), 1, text.size(), file) == text.size() && !fflush(file) && !fsync(fileno(file));
+	if (file && fclose(file)) saved = false;
+	if (!saved || rename(temporary.c_str(), path.c_str())) {
+		remove(temporary.c_str());
+		return std::string("game.json could not be saved: ") + strerror(errno);
+	}
+	return "";
+}
 
 __attribute__((format(printf, 1, 2))) void proton_say(const char *format, ...)
 {
@@ -800,6 +851,33 @@ std::string proton_game_prefix(const ProtonGame &game)
 	return root + id;
 }
 
+/* The game's program on the console's disk: Z: is the root, C: the game's prefix (read_game checks the same way). */
+static std::string host_executable(const ProtonGame &game)
+{
+	const std::string &path = game.executable;
+	if (path.size() < 4 || path[1] != ':') return {};
+	const char drive = (char)(path[0] | 0x20);
+	std::string rest = path.substr(2);
+	for (char &character : rest) if (character == '\\') character = '/';
+	const std::string prefix = proton_game_prefix(game);
+	const std::string host = drive == 'z' ? rest : drive == 'c' && !prefix.empty() ? prefix + "/drive_c" + rest : std::string();
+	char held[4096];
+	return !host.empty() && pw_path_nocase(host.c_str(), held, sizeof(held)) ? std::string(held) : std::string();
+}
+
+void proton_add_steam_ids(ProtonGame &game)
+{
+	game.steam_words.clear();
+	char found[PW_STEAM_ID_MAX] = "";
+	const std::string host = host_executable(game);
+	if (!host.empty()) pw_steam_appid_of(host.c_str(), found, sizeof(found));
+	std::vector<const char *> env;
+	for (const auto &word : game.env) env.push_back(word.c_str());
+	char words[2][PW_STEAM_ID_WORD];
+	const size_t added = pw_steam_id_words(env.data(), env.size(), found[0] ? found : nullptr, words);
+	for (size_t i = 0; i < added; ++i) game.steam_words.push_back(words[i]);
+}
+
 std::vector<ProtonGame> proton_read_games(std::string *problem)
 {
 	std::vector<ProtonGame> games;
@@ -829,6 +907,9 @@ std::vector<ProtonGame> proton_read_games(std::string *problem)
 					continue;   /* counted, but a game is a directory */
 				}
 				ProtonGame game = read_game(name, path);
+				if (pw_parked_profile(game.id.c_str())) {
+					continue;   /* parked: kept on the console, never listed (src/pw_parked.h) */
+				}
 				bool known = false;
 				for (const ProtonGame &earlier : games) {
 					known = known || earlier.id == game.id;
@@ -899,8 +980,8 @@ void proton_finish_restart()
 
 void proton_restart(const ProtonGame *game, unsigned cycle, const char *reason, const char *ended)
 {
-	char storage[4][1024];
-	char *argv[5];
+	char storage[5][1024];
+	char *argv[6];
 	int count = 0;
 	if (game) {
 		snprintf(storage[count], sizeof(storage[count]), "profile=%s", game->id.c_str());
@@ -910,6 +991,12 @@ void proton_restart(const ProtonGame *game, unsigned cycle, const char *reason, 
 		 * it instead of the profile's own arguments. Empty keeps the profile's. */
 		if (!game->arguments.empty()) {
 			snprintf(storage[count], sizeof(storage[count]), "args=%s", game->arguments.c_str());
+			argv[count] = storage[count];
+			count++;
+		}
+		/* A program the launcher's Files chose, run with this entry's prefix and settings (the title's path= launch) */
+		if (!game->run_path.empty()) {
+			snprintf(storage[count], sizeof(storage[count]), "path=%s", game->run_path.c_str());
 			argv[count] = storage[count];
 			count++;
 		}
@@ -930,8 +1017,10 @@ void proton_restart(const ProtonGame *game, unsigned cycle, const char *reason, 
 #if defined(PS5_HOST_REFERENCE)
 	/* The PC has no shell to replace and no eboot: the reference build says what
 	 * the console would do, so the menus and the self-test can be exercised here. */
+	std::string words;
+	for (int i = 0; i < count; ++i) words += (i ? " " : "") + std::string(argv[i]);
 	proton_say("restart: (host reference) to=%s cycle=%u reason=%s argv=%s",
-		game ? game->id.c_str() : "launcher", cycle, reason, argv[0] ? argv[0] : "");
+		game ? game->id.c_str() : "launcher", cycle, reason, words.c_str());
 	(void)selfEboots;
 #else
 	// Preserve the selection independently of LoadExec argument conventions.
@@ -1026,15 +1115,10 @@ static PwPayloadReport gPayloads;
 static PwPayloadFacts gPayloadFacts;
 static bool gPayloadsTaken = false;
 
-const PwPayloadReport &proton_payloads_check()
+#if !defined(PS5_HOST_REFERENCE)
+/* Every process kern.proc lists; *listed 1 when it answered */
+static std::vector<PwPayloadProcess> list_processes(int *listed)
 {
-	gPayloadsTaken = true;
-	memset(&gPayloadFacts, 0, sizeof(gPayloadFacts));
-#if defined(PS5_HOST_REFERENCE)
-	memset(&gPayloads, 0, sizeof(gPayloads));
-	gPayloads.listed = gPayloads.pass = 1;   /* the PC has no payloads */
-	return gPayloads;
-#else
 	std::vector<PwPayloadProcess> list;
 	int mib[4] = { CTL_KERN, KERN_PROC, KERN_PROC_PROC, 0 };
 	size_t bytes = 0;
@@ -1042,7 +1126,7 @@ const PwPayloadReport &proton_payloads_check()
 		bytes += bytes / 4;
 		std::vector<char> raw(bytes);
 		if (!sysctl(mib, 4, raw.data(), &bytes, nullptr, 0)) {
-			gPayloadFacts.listed = 1;
+			*listed = 1;
 			const uint64_t page = (uint64_t)sysconf(_SC_PAGESIZE);
 			/* The console's records are ki_structsize apart (1096 bytes, the SDK's 1088); the fields read come first. */
 			for (size_t at = 0; at + sizeof(int) <= bytes;) {
@@ -1052,12 +1136,72 @@ const PwPayloadReport &proton_payloads_check()
 				struct kinfo_proc record = {};
 				memcpy(&record, raw.data() + at, std::min((size_t)size, sizeof(record)));
 				at += (size_t)size;
-				PwPayloadProcess process = { record.ki_pid, record.ki_ppid, {}, (uint64_t)record.ki_rssize * page };
+				PwPayloadProcess process = { record.ki_pid, record.ki_ppid, {}, (uint64_t)record.ki_rssize * page,
+					(int64_t)record.ki_start.tv_sec };
 				snprintf(process.name, sizeof(process.name), "%s", record.ki_comm);
 				list.push_back(process);
 			}
 		}
 	}
+	return list;
+}
+extern "C" int sceKernelGetResidentFmemCount(int pid, uint64_t *resident, uint64_t *mapped);
+#endif
+
+PwSteamCensus proton_system_memory()
+{
+	PwSteamCensus out{};
+#if defined(PS5_HOST_REFERENCE)
+	/* The PC has no such memory; the render test's made-up figures: PROTON_MEMORY_TEST="system[,payloads MiB,payloads]" */
+	if (const char *test = getenv("PROTON_MEMORY_TEST"); test && *test)
+		out.known = sscanf(test, "%u,%u,%u", &out.system_mib, &out.payload_mib, &out.payload_count) >= 1;
+#else
+	/* The memory helper's census (src/pw_memory_helper.c census_take), taken here, when Steam is chosen: every process's
+	 * resident memory but the title's (sceKernelGetResidentFmemCount, 16 KiB pages), the user's payloads apart. No /data,
+	 * no list or no figure for any process: unknown, and the launcher never warns on it. */
+	int listed = 0;
+	const std::vector<PwPayloadProcess> list = gDataGranted ? list_processes(&listed) : std::vector<PwPayloadProcess>();
+	int syscore = 0;
+	for (const auto &process : list)
+		if (!strncmp(process.name, "SceSysCore", 10)) syscore = process.pid;
+	const uint64_t page = (uint64_t)sysconf(_SC_PAGESIZE);
+	uint64_t system = 0, payloads = 0;
+	for (const auto &process : list) {
+		uint64_t pages = 0, mapped = 0;
+		if (process.pid == getpid() || sceKernelGetResidentFmemCount(process.pid, &pages, &mapped)) continue;
+		system += pages * page;
+		out.processes++;
+		if (process.pid != syscore && pw_memory_is_payload(process.ppid, syscore, process.name)) {
+			payloads += pages * page;
+			out.payload_count++;
+		}
+	}
+	out.known = out.processes > 0;
+	out.system_mib = (unsigned)(system >> 20);
+	out.payload_mib = (unsigned)(payloads >> 20);
+#endif
+	return out;
+}
+
+const PwPayloadReport &proton_payloads_check()
+{
+	gPayloadsTaken = true;
+	memset(&gPayloadFacts, 0, sizeof(gPayloadFacts));
+#if defined(PS5_HOST_REFERENCE)
+	memset(&gPayloads, 0, sizeof(gPayloads));
+	gPayloads.listed = gPayloads.pass = 1;   /* the PC has no payloads */
+	if (const char *test = getenv("PROTON_PAYLOAD_TEST"); test && !strcmp(test, "fail")) {
+		/* The render test's failing check (tools/test-launcher-ui.py): no Kstuff, and one payload too many */
+		static const PwPayloadProcess table[] = { { 53, 1, "SceSysCore.elf", 0, 0 }, { 69, 53, "SceRedisServer", 0, 0 },
+			{ 87, 69, "elfldr.elf", 24u << 20, 0 },
+			{ 101, 87, "shadowmountplus.elf", 25u << 20, 0 }, { 102, 87, "websrv.elf", 8u << 20, 0 },
+			{ 130, 87, "extra.elf", 6u << 20, 0 }, { 120, 53, "eboot.bin", 300u << 20, 0 } };
+		gPayloadFacts.listed = 1;
+		pw_payload_check(table, sizeof(table) / sizeof(table[0]), 120, &gPayloadFacts, &gPayloads);
+	}
+	return gPayloads;
+#else
+	std::vector<PwPayloadProcess> list = list_processes(&gPayloadFacts.listed);
 	/* kstuff by its process: a title may not make a raw system call (a kekcall from the title ended it with
 	 * SYSTEM_ILLEGAL_FUNCTION_CALL, "directly issued a syscall 39", payload-quick-2026-10-29-01), so its version is not read */
 	for (const auto &process : list)
@@ -1069,20 +1213,26 @@ const PwPayloadReport &proton_payloads_check()
 		json_text(loopback_http(PW_ELFLDR_PORT, "GET /version HTTP/1.1\r\nHost: 127.0.0.1\r\nConnection: close\r\n\r\n"),
 			"tag").c_str());
 	gPayloadFacts.data_denied = !gDataGranted;
+	if (FILE *record = fopen(proton_title_path(PROTON_DAEMON_STARTED).c_str(), "r")) {
+		long long when = 0;
+		if (fscanf(record, "%lld", &when) == 1) gPayloadFacts.daemon_started = when;
+		fclose(record);
+	}
 	pw_payload_check(list.data(), (unsigned)list.size(), (int)getpid(), &gPayloadFacts, &gPayloads);
 	int syscore = 0;
 	for (const auto &process : list)
 		if (!strncmp(process.name, "SceSysCore", 10)) syscore = process.pid;
 	for (const auto &process : list)
 		if (pw_memory_is_payload(process.ppid, syscore, process.name))
-			proton_say("payloads: pid=%d ppid=%d name=%s resident=%.1f MiB", process.pid, process.ppid, process.name,
-				process.resident / 1048576.0);
+			proton_say("payloads: pid=%d ppid=%d name=%s resident=%.1f MiB started=%lld", process.pid, process.ppid,
+				process.name, process.resident / 1048576.0, (long long)process.started);
 	proton_say("payloads: pass=%d listed=%d processes=%zu kstuff=%s shadowmountplus=%s websrv=%s others=%u (%.1f MiB) "
-		"payloads=%.1f MiB", gPayloads.pass, gPayloads.listed, list.size(),
+		"payloads=%.1f MiB unnamed=%u daemon_started=%lld", gPayloads.pass, gPayloads.listed, list.size(),
 		gPayloadFacts.kstuff == PW_KSTUFF_OK ? "running" : "absent",
 		gPayloadFacts.shadowmount_version[0] ? gPayloadFacts.shadowmount_version : "-",
 		gPayloadFacts.websrv_version[0] ? gPayloadFacts.websrv_version : "-", gPayloads.others,
-		gPayloads.other_resident / 1048576.0, gPayloads.payload_resident / 1048576.0);
+		gPayloads.other_resident / 1048576.0, gPayloads.payload_resident / 1048576.0, gPayloads.unnamed,
+		(long long)gPayloadFacts.daemon_started);
 	return gPayloads;
 #endif
 }

@@ -824,7 +824,6 @@ def gen_lantern(out, download):
 
 # ------------------------------------------------------------------ the guided setup (MihawkOS)
 
-# The page the setup's QR code opens: the USB install, step by step (docs/INSTALL_USB.md).
 # The Chinese and Japanese faces: Google Fonts' Noto Sans SC and JP (OFL-1.1, ps5/licenses/NotoSansCJK-OFL.txt), the
 # variable TrueType files at a pinned revision. TrueType, not the CFF .otf: stb_truetype's distance fields draw only
 # lines and quadratic curves, and CFF's cubic outlines came out torn.
@@ -833,29 +832,22 @@ SETUP_FACES = {
     "noto-sans-sc": (GOOGLE_FONTS + "notosanssc/NotoSansSC%5Bwght%5D.ttf", "a3041811a78c361b1de50f953c805e0244951c21c5bd412f7232ef0d899af0da"),
     "noto-sans-jp": (GOOGLE_FONTS + "notosansjp/NotoSansJP%5Bwght%5D.ttf", "c2f3b4d463500a2ddcd3849cded1fceeb9fd6d1c32e6cbecd568453ba50fc68f"),
 }
-SETUP_INSTRUCTIONS = "https://github.com/mihawk-99/PS5_MihawkOS/blob/main/docs/INSTALL_USB.md"
 
 
 def gen_setup(out, download):
     """The language tiles' flags, rasterized from the SVGs kept in ps5/assets/flags (lipis/flag-icons, MIT, pinned
-    in its SOURCE.json) by rsvg-convert; the QR code's modules as text: one line a row, 1 dark, 0 light (made by
-    qrencode, error correction M); and each CJK language's face, baked with only the characters its text uses
+    in its SOURCE.json) by rsvg-convert; and each CJK language's face, baked with only the characters its text uses
     (src/pw_setup.c) by tools/bake-huifont.cpp."""
     import re
     import subprocess
-    for tool in ("rsvg-convert", "qrencode", "clang++"):
+    for tool in ("rsvg-convert", "clang++"):
         if not shutil.which(tool):
-            raise SystemExit(f"generator setup: {tool} is needed (librsvg, qrencode)")
+            raise SystemExit(f"generator setup: {tool} is needed (librsvg)")
     flags = out / "setup" / "flags"
     flags.mkdir(parents=True, exist_ok=True)
     for svg in sorted((Path(__file__).resolve().parents[1] / "assets" / "flags").glob("*.svg")):
         subprocess.run(["rsvg-convert", "-w", "240", "-h", "180", "-f", "png", "-o", str(flags / (svg.stem + ".png")),
                         str(svg)], check=True)
-    art = subprocess.run(["qrencode", "-t", "ASCII", "-m", "0", "-l", "M", SETUP_INSTRUCTIONS], check=True,
-                         capture_output=True, text=True).stdout.splitlines()
-    rows = ["".join("1" if line[i] == "#" else "0" for i in range(0, len(line), 2)) for line in art if line]
-    assert rows and all(len(row) == len(rows) for row in rows), "qrencode gave no square"
-    (out / "setup" / "qr.txt").write_text("\n".join(rows) + "\n")
     root = Path(__file__).resolve().parents[2]
     work = out / "setup-work"   # the baker and its character lists: not shipped
     work.mkdir(parents=True, exist_ok=True)
@@ -892,15 +884,39 @@ def gen_setup(out, download):
         shutil.copyfile(medium, fonts / (face + ".ttf"))
 
 
+def gen_launcher(out, _):
+    """The main menu's pictures (examples/ps5proton/home_grid.hpp), rasterized by rsvg-convert at twice the size they are
+    drawn on the menu's 1920x1080 page, one texel a pixel on the 3840x2160 swapchain: the title's Aero user tile
+    (ps5/tools/icon0.svg), the pointer, the dock's Settings cog and Steam's tile (ps5/assets/launcher/*.svg), and the
+    README's orbs for the rest of the dock and the tiles without art (docs/media/readme/orb-*-day.svg)."""
+    import subprocess
+    if not shutil.which("rsvg-convert"):
+        raise SystemExit("generator launcher: rsvg-convert is needed (librsvg)")
+    root = Path(__file__).resolve().parents[2]
+    folder = out / "launcher"
+    shutil.rmtree(folder / "orbs", ignore_errors=True)   # an orb the menu no longer draws leaves the title too
+    (folder / "orbs").mkdir(parents=True, exist_ok=True)
+    pictures = [(root / "ps5/tools/icon0.svg", folder / "aero-logo.png", 432),
+                (root / "ps5/assets/launcher/cursor.svg", folder / "cursor.png", 224),
+                (root / "ps5/assets/launcher/dock-settings.svg", folder / "dock-settings.png", 208),
+                (root / "ps5/assets/launcher/steam-tile.svg", folder / "steam-tile.png", 208)]
+    for orb in ("folder", "document", "app-browser", "app-generic"):
+        pictures.append((root / f"docs/media/readme/orb-{orb}-day.svg", folder / "orbs" / f"orb-{orb}.png", 208))
+    for source, target, size in pictures:
+        subprocess.run(["rsvg-convert", "-w", str(size), "-h", str(size), "-f", "png", "-o", str(target), str(source)],
+                       check=True)
+
+
 # Files beside this one that a generator reads: a change makes it run again
-GENERATOR_INPUTS = {"setup": ["src/pw_setup.c", "tools/bake-huifont.cpp", "ps5/assets/flags/*.svg"]}
+GENERATOR_INPUTS = {"setup": ["src/pw_setup.c", "tools/bake-huifont.cpp", "ps5/assets/flags/*.svg"],
+                    "launcher": ["ps5/tools/icon0.svg", "ps5/assets/launcher/*.svg", "docs/media/readme/orb-*-day.svg"]}
 
 GENERATORS = {
     "cube": gen_cube, "tunnel": gen_tunnel, "shadow_scenes": gen_shadow_scenes, "imgui_scene": gen_imgui_scene,
     "instancing": gen_instancing, "indirectdraw": gen_indirectdraw, "deferred_floor": gen_deferred_floor,
     "metal_plate": gen_metal_plate, "particles": gen_particles, "space_cubemap": gen_space_cubemap,
     "hdri_cube": gen_hdri_cube, "pbr_camera": gen_pbr_camera, "lantern": gen_lantern,
-    "setup": gen_setup,
+    "setup": gen_setup, "launcher": gen_launcher,
 }
 
 # The downloads (URL, SHA-256): CC0, Poly Haven and Khronos (ps5/assets.json)

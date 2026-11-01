@@ -4,6 +4,7 @@
 #include "pw_controller.h"
 #include "pw_controls.h"
 #include "pw_detailed_logs.h"
+#include "pw_drive_browse.h"
 #include "pw_game_mode.h"
 #include "pw_high_refresh.h"
 #include "json.hpp"   // external/tinygltf's vendored nlohmann::json, already in the title
@@ -138,14 +139,6 @@ bool printable(const std::string &text, size_t limit)
     for (unsigned char c : text)
         if (c < 0x20 || c == 0x7f) return false;
     return true;
-}
-
-bool ends_with_exe(const std::string &name)
-{
-    if (name.size() < 5) return false;
-    std::string tail = name.substr(name.size() - 4);
-    std::transform(tail.begin(), tail.end(), tail.begin(), [](unsigned char c) { return char(std::tolower(c)); });
-    return tail == ".exe";
 }
 
 bool token_ok(const PwWebuiContext &context, const PwWebuiRequest &request)
@@ -297,22 +290,13 @@ PwWebuiResponse delete_game(const PwWebuiContext &context, const PwWebuiRequest 
     return reply(200, json{{"removed", id}});
 }
 
-// A relative path under a prefix's drive_c, every part validated and none a symlink.
+// A relative path under a prefix's drive_c, every part validated and none a symlink (src/pw_drive_browse.h, which the
+// launcher's Files page uses too).
 bool drive_path(const PwWebuiContext &context, const std::string &prefix, const std::string &relative, std::string &out)
 {
-    if (!pw_webui_id(prefix)) return false;
-    out = context.data_root + "/prefixes/" + prefix + "/drive_c";
-    if (!is_dir(out)) return false;
-    size_t start = 0;
-    while (start < relative.size()) {
-        const size_t slash = relative.find('/', start);
-        const std::string part = relative.substr(start, slash == std::string::npos ? std::string::npos : slash - start);
-        if (!pw_webui_part(part)) return false;
-        out += "/" + part;
-        if (!is_dir(out)) return false;
-        if (slash == std::string::npos) break;
-        start = slash + 1;
-    }
+    char folder[4096];
+    if (pw_drive_folder(context.data_root.c_str(), prefix.c_str(), relative.c_str(), folder, sizeof(folder))) return false;
+    out = folder;
     return true;
 }
 
@@ -323,9 +307,13 @@ PwWebuiResponse browse(const PwWebuiContext &context, const PwWebuiRequest &requ
     if (relative.empty()) relative = "Games";
     if (!drive_path(context, prefix, relative, folder)) return fail(404, "No such folder.");
     json dirs = json::array(), exes = json::array();
-    for (const Entry &entry : list_dir(folder))
-        if (entry.dir) dirs.push_back(entry.name);
-        else if (ends_with_exe(entry.name)) exes.push_back(json{{"name", entry.name}, {"size", entry.size}});
+    PwDriveEntry *list = nullptr;
+    size_t count = 0, others = 0;
+    if (pw_drive_list(folder.c_str(), &list, &count, &others)) return fail(404, "No such folder.");
+    for (size_t i = 0; i < count; ++i)
+        if (list[i].dir) dirs.push_back(list[i].name);
+        else exes.push_back(json{{"name", list[i].name}, {"size", list[i].size}});
+    free(list);
     std::string windows = "C:\\" + relative;
     std::replace(windows.begin(), windows.end(), '/', '\\');
     return reply(200, json{{"prefix", prefix}, {"path", relative}, {"windows", windows}, {"dirs", dirs}, {"exes", exes}});
@@ -362,7 +350,9 @@ json settings_json(const PwWebuiContext &context)
     pw_detailed_logs_load(&logging, (root + "/logging.txt").c_str());
     pw_controls controls;
     pw_controls_load(&controls, (root + "/controls.txt").c_str());
-    json buttons = json::array(), controllers = json::array();
+    json buttons = json::array(), controllers = json::array(), keyboards = json::array();
+    for (unsigned i = 0; i < PW_OSK_TRIGGERS; ++i)
+        keyboards.push_back(json{{"id", pw_osk_trigger_id(i)}});
     for (unsigned i = 0; i < PW_CONTROLS_BUTTONS; ++i)
         buttons.push_back(json{{"id", pw_controls_button_id(i)}, {"label", pw_controls_button_label(i)}});
     for (int k = 0; k < PW_CONTROLLER_KINDS; ++k)
@@ -375,9 +365,10 @@ json settings_json(const PwWebuiContext &context)
                 {"mouse", json{{"left", pw_controls_button_id(controls.button[0])},
                                {"right", pw_controls_button_id(controls.button[1])},
                                {"middle", pw_controls_button_id(controls.button[2])}}},
+                {"keyboard", pw_osk_trigger_id(controls.keyboard)},
                 {"theme", kept_choice(context, "theme.txt", context.themes, false)},
                 {"music", kept_choice(context, "music.txt", context.music, true)},
-                {"choices", json{{"buttons", buttons}, {"controllers", controllers},
+                {"choices", json{{"buttons", buttons}, {"controllers", controllers}, {"keyboards", keyboards},
                                  {"themes", choices_json(context.themes, false)}, {"music", choices_json(context.music, true)}}}};
 }
 
@@ -415,6 +406,12 @@ PwWebuiResponse save_settings(const PwWebuiContext &context, const PwWebuiReques
             pw_controls_assign(&controls, i, unsigned(index));   // a button keeps one action: the old one is cleared
             controls_changed = true;
         }
+    }
+    if (body.count("keyboard")) {
+        const int trigger = body["keyboard"].is_string() ? pw_osk_trigger_parse(body["keyboard"].get<std::string>().c_str()) : -1;
+        if (trigger < 0) return fail(400, "The on-screen keyboard is off, touchpad, l3-r3 or options-touchpad.");
+        pw_controls_set_keyboard(&controls, unsigned(trigger));
+        controls_changed = true;
     }
     // The theme and the music: an id the launcher lists (and "off" for the music)
     std::vector<std::pair<std::string, std::string>> kept;   // file, id
@@ -456,7 +453,8 @@ PwWebuiResponse save_settings(const PwWebuiContext &context, const PwWebuiReques
 // The logs: logs/ itself and its sessions/<n>/ (src/pw_log_sessions.h), each as a name under logs/
 std::vector<Entry> log_files(const PwWebuiContext &context)
 {
-    std::vector<Entry> files;
+    // logs/ itself first: a report's 16 MiB then always holds this session's logs and their ends (src/pw_capped_log.h).
+    std::vector<Entry> files, sessions;
     const std::string root = context.data_root + "/logs";
     for (const Entry &entry : list_dir(root)) {
         if (!entry.dir) {
@@ -467,8 +465,9 @@ std::vector<Entry> log_files(const PwWebuiContext &context)
         for (const Entry &session : list_dir(root + "/sessions"))
             if (session.dir && pw_webui_part(session.name))
                 for (Entry file : list_dir(root + "/sessions/" + session.name))
-                    if (!file.dir) file.name = "sessions/" + session.name + "/" + file.name, files.push_back(file);
+                    if (!file.dir) file.name = "sessions/" + session.name + "/" + file.name, sessions.push_back(file);
     }
+    files.insert(files.end(), sessions.begin(), sessions.end());
     return files;
 }
 

@@ -52,6 +52,8 @@ typedef struct PwWineFdvStats {
     unsigned live, parked, high_water;
     unsigned long parks, unparks, limit_hits, failures;
     int disabled;
+    unsigned code_copies;        /* shared code copies the title holds (pw_wine_codeshare.h): each a descriptor */
+    unsigned long code_released; /* of those, taken back for a full descriptor table */
 } PwWineFdvStats;
 void pw_wine_fdv_stats(PwWineFdvStats *out);
 

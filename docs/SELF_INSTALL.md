@@ -39,8 +39,9 @@ Status lives in [PLAN.md](PLAN.md); this file is the design.
   - the Mono and Gecko MSIs: 192 MB of that, incompressible;
   - the probe prefix: 787 MB, needed only by the PC tools and the gate.
 - **A Microsoft image shipped in every runtime built on this PC** until 2026-10-18: `tools/build-wine-theme.py` turned the
-  local Windows 11 "Bloom" JPEG into `proton.bmp`. It now draws the project's own wallpaper instead
-  (Aero Meadow from 2026-10-18, Bubble Earth from 2026-10-25: `tools/make-aero-wallpapers.py`), and `tools/publication-check.py` fails a build whose `proton.bmp` is anything else.
+  local Windows 11 "Bloom" JPEG into `proton.bmp`. It now stages a wallpaper the project may redistribute instead
+  (Aero Meadow from 2026-10-18, Bubble Earth from 2026-10-25, Bubble City by Skeuoss, with the artist's permission,
+  from 2026-10-31), and `tools/publication-check.py` fails a build whose `proton.bmp` is anything else.
 
 ## The owner's decisions (2026-10-18)
 
@@ -49,8 +50,8 @@ Status lives in [PLAN.md](PLAN.md); this file is the design.
 | Where consoles download from | GitHub Releases of the public repo, published by the owner, built on a clean machine, with a source bundle attached. Nothing is published before phase 9 (rule 10). |
 | How a user without a PC starts the first install | Copy the MihawkOS folder to `/data/homebrew` (FTP from a phone or a PC, or a file manager on the console), then open the tile. The title sets itself up (phase 7). This replaced, later on 2026-10-18, a setup program started from pldmgr or a USB stick: "the title can set itself up", as probe 3 proved. |
 | How MihawkOS is updated | MihawkOS updates itself, on request, from a signed manifest (phase 8). This replaced version 1's "run the newest setup program again". |
-| ShadowMountPlus | **Never shipped** (the owner, 2026-10-18): "we will not be shipping a patched shadowmountplus and instead wait for it to be fixed upstream. The user themselves must use their own SM+". Nothing MihawkOS ships carries or installs it. Releases before 1.7beta6 could leave other homebrew unable to start after MihawkOS closes; MihawkOS requires 1.7beta10 or later (its payload check, `src/pw_payload_check.h`), which has the fix (`docs/LAUNCH_AFTER_EXIT.md`). |
-| The desktop in a public build | Bubble Earth, the project's own wallpaper (`tools/make-aero-wallpapers.py`), in every build (the owner, 2026-10-25); Aero Meadow before it replaced Bloom and the plain colour (the owner, 2026-10-18). |
+| ShadowMountPlus | **Never shipped** (the owner, 2026-10-18): "we will not be shipping a patched shadowmountplus and instead wait for it to be fixed upstream. The user themselves must use their own SM+". Nothing MihawkOS ships carries or installs it. Releases before 1.7beta6 could leave other homebrew unable to start after MihawkOS closes; MihawkOS asks for beta11 or newer (its payload check, `src/pw_payload_check.h`, checks only that it runs), which has the fix (`docs/LAUNCH_AFTER_EXIT.md`). |
+| The desktop in a public build | Bubble City by Skeuoss, used with the artist's permission (`themes/windows11/wallpapers/`), in every build (the owner, 2026-10-31); Bubble Earth (`tools/make-aero-wallpapers.py`) from 2026-10-25; Aero Meadow before it replaced Bloom and the plain colour (the owner, 2026-10-18). |
 
 Defaults the plan takes unless the owner says otherwise:
 - **The download starts on request:** the launcher asks once and shows the size and the free space needed.
@@ -249,8 +250,8 @@ Measured on the PC, on main's staged runtime: 2,442 files and 1,156,227,861 B ma
 (35.6%) in 65 s. `--long`'s 371 MB needs a 128 MiB window; the 8 MiB default costs about 40 MB.
 
 Other details:
-- **Launcher:** Settings, "Install runtime" (item 3, after About). It looks in `/data/ps5proton/install`, then in
-  each `/mnt/usbN/mihawkos`.
+- **Launcher:** Settings, "Install runtime" (item 3, after About). It looks in the title folder's `runtime-pieces/`
+  (since 2026-10-31; before, `/data/ps5proton/install`, then each `/mnt/usbN/mihawkos`).
 - **Free space:** checked through libkernel's `statfs`, not the title's `statvfs`, which is a null import there.
   When `statfs` gives no answer, a full disk is reported by the write that fails (ENOSPC).
 - **Typed outcomes for the first-launch tour** (`ProtonInstall::Problem`), cancel, and a USB-only search.
@@ -461,14 +462,13 @@ four sibling repositories beside it, by the README's steps (`tools/package-insta
    before root the title made only `/data/ps5proton`. A new console would never have been granted `/data`. Fixed in
    `33c587a`.
 
-**The package:**
-- `PPSA99170/` is the title folder.
-- `usb/mihawkos/` holds the runtime's pieces.
-- `SHA256SUMS` lists every file; `README.txt` is the user's three steps.
+**The package** (since 2026-10-31 one folder, the owner: "package everything in a single PPSA title file, and have
+the setup place the runtime by itself"):
+- `PPSA99170/` is the title folder, with the runtime's pieces in its `runtime-pieces/`;
+- `SHA256SUMS` lists every file; `README.txt` is the user's three steps;
+- `PS5_MihawkOS-v<version>.zip` holds the three, the release's one download, with its `.sha256` beside it.
 
-**Before, on the PC:** format a USB stick exFAT with an MBR partition table (the PS5 does not mount a GPT stick). Copy
-`usb/`'s contents to its root, so the stick holds `mihawkos/` with every piece. To check the copy, run
-`sha256sum -c SHA256SUMS` from the package folder.
+**Before, on the PC:** to check the package, run `sha256sum -c SHA256SUMS` from its folder.
 
 **On the console:**
 1. **Restart the PS5** (a real restart, not rest mode).
@@ -493,22 +493,21 @@ four sibling repositories beside it, by the README's steps (`tools/package-insta
    Check that `/data/ps5proton`, `/data/homebrew/PPSA99170` and `/data/homebrew/dev.conf` are gone. A stale tile may
    stay on the home screen: do not open it yet.
 4. **Copy the title folder the user's way:** `PPSA99170/` into `/data/homebrew/`, either from a phone's FTP client
-   (ftpsrv, port 2121) or with a file manager from a USB stick. Wait about 45 s for ShadowMountPlus to register it.
-5. **Plug in the stick** with `mihawkos/`.
-6. **Open MihawkOS.** What should happen:
+   (ftpsrv, port 2121) or with a file manager from a USB stick. It is about 0.6 GB with its `runtime-pieces/`. Wait
+   about 45 s for ShadowMountPlus to register it.
+5. **Open MihawkOS.** What should happen:
    - Before it asks for root, the title writes `dev.conf` and makes `/data/ps5proton` and its `logs/` (phase 7).
    - It starts the Lapy daemon and may restart itself once. The screen goes black for a few seconds; that is the
      elevation retry.
    - The guided setup opens at Welcome, with its music.
-7. **Walk the tour:**
+6. **Walk the tour:**
    1. Choose a language.
-   2. At "How to install", choose USB. "Check drive" should say how much the drive holds to install (about 1.55 GB).
-   3. Choose Install.
-   4. At "Preparing Mihawk OS", choose Start. That first session makes the `mihawk` prefix and ends itself.
-   5. The tour comes back at Done.
-8. **The first real Mihawk OS session:** Enter Mihawk OS from Done. Check the desktop, the DualSense, the Start menu and
+   2. Installing starts by itself: the runtime from the title folder, about 1.55 GB, about a minute.
+   3. At "Preparing Mihawk OS", choose Start. That first session makes the `mihawk` prefix and ends itself.
+   4. The tour comes back at Before you play. Hold ✕ until the ring is full (10 seconds).
+7. **The first real Mihawk OS session:** at Done, choose Go to the game library, then Mihawk OS. Check the desktop, the DualSense, the Start menu and
    a window. End the session, then come back to the launcher.
-9. **A game by folder (phase 2):** with MihawkOS in its launcher, copy a game folder that has one x86 or x64 `.exe` at
+8. **A game by folder (phase 2):** with MihawkOS in its launcher, copy a game folder that has one x86 or x64 `.exe` at
    its top over FTP to `/data/ps5proton/prefixes/mihawk/drive_c/Games/<Name>/`.
    - Let the copy finish first: big FTP copies slow the console.
    - Open Mihawk OS: the desktop should show the game's shortcut.
@@ -556,9 +555,10 @@ them. A user without a PC needs no ftpsrv or klogsrv: only the PC tools use them
 is missing and says so on screen.
 
 **Payload check:** MihawkOS opens only with the official payload set: Kstuff Lite 1.11 Beta or later, ShadowMountPlus
-1.7beta10 or later, elfldr, websrv and NanoDNS, with klog, ftpsrv and pldmgr allowed (`src/pw_payload_check.h`).
+beta11 or newer (asked for; only its presence is checked), elfldr and websrv, with NanoDNS, klog, ftpsrv and pldmgr allowed
+(`src/pw_payload_check.h`).
 Releases of ShadowMountPlus before 1.7beta6 could leave other homebrew unable to start after MihawkOS closed
-(`0x80940033`, `docs/LAUNCH_AFTER_EXIT.md`); the required 1.7beta10 has the fix.
+(`0x80940033`, `docs/LAUNCH_AFTER_EXIT.md`); every release MihawkOS asks for has the fix.
 
 ## Who does what
 

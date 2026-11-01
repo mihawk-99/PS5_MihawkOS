@@ -162,6 +162,23 @@ int main(void)
     assert(calls_wine_main == 1 && wine_argc == 2 && !strcmp(wine_argv0, "wine") &&
            !strcmp(wine_argv1, argv[1]) && start.stage == PW_WINE_START_RUNNING);
 
+    /* The title gives a game 17 settings of its own (OPENSSL_ia32cap was the 17th): up to PW_WINE_START_MAX_ENV go through. */
+    {
+        static PwWineStartEnv many[PW_WINE_START_MAX_ENV + 1];
+        PwWineStartConfig big = config;
+        for (unsigned i = 0; i < PW_WINE_START_MAX_ENV + 1; i++) many[i] = (PwWineStartEnv){ "K", "v" };
+        big.extra_env = many;
+        big.extra_env_count = 17;
+        env_log[0] = 0;
+        assert(PW_WINE_START_MAX_ENV >= 17 && pw_wine_start_environment(&start, &big, &ops) == PW_OK);
+        big.extra_env_count = PW_WINE_START_MAX_ENV;
+        env_log[0] = 0;
+        assert(pw_wine_start_environment(&start, &big, &ops) == PW_OK);
+        big.extra_env_count = PW_WINE_START_MAX_ENV + 1;
+        env_log[0] = 0;
+        assert(pw_wine_start_environment(&start, &big, &ops) != PW_OK);
+    }
+
     /* Only __wine_main exported: optional entries are skipped. */
     calls_module_start = calls_adopt = 0;
     build_module(0);

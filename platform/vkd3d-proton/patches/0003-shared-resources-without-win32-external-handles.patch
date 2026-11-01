@@ -1,0 +1,125 @@
+A shared resource's memory was made exportable and exported at once, and CreateSharedHandle exported it
+again, whether or not the device has VK_KHR_external_memory_win32. Every game's Vulkan on the console is the GPU
+broker's client, which has no Win32 external memory or semaphores: Wine's allocation with an export request
+failed (win32u patch 2407 turns it into an ordinary one), and vkGetMemoryWin32HandleKHR is NULL, so a game that
+makes a shared resource at start crashed. Without the extension a shared resource is now ordinary memory,
+CreateSharedHandle returns E_NOTIMPL and OpenSharedHandle opens nothing; the same for fences without
+VK_KHR_external_semaphore_win32, and a shared fence the host cannot export is an ordinary fence instead of
+failing CreateFence.
+The problem was found by reading PC5's vkd3d-proton 0002 and prospero-win 0054 (github.com/bornaradusin/PC5 at
+81323dc3, LGPL-2.1); this change is independently written.
+
+--- a/libs/vkd3d/device.c
++++ b/libs/vkd3d/device.c
+@@ -6664,6 +6664,13 @@
+             return DXGI_ERROR_INVALID_CALL;
+         }
+ 
++        /* PS5: its memory is ordinary without VK_KHR_external_memory_win32 (resource.c). */
++        if (!device->vk_info.KHR_external_memory_win32)
++        {
++            ID3D12Resource_Release(resource_iface);
++            return E_NOTIMPL;
++        }
++
+         if (D3DKMTShareObjects(1, &resource->kmt_local, &attr, access, handle) == STATUS_SUCCESS)
+         {
+             ID3D12Resource_Release(resource_iface);
+@@ -6735,6 +6742,13 @@
+ 
+         fence = shared_impl_from_ID3D12Fence(fence_iface);
+ 
++        /* PS5: without VK_KHR_external_semaphore_win32, vkGetSemaphoreWin32HandleKHR is NULL. */
++        if (!device->vk_info.KHR_external_semaphore_win32)
++        {
++            ID3D12Fence_Release(fence_iface);
++            return E_NOTIMPL;
++        }
++
+         if (D3DKMTShareObjects(1, &fence->kmt_local, &attr, access, handle) == STATUS_SUCCESS)
+         {
+             ID3D12Fence_Release(fence_iface);
+@@ -6787,6 +6801,15 @@
+     TRACE("iface %p, handle %p, riid %s, object %p\n",
+             iface, handle, debugstr_guid(riid), object);
+ 
++    /* PS5: nothing can be imported without Win32 external memory or semaphores (the GPU broker's Vulkan client). */
++    if ((IsEqualGUID(riid, &IID_ID3D12Resource) && !device->vk_info.KHR_external_memory_win32) ||
++            (IsEqualGUID(riid, &IID_ID3D12Fence) && !device->vk_info.KHR_external_semaphore_win32))
++    {
++        WARN("Cannot open shared handle %p without Win32 external handles.\n", handle);
++        *object = NULL;
++        return E_NOTIMPL;
++    }
++
+     if (IsEqualGUID(riid, &IID_ID3D12Resource))
+     {
+         struct DxvkSharedTextureMetadata metadata;
+--- a/libs/vkd3d/resource.c
++++ b/libs/vkd3d/resource.c
+@@ -758,7 +758,8 @@
+     memset(create_info, 0, sizeof(*create_info));
+     image_info->sType = VK_STRUCTURE_TYPE_IMAGE_CREATE_INFO;
+ 
+-    if (resource && (resource->heap_flags & D3D12_HEAP_FLAG_SHARED))
++    /* PS5: without VK_KHR_external_memory_win32 (the GPU broker's Vulkan client) a shared resource is ordinary memory. */
++    if (resource && (resource->heap_flags & D3D12_HEAP_FLAG_SHARED) && device->vk_info.KHR_external_memory_win32)
+     {
+         external_info->sType = VK_STRUCTURE_TYPE_EXTERNAL_MEMORY_IMAGE_CREATE_INFO;
+         external_info->handleTypes = VK_EXTERNAL_MEMORY_HANDLE_TYPE_OPAQUE_WIN32_BIT;
+@@ -4417,7 +4418,13 @@
+ 
+         allocate_info.vk_memory_priority = object->priority.residency_count ? vkd3d_convert_to_vk_prio(object->priority.d3d12priority) : 0.f;
+ 
+-        if (heap_flags & D3D12_HEAP_FLAG_SHARED)
++        if ((heap_flags & D3D12_HEAP_FLAG_SHARED) && !device->vk_info.KHR_external_memory_win32)
++        {
++            /* PS5: an ordinary allocation, neither exported nor exportable: CreateSharedHandle refuses it with
++             * E_NOTIMPL and OpenSharedHandle opens nothing, where the export used to fail or call a NULL function. */
++            WARN("No VK_KHR_external_memory_win32: shared resource %p is not shareable.\n", object);
++        }
++        else if (heap_flags & D3D12_HEAP_FLAG_SHARED)
+         {
+ #ifdef _WIN32
+             dedicated_requirements.prefersDedicatedAllocation = VK_TRUE;
+--- a/libs/vkd3d/command.c
++++ b/libs/vkd3d/command.c
+@@ -637,15 +637,18 @@
+             !(external_semaphore_properties.externalSemaphoreFeatures & VK_EXTERNAL_SEMAPHORE_FEATURE_IMPORTABLE_BIT) ||
+             !(external_semaphore_properties.exportFromImportedHandleTypes & VK_EXTERNAL_SEMAPHORE_HANDLE_TYPE_D3D12_FENCE_BIT))
+         {
+-            WARN("D3D12-Fence shared timeline semaphores not supported by host.\n");
+-            return E_NOTIMPL;
++            /* PS5: the fence still works, it only cannot be shared: CreateSharedHandle refuses it with E_NOTIMPL. A
++             * game that makes its fences shareable at start used to fail CreateFence here. */
++            WARN("D3D12-Fence shared timeline semaphores not supported by host: the fence is not shareable.\n");
+         }
++        else
++        {
++            export_info.sType = VK_STRUCTURE_TYPE_EXPORT_SEMAPHORE_CREATE_INFO;
++            export_info.pNext = NULL;
++            export_info.handleTypes = VK_EXTERNAL_SEMAPHORE_HANDLE_TYPE_D3D12_FENCE_BIT;
+ 
+-        export_info.sType = VK_STRUCTURE_TYPE_EXPORT_SEMAPHORE_CREATE_INFO;
+-        export_info.pNext = NULL;
+-        export_info.handleTypes = VK_EXTERNAL_SEMAPHORE_HANDLE_TYPE_D3D12_FENCE_BIT;
+-
+-        type_info.pNext = &export_info;
++            type_info.pNext = &export_info;
++        }
+     }
+ 
+     info.sType = VK_STRUCTURE_TYPE_SEMAPHORE_CREATE_INFO;
+--- a/libs/vkd3d/d3dkmt.c
++++ b/libs/vkd3d/d3dkmt.c
+@@ -61,6 +61,10 @@
+         return;
+     }
+ 
++    /* PS5: without VK_KHR_external_semaphore_win32, vkGetSemaphoreWin32HandleKHR is NULL. */
++    if (!device->vk_info.KHR_external_semaphore_win32)
++        return;
++
+     win32_handle_info.sType = VK_STRUCTURE_TYPE_SEMAPHORE_GET_WIN32_HANDLE_INFO_KHR;
+     win32_handle_info.pNext = NULL;
+     win32_handle_info.semaphore = fence->timeline_semaphore;

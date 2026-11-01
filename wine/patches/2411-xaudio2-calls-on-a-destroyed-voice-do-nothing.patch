@@ -1,0 +1,694 @@
+From 0000000000000000000000000000000000000000 Mon Sep 17 00:00:00 2001
+From: Mihawk <163614687+mihawk-99@users.noreply.github.com>
+Date: Sat, 31 Oct 2026 19:00:00 -0400
+Subject: [PATCH] xaudio2: Calls on a destroyed voice do nothing.
+
+A game goes on calling a voice after DestroyVoice, which does no harm on Windows: GetState, SubmitSourceBuffer, Start, Stop,
+the getters and a second DestroyVoice are all harmless there. Here the voice kept its pointer to the FAudio voice that
+DestroyVoiceSafeEXT had freed, so the next call read freed memory (a mixer thread crashed in FAudioSourceVoice_GetState on a
+voice the game had destroyed), and the voice's object went to the next voice created, so a late SubmitSourceBuffer queued its
+buffer there.
+
+A destroyed voice now has no FAudio voice (voice_is_gone), and each method of the source, submix and mastering voices answers
+with nothing when its voice is gone: RETURN_IF_GONE and its variants stand first in the method, getters answer with zeros, and
+a second DestroyVoice is ignored. The sends of a new voice leave out a destroyed voice (forget_gone_sends). The destroyed
+voice's object is not handed to a new voice for LATE_CALL_GRACE_MS (10 s), counted from the destroy by GetTickCount64
+(slot_is_free): a late call comes within moments of the destroy, and the object, still dead, takes it without changing a
+newcomer.
+
+The problem was found by reading bornaradusin/PC5's description of the crash (LGPL-2.1-or-later; patch 0007 of its
+patches/prospero-win); the design and the code are this project's own (NOTICE.md, "PC5").
+---
+ dlls/xaudio2_7/xaudio_dll.c | 173 ++++++++++++++++++++++++++++++++++++++++---
+ dlls/xaudio2_7/xaudio_private.h | 1 +
+ 2 files changed, 171 insertions(+), 3 deletions(-)
+
+diff --git a/dlls/xaudio2_7/xaudio_dll.c b/dlls/xaudio2_7/xaudio_dll.c
+--- a/dlls/xaudio2_7/xaudio_dll.c
++++ b/dlls/xaudio2_7/xaudio_dll.c
+@@ -350,6 +350,22 @@
+ 
+ /* Send Wrapping */
+ 
++/* A send to a voice that was destroyed has no FAudio voice to name: the entry is taken out. */
++static FAudioVoiceSends *forget_gone_sends(FAudioVoiceSends *sends)
++{
++    unsigned int i, kept = 0;
++
++    if(!sends)
++        return NULL;
++    for(i = 0; i < sends->SendCount; ++i){
++        if(!sends->pSends[i].pOutputVoice)
++            continue;
++        sends->pSends[kept++] = sends->pSends[i];
++    }
++    sends->SendCount = kept;
++    return sends;
++}
++
+ static FAudioVoiceSends *wrap_voice_sends(const XAUDIO2_VOICE_SENDS *sends)
+ {
+     FAudioVoiceSends *ret;
+@@ -377,7 +393,7 @@
+         ret->pSends[i].Flags = sends->pSends[i].Flags;
+     }
+ #endif
+-    return ret;
++    return forget_gone_sends(ret);
+ }
+ 
+ static void free_voice_sends(FAudioVoiceSends *sends)
+@@ -512,15 +528,42 @@
+ 
+ /* Common Voice Functions */
+ 
++/* A game goes on calling a voice after DestroyVoice, which does no harm on Windows. Here a destroyed voice has no FAudio
++ * voice any more, and each of its methods answers with nothing (zeros from a getter) instead of reaching freed memory.
++ * Its object stays in the engine's list for reuse, but not at once: a late call comes within moments of the destroy
++ * (the frame, a callback), and until the grace has passed the object is not handed to a new voice, whose state it
++ * would otherwise change. */
++#define LATE_CALL_GRACE_MS 10000
++
++static inline BOOL voice_is_gone(const XA2VoiceImpl *voice)
++{
++    return !voice->faudio_voice;
++}
++
++static inline BOOL slot_is_free(const XA2VoiceImpl *voice, ULONGLONG now)
++{
++    return !voice->in_use && (!voice->gone_at_ms || now - voice->gone_at_ms >= LATE_CALL_GRACE_MS);
++}
++
++#define RETURN_IF_GONE(voice) \
++    do { if (voice_is_gone(voice)) return; } while (0)
++#define RETURN_IF_GONE_WITH(voice, value) \
++    do { if (voice_is_gone(voice)) return (value); } while (0)
++#define RETURN_ZEROED_IF_GONE(voice, out) \
++    do { if (voice_is_gone(voice)) { memset((out), 0, sizeof(*(out))); return; } } while (0)
++
+ static inline void destroy_voice(XA2VoiceImpl *This)
+ {
++    RETURN_IF_GONE(This);
+     if (FAILED(FAudioVoice_DestroyVoiceSafeEXT(This->faudio_voice)))
+     {
+         ERR("Destroying voice %p failed.\n", This);
+         return;
+     }
++    This->faudio_voice = NULL;
+     free_effect_chain(This->effect_chain);
+     This->effect_chain = NULL;
++    This->gone_at_ms = GetTickCount64() | 1;  /* never 0, which means "not destroyed" */
+     This->in_use = FALSE;
+ }
+ 
+@@ -528,6 +571,8 @@
+ {
+     FAudioVoiceDetails faudio_details;
+ 
++    RETURN_ZEROED_IF_GONE(voice, details);
++
+     TRACE("%p, %p\n", voice, details);
+ 
+     FAudioVoice_GetVoiceDetails(voice->faudio_voice, &faudio_details);
+@@ -560,6 +605,8 @@
+     FAudioVoiceSends *faudio_sends;
+     HRESULT hr;
+ 
++    RETURN_IF_GONE_WITH(This, S_OK);
++
+     TRACE("%p, %p\n", This, pSendList);
+ 
+     faudio_sends = wrap_voice_sends(pSendList);
+@@ -578,6 +625,8 @@
+     FAudioEffectChain *chain;
+     HRESULT hr;
+ 
++    RETURN_IF_GONE_WITH(This, S_OK);
++
+     TRACE("%p, %p\n", This, pEffectChain);
+ 
+     chain = wrap_effect_chain(pEffectChain);
+@@ -597,6 +646,8 @@
+         UINT32 OperationSet)
+ {
+     XA2VoiceImpl *This = impl_from_IXAudio2SourceVoice(iface);
++    RETURN_IF_GONE_WITH(This, S_OK);
++
+     TRACE("%p, %u, 0x%x\n", This, EffectIndex, OperationSet);
+     return FAudioVoice_EnableEffect(This->faudio_voice, EffectIndex, OperationSet);
+ }
+@@ -605,6 +656,8 @@
+         UINT32 OperationSet)
+ {
+     XA2VoiceImpl *This = impl_from_IXAudio2SourceVoice(iface);
++    RETURN_IF_GONE_WITH(This, S_OK);
++
+     TRACE("%p, %u, 0x%x\n", This, EffectIndex, OperationSet);
+     return FAudioVoice_DisableEffect(This->faudio_voice, EffectIndex, OperationSet);
+ }
+@@ -613,6 +666,8 @@
+         BOOL *pEnabled)
+ {
+     XA2VoiceImpl *This = impl_from_IXAudio2SourceVoice(iface);
++    RETURN_IF_GONE(This);
++
+     TRACE("%p, %u, %p\n", This, EffectIndex, pEnabled);
+     FAudioVoice_GetEffectState(This->faudio_voice, EffectIndex, (int32_t*)pEnabled);
+ }
+@@ -622,6 +677,8 @@
+         UINT32 OperationSet)
+ {
+     XA2VoiceImpl *This = impl_from_IXAudio2SourceVoice(iface);
++    RETURN_IF_GONE_WITH(This, S_OK);
++
+     TRACE("%p, %u, %p, 0x%x, 0x%x\n", This, EffectIndex, pParameters,
+             ParametersByteSize, OperationSet);
+     return FAudioVoice_SetEffectParameters(This->faudio_voice, EffectIndex,
+@@ -632,6 +689,8 @@
+         UINT32 EffectIndex, void *pParameters, UINT32 ParametersByteSize)
+ {
+     XA2VoiceImpl *This = impl_from_IXAudio2SourceVoice(iface);
++    RETURN_IF_GONE_WITH(This, S_OK);
++
+     TRACE("%p, %u, %p, 0x%x\n", This, EffectIndex, pParameters,
+             ParametersByteSize);
+     return FAudioVoice_GetEffectParameters(This->faudio_voice, EffectIndex,
+@@ -642,6 +701,8 @@
+         const XAUDIO2_FILTER_PARAMETERS *pParameters, UINT32 OperationSet)
+ {
+     XA2VoiceImpl *This = impl_from_IXAudio2SourceVoice(iface);
++    RETURN_IF_GONE_WITH(This, S_OK);
++
+     TRACE("%p, %p, 0x%x\n", This, pParameters, OperationSet);
+     return FAudioVoice_SetFilterParameters(This->faudio_voice,
+             (const FAudioFilterParameters *)pParameters, OperationSet);
+@@ -651,6 +712,8 @@
+         XAUDIO2_FILTER_PARAMETERS *pParameters)
+ {
+     XA2VoiceImpl *This = impl_from_IXAudio2SourceVoice(iface);
++    RETURN_IF_GONE(This);
++
+     TRACE("%p, %p\n", This, pParameters);
+     FAudioVoice_GetFilterParameters(This->faudio_voice, (FAudioFilterParameters *)pParameters);
+ }
+@@ -663,6 +726,8 @@
+     XA2VoiceImpl *This = impl_from_IXAudio2SourceVoice(iface);
+     XA2VoiceImpl *dst = pDestinationVoice ? impl_from_IXAudio2Voice(pDestinationVoice) : NULL;
+ 
++    RETURN_IF_GONE_WITH(This, S_OK);
++
+     TRACE("%p, %p, %p, 0x%x\n", This, pDestinationVoice, pParameters, OperationSet);
+ 
+     return FAudioVoice_SetOutputFilterParameters(This->faudio_voice,
+@@ -676,6 +741,8 @@
+     XA2VoiceImpl *This = impl_from_IXAudio2SourceVoice(iface);
+     XA2VoiceImpl *dst = pDestinationVoice ? impl_from_IXAudio2Voice(pDestinationVoice) : NULL;
+ 
++    RETURN_IF_GONE(This);
++
+     TRACE("%p, %p, %p\n", This, pDestinationVoice, pParameters);
+ 
+     FAudioVoice_GetOutputFilterParameters(This->faudio_voice,
+@@ -687,6 +754,8 @@
+         UINT32 OperationSet)
+ {
+     XA2VoiceImpl *This = impl_from_IXAudio2SourceVoice(iface);
++    RETURN_IF_GONE_WITH(This, S_OK);
++
+     TRACE("%p, %f, 0x%x\n", This, Volume, OperationSet);
+     return FAudioVoice_SetVolume(This->faudio_voice, Volume, OperationSet);
+ }
+@@ -694,6 +763,8 @@
+ static void WINAPI XA2SRC_GetVolume(IXAudio2SourceVoice *iface, float *pVolume)
+ {
+     XA2VoiceImpl *This = impl_from_IXAudio2SourceVoice(iface);
++    RETURN_IF_GONE(This);
++
+     TRACE("%p, %p\n", This, pVolume);
+     return FAudioVoice_GetVolume(This->faudio_voice, pVolume);
+ }
+@@ -702,6 +773,8 @@
+         const float *pVolumes, UINT32 OperationSet)
+ {
+     XA2VoiceImpl *This = impl_from_IXAudio2SourceVoice(iface);
++    RETURN_IF_GONE_WITH(This, S_OK);
++
+     TRACE("%p, %u, %p, 0x%x\n", This, Channels, pVolumes, OperationSet);
+     return FAudioVoice_SetChannelVolumes(This->faudio_voice, Channels,
+             pVolumes, OperationSet);
+@@ -711,6 +784,8 @@
+         float *pVolumes)
+ {
+     XA2VoiceImpl *This = impl_from_IXAudio2SourceVoice(iface);
++    RETURN_IF_GONE(This);
++
+     TRACE("%p, %u, %p\n", This, Channels, pVolumes);
+     return FAudioVoice_GetChannelVolumes(This->faudio_voice, Channels,
+             pVolumes);
+@@ -724,6 +799,8 @@
+     XA2VoiceImpl *This = impl_from_IXAudio2SourceVoice(iface);
+     XA2VoiceImpl *dst = pDestinationVoice ? impl_from_IXAudio2Voice(pDestinationVoice) : NULL;
+ 
++    RETURN_IF_GONE_WITH(This, S_OK);
++
+     TRACE("%p, %p, %u, %u, %p, 0x%x\n", This, pDestinationVoice,
+             SourceChannels, DestinationChannels, pLevelMatrix, OperationSet);
+ 
+@@ -771,6 +848,8 @@
+ {
+     XA2VoiceImpl *This = impl_from_IXAudio2SourceVoice(iface);
+ 
++    RETURN_IF_GONE_WITH(This, S_OK);
++
+     TRACE("%p, 0x%x, 0x%x\n", This, Flags, OperationSet);
+ 
+     return FAudioSourceVoice_Start(This->faudio_voice, Flags, OperationSet);
+@@ -781,6 +860,8 @@
+ {
+     XA2VoiceImpl *This = impl_from_IXAudio2SourceVoice(iface);
+ 
++    RETURN_IF_GONE_WITH(This, S_OK);
++
+     TRACE("%p, 0x%x, 0x%x\n", This, Flags, OperationSet);
+ 
+     return FAudioSourceVoice_Stop(This->faudio_voice, Flags, OperationSet);
+@@ -791,6 +872,8 @@
+ {
+     XA2VoiceImpl *This = impl_from_IXAudio2SourceVoice(iface);
+ 
++    RETURN_IF_GONE_WITH(This, S_OK);
++
+     TRACE("%p, %p, %p\n", This, pBuffer, pBufferWMA);
+ 
+     return FAudioSourceVoice_SubmitSourceBuffer(This->faudio_voice, (FAudioBuffer*)pBuffer, (FAudioBufferWMA*)pBufferWMA);
+@@ -800,6 +883,8 @@
+ {
+     XA2VoiceImpl *This = impl_from_IXAudio2SourceVoice(iface);
+ 
++    RETURN_IF_GONE_WITH(This, S_OK);
++
+     TRACE("%p\n", This);
+ 
+     return FAudioSourceVoice_FlushSourceBuffers(This->faudio_voice);
+@@ -809,6 +894,8 @@
+ {
+     XA2VoiceImpl *This = impl_from_IXAudio2SourceVoice(iface);
+ 
++    RETURN_IF_GONE_WITH(This, S_OK);
++
+     TRACE("%p\n", This);
+ 
+     return FAudioSourceVoice_Discontinuity(This->faudio_voice);
+@@ -818,6 +905,8 @@
+ {
+     XA2VoiceImpl *This = impl_from_IXAudio2SourceVoice(iface);
+ 
++    RETURN_IF_GONE_WITH(This, S_OK);
++
+     TRACE("%p, 0x%x\n", This, OperationSet);
+ 
+     return FAudioSourceVoice_ExitLoop(This->faudio_voice, OperationSet);
+@@ -834,6 +923,8 @@
+     UINT32 Flags = 0;
+ #endif
+ 
++    RETURN_ZEROED_IF_GONE(This, pVoiceState);
++
+     TRACE("%p, %p, 0x%x\n", This, pVoiceState, Flags);
+ 
+     return FAudioSourceVoice_GetState(This->faudio_voice, (FAudioVoiceState*)pVoiceState, Flags);
+@@ -844,6 +935,8 @@
+ {
+     XA2VoiceImpl *This = impl_from_IXAudio2SourceVoice(iface);
+ 
++    RETURN_IF_GONE_WITH(This, S_OK);
++
+     TRACE("%p, %f, 0x%x\n", This, Ratio, OperationSet);
+ 
+     return FAudioSourceVoice_SetFrequencyRatio(This->faudio_voice, Ratio, OperationSet);
+@@ -853,6 +946,8 @@
+ {
+     XA2VoiceImpl *This = impl_from_IXAudio2SourceVoice(iface);
+ 
++    RETURN_IF_GONE(This);
++
+     TRACE("%p, %p\n", This, pRatio);
+ 
+     return FAudioSourceVoice_GetFrequencyRatio(This->faudio_voice, pRatio);
+@@ -865,6 +960,8 @@
+ {
+     XA2VoiceImpl *This = impl_from_IXAudio2SourceVoice(iface);
+ 
++    RETURN_IF_GONE_WITH(This, S_OK);
++
+     TRACE("%p, %u\n", This, NewSourceSampleRate);
+ 
+     return FAudioSourceVoice_SetSourceSampleRate(This->faudio_voice, NewSourceSampleRate);
+@@ -928,6 +1025,8 @@
+     FAudioVoiceSends *faudio_sends;
+     HRESULT hr;
+ 
++    RETURN_IF_GONE_WITH(This, S_OK);
++
+     TRACE("%p, %p\n", This, pSendList);
+ 
+     faudio_sends = wrap_voice_sends(pSendList);
+@@ -946,6 +1045,8 @@
+     FAudioEffectChain *chain;
+     HRESULT hr;
+ 
++    RETURN_IF_GONE_WITH(This, S_OK);
++
+     TRACE("%p, %p\n", This, pEffectChain);
+ 
+     chain = wrap_effect_chain(pEffectChain);
+@@ -965,6 +1066,8 @@
+         UINT32 OperationSet)
+ {
+     XA2VoiceImpl *This = impl_from_IXAudio2SubmixVoice(iface);
++    RETURN_IF_GONE_WITH(This, S_OK);
++
+     TRACE("%p, %u, 0x%x\n", This, EffectIndex, OperationSet);
+     return FAudioVoice_EnableEffect(This->faudio_voice, EffectIndex, OperationSet);
+ }
+@@ -973,6 +1076,8 @@
+         UINT32 OperationSet)
+ {
+     XA2VoiceImpl *This = impl_from_IXAudio2SubmixVoice(iface);
++    RETURN_IF_GONE_WITH(This, S_OK);
++
+     TRACE("%p, %u, 0x%x\n", This, EffectIndex, OperationSet);
+     return FAudioVoice_DisableEffect(This->faudio_voice, EffectIndex, OperationSet);
+ }
+@@ -981,6 +1086,8 @@
+         BOOL *pEnabled)
+ {
+     XA2VoiceImpl *This = impl_from_IXAudio2SubmixVoice(iface);
++    RETURN_IF_GONE(This);
++
+     TRACE("%p, %u, %p\n", This, EffectIndex, pEnabled);
+     FAudioVoice_GetEffectState(This->faudio_voice, EffectIndex, (int32_t*)pEnabled);
+ }
+@@ -990,6 +1097,8 @@
+         UINT32 OperationSet)
+ {
+     XA2VoiceImpl *This = impl_from_IXAudio2SubmixVoice(iface);
++    RETURN_IF_GONE_WITH(This, S_OK);
++
+     TRACE("%p, %u, %p, 0x%x, 0x%x\n", This, EffectIndex, pParameters,
+             ParametersByteSize, OperationSet);
+     return FAudioVoice_SetEffectParameters(This->faudio_voice, EffectIndex,
+@@ -1000,6 +1109,8 @@
+         UINT32 EffectIndex, void *pParameters, UINT32 ParametersByteSize)
+ {
+     XA2VoiceImpl *This = impl_from_IXAudio2SubmixVoice(iface);
++    RETURN_IF_GONE_WITH(This, S_OK);
++
+     TRACE("%p, %u, %p, 0x%x\n", This, EffectIndex, pParameters,
+             ParametersByteSize);
+     return FAudioVoice_GetEffectParameters(This->faudio_voice, EffectIndex,
+@@ -1010,6 +1121,8 @@
+         const XAUDIO2_FILTER_PARAMETERS *pParameters, UINT32 OperationSet)
+ {
+     XA2VoiceImpl *This = impl_from_IXAudio2SubmixVoice(iface);
++    RETURN_IF_GONE_WITH(This, S_OK);
++
+     TRACE("%p, %p, 0x%x\n", This, pParameters, OperationSet);
+     return FAudioVoice_SetFilterParameters(This->faudio_voice, (const FAudioFilterParameters *)pParameters,
+             OperationSet);
+@@ -1019,6 +1132,8 @@
+         XAUDIO2_FILTER_PARAMETERS *pParameters)
+ {
+     XA2VoiceImpl *This = impl_from_IXAudio2SubmixVoice(iface);
++    RETURN_IF_GONE(This);
++
+     TRACE("%p, %p\n", This, pParameters);
+     FAudioVoice_GetFilterParameters(This->faudio_voice, (FAudioFilterParameters *)pParameters);
+ }
+@@ -1031,6 +1146,8 @@
+     XA2VoiceImpl *This = impl_from_IXAudio2SubmixVoice(iface);
+     XA2VoiceImpl *dst = pDestinationVoice ? impl_from_IXAudio2Voice(pDestinationVoice) : NULL;
+ 
++    RETURN_IF_GONE_WITH(This, S_OK);
++
+     TRACE("%p, %p, %p, 0x%x\n", This, pDestinationVoice, pParameters, OperationSet);
+ 
+     return FAudioVoice_SetOutputFilterParameters(This->faudio_voice,
+@@ -1044,6 +1161,8 @@
+     XA2VoiceImpl *This = impl_from_IXAudio2SubmixVoice(iface);
+     XA2VoiceImpl *dst = pDestinationVoice ? impl_from_IXAudio2Voice(pDestinationVoice) : NULL;
+ 
++    RETURN_IF_GONE(This);
++
+     TRACE("%p, %p, %p\n", This, pDestinationVoice, pParameters);
+ 
+     FAudioVoice_GetOutputFilterParameters(This->faudio_voice,
+@@ -1055,6 +1174,8 @@
+         UINT32 OperationSet)
+ {
+     XA2VoiceImpl *This = impl_from_IXAudio2SubmixVoice(iface);
++    RETURN_IF_GONE_WITH(This, S_OK);
++
+     TRACE("%p, %f, 0x%x\n", This, Volume, OperationSet);
+     return FAudioVoice_SetVolume(This->faudio_voice, Volume, OperationSet);
+ }
+@@ -1062,6 +1183,8 @@
+ static void WINAPI XA2SUB_GetVolume(IXAudio2SubmixVoice *iface, float *pVolume)
+ {
+     XA2VoiceImpl *This = impl_from_IXAudio2SubmixVoice(iface);
++    RETURN_IF_GONE(This);
++
+     TRACE("%p, %p\n", This, pVolume);
+     return FAudioVoice_GetVolume(This->faudio_voice, pVolume);
+ }
+@@ -1070,6 +1193,8 @@
+         const float *pVolumes, UINT32 OperationSet)
+ {
+     XA2VoiceImpl *This = impl_from_IXAudio2SubmixVoice(iface);
++    RETURN_IF_GONE_WITH(This, S_OK);
++
+     TRACE("%p, %u, %p, 0x%x\n", This, Channels, pVolumes, OperationSet);
+     return FAudioVoice_SetChannelVolumes(This->faudio_voice, Channels,
+             pVolumes, OperationSet);
+@@ -1079,6 +1204,8 @@
+         float *pVolumes)
+ {
+     XA2VoiceImpl *This = impl_from_IXAudio2SubmixVoice(iface);
++    RETURN_IF_GONE(This);
++
+     TRACE("%p, %u, %p\n", This, Channels, pVolumes);
+     return FAudioVoice_GetChannelVolumes(This->faudio_voice, Channels,
+             pVolumes);
+@@ -1092,6 +1219,8 @@
+     XA2VoiceImpl *This = impl_from_IXAudio2SubmixVoice(iface);
+     XA2VoiceImpl *dst = pDestinationVoice ? impl_from_IXAudio2Voice(pDestinationVoice) : NULL;
+ 
++    RETURN_IF_GONE_WITH(This, S_OK);
++
+     TRACE("%p, %p, %u, %u, %p, 0x%x\n", This, pDestinationVoice,
+             SourceChannels, DestinationChannels, pLevelMatrix, OperationSet);
+ 
+@@ -1179,6 +1308,8 @@
+     FAudioVoiceSends *faudio_sends;
+     HRESULT hr;
+ 
++    RETURN_IF_GONE_WITH(This, S_OK);
++
+     TRACE("%p, %p\n", This, pSendList);
+ 
+     faudio_sends = wrap_voice_sends(pSendList);
+@@ -1197,6 +1328,8 @@
+     FAudioEffectChain *chain;
+     HRESULT hr;
+ 
++    RETURN_IF_GONE_WITH(This, S_OK);
++
+     TRACE("%p, %p\n", This, pEffectChain);
+ 
+     chain = wrap_effect_chain(pEffectChain);
+@@ -1216,6 +1349,8 @@
+         UINT32 OperationSet)
+ {
+     XA2VoiceImpl *This = impl_from_IXAudio2MasteringVoice(iface);
++    RETURN_IF_GONE_WITH(This, S_OK);
++
+     TRACE("%p, %u, 0x%x\n", This, EffectIndex, OperationSet);
+     return FAudioVoice_EnableEffect(This->faudio_voice, EffectIndex, OperationSet);
+ }
+@@ -1224,6 +1359,8 @@
+         UINT32 OperationSet)
+ {
+     XA2VoiceImpl *This = impl_from_IXAudio2MasteringVoice(iface);
++    RETURN_IF_GONE_WITH(This, S_OK);
++
+     TRACE("%p, %u, 0x%x\n", This, EffectIndex, OperationSet);
+     return FAudioVoice_DisableEffect(This->faudio_voice, EffectIndex, OperationSet);
+ }
+@@ -1232,6 +1369,8 @@
+         BOOL *pEnabled)
+ {
+     XA2VoiceImpl *This = impl_from_IXAudio2MasteringVoice(iface);
++    RETURN_IF_GONE(This);
++
+     TRACE("%p, %u, %p\n", This, EffectIndex, pEnabled);
+     FAudioVoice_GetEffectState(This->faudio_voice, EffectIndex, (int32_t*)pEnabled);
+ }
+@@ -1241,6 +1380,8 @@
+         UINT32 OperationSet)
+ {
+     XA2VoiceImpl *This = impl_from_IXAudio2MasteringVoice(iface);
++    RETURN_IF_GONE_WITH(This, S_OK);
++
+     TRACE("%p, %u, %p, 0x%x, 0x%x\n", This, EffectIndex, pParameters,
+             ParametersByteSize, OperationSet);
+     return FAudioVoice_SetEffectParameters(This->faudio_voice, EffectIndex,
+@@ -1251,6 +1392,8 @@
+         UINT32 EffectIndex, void *pParameters, UINT32 ParametersByteSize)
+ {
+     XA2VoiceImpl *This = impl_from_IXAudio2MasteringVoice(iface);
++    RETURN_IF_GONE_WITH(This, S_OK);
++
+     TRACE("%p, %u, %p, 0x%x\n", This, EffectIndex, pParameters,
+             ParametersByteSize);
+     return FAudioVoice_GetEffectParameters(This->faudio_voice, EffectIndex,
+@@ -1261,6 +1404,8 @@
+         const XAUDIO2_FILTER_PARAMETERS *pParameters, UINT32 OperationSet)
+ {
+     XA2VoiceImpl *This = impl_from_IXAudio2MasteringVoice(iface);
++    RETURN_IF_GONE_WITH(This, S_OK);
++
+     TRACE("%p, %p, 0x%x\n", This, pParameters, OperationSet);
+     return FAudioVoice_SetFilterParameters(This->faudio_voice, (const FAudioFilterParameters *)pParameters,
+             OperationSet);
+@@ -1270,6 +1415,8 @@
+         XAUDIO2_FILTER_PARAMETERS *pParameters)
+ {
+     XA2VoiceImpl *This = impl_from_IXAudio2MasteringVoice(iface);
++    RETURN_IF_GONE(This);
++
+     TRACE("%p, %p\n", This, pParameters);
+     FAudioVoice_GetFilterParameters(This->faudio_voice, (FAudioFilterParameters *)pParameters);
+ }
+@@ -1282,6 +1429,8 @@
+     XA2VoiceImpl *This = impl_from_IXAudio2MasteringVoice(iface);
+     XA2VoiceImpl *dst = pDestinationVoice ? impl_from_IXAudio2Voice(pDestinationVoice) : NULL;
+ 
++    RETURN_IF_GONE_WITH(This, S_OK);
++
+     TRACE("%p, %p, %p, 0x%x\n", This, pDestinationVoice, pParameters, OperationSet);
+ 
+     return FAudioVoice_SetOutputFilterParameters(This->faudio_voice,
+@@ -1295,6 +1444,8 @@
+     XA2VoiceImpl *This = impl_from_IXAudio2MasteringVoice(iface);
+     XA2VoiceImpl *dst = pDestinationVoice ? impl_from_IXAudio2Voice(pDestinationVoice) : NULL;
+ 
++    RETURN_IF_GONE(This);
++
+     TRACE("%p, %p, %p\n", This, pDestinationVoice, pParameters);
+ 
+     FAudioVoice_GetOutputFilterParameters(This->faudio_voice,
+@@ -1306,6 +1457,8 @@
+         UINT32 OperationSet)
+ {
+     XA2VoiceImpl *This = impl_from_IXAudio2MasteringVoice(iface);
++    RETURN_IF_GONE_WITH(This, S_OK);
++
+     TRACE("%p, %f, 0x%x\n", This, Volume, OperationSet);
+     return FAudioVoice_SetVolume(This->faudio_voice, Volume, OperationSet);
+ }
+@@ -1313,6 +1466,8 @@
+ static void WINAPI XA2M_GetVolume(IXAudio2MasteringVoice *iface, float *pVolume)
+ {
+     XA2VoiceImpl *This = impl_from_IXAudio2MasteringVoice(iface);
++    RETURN_IF_GONE(This);
++
+     TRACE("%p, %p\n", This, pVolume);
+     return FAudioVoice_GetVolume(This->faudio_voice, pVolume);
+ }
+@@ -1321,6 +1476,8 @@
+         const float *pVolumes, UINT32 OperationSet)
+ {
+     XA2VoiceImpl *This = impl_from_IXAudio2MasteringVoice(iface);
++    RETURN_IF_GONE_WITH(This, S_OK);
++
+     TRACE("%p, %u, %p, 0x%x\n", This, Channels, pVolumes, OperationSet);
+     return FAudioVoice_SetChannelVolumes(This->faudio_voice, Channels,
+             pVolumes, OperationSet);
+@@ -1330,6 +1487,8 @@
+         float *pVolumes)
+ {
+     XA2VoiceImpl *This = impl_from_IXAudio2MasteringVoice(iface);
++    RETURN_IF_GONE(This);
++
+     TRACE("%p, %u, %p\n", This, Channels, pVolumes);
+     return FAudioVoice_GetChannelVolumes(This->faudio_voice, Channels,
+             pVolumes);
+@@ -1343,6 +1502,8 @@
+     XA2VoiceImpl *This = impl_from_IXAudio2MasteringVoice(iface);
+     XA2VoiceImpl *dst = pDestinationVoice ? impl_from_IXAudio2Voice(pDestinationVoice) : NULL;
+ 
++    RETURN_IF_GONE_WITH(This, S_OK);
++
+     TRACE("%p, %p, %u, %u, %p, 0x%x\n", This, pDestinationVoice,
+             SourceChannels, DestinationChannels, pLevelMatrix, OperationSet);
+ 
+@@ -1391,6 +1552,8 @@
+ {
+     XA2VoiceImpl *This = impl_from_IXAudio2MasteringVoice(iface);
+ 
++    RETURN_IF_GONE_WITH(This, S_OK);
++
+     TRACE("%p, %p\n", This, pChannelMask);
+ 
+     return FAudioMasteringVoice_GetChannelMask(This->faudio_voice, (uint32_t *)pChannelMask);
+@@ -1617,6 +1780,7 @@
+ {
+     IXAudio2Impl *This = impl_from_IXAudio2(iface);
+     XA2VoiceImpl *src;
++    ULONGLONG now;
+     HRESULT hr;
+     FAudioVoiceSends *faudio_sends;
+     FAudioEffectChain *chain;
+@@ -1632,9 +1796,10 @@
+ #endif
+     EnterCriticalSection(&This->lock);
+ 
++    now = GetTickCount64();
+     LIST_FOR_EACH_ENTRY(src, &This->voices, XA2VoiceImpl, entry){
+         EnterCriticalSection(&src->lock);
+-        if(!src->in_use)
++        if(slot_is_free(src, now))
+             break;
+         LeaveCriticalSection(&src->lock);
+     }
+@@ -1680,6 +1845,7 @@
+     HRESULT hr;
+     IXAudio2Impl *This = impl_from_IXAudio2(iface);
+     XA2VoiceImpl *sub;
++    ULONGLONG now;
+     FAudioVoiceSends *faudio_sends;
+     FAudioEffectChain *chain;
+ 
+@@ -1695,9 +1861,10 @@
+ 
+     EnterCriticalSection(&This->lock);
+ 
++    now = GetTickCount64();
+     LIST_FOR_EACH_ENTRY(sub, &This->voices, XA2VoiceImpl, entry){
+         EnterCriticalSection(&sub->lock);
+-        if(!sub->in_use)
++        if(slot_is_free(sub, now))
+             break;
+         LeaveCriticalSection(&sub->lock);
+     }
+diff --git a/dlls/xaudio2_7/xaudio_private.h b/dlls/xaudio2_7/xaudio_private.h
+--- a/dlls/xaudio2_7/xaudio_private.h
++++ b/dlls/xaudio2_7/xaudio_private.h
+@@ -68,6 +68,7 @@
+     FAudioEffectChain *effect_chain;
+ 
+     BOOL in_use;
++    ULONGLONG gone_at_ms; /* GetTickCount64() when DestroyVoice ran (never 0); 0 while the voice was never destroyed */
+ 
+     CRITICAL_SECTION lock;
+ 

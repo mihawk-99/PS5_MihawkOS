@@ -1,0 +1,66 @@
+From 0000000000000000000000000000000000000000 Mon Sep 17 00:00:00 2001
+From: Mihawk <163614687+mihawk-99@users.noreply.github.com>
+Date: Sun, 01 Nov 2026 14:00:00 -0400
+Subject: [PATCH] kernelbase: PS5: No debugger starts in a title or helper.
+
+A crash in a PS5 title or helper started winedbg: UnhandledExceptionFilter calls the game's own filter, then start_debugger,
+which reads AeDebug and allocates the command line and a copy of the environment from the process heap. The runtime has no
+winedbg (the log shows "cannot open .../winedbg.so"), and when the crashing thread's neighbours hold the heap lock the crash
+froze the title instead of ending it (prospero-win saw this in a game, from the heap lock; here the tester's Elden Ring crash
+started a winedbg that itself failed 0.65 s later). WINE_PS5_NTDLL_DIR is set by the starter for a title and for each helper:
+there the filter still calls the game's own filter, then logs the exception ("no debugger starts in a PS5 title") and lets the
+thread's handler end the process.
+
+The problem was found by reading prospero-win (mpereiraesaa/prospero-win, LGPL-2.1-or-later; its patch 0971, commit b9ee658);
+this change is written independently here (NOTICE.md, "prospero-win and ProsperoMC"). Not run on a console.
+---
+ dlls/kernelbase/debug.c | 29 +++++++++++++++++++++++++++++
+ 1 file changed, 29 insertions(+)
+
+diff --git a/dlls/kernelbase/debug.c b/dlls/kernelbase/debug.c
+index 6615507..e9da375 100644
+--- a/dlls/kernelbase/debug.c
++++ b/dlls/kernelbase/debug.c
+@@ -748,6 +748,29 @@ static BOOL check_resource_write( void *addr )
+ }
+ 
+ 
++/*******************************************************************
++ *         ps5_no_debugger
++ *
++ * Whether this process is a PS5 title's or one of its helpers (the starter sets WINE_PS5_NTDLL_DIR for both): no
++ * debugger starts there. winedbg is not part of the runtime, and trying to start it reads AeDebug and allocates the
++ * command line and the environment from the process heap, which the crashing thread's neighbours may hold: the
++ * crash then froze the title instead of ending it.
++ */
++static BOOL ps5_no_debugger(void)
++{
++    static LONG state;   /* 0: not asked, 1: a title, 2: not */
++    WCHAR value[2];
++    SIZE_T len;
++
++    if (!state)
++    {
++        NTSTATUS status = RtlQueryEnvironmentVariable( NULL, L"WINE_PS5_NTDLL_DIR", 18, value, ARRAY_SIZE(value) - 1, &len );
++        InterlockedExchange( &state, status == STATUS_VARIABLE_NOT_FOUND ? 2 : 1 );
++    }
++    return state == 1;
++}
++
++
+ /*******************************************************************
+  *         UnhandledExceptionFilter   (kernelbase.@)
+  */
+@@ -784,6 +807,12 @@ LONG WINAPI UnhandledExceptionFilter( EXCEPTION_POINTERS *epointers )
+             if (ret != EXCEPTION_CONTINUE_SEARCH) return ret;
+         }
+ 
++        if (ps5_no_debugger())
++        {
++            ERR( "unhandled exception %#lx at %p: no debugger starts in a PS5 title\n", rec->ExceptionCode, rec->ExceptionAddress );
++            return nested ? EXCEPTION_CONTINUE_SEARCH : EXCEPTION_EXECUTE_HANDLER;
++        }
++
+         if ((GetErrorMode() & SEM_NOGPFAULTERRORBOX) ||
+             !start_debugger_atomic( epointers ) || !NtCurrentTeb()->Peb->BeingDebugged)
+             return nested ? EXCEPTION_CONTINUE_SEARCH : EXCEPTION_EXECUTE_HANDLER;

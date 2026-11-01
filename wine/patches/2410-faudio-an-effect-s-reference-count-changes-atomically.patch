@@ -1,0 +1,50 @@
+From 0000000000000000000000000000000000000000 Mon Sep 17 00:00:00 2001
+From: Mihawk <163614687+mihawk-99@users.noreply.github.com>
+Date: Sat, 31 Oct 2026 12:00:00 -0400
+Subject: [PATCH] faudio: An effect's reference count changes atomically.
+
+FAPOBase_AddRef and FAPOBase_Release changed m_lReferenceCount with plain += and -=, and Release read it back
+afterwards. Every effect Wine builds on FAPOBase (reverb, volume meter, the XAPOFX effects) shares that count between
+the game's references and those its voices hold, so a game that attaches one effect to voices it creates and destroys
+on more than one thread loses updates between them: the count reaches zero while a voice still holds the effect and
+the mixer reads freed memory (XAPOFXParams_GetParameters, from a voice's GetEffectParameters). The count now changes
+atomically, as XAPOBase's does with InterlockedIncrement on Windows, and Release returns the value it computed.
+
+The problem was found by reading bornaradusin/PC5 (LGPL-2.1-or-later; patch 0002 of its patches/prospero-win); this
+change is written independently here (NOTICE.md, "PC5").
+---
+ libs/faudio/src/FAPOBase.c | 12 ++++++------
+ 1 file changed, 6 insertions(+), 6 deletions(-)
+
+diff --git a/libs/faudio/src/FAPOBase.c b/libs/faudio/src/FAPOBase.c
+index 27a98e1..c3c8353 100644
+--- a/libs/faudio/src/FAPOBase.c
++++ b/libs/faudio/src/FAPOBase.c
+@@ -104,21 +104,21 @@ void CreateFAPOBaseWithCustomAllocatorEXT(
+ 	fapo->m_lReferenceCount = 1;
+ }
+ 
++/* The count changes atomically, as XAPOBase's does with InterlockedIncrement. A game attaches one effect to voices it
++ * creates and destroys on several threads; an update lost between them frees the effect while a voice still holds it. */
+ int32_t FAPOBase_AddRef(FAPOBase *fapo)
+ {
+-	fapo->m_lReferenceCount += 1;
+-	return fapo->m_lReferenceCount;
++	return __atomic_add_fetch(&fapo->m_lReferenceCount, 1, __ATOMIC_SEQ_CST);
+ }
+ 
+ int32_t FAPOBase_Release(FAPOBase *fapo)
+ {
+-	fapo->m_lReferenceCount -= 1;
+-	if (fapo->m_lReferenceCount == 0)
++	int32_t count = __atomic_sub_fetch(&fapo->m_lReferenceCount, 1, __ATOMIC_SEQ_CST);
++	if (count == 0)
+ 	{
+ 		fapo->Destructor(fapo);
+-		return 0;
+ 	}
+-	return fapo->m_lReferenceCount;
++	return count;
+ }
+ 
+ uint32_t FAPOBase_GetRegistrationProperties(

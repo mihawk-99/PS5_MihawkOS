@@ -1,0 +1,89 @@
+From 0000000000000000000000000000000000000000 Mon Sep 17 00:00:00 2001
+From: Mihawk <163614687+mihawk-99@users.noreply.github.com>
+Date: Sun, 01 Nov 2026 12:00:00 -0400
+Subject: [PATCH] ntdll: PS5: The high area is as large as the kernel grants.
+
+A 64-bit game may reserve tens of GiB of address space at once: Red Dead Redemption 2 asks for 28 GiB, Cyberpunk 2077 for
+16 GiB, a .NET runtime for 256 GiB. The high area of patch 0600 is one reservation of 16 GiB, and a view that does not fit
+in what is left falls through to an anonymous mmap(NULL), which the console refuses for such sizes ("map_view anon mmap
+error Cannot allocate memory"). A reservation costs no memory until a page is committed, so mmap_init now asks for 512 GiB
+at the high base and halves the size until the kernel grants it, down to the 16 GiB the single reservation had.
+PW_PS5_HIGH_RESERVE_GB gives the size tried first (0 keeps the single 16 GiB reservation), and one wine-ps5 line at startup
+reports the area granted. The high area is reserved before the view heap's: the kernel places that reservation where it
+likes and must not place it inside this one. The protection table's leaves (1 MiB per 4 GiB of views) already come from the
+native heap (patch 0960), so a larger area costs no flexible memory.
+
+The problem was found by reading prospero-win (mpereiraesaa/prospero-win, LGPL-2.1-or-later; its patch 0982, commit
+ad7d313); this change is written independently here (NOTICE.md, "prospero-win and ProsperoMC"). Not run on a console.
+---
+ dlls/ntdll/unix/virtual.c | 48 +++++++++++++++++++++++++++++++++++++++++++----
+ 1 file changed, 44 insertions(+), 4 deletions(-)
+
+diff --git a/dlls/ntdll/unix/virtual.c b/dlls/ntdll/unix/virtual.c
+index 66b0500..02311de 100644
+--- a/dlls/ntdll/unix/virtual.c
++++ b/dlls/ntdll/unix/virtual.c
+@@ -1007,6 +1007,45 @@ extern int sceKernelReserveVirtualRange( void **addr, size_t size, int flags, si
+  * the kernel grants 16 GiB at this hint (measured on FW 12.02). */
+ #define PS5_HIGH_BASE        ((void *)0x1000000000)
+ #define PS5_HIGH_RESERVE     ((size_t)16 << 30)
++/* A 64-bit game may reserve tens of GiB at once (28 GiB, 48 GiB, a .NET runtime 256 GiB): reserving costs no memory
++ * until a page is committed, so ask for this much first and halve until the kernel grants it. */
++#define PS5_HIGH_RESERVE_MAX ((size_t)512 << 30)
++#endif
++
++#ifdef __PROSPERO__
++/* The largest size, halving from first down to PS5_HIGH_RESERVE, that reserve() grants (0 when none: first is raised to
++ * PS5_HIGH_RESERVE if smaller). */
++static size_t ps5_halving_reserve( size_t first, int (*reserve)( size_t size, void *context ), void *context )
++{
++    size_t size = first < PS5_HIGH_RESERVE ? PS5_HIGH_RESERVE : first;
++
++    for (;;)
++    {
++        if (!reserve( size, context )) return size;
++        if (size <= PS5_HIGH_RESERVE) return 0;
++        size = max( size >> 1, PS5_HIGH_RESERVE );
++    }
++}
++
++/* The size to try first: PW_PS5_HIGH_RESERVE_GB (0 keeps the single 16 GiB reservation), else PS5_HIGH_RESERVE_MAX. */
++static size_t ps5_high_reserve_first(void)
++{
++    const char *env = getenv( "PW_PS5_HIGH_RESERVE_GB" );
++    char *end;
++    unsigned long gb;
++
++    if (!env || !*env) return PS5_HIGH_RESERVE_MAX;
++    gb = strtoul( env, &end, 10 );
++    if (*end || gb > (PS5_HIGH_RESERVE_MAX >> 30)) return PS5_HIGH_RESERVE_MAX;
++    return (size_t)gb << 30;
++}
++
++static int ps5_reserve_high_area( size_t size, void *context )
++{
++    void *high = PS5_HIGH_BASE;
++
++    return sceKernelReserveVirtualRange( &high, size, PS5_MAP_FIXED | PS5_MAP_NO_OVERWRITE, granularity_mask + 1 );
++}
+ #endif
+ 
+ #ifdef __PROSPERO__
+@@ -1224,12 +1263,13 @@ static void mmap_init( const struct preload_info *preload_info )
+      * heap wherever the kernel has space above 4 GiB. */
+     {
+         void *heap = NULL;
+-        void *high = PS5_HIGH_BASE;
++        size_t granted = ps5_halving_reserve( ps5_high_reserve_first(), ps5_reserve_high_area, NULL );
++        /* the high area first: the kernel places the view heap's reservation where it likes, and not inside this one */
++        if (granted) mmap_add_reserved_area( PS5_HIGH_BASE, granted );
+         if (!sceKernelReserveVirtualRange( &heap, PS5_HEAP_RESERVE, 0, granularity_mask + 1 ))
+             mmap_add_reserved_area( heap, PS5_HEAP_RESERVE );
+-        if (!sceKernelReserveVirtualRange( &high, PS5_HIGH_RESERVE, PS5_MAP_FIXED | PS5_MAP_NO_OVERWRITE,
+-                                           granularity_mask + 1 ))
+-            mmap_add_reserved_area( high, PS5_HIGH_RESERVE );
++        fprintf( stderr, "wine-ps5: high area %llu GiB at %p (PW_PS5_HIGH_RESERVE_GB gives the size tried first)\n",
++                 (unsigned long long)(granted >> 30), PS5_HIGH_BASE );
+     }
+ #else
+     reserve_area( (void *)0x7ffffe000000, (void *)0x7fffffff0000 );

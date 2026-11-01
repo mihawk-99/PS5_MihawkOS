@@ -2,11 +2,14 @@
 /* Sony owns native processes; Wine owns Windows process state and handles. */
 #include "pw_wine_process.h"
 #include "pw_wine_inherit.h"
+#include "pw_wine_title_game.h"
+#include "pw_wine_pe_imports.h"
 #include "../../src/pw_environment.h"
 #include "pw_wine_sink.h"
 #include "pw_wine_process_io.h"
 #include "pw_wine_threads.h"
 #include "pw_wine_perf.h"
+#include "pw_spawn_wait.h"
 #include "../../src/pw_ntsync.h"
 #include <errno.h>
 #include <netdb.h>
@@ -35,7 +38,9 @@ extern int sceKernelUsleep(unsigned);
 /* service is 1 while the slot holds a helper (-1 while one starts): every helper is a payload process. */
 /* unloading: the root the title's desktop session ends on purpose (game mode, src/pw_desktop_session.h); its exit is
  * not the session's result. */
-struct child { int fd, service, pid, closing, initial, unloading, gpu_cookie, memory, code_kib; void *input_page, *audio_ring; };
+/* game_line: the program the title runs itself started this helper, or a helper it started did (a game's launcher in
+ * the title starts the game): the title's end waits for it with no time limit (pw_ps5_wait_children). */
+struct child { int fd, service, pid, closing, initial, unloading, gpu_cookie, memory, code_kib, game_line; void *input_page, *audio_ring; };
 static struct child children[32];
 static pthread_mutex_t child_lock = PTHREAD_MUTEX_INITIALIZER;
 static pthread_cond_t child_closed = PTHREAD_COND_INITIALIZER;
@@ -81,6 +86,8 @@ int pw_ps5_set_initial_environment(const char *block,size_t bytes)
 }
 const char *pw_ps5_initial_environment(void) { return initial_environment; }
 static unsigned pending_spawns;
+/* When pending_spawns last went from 0 to 1, on payload_ms's clock; 0 while none is in flight (pw_spawn_wait.h). */
+static long long pending_since_ms;
 static int root_result=-1;
 int pw_ps5_root_result(void) { pthread_mutex_lock(&child_lock);int result=root_result;pthread_mutex_unlock(&child_lock);return result; }
 static int (*graphics_start)(int,const struct pw_child_bootstrap *);
@@ -255,12 +262,40 @@ static int warm_take_alive(int *fd, int *pid)
     return 0;
 }
 static int spawn_native(int server_fd, const struct pw_child_bootstrap *boot, int *native_pid);
+/* The title runs a program itself (title_client_start took it): what it starts, and what those start, are its game's. */
+static int title_client_live;
+/* The title runs a session's root itself (proton_wine.cpp, start_title_root): what it starts is its game's too. */
+void pw_ps5_set_title_client_live(void) { title_client_live=1; }
+static int game_line_of(int pid)
+{
+    int line = 0;
+    pthread_mutex_lock(&child_lock);
+    for (unsigned i = 0; i < 32; ++i) if (children[i].service > 0 && children[i].pid == pid) line = children[i].game_line;
+    pthread_mutex_unlock(&child_lock);
+    return line;
+}
+static void game_line_mark(int pid, const char *image)
+{
+    pthread_mutex_lock(&child_lock);
+    for (unsigned i = 0; i < 32; ++i) if (children[i].service > 0 && children[i].pid == pid) children[i].game_line = 1;
+    pthread_mutex_unlock(&child_lock);
+    fprintf(stderr, "wine-ps5: helper %d (%s) is the game's: the title's end waits for it\n", pid,
+            image && *image ? pw_title_game_name(image) : "a program");
+}
 struct spawn_work { struct pw_child_spawn request; int fds[2]; long long received_ms; };
 static void *spawn_worker(void *opaque)
 {
     struct spawn_work *work=opaque;
     int native_pid=0;
     int result;
+    /* Test only (missing-import64-title): WINE_PS5_TEST_SPAWN_STALL=<image> holds that program's start for 600 s (past the case's watchdog), as
+     * the console's wedged loader held a store overlay's while the game in the title failed (pw_spawn_wait.h). */
+    const char *stall=getenv("WINE_PS5_TEST_SPAWN_STALL");
+    if(stall && *stall && work->request.bootstrap.image[0] &&
+       !strcasecmp(pw_title_game_name(work->request.bootstrap.image),stall)) {
+        fprintf(stderr,"wine-ps5: test: the start of %s is held 600 s\n",stall);
+        sceKernelUsleep(600000000u);
+    }
     /* Test only: force Chromium's single-process model on the CEF helper, so it cannot spawn a --type=renderer child
      * (the in-title design needs to know whether the CEF can be collapsed). */
     if (getenv("PROTON_CEF_SINGLE_PROCESS") && work->request.bootstrap.command_line[0] &&
@@ -279,9 +314,15 @@ static void *spawn_worker(void *opaque)
     } else if(work->request.bootstrap.flags==PW_CHILD_GRAPHICS && gpu_open && title_client_start) {
         /* Beside the broker: the title's own client, a broker client in this process; once it is taken, a helper. */
         result=title_client_start(work->fds[0],&work->request.bootstrap);
-        if(!result)native_pid=getpid();
-        else if(errno==EBUSY)result=spawn_native(work->fds[0],&work->request.bootstrap,&native_pid);
+        if(!result) { native_pid=getpid();title_client_live=1; }
+        else if(errno==EBUSY) {
+            fprintf(stderr,"wine-ps5: %s: the title's place is taken; a helper\n",
+                    work->request.bootstrap.image[0] ? pw_title_game_name(work->request.bootstrap.image) : "a program");
+            result=spawn_native(work->fds[0],&work->request.bootstrap,&native_pid);
+        }
     } else result=spawn_native(work->fds[0],&work->request.bootstrap,&native_pid);
+    if(!result && native_pid>0 && native_pid!=getpid() && game_line_of(work->request.message.pid))
+        game_line_mark(native_pid,work->request.bootstrap.image);
     struct pw_child_message reply={PW_CHILD_PROTOCOL,PW_CHILD_SPAWN_REPLY,work->request.message.pid,result ? errno : 0,native_pid};
     if(pw_child_send(work->fds[1],&reply,sizeof(reply),NULL,0) && !result && native_pid!=getpid()) pw_ps5_remote_close(native_pid);
     fprintf(stderr,"wine-ps5: broker requester=%d child=%d status=%d\n",reply.pid,native_pid,reply.value);
@@ -289,7 +330,7 @@ static void *spawn_worker(void *opaque)
     fprintf(stderr,"wine-ps5: spawn served requester=%d native=%d received_ms=%lld replied_ms=%lld\n",reply.pid,native_pid,
             work->received_ms,payload_ms());
     close(work->fds[0]);close(work->fds[1]);free(work);
-    pthread_mutex_lock(&child_lock);--pending_spawns;pthread_mutex_unlock(&child_lock);
+    pthread_mutex_lock(&child_lock);if(!--pending_spawns)pending_since_ms=0;pthread_mutex_unlock(&child_lock);
     return NULL;
 }
 static int accept_spawn(const struct pw_child_spawn *request, int fds[2])
@@ -308,11 +349,11 @@ static int accept_spawn(const struct pw_child_spawn *request, int fds[2])
     int error=ENOMEM;
     if(work) {
         work->request=*request;memcpy(work->fds,fds,sizeof(work->fds));work->received_ms=payload_ms();
-        pthread_mutex_lock(&child_lock);++pending_spawns;pthread_mutex_unlock(&child_lock);
+        pthread_mutex_lock(&child_lock);if(!pending_spawns++)pending_since_ms=payload_ms();pthread_mutex_unlock(&child_lock);
         pthread_t thread;
         error=pthread_create(&thread,NULL,spawn_worker,work);
         if(!error) { pthread_detach(thread);return 0; }
-        pthread_mutex_lock(&child_lock);--pending_spawns;pthread_mutex_unlock(&child_lock);
+        pthread_mutex_lock(&child_lock);if(!--pending_spawns)pending_since_ms=0;pthread_mutex_unlock(&child_lock);
         free(work);
     }
     struct pw_child_message reply={PW_CHILD_PROTOCOL,PW_CHILD_SPAWN_REPLY,request->message.pid,error,0};
@@ -351,9 +392,9 @@ static void code_share_forget(int pid,struct child *child)
     pw_wine_codeshare_stats(&stats);
     if(closed || stats.finds)
         fprintf(stderr,"wine-ps5: shared code copies native=%d closed=%u held=%llu held_kib=%llu asks=%llu hits=%llu "
-                "offers=%llu kept=%llu\n",pid,closed,(unsigned long long)stats.entries,(unsigned long long)(stats.bytes>>10),
-                (unsigned long long)stats.finds,(unsigned long long)stats.hits,(unsigned long long)stats.offers,
-                (unsigned long long)stats.kept);
+                "offers=%llu kept=%llu released=%llu\n",pid,closed,(unsigned long long)stats.entries,
+                (unsigned long long)(stats.bytes>>10),(unsigned long long)stats.finds,(unsigned long long)stats.hits,
+                (unsigned long long)stats.offers,(unsigned long long)stats.kept,(unsigned long long)stats.released);
 }
 static void *monitor_child(void *opaque)
 {
@@ -501,7 +542,7 @@ static void *monitor_child(void *opaque)
     pthread_mutex_lock(&child_lock);
     if(child->memory>=0) { close(child->memory);child->memory=-1; }
     child->gpu_cookie=0;child->input_page=NULL;child->audio_ring=NULL;
-    child->service = 0; child->pid = 0; child->closing = 0; child->initial = 0; child->unloading = 0;
+    child->service = 0; child->pid = 0; child->closing = 0; child->initial = 0; child->unloading = 0; child->game_line = 0;
     pthread_mutex_unlock(&child_lock);
     payload_trace("resources-released",pid,control,0);
     descriptor_metrics("closed");
@@ -952,7 +993,7 @@ static int spawn_native(int server_fd, const struct pw_child_bootstrap *boot, in
     }
     if (ack.value) { errno = EIO; goto done; }
     pthread_mutex_lock(&child_lock);
-    child->fd = pair[0]; child->pid = ack.pid; child->service = service; child->closing = 0;
+    child->fd = pair[0]; child->pid = ack.pid; child->service = service; child->closing = 0; child->game_line = 0;
     child->memory = memory_fd; memory_fd = -1;
     child->input_page=input_page;input_page=NULL;
     child->audio_ring=audio_ring;audio_ring=NULL;
@@ -992,7 +1033,7 @@ static int spawn_native(int server_fd, const struct pw_child_bootstrap *boot, in
         if(pair[1]>=0) { close(pair[1]);pair[1]=-1; }
         if(payload_pid>0) { close_until_gone(payload_pid,pair[0]);pair[0]=-1; }
         if(gpu_cookie && gpu_close)gpu_close(gpu_cookie,-payload_pid);
-        pthread_mutex_lock(&child_lock); child->service = 0; child->pid = 0;
+        pthread_mutex_lock(&child_lock); child->service = 0; child->pid = 0; child->game_line = 0;
         pthread_mutex_unlock(&child_lock);
     }
     for (unsigned i = 0; i < 2; ++i) if (pair[i] != -1) close(pair[i]);
@@ -1062,7 +1103,75 @@ int pw_ps5_spawn(int server_fd, const char *runtime, const char *prefix, const c
     }
     if(flags && (flags!=PW_CHILD_GRAPHICS || (child_control<0 && !gpu_open))) { errno=ENOTSUP;return -1; }
     boot.flags=flags;
-    return child_control>=0 ? spawn_through_owner(server_fd,&boot) : spawn_native(server_fd,&boot,NULL);
+    if(child_control>=0) return spawn_through_owner(server_fd,&boot);
+    /* In the title: the program it runs itself starts this one, so it is its game's (a launcher starting the game). */
+    int pid=0;
+    const int result=spawn_native(server_fd,&boot,&pid);
+    if(!result && title_client_live && pid>0) game_line_mark(pid,image);
+    return result;
+}
+/* The image's own file and the DLLs beside it, for pw_pe_kind: one open file at a time. */
+struct pe_folder { const char *exe; char dir[1024]; char name[PW_PE_IMPORT_NAME]; int fd; };
+static int pe_folder_read(void *context, const char *name, uint64_t offset, void *into, size_t size)
+{
+    struct pe_folder *folder = context;
+    if (folder->fd < 0 || strcasecmp(folder->name, name ? name : "")) {
+        if (folder->fd >= 0) close(folder->fd);
+        folder->fd = -1;
+        copy_string(folder->name, sizeof(folder->name), name ? name : "");
+        char path[1280];
+        if (!name) folder->fd = open(folder->exe, O_RDONLY);
+        else if ((size_t)snprintf(path, sizeof(path), "%s/%s", folder->dir, name) < sizeof(path)) {
+            folder->fd = open(path, O_RDONLY);
+            /* shortcut: the exact name, then all lower case; a DLL in another case is not found (the program stays a
+             * helper, as in Alpha 6) until a case-blind lookup is needed */
+            for (char *at = path + strlen(folder->dir) + 1; folder->fd < 0 && *at; ++at) *at = pw_pe_lower(*at);
+            if (folder->fd < 0) folder->fd = open(path, O_RDONLY);
+        }
+        if (folder->fd < 0) return -1;
+    }
+    size_t have = 0;
+    while (have < size) {
+        const ssize_t got = pread(folder->fd, (char *)into + have, size - have, (off_t)(offset + have));
+        if (got <= 0) return -1;
+        have += (size_t)got;
+    }
+    return 0;
+}
+/* 1 when dir/name exists. */
+static int folder_has(const char *dir, const char *name)
+{
+    char path[1280];
+    return (size_t)snprintf(path, sizeof(path), "%s/%s", dir, name) < sizeof(path) && access(path, F_OK) == 0;
+}
+unsigned int pw_ps5_title_route(const char *unix_name, unsigned short machine, const char *image, const char *command_line)
+{
+    const char *setting = getenv("WINE_PS5_TITLE_GAMES");
+    if (!setting || strcmp(setting, "1") || !image || !*image || (child_control < 0 && !gpu_open)) return 0;
+    enum PwTitleRoute route = pw_title_game_route(image, machine == 0x8664, setting, getenv("WINE_PS5_TITLE_OPTOUT"),
+                                                  getenv("WINE_PS5_TITLE_PICK"), getenv("WINE_PS5_TITLE_LISTED"));
+    enum PwPeKind kind = PW_PE_KIND_UNREAD;
+    char deepest[PW_PE_IMPORT_NAME] = "";
+    if (route == PW_TITLE_ROUTE_CANDIDATE && unix_name) {
+        struct pe_folder folder = { unix_name, "", "", -1 };
+        copy_string(folder.dir, sizeof(folder.dir), unix_name);
+        char *slash = strrchr(folder.dir, '/');
+        if (slash) *slash = 0;
+        /* A Chromium-based game first: its imports show no graphics API (it loads Direct3D at run time). */
+        const int chromium = folder_has(folder.dir, "resources.pak") && folder_has(folder.dir, "icudtl.dat") &&
+            (folder_has(folder.dir, "v8_context_snapshot.bin") || folder_has(folder.dir, "snapshot_blob.bin"));
+        route = pw_title_game_chromium(route, chromium, folder_has(folder.dir, "libcef.dll"),
+                                       command_line && strstr(command_line, "--type=") != NULL);
+        if (route == PW_TITLE_ROUTE_CANDIDATE) kind = pw_pe_kind(pe_folder_read, &folder, deepest);
+        if (folder.fd >= 0) close(folder.fd);
+    }
+    route = pw_title_game_decide(route, kind == PW_PE_KIND_GAME);
+    if (route != PW_TITLE_ROUTE_OFF && route != PW_TITLE_ROUTE_NOT_LIBRARY)
+        fprintf(stderr, "wine-ps5: %s: %s (%s%s%s%s%s)\n", pw_title_game_name(image),
+                pw_title_route_in_title(route) ? "inside MihawkOS" : "a helper", pw_title_route_word(route),
+                kind != PW_PE_KIND_UNREAD ? "; " : "", kind != PW_PE_KIND_UNREAD ? pw_pe_kind_word(kind) : "",
+                deepest[0] ? " through " : "", deepest);
+    return pw_title_route_in_title(route) ? PW_CHILD_GRAPHICS : 0;
 }
 int pw_ps5_start_root(int server_fd,const char *runtime,const char *prefix,const char *cwd,int argc,const char *const *argv)
 {
@@ -1172,7 +1281,8 @@ static void close_remaining_children(void)
     unsigned count = 0;
     pthread_mutex_lock(&child_lock);
     for (unsigned i = 0; i < 32; ++i)
-        if (children[i].service > 0 && children[i].pid > 0 && !children[i].closing) pids[count++] = children[i].pid;
+        if (children[i].service > 0 && children[i].pid > 0 && !children[i].closing && !children[i].game_line)
+            pids[count++] = children[i].pid;
     pthread_mutex_unlock(&child_lock);
     for (unsigned i = 0; i < count; ++i) {
         fprintf(stderr, "wine-ps5: child native=%d still open after the title's wait; closing it\n", (int)pids[i]);
@@ -1198,18 +1308,34 @@ static void report_open_children(unsigned seconds)
 void pw_ps5_wait_children(void)
 {
     unsigned live, waited = 0;
+    int let_go = 0;
     do {
         live = 0;
         pthread_mutex_lock(&child_lock);
-        live=pending_spawns;
+        const unsigned pending=pending_spawns;
+        const long long since=pending_since_ms;
         for (unsigned i=0; i<32; ++i) live += children[i].service != 0;
         pthread_mutex_unlock(&child_lock);
+        const long long now=payload_ms();
+        if (pw_spawn_wait_holds(pending, since > 0 ? (uint64_t)since : 0, now > 0 ? (uint64_t)now : 0)) live += pending;
+        else if (pending && !let_go) {
+            let_go = 1;
+            fprintf(stderr, "wine-ps5: %u helper start(s) in flight for %lld s; the title's end goes on without them\n",
+                    pending, (now - since) / 1000);
+        }
         if (live) {
             sceKernelUsleep(10000);
             /* After 15 s, the helpers left are closed. A helper whose Windows program cannot end (one created
              * suspended whose parent is gone) kept the title waiting for good, and outlived it once the system
              * closed the title (2026-10-06, record removed from the tree; in git history: a launcher's browser process 365). */
-            if (++waited == 1500) close_remaining_children();
+            if (++waited == 1500) {
+                unsigned games = 0;
+                pthread_mutex_lock(&child_lock);
+                for (unsigned i = 0; i < 32; ++i) games += children[i].service > 0 && children[i].game_line;
+                pthread_mutex_unlock(&child_lock);
+                if (games) fprintf(stderr, "wine-ps5: the title waits for the %u helper(s) of its game, as long as they run\n", games);
+                close_remaining_children();
+            }
             if (waited % 3000 == 0) report_open_children(waited / 100);
         }
     } while (live);

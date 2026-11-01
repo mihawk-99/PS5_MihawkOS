@@ -6,15 +6,13 @@ presses with the real install engine, its first Mihawk OS session, Done, and one
   tools/run-setup-unattended.py --name RUN
   tools/run-setup-unattended.py --name RUN --read --package DIR    afterwards: downloads only, nothing launched or
                                                                    written
-  tools/run-setup-unattended.py --name RUN --route ftp --pieces DIR
-                         the FTP route instead of the stick: DIR's files (a package's usb/mihawkos) are copied into
-                         /data/ps5proton/install, the tour is walked Welcome, language, FTP, Check files, Install, to
-                         "You're all set" (step 6), and the launcher is closed there. It runs on a set-up console too:
-                         setup.txt is put aside for the run and put back after it, the prefix and saves are not touched,
-                         and an installed runtime is installed over (the engine keeps what already matches).
+  tools/run-setup-unattended.py --name RUN --pieces DIR
+                         first copies DIR's files (dist/runtime, or a package's PPSA99170/runtime-pieces) into the
+                         title folder's runtime-pieces/ over FTP, as a release carries them (one already there at its
+                         size is left alone): for a title deployed from a development build, which has none.
 
-Before it: the title folder holds the build under test, the tour has not finished (no setup.txt with done=1), and a USB
-stick with mihawkos/ is plugged in. The harness writes only its own hooks (/data/ps5proton/setup-unattended, the title
+Before it: the title folder holds the build under test with its runtime pieces (a release package's PPSA99170, or
+--pieces), and the tour has not finished (no setup.txt with done=1). The harness writes only its own hooks (/data/ps5proton/setup-unattended, the title
 folder's test-run.txt, /data/ps5proton/stop-game) and removes them when the console is idle, failure or not; the title
 writes what a first install writes. With the marker, a scripted run gives the tour the real engine and lets it restart
 into its sessions (proton_setup_unattended, ps5/src/proton_launch.h); without it nothing of this happens.
@@ -23,14 +21,15 @@ No person can close a title, so every launcher is a scripted one that ends itsel
   0. prime, only when /data/ps5proton is missing (after a first attempt was renamed aside): a 300-frame launcher with
      no presses is the title's real first run (dev.conf, the folder and logs/ before root, the grant); the harness
      checks the folder is there and keeps that run's title-early.log, which the next launch writes over.
-  1. install: Welcome, the first language, USB, Check drive, Install, in a launcher of 18000 frames (about 5 min, so
-     it outlives the install). It waits for "install: done" (or a failure) and for the launcher's end. Skipped when
+  1. install: Welcome, the first language; the install then starts by itself from the title folder, in a launcher of
+     18000 frames (about 5 min, so it outlives the install). It waits for "install: done" (or a failure) and for the launcher's end. Skipped when
      the runtime's stamp is already on the console (a rerun after an install that finished).
-  2. prepare: until setup.txt says done=1 the tour starts at Welcome, and with the runtime in place How to install
-     focuses Continue: Welcome, language, Continue, Preparing → Start. The title restarts into the first Mihawk OS session, which ends itself once the prefix
-     is made. The launcher after it (its test-run.txt planted during the session) is at Done → Enter Mihawk OS. The
-     session after that is logged off through stop-game once its desktop has been up 45 s, and the launcher after it
-     runs its frames and ends.
+  2. prepare: until setup.txt says done=1 the tour starts at Welcome, and with the runtime in place the language goes
+     on to Preparing: Welcome, language, Start. The title restarts into the first Mihawk OS session, which ends itself once the prefix
+     is made. The launcher after it (its test-run.txt planted during the session) is at Before you play, where cross
+     is held 1,500 frames (12.5 s at 120 fps; the page wants 10 s), then Done → Go to the game library, then Mihawk OS,
+     which the library focuses after Done. The session after that is logged off through stop-game once
+     its desktop has been up 45 s, and the launcher after it runs its frames and ends.
 It stops at the first stop line (a crash, maxpipekva, TTY(STDIN), errno=5, a storage error) and changes nothing more.
 klog goes to klog/RUN/capture.log; each milestone is printed as it arrives; evidence/RUN.json records them.
 --read, with the console idle, downloads what the install left (dev.conf, title-early.log, setup.txt, the logs and
@@ -66,8 +65,10 @@ MILESTONE = re.compile(r'\[MihawkOS\] (setup: (?!sky)|install: (from|done|failed
 
 
 def script(identity, frames, presses):
+    """A test run: presses are (frame, action); holds are (first frame, last frame, action)."""
     return (f'identity {identity}\nframes {frames}\nscreenshot\nsamples ps5proton\n' +
-            ''.join(f'press ps5proton {frame} {action}\n' for frame, action in presses)).encode()
+            ''.join(f'press ps5proton {p[0]} {p[1]}\n' if len(p) == 2 else f'hold ps5proton {p[0]} {p[1]} {p[2]}\n'
+                    for p in presses)).encode()
 
 
 def read_results(args):
@@ -143,11 +144,10 @@ def main():
     parser.add_argument('--name', required=True)
     parser.add_argument('--read', action='store_true', help='downloads only: nothing is launched or written')
     parser.add_argument('--package', type=Path, help="with --read: the package's title folder (its runtime-pack.txt)")
-    parser.add_argument('--route', choices=('usb', 'ftp'), default='usb')
-    parser.add_argument('--pieces', type=Path, help="with --route ftp: the folder of runtime pieces to copy over FTP")
+    parser.add_argument('--pieces', type=Path, help="runtime pieces to copy into the title folder's runtime-pieces/")
     args = parser.parse_args()
-    if args.route == 'ftp' and not (args.pieces and args.pieces.is_dir()):
-        parser.error('--route ftp needs --pieces DIR')
+    if args.pieces and not args.pieces.is_dir():
+        parser.error('--pieces needs a folder')
     if not re.fullmatch(r'[a-zA-Z0-9_-]+', args.name):
         parser.error('use a plain run name')
     if args.read:
@@ -203,9 +203,8 @@ def main():
                 if not str(error).startswith(('550', '226')):
                     raise
 
-    record = {'name': args.name, 'route': args.route, 'launch_readiness': readiness, 'milestones': [], 'stop_lines': [],
+    record = {'name': args.name, 'launch_readiness': readiness, 'milestones': [], 'stop_lines': [],
               'launches': []}
-    kept_record = []   # --route ftp: setup.txt as it was, put back in the finally
     lines = []
     clean = False
     sock = socket.create_connection((settings['host'], settings['klog_port']), timeout=10)
@@ -275,65 +274,36 @@ def main():
                                  'stopped here')
         put(MARKER, b'')
         remove('/data/ps5proton/setup-first-run')   # the simulated first run would win over the real one
-        if args.route == 'ftp':
-            # The pieces into /data/ps5proton/install, as a user's FTP client puts them (one already there at its size
-            # is left alone). The tour makes the folder too; here it must exist before the copy.
+        if args.pieces:
+            # The pieces into the title folder's runtime-pieces/, where a release carries them (one already there at its
+            # size is left alone)
             with ftp() as connection:
                 try:
-                    connection.mkd('/data/ps5proton/install')
+                    connection.mkd(TITLE + '/runtime-pieces')
                 except error_perm:
                     pass
                 there = {}
-                connection.retrlines('LIST /data/ps5proton/install',
+                connection.retrlines(f'LIST {TITLE}/runtime-pieces',
                                      lambda line: there.__setitem__(line.split()[-1], int(line.split()[4])))
-                pieces = sorted(p for p in args.pieces.iterdir() if p.is_file())
+                pieces = sorted(p for p in args.pieces.iterdir() if p.is_file() and p.suffix == '.zst')
                 copied = 0
                 for piece in pieces:
                     if there.get(piece.name) == piece.stat().st_size:
                         continue
                     with piece.open('rb') as data:
-                        connection.storbinary(f'STOR /data/ps5proton/install/{piece.name}', data)
+                        connection.storbinary(f'STOR {TITLE}/runtime-pieces/{piece.name}', data)
                     copied += 1
             record['pieces'] = {'count': len(pieces), 'copied': copied}
-            print(f'pieces: {len(pieces)} in /data/ps5proton/install ({copied} copied)', flush=True)
-            # setup.txt aside, so the tour starts at Welcome; it is put back after the run, whatever happens
-            kept = fetch('/data/ps5proton/setup.txt')
-            if kept:
-                kept_record.append(kept.encode())
-                (run / 'setup.txt.kept').write_bytes(kept_record[0])   # a copy here before the console's is removed
-                remove('/data/ps5proton/setup.txt')
-            runtime = bool(fetch('/data/ps5proton/runtime/ge11-7/runtime-stamp'))
-            record['runtime_was_installed'] = runtime
-            # Welcome; the language focused (en-US); How to install: with a runtime, Continue has the focus and two
-            # lefts reach FTP (past Internet), without one USB has it and one right does; FTP; Check files; Install.
-            # Nothing is pressed after Install: during the install CROSS is Stop.
-            method = [(100, 'left'), (110, 'left')] if runtime else [(100, 'right')]
-            presses = [(30, 'cross'), (70, 'cross'), *method, (130, 'cross'), (160, 'cross'), (190, 'cross')]
-            put(TITLE + '/test-run.txt', script(uuid.uuid4().hex, 18000, presses))
-            console_guard.after_launch()
-            mark = len(lines)
-            ps5_console.ps5vkctl_command(settings, 'launch PPSA99170', timeout=120)
-            record['launches'].append('install-ftp')
-            reached = wait(lambda all_lines: any('setup: step 6' in l or 'install: failed' in l
-                                                 for l in all_lines[mark:]), 900)
-            after = lines[mark:]
-            record['ftp_step_shown'] = any('setup: step 7' in l for l in after)
-            record['folder_checked'] = [l for l in after if 'setup: folder check' in l]
-            record['install_done'] = any('install: done' in l for l in after)
-            record['all_set'] = reached and any('setup: step 6' in l for l in after)
-            # The tour waits at "You're all set"; the scripted launcher is closed there (nobody presses Enter)
-            ps5_console.ps5vkctl_command(settings, 'kill PPSA99170', timeout=120)
-            wait(lambda all_lines: False, 60, idle_ends=True)
-            clean = record['all_set'] and record['install_done'] and record['ftp_step_shown'] and not record['stop_lines']
-            return 0 if clean else 1
+            print(f'pieces: {len(pieces)} in {TITLE}/runtime-pieces ({copied} copied)', flush=True)
         # 1. The install, unless an earlier run finished it: the stamp is the last file an install writes.
         stamp = fetch('/data/ps5proton/runtime/ge11-7/runtime-stamp')
         record['install_skipped'] = bool(stamp)
         if not stamp:
-            # 1. The install. Welcome; the language focused (en-US); How to install: USB; Check drive; Install.
+            # 1. The install. Welcome; the language focused (en-US); the install starts by itself. Nothing is pressed
+            # after it: during the install CROSS is Stop.
             identity = uuid.uuid4().hex
             # 18000 frames, about 5 min at 60 fps: the scripted launcher must outlive the install, which ends with it.
-            presses = [(30, 'cross'), (70, 'cross'), (100, 'cross'), (130, 'cross'), (160, 'cross')]
+            presses = [(30, 'cross'), (70, 'cross')]
             put(TITLE + '/test-run.txt', script(identity, 18000, presses))
             console_guard.after_launch()
             mark = len(lines)
@@ -347,21 +317,25 @@ def main():
                 raise SystemExit('the install did not end in "install: done"; stopped here')
             if not idle():
                 raise SystemExit('the install launcher is still running after its frames; stopped here')
-        # 2. Preparing → Start; the first session; Done → Enter Mihawk OS; a session logged off; the launcher's end.
+        # 2. Preparing → Start; the first session; Before you play (cross held); Done → the library → Mihawk OS; a session
+        # logged off; the launcher's end.
         # Until setup.txt says done=1 the tour starts at Welcome (src/pw_setup.c pw_setup_start); with the runtime in
-        # place How to install focuses Continue, which goes to Preparing: Welcome, language, Continue, Start.
+        # place the language goes on to Preparing: Welcome, language, Start.
         if not idle():
             raise SystemExit('the console is not idle before the Preparing launch; stopped here')
-        put(TITLE + '/test-run.txt', script(uuid.uuid4().hex, 1200, [(30, 'cross'), (70, 'cross'), (100, 'cross'),
-                                                                     (130, 'cross')]))
+        put(TITLE + '/test-run.txt', script(uuid.uuid4().hex, 1200, [(30, 'cross'), (70, 'cross'), (100, 'cross')]))
         console_guard.after_launch()
         mark = len(lines)
         ps5_console.ps5vkctl_command(settings, 'launch PPSA99170', timeout=120)
         record['launches'].append('prepare')
         if not wait(seen('setup: the first Mihawk OS session starts'), 120):
             raise SystemExit('Preparing did not start the first session; stopped here')
-        put(TITLE + '/test-run.txt', script(uuid.uuid4().hex, 1200, [(90, 'cross')]))   # for the launcher after it
-        if not wait(seen('setup: the prefix is made'), 900) or not wait(seen('setup: ends (finished)'), 300):
+        # for the launcher after it: cross held through Before you play, then Done's library tile (right of Install
+        # Steam), then Mihawk OS, which the library focuses
+        put(TITLE + '/test-run.txt', script(uuid.uuid4().hex, 2400, [(90, 1590, 'cross'), (1620, 'right'), (1640, 'cross'),
+                                                                     (1700, 'cross')]))
+        if not wait(seen('setup: the prefix is made'), 900) or not wait(seen('setup: held'), 300) \
+                or not wait(seen('setup: ends (the library)'), 300):
             raise SystemExit('the first session or Done did not finish; stopped here')
         put(TITLE + '/test-run.txt', script(uuid.uuid4().hex, 600, []))   # for the launcher after the next session
         mark = len(lines)
@@ -390,9 +364,6 @@ def main():
             if idle():
                 for path in (MARKER, TITLE + '/test-run.txt', TITLE + '/wine-run.txt', '/data/ps5proton/stop-game'):
                     remove(path)
-                if kept_record:
-                    put('/data/ps5proton/setup.txt', kept_record[0])
-                    record['setup_record_restored'] = fetch('/data/ps5proton/setup.txt').encode() == kept_record[0]
                 record['hooks_removed'] = True
             else:
                 record['hooks_removed'] = False   # a title still runs: nothing is touched under it

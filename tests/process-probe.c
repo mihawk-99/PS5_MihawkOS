@@ -226,6 +226,41 @@ static void graphics_parent(int check_limit)
     handle_balance(before,1,"stage=graphics-handles\n");
     verdict(ok,"stage=graphics-child-render-exit\n");
 }
+/* Alpha 7's default ("Run inside MihawkOS", wine/ps5/pw_wine_title_game.h): copies of the renderer in a library folder,
+ * none named to the title. game64.exe goes into the title; while it runs, second64.exe (the title takes one), game32.exe
+ * (32-bit) and optout64.exe (the run's WINE_PS5_TITLE_OPTOUT) go to helpers. The title and the helpers' logs say where
+ * each ran; here each helper copy must draw and end with 0. The session ends with game64.exe. */
+static void title_games_parent(void)
+{
+    static const WCHAR *const copies[][2]={
+        {L"C:\\d3d11-probe.exe",L"C:\\users\\Mihawk\\Games\\Probe\\game64.exe"},
+        {L"C:\\d3d11-probe.exe",L"C:\\users\\Mihawk\\Games\\Probe\\second64.exe"},
+        {L"C:\\d3d11-32-probe.exe",L"C:\\users\\Mihawk\\Games\\Probe\\game32.exe"},
+        {L"C:\\d3d11-probe.exe",L"C:\\users\\Mihawk\\Games\\Probe\\optout64.exe"}};
+    CreateDirectoryW(L"C:\\users\\Mihawk\\Games",NULL);CreateDirectoryW(L"C:\\users\\Mihawk\\Games\\Probe",NULL);
+    SetEnvironmentVariableA("WINE_PS5_DESCENDANTS","1");
+    SetEnvironmentVariableA("PS5_PROTON_PROBE_FRAMES","8");   /* the helpers' copies; the title's reads the title's own */
+    PROCESS_INFORMATION children[4]={{0}};
+    int okay=1;
+    for(unsigned i=0;i<4;i++) {
+        if(!CopyFileW(copies[i][0],copies[i][1],FALSE))verdict(0,"stage=title-games-copy\n");
+        STARTUPINFOW startup={0};startup.cb=sizeof(startup);
+        WCHAR command[96];lstrcpyW(command,copies[i][1]);
+        if(!CreateProcessW(NULL,command,NULL,NULL,FALSE,0,NULL,NULL,&startup,&children[i]))verdict(0,"stage=title-games-create\n");
+        char line[96]="title-games: started copy";char *p=line;while(*p)++p;
+        append_number(&p,i);append_number(&p,children[i].dwProcessId);*p++='\n';*p=0;OutputDebugStringA(line);
+        if(!i)Sleep(3000);   /* game64.exe in the title first */
+    }
+    for(unsigned i=1;i<4;i++) {
+        DWORD code=~0u;
+        okay &= WaitForSingleObject(children[i].hProcess,90000)==WAIT_OBJECT_0 && GetExitCodeProcess(children[i].hProcess,&code) && !code;
+        char line[96]="title-games: copy";char *p=line;while(*p)++p;
+        append_number(&p,i);p[0]=' ';p[1]='e';p[2]='x';p[3]='i';p[4]='t';p+=5;append_number(&p,code);*p++='\n';*p=0;OutputDebugStringA(line);
+        CloseHandle(children[i].hThread);CloseHandle(children[i].hProcess);
+    }
+    if(okay)OutputDebugStringA("PS5_PROTON_TITLE_GAMES PASS: the helpers' copies drew and ended\n");
+    verdict(okay,"stage=title-games\n");
+}
 static void graphics_broker_parent(void)
 {
     OutputDebugStringA("graphics-broker: starting two independent renderers\n");
@@ -237,7 +272,12 @@ static void graphics_broker_parent(void)
     SetEnvironmentVariableA("PS5_PROCESS_COOKIE","native-child");
     SetEnvironmentVariableA("WINE_PS5_DESCENDANTS","1");SetEnvironmentVariableA("WINE_PS5_GRAPHICS_CHILD","1");
     SetEnvironmentVariableA("PS5_GRAPHICS_BROKER","1");SetEnvironmentVariableA("PS5_GRAPHICS_DEPTH","0");
-    SetEnvironmentVariableA("PS5_PROTON_PROBE_FRAMES","8");
+    /* 8 frames, unless the run named its own (the title watchdog's healthy case draws for minutes); waited for in kind. */
+    char named[16]={0};unsigned frames=0;
+    GetEnvironmentVariableA("PS5_PROTON_PROBE_FRAMES",named,sizeof(named));
+    for(const char *d=named;*d>='0' && *d<='9';++d)frames=frames*10+(unsigned)(*d-'0');
+    if(!frames) { frames=8;SetEnvironmentVariableA("PS5_PROTON_PROBE_FRAMES","8"); }
+    const DWORD wait=60000+frames*50;
     SetEnvironmentVariableA("PS5_PROTON_PROBE_WIDTH","1920");SetEnvironmentVariableA("PS5_PROTON_PROBE_HEIGHT","1080");
     STARTUPINFOW startup={0};PROCESS_INFORMATION children[2]={{0}};startup.cb=sizeof(startup);
     for(unsigned i=0;i<2;i++) {
@@ -250,7 +290,7 @@ static void graphics_broker_parent(void)
     int okay=pids[0]!=pids[1] && ((pids[0]==children[0].dwProcessId && pids[1]==children[1].dwProcessId) ||
         (pids[1]==children[0].dwProcessId && pids[0]==children[1].dwProcessId));
     for(unsigned i=0;i<2;i++) {
-        okay &= WaitForSingleObject(children[i].hProcess,60000)==WAIT_OBJECT_0 && GetExitCodeProcess(children[i].hProcess,&code) && !code;
+        okay &= WaitForSingleObject(children[i].hProcess,wait)==WAIT_OBJECT_0 && GetExitCodeProcess(children[i].hProcess,&code) && !code;
         CloseHandle(children[i].hThread);CloseHandle(children[i].hProcess);
     }
     handle_balance(before,1,"stage=broker-handles\n");
@@ -908,6 +948,121 @@ static void payload_memory_root(void)
     }
     verdict(1,"stage=payload-memory-complete simultaneous_bytes=4294967296 cycles=2\n");
 }
+/* The launcher-and-game pair (docs/TITLE_CLIENT.md, "Choosing the game"): a copy of this program, which imports no
+ * graphics API, is a game's launcher in a library folder; it starts a copy of the renderer and exits at once, as a
+ * launcher does. The renderer must take the title's place, and the session must outlive the launcher. This root waits
+ * for the renderer and passes when it drew and ended with 0. */
+static void launcher_pair_start(void)
+{
+    STARTUPINFOW startup={0};PROCESS_INFORMATION game={0};startup.cb=sizeof(startup);
+    WCHAR command[]=L"C:\\users\\Mihawk\\Games\\Pair\\game64.exe";
+    if(!CreateProcessW(NULL,command,NULL,NULL,FALSE,0,NULL,NULL,&startup,&game))ExitProcess(2);
+    OutputDebugStringA("launcher-pair: the launcher started the game and exits\n");
+    ExitProcess(0);
+}
+static void launcher_pair_root(void)
+{
+    CreateDirectoryW(L"C:\\users\\Mihawk\\Games",NULL);CreateDirectoryW(L"C:\\users\\Mihawk\\Games\\Pair",NULL);
+    if(!CopyFileW(L"C:\\process-probe.exe",L"C:\\users\\Mihawk\\Games\\Pair\\start.exe",FALSE) ||
+       !CopyFileW(L"C:\\d3d11-probe.exe",L"C:\\users\\Mihawk\\Games\\Pair\\game64.exe",FALSE))verdict(0,"stage=pair-copy\n");
+    STARTUPINFOW startup={0};PROCESS_INFORMATION launcher={0};startup.cb=sizeof(startup);
+    WCHAR command[]=L"C:\\users\\Mihawk\\Games\\Pair\\start.exe --launcher-pair-start";
+    if(!CreateProcessW(NULL,command,NULL,NULL,FALSE,0,NULL,NULL,&startup,&launcher))verdict(0,"stage=pair-launcher\n");
+    DWORD game_pid=0,code=~0u;
+    for(unsigned i=0;i<200 && !(game_pid=find_game_process(launcher.dwProcessId,"game64.exe",0));++i)Sleep(100);
+    HANDLE game=game_pid ? OpenProcess(SYNCHRONIZE|PROCESS_QUERY_LIMITED_INFORMATION,FALSE,game_pid) : NULL;
+    const int launcher_ended=WaitForSingleObject(launcher.hProcess,30000)==WAIT_OBJECT_0 && GetExitCodeProcess(launcher.hProcess,&code) && !code;
+    OutputDebugStringA(launcher_ended ? "launcher-pair: the launcher ended with 0\n" : "launcher-pair: the launcher did not end with 0\n");
+    code=~0u;
+    const int game_ended=game && WaitForSingleObject(game,180000)==WAIT_OBJECT_0 && GetExitCodeProcess(game,&code) && !code;
+    if(launcher_ended && game_ended)OutputDebugStringA("PS5_PROTON_LAUNCHER_PAIR PASS: the game outlived its launcher and ended with 0\n");
+    verdict(launcher_ended && game_ended,"stage=launcher-pair\n");
+}
+/* A library game whose DLL is missing (tests/missing-import-probe.c): the title takes it, Wine's loader fails at once, and
+ * the game ends with STATUS_DLL_NOT_FOUND as on Windows. This root waits for that exit code; the title must then end the
+ * session in order (its PS5_PROTON_OWNER_BOOTSTRAP line), not die with the game (a tester's demo, 2026-11-01). */
+/* A game in the title whose parent is alive in a helper (tests/parent-query-probe.c): it asks what it learns of this
+ * process and of itself, and ends with 0 when every answer is as good for the parent. This root stays its parent until
+ * then (a store game ended itself only when its parent was alive: witcher3-dx12-parent-pro-2026-11-01). */
+static void parent_query_root(void)
+{
+    CreateDirectoryW(L"C:\\users\\Mihawk\\Games",NULL);CreateDirectoryW(L"C:\\users\\Mihawk\\Games\\ParentQuery",NULL);
+    if(!CopyFileW(L"C:\\parent-query-probe.exe",L"C:\\users\\Mihawk\\Games\\ParentQuery\\game64.exe",FALSE))
+        verdict(0,"stage=parent-query-copy\n");
+    STARTUPINFOW startup={0};PROCESS_INFORMATION game={0};startup.cb=sizeof(startup);
+    WCHAR command[]=L"C:\\users\\Mihawk\\Games\\ParentQuery\\game64.exe";
+    if(!CreateProcessW(NULL,command,NULL,NULL,FALSE,0,NULL,NULL,&startup,&game))verdict(0,"stage=parent-query-create\n");
+    DWORD code=~0u;
+    const int ended=WaitForSingleObject(game.hProcess,120000)==WAIT_OBJECT_0 && GetExitCodeProcess(game.hProcess,&code) && !code;
+    verdict(ended,"stage=parent-query\n");
+}
+static DWORD WINAPI missing_import_overlay(void *unused)
+{
+    (void)unused;
+    STARTUPINFOW startup={0};PROCESS_INFORMATION overlay={0};startup.cb=sizeof(startup);
+    WCHAR command[]=L"C:\\overlay64.exe";
+    OutputDebugStringA("missing-import: asking for the overlay beside the game\n");
+    if(CreateProcessW(NULL,command,NULL,NULL,FALSE,0,NULL,NULL,&startup,&overlay)) {
+        OutputDebugStringA("missing-import: the overlay started\n");
+        CloseHandle(overlay.hProcess);CloseHandle(overlay.hThread);
+    } else OutputDebugStringA("missing-import: the overlay did not start\n");
+    return 0;
+}
+static void missing_import_root(void)
+{
+    CreateDirectoryW(L"C:\\users\\Mihawk\\Games",NULL);CreateDirectoryW(L"C:\\users\\Mihawk\\Games\\Missing",NULL);
+    if(!CopyFileW(L"C:\\missing-import-probe.exe",L"C:\\users\\Mihawk\\Games\\Missing\\game64.exe",FALSE))
+        verdict(0,"stage=missing-copy\n");
+    STARTUPINFOW startup={0};PROCESS_INFORMATION game={0};startup.cb=sizeof(startup);
+    WCHAR command[]=L"C:\\users\\Mihawk\\Games\\Missing\\game64.exe";
+    if(!CreateProcessW(NULL,command,NULL,NULL,FALSE,0,NULL,NULL,&startup,&game))verdict(0,"stage=missing-create\n");
+    /* The store client starts its overlay beside each game it starts: a second graphics program, to a helper (the title's
+     * place is the game's). Its start was in flight, held by the console's wedged loader, when the demo's loader failed;
+     * the battery holds it too (WINE_PS5_TEST_SPAWN_STALL=overlay64.exe), so it is asked from a thread of its own. */
+    if(!CopyFileW(L"C:\\d3d11-probe.exe",L"C:\\overlay64.exe",FALSE))verdict(0,"stage=missing-overlay-copy\n");
+    HANDLE overlay=CreateThread(NULL,0,missing_import_overlay,NULL,0,NULL);
+    if(!overlay)verdict(0,"stage=missing-overlay-thread\n");
+    DWORD code=~0u;
+    const int ended=WaitForSingleObject(game.hProcess,60000)==WAIT_OBJECT_0 && GetExitCodeProcess(game.hProcess,&code) &&
+                    code==0xc0000135;
+    char line[96]="missing-import: the game's exit code ";char *end=line;while(*end)++end;
+    append_number(&end,code);*end++='\n';*end=0;OutputDebugStringA(line);
+    if(ended)OutputDebugStringA("PS5_PROTON_MISSING_IMPORT PASS: the game ended with STATUS_DLL_NOT_FOUND\n");
+    verdict(ended,"stage=missing-import\n");
+}
+/* A Chromium-based game (docs/TITLE_CLIENT.md, "Choosing the game"): a copy of the renderer in a library folder with
+ * Chromium's resources.pak, icudtl.dat and V8 snapshot beside it. Kernelbase patch 2404 must start it as one process
+ * (the title's WINE_PS5_CHROMIUM_ARGS, --single-process, appended to its command line), and it must draw and end with 0
+ * in its helper (it never takes the title's place). This root reads the child's command line back to see the switch. */
+static void chromium_game_root(void)
+{
+    static const WCHAR *const marks[]={L"C:\\users\\Mihawk\\Games\\Chromium\\resources.pak",
+        L"C:\\users\\Mihawk\\Games\\Chromium\\icudtl.dat",L"C:\\users\\Mihawk\\Games\\Chromium\\v8_context_snapshot.bin"};
+    CreateDirectoryW(L"C:\\users\\Mihawk\\Games",NULL);CreateDirectoryW(L"C:\\users\\Mihawk\\Games\\Chromium",NULL);
+    if(!CopyFileW(L"C:\\d3d11-probe.exe",L"C:\\users\\Mihawk\\Games\\Chromium\\game.exe",FALSE))verdict(0,"stage=chromium-copy\n");
+    for(unsigned i=0;i<3;i++) {
+        HANDLE mark=CreateFileW(marks[i],GENERIC_WRITE,0,NULL,CREATE_ALWAYS,0,NULL);
+        if(mark==INVALID_HANDLE_VALUE)verdict(0,"stage=chromium-marks\n");
+        CloseHandle(mark);
+    }
+    STARTUPINFOW startup={0};PROCESS_INFORMATION game={0};startup.cb=sizeof(startup);
+    WCHAR command[]=L"\"C:\\users\\Mihawk\\Games\\Chromium\\game.exe\"";
+    if(!CreateProcessW(NULL,command,NULL,NULL,FALSE,0,NULL,NULL,&startup,&game))verdict(0,"stage=chromium-create\n");
+    typedef LONG (WINAPI *Query)(HANDLE,int,void *,ULONG,ULONG *);
+    Query query=(Query)GetProcAddress(GetModuleHandleA("ntdll.dll"),"NtQueryInformationProcess");
+    static unsigned char line[4096];ULONG got=0;
+    const UNICODE_STRING *text=(const UNICODE_STRING *)line;
+    int single=0;
+    if(query && !query(game.hProcess,60 /* ProcessCommandLineInformation */,line,sizeof(line),&got) && text->Buffer)
+        for(const WCHAR *at=text->Buffer;at+16<=text->Buffer+text->Length/sizeof(WCHAR) && !single;++at)
+            single=!memcmp(at,L"--single-process",16*sizeof(WCHAR));
+    OutputDebugStringA(single ? "chromium-game: started as one process (--single-process)\n" :
+                                "chromium-game: no --single-process on its command line\n");
+    DWORD code=~0u;
+    const int ended=WaitForSingleObject(game.hProcess,120000)==WAIT_OBJECT_0 && GetExitCodeProcess(game.hProcess,&code) && !code;
+    if(single && ended)OutputDebugStringA("PS5_PROTON_CHROMIUM_GAME PASS: one process, drew and ended with 0\n");
+    verdict(single && ended,"stage=chromium-game\n");
+}
 void mainCRTStartup(void)
 {
     const char *cmd=GetCommandLineA(), *child=NULL;
@@ -935,6 +1090,12 @@ void mainCRTStartup(void)
     if(contains(cmd,"--console-child"))console_child();
     if(contains(cmd,"--graphics-owner-cancel"))graphics_teardown_parent(1);
     if(contains(cmd,"--graphics-teardown"))graphics_teardown_parent(0);
+    if(contains(cmd,"--title-games"))title_games_parent();
+    if(contains(cmd,"--chromium-game"))chromium_game_root();
+    if(contains(cmd,"--missing-import"))missing_import_root();
+    if(contains(cmd,"--parent-query"))parent_query_root();
+    if(contains(cmd,"--launcher-pair-start"))launcher_pair_start();
+    if(contains(cmd,"--launcher-pair"))launcher_pair_root();
     if(contains(cmd,"--graphics-broker"))graphics_broker_parent();
     if(contains(cmd,"--graphics"))graphics_parent(contains(cmd,"--graphics-console"));
     if(contains(cmd,"--java"))java_probe();

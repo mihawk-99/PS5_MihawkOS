@@ -45,6 +45,13 @@ PwAppMatch pw_app_environment_find(const PwAppEntry *entries, size_t count, cons
  * player's: WINE_PS5_HID=1 for "dualsense" and =0 otherwise, as each program runs its own HID stack (Wine patch 0870),
  * and no SDL_XINPUT_ENABLED=0 beside an Xbox controller, where XInput is the only controller. */
 int pw_app_environment_block(const PwAppEntry *entry, char *out, size_t capacity, uint32_t *bytes, size_t *kept);
+/* A game's WINEDLLOVERRIDES joins the title's instead of replacing it: Wine keeps the last entry it reads for a DLL, so
+ * the game still decides every DLL it names, and keeps the title's for the rest, DXVK's and VKD3D-Proton's among them
+ * (Proton appends a user's the same way). A game.json "env" line such as WINEDLLOVERRIDES=dinput8=n,b, the usual
+ * advice for a mod, used to take Direct3D 9 to 12 away from that game. Into out: "WINEDLLOVERRIDES=" title ";" the
+ * game's value. 1 when word is a WINEDLLOVERRIDES setting and title is not empty (out written), 0 when word stays as
+ * it is, -1 when out is too small (nothing written). */
+int pw_app_environment_join_overrides(const char *title, const char *word, char *out, size_t size);
 #ifdef __cplusplus
 }
 #endif

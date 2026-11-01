@@ -44,20 +44,54 @@ taskbar, Start, File Explorer and a web browser of its own.
 **Releases** are on the [Releases](https://github.com/mihawk-99/PS5_MihawkOS/releases) page. Each one says what
 changed and which consoles it was tested on.
 
+**New in Alpha 7:**
+- **Games run inside MihawkOS.** A 64-bit game from Steam's library or your Games folder now runs in MihawkOS's own
+  process instead of a helper, with MihawkOS's larger page-table pool (16,384, against the helpers' 8,192). 32-bit
+  games, a second game while one runs, and a game's launcher, installers and crash reporters still run in helpers.
+  MihawkOS picks the game by what it is: a program that draws with Direct3D, Vulkan or OpenGL, not a launcher,
+  installer or crash reporter. A game built on Chromium (Electron or NW.js) runs as one process. Press TRIANGLE on a
+  game to choose, for that game, to run it the old way.
+- **One folder to install, and it updates itself.** The Windows runtime ships inside `PPSA99170`: copy the folder, open
+  MihawkOS, and it installs the runtime by itself. To update, replace the folder and open MihawkOS: it writes only what
+  changed, and `/data/ps5proton` (your prefix, games, Steam and settings) is left alone. A signed update check asks
+  GitHub for new releases.
+- **A new main menu.** A tile grid on a sky, Files to start any program on C:, Options for each game, and ten
+  languages. An **on-screen keyboard** (off by default; Settings, Controls) types into games.
+- **Frames reach the screen sooner.** Each finished frame is copied to the TV in under 1 ms instead of about 7.4 ms.
+- **Direct3D 12:** feature level 12_1; games see the real GPU's name and model; up to 32,768 reserved graphics memory
+  pieces; games that place graphics memory over their own memory (existing heaps) can.
+- **Behaves more like Windows:** a game's message boxes show on screen and CROSS answers them; a program can read
+  another program's command line and its parent's details; a game missing a DLL ends with that file's name instead of
+  leaving MihawkOS stuck; a controller that drops and comes back is found again.
+- **Games:** Undertale, Deltarune and other GameMaker games start; Deltarune's sound stays clean across chapters; The
+  Witcher 3's DirectX 12 version plays when started from Files or the library; started from the Mihawk OS desktop it
+  still closes itself at once (it inspects the program that started it), a known limit.
+- **Steam:** big downloads no longer close it (over 10,000 files open at once), and it warns before starting when the
+  console is too low on memory.
+- **A game that stops drawing for 3 minutes inside MihawkOS is ended**, and MihawkOS returns to its launcher.
+- **The guided setup can no longer be skipped.** A new page, **Before you play**, says which games MihawkOS cannot run
+  (DRM such as Denuvo, anti-cheat); hold ✕ for 10 seconds to go on.
+- **Payloads:** the checklist can be passed by holding TRIANGLE for 5 seconds; NanoDNS is optional; ShadowMountPlus is
+  checked by presence only; the payload memory notice shows only at 200 MiB or more.
+- **Logs keep their last minutes**, so a crash report shows what happened just before.
+- **Looks:** a new Frutiger Aero title icon, and the Bubble City wallpaper by Skeuoss.
+
+Alpha 7 itself was tested on the PS5 Pro (firmware 10.01); earlier features were also shown on a standard PS5.
+
 > [!WARNING]
 > **Needs the official payload set, and nothing more.** At every start MihawkOS checks for Kstuff Lite 1.11 Beta or
-> later, [ShadowMountPlus](https://github.com/drakmor/ShadowMountPlus) 1.7beta10 or later, elfldr, websrv and NanoDNS
-> (klog, ftpsrv and pldmgr may also run). It stays on its payload check while one is missing or too old, or while any
-> other payload runs, and says what to load or close. It can see that kstuff runs but not its version: load 1.11 Beta
-> or later yourself. MihawkOS does not ship or change any of them.
+> later, [ShadowMountPlus](https://github.com/drakmor/ShadowMountPlus) beta11 or newer, elfldr and websrv
+> (NanoDNS, klog, ftpsrv and pldmgr may also run). It stays on its payload check while one is missing or too old, or while any
+> other payload runs, and says what to load or close. It sees that kstuff and ShadowMountPlus run, not their versions:
+> load Kstuff Lite 1.11 Beta or later and ShadowMountPlus beta11 or newer yourself. MihawkOS does not ship or change any of them.
 
 <a id="what-it-is"></a>
 
 ## <picture><source media="(prefers-color-scheme: dark)" srcset="docs/media/readme/divider-night.svg"><img src="docs/media/readme/divider-day.svg" width="960" alt=""></picture><br><picture><source media="(prefers-color-scheme: dark)" srcset="docs/media/readme/orb-desktop-night.svg"><img src="docs/media/readme/orb-desktop-day.svg" width="34" height="34" alt=""></picture> Two things that ship together
 
 - **A desktop.** Mihawk OS is a Windows-style desktop with a taskbar, Start with search and pins, File Explorer, a
-  desktop of shortcuts and MihawkBrowser. A shortcut appears for each game you copy in. Its wallpaper, Bubble Earth,
-  its music and its mark are the project's own.
+  desktop of shortcuts and MihawkBrowser. A shortcut appears for each game you copy in. Its wallpaper, and the PS5 home-screen
+  background, is Bubble City by the artist Skeuoss, used with their permission; its music and its mark are the project's own.
 - **A runtime.** Wine with Proton's components: DXVK and VKD3D-Proton for Direct3D, Mesa's Zink for OpenGL. It is pinned
   from GE-Proton and patched so it runs on the console. Each Windows program runs in a process of its own. MihawkOS
   itself owns the screen, the controller, the sound and the GPU that every program draws through.
@@ -73,7 +107,7 @@ A full-screen game takes the screen directly (**Game Mode**), and the desktop co
 | <img src="themes/windows11/icons/original/games.svg" width="36" height="36" alt=""> **Windows games, 64-bit and 32-bit.** Direct3D 11 and 12, OpenGL and video, with the DualSense as an Xbox controller. |
 | <img src="themes/windows11/icons/original/app-generic.svg" width="36" height="36" alt=""> **Steam, built in.** Download, install and sign in once with your phone. After that, Big Picture opens from the launcher. |
 | <img src="themes/windows11/icons/original/app-browser.svg" width="36" height="36" alt=""> **A browser companion.** Add games, find their art, make home-screen tiles, back up saves and change settings from a phone or computer. |
-| <img src="themes/windows11/icons/original/downloads.svg" width="36" height="36" alt=""> **Guided from the first launch.** A setup in ten languages installs the runtime from a USB drive or over FTP. |
+| <img src="themes/windows11/icons/original/downloads.svg" width="36" height="36" alt=""> **Guided from the first launch.** One folder to copy: a setup in ten languages installs the runtime from it. |
 
 **Explore:** [Get started](#get-started) · [Steam](#steam-built-in) · [WebUI](#webui) · [Add games](#add-your-games) · [Controls](#controls) · [What runs](#what-runs) · [Your files](#your-files) · [Known limits](#compatibility-and-known-limits) · [Build](#build-from-source)
 
@@ -82,18 +116,20 @@ A full-screen game takes the screen directly (**Game Mode**), and the desktop co
 ## <picture><source media="(prefers-color-scheme: dark)" srcset="docs/media/readme/orb-downloads-night.svg"><img src="docs/media/readme/orb-downloads-day.svg" width="34" height="34" alt=""></picture> Get started
 
 1. **Set up the console's homebrew tools.** Load the official payload set: **Kstuff Lite 1.11 Beta** or later,
-   **elfldr**, **websrv**, **NanoDNS** and **ShadowMountPlus 1.7beta10** or later, and no other payload. You set these up yourself, with tools from their own authors; see
+   **elfldr**, **websrv** and **ShadowMountPlus beta11** or newer (NanoDNS is optional), and no other payload. You set these up yourself, with tools from their own authors; see
    [Every time you play](#every-time-you-play) for the tested set. This project does not provide, link to or explain
    a jailbreak.
-2. **Install the title.** From a release, copy the `PPSA99170` folder to `/data/homebrew/PPSA99170/`, over FTP from a
-   phone or computer, or with a file manager on the console. ShadowMountPlus needs about 45 seconds to register a new
-   title. A refusal in that window is not a crash.
+2. **Install the title.** Unzip the release's one download and copy its `PPSA99170` folder to
+   `/data/homebrew/PPSA99170/`, over FTP from a phone or computer, or with a file manager on the console. The folder is
+   about 0.6 GB: the Windows runtime is inside it. Leave about 4 GB free on the console for the runtime and your first
+   Windows drive. ShadowMountPlus needs about 45 seconds to register a new title. A refusal in that window is not a
+   crash.
 3. **Open MihawkOS from the home screen.** The guided setup walks you through the rest:
    - choose your language;
-   - install the Windows runtime, from a USB drive (the release's `…-usb-mihawkos.zip`, unzipped to the top of an exFAT
-     drive) or over FTP (every file inside its `mihawkos` folder copied to `/data/ps5proton/install`);
+   - let it install the Windows runtime from its own folder, about a minute;
    - let it build your Windows drive, about a minute;
-   - then **Enter Mihawk OS**.
+   - then choose **Install Steam**, which guides you through Steam, or **Go to the game library**, where Mihawk OS
+     is a press away.
 4. **Add your games.** Scan the WebUI's QR code with your phone and follow **Add a game**, or set up
    [Steam](#steam-built-in) from the launcher.
 
@@ -105,7 +141,6 @@ No games, keys or firmware are included. Use your own copies of the games and pr
 | --- | --- |
 | **The launcher's library**, under the side panel | The WebUI, at `http://<PS5 address>:6767` |
 | **Settings → Web UI** in the launcher | The same, larger |
-| **The guided setup**, on its install steps | The step-by-step instructions for preparing a USB drive |
 
 <a id="first-launch"></a>
 
@@ -115,12 +150,12 @@ The first time you open MihawkOS, it shows a short guided setup, like a new cons
 
 | Step | What it does |
 | --- | --- |
-| **Welcome** | About ten minutes from here to your desktop. **Skip setup** if MihawkOS is already set up. |
+| **Welcome** | About ten minutes from here to your desktop. The setup cannot be skipped. |
 | **Language** | English (US), Français, Español, Deutsch, Italiano, Русский, 简体中文, 日本語, Português (Brasil) and Polski. New Windows drives take this language too, so games default to it. |
-| **How to install** | A USB drive or FTP. It says so, and offers Continue, when the runtime is already there. |
-| **Installing** | The size, the speed and the time left. What is already installed is kept if it stops. |
+| **Installing** | Starts by itself: the runtime is copied from the MihawkOS folder and every file is checked. The size, the speed and the time left. A folder copied without its pieces, or a full disk, is said plainly, with Try again. |
 | **Preparing Mihawk OS** | Builds your Windows drive, about a minute, with each stage ticked off as it finishes. |
-| **Done** | **Enter Mihawk OS.** |
+| **Before you play** | What MihawkOS is, and the games it cannot run: games with DRM such as Denuvo, and games with anti-cheat or kernel-level protection such as Easy Anti-Cheat or BattlEye. Hold ✕ for 10 seconds to continue. |
+| **Done** | **Install Steam** (the Steam guide) or **Go to the game library**. Steam stays on the library's Steam row for later. |
 
 Use the D-pad and Cross, or the touchpad as a pointer. Any problem is said in plain words with a way out: a drive the
 PS5 cannot read, an incomplete folder, too little space. Open the setup again at any time from **Settings → Guided
@@ -235,14 +270,23 @@ launcher when it ends.
 
 ### The launcher
 
+The main menu is a grid of tiles on a sky: Mihawk OS first and largest, Steam, your games (ten a page after the first),
+and the Web UI's QR code. Under them, a dock: Settings, Files and Payloads. The menu speaks the language chosen in the
+guided setup, and so does Settings.
+
 | Button | Does |
 | --- | --- |
-| D-pad, Cross | Choose, then open |
-| Square | Themes: thirty of them. Gloss / Skeuomorphic is the default. |
-| Triangle | Settings: Controls, Game Mode, Controller, 120 Hz output, Music, Guided setup, Logging and Web UI |
-| R1 | Next piece of MihawkOS's own music |
+| D-pad, Cross | Choose a tile, then open it |
+| Left stick | Moves the pointer; the tile under it is chosen |
+| L1, R1 | The page before or after |
+| Triangle | A game's own options: Game Mode, controller, and whether it runs inside MihawkOS |
+| Square | Themes for Settings' pages: thirty of them. Gloss / Skeuomorphic is the default. |
 | Circle | Back |
 | Options, held 1 s | Close the launcher |
+
+- **Settings** (the dock): Controls, Game Mode, Controller, 120 Hz output, Music, Guided setup, Logging and Web UI.
+- **Files** (the dock) shows Mihawk OS's C: drive. Cross on a program starts it, as a game in the library starts, without
+  the desktop. Files only looks: it changes and deletes nothing.
 
 - **Controls** assigns the left, right and middle mouse clicks to DualSense buttons. The default is left click on the
   touchpad click.
@@ -304,7 +348,7 @@ Every line here is something a console run showed, on a **PS5 Pro (firmware 10.0
 - **Vulkan.** A program that asks for the "immediate" or "mailbox" present mode gets its window, presented in step with
   the display, instead of a refusal. A Vulkan window reports its own drawing area, not the whole screen.
 - **Start-up.** USB keyboard and mouse support loads first, which fixed a tester's console where neither worked.
-- **Looks.** The Frutiger Aero loading screen and the Bubble Earth wallpaper.
+- **Looks.** The Frutiger Aero loading screen and the Bubble Earth wallpaper (Bubble City by Skeuoss since Alpha 7).
 
 <a id="your-files"></a>
 
@@ -345,8 +389,8 @@ DualSense; in later sessions it did.
 ## <picture><source media="(prefers-color-scheme: dark)" srcset="docs/media/readme/orb-drive-night.svg"><img src="docs/media/readme/orb-drive-day.svg" width="34" height="34" alt=""></picture> Every time you play
 
 1. **Cold-boot the console.** Never use rest mode: it unloads the payloads, and only a real restart brings them back.
-2. **Load Kstuff Lite 1.11 Beta** or later, then **elfldr**, **websrv**, **NanoDNS** and **ShadowMountPlus 1.7beta10**
-   or later. Keep elfldr loaded while you play: MihawkOS starts its `/data` access service and every Windows helper
+2. **Load Kstuff Lite 1.11 Beta** or later, then **elfldr**, **websrv** and **ShadowMountPlus beta11** or newer
+   (NanoDNS is optional). Keep elfldr loaded while you play: MihawkOS starts its `/data` access service and every Windows helper
    through it.
 3. **Open MihawkOS.** Its payload check lists each payload. If one is missing it says which to load; press CROSS to
    check again. If one is too old or an extra payload runs, restart the PS5 and load only the set above.
@@ -358,13 +402,15 @@ What the tested consoles ran alongside MihawkOS. This repository ships none of t
 | [Kstuff Lite](https://github.com/EchoStretch/kstuff-lite) | Yes | 1.11 Beta | 7.7 MiB | – | Everything |
 | [elfldr](https://github.com/ps5-payload-dev/elfldr) | Yes | – | 22.8 MiB | through websrv | Always |
 | [websrv](https://github.com/ps5-payload-dev/websrv) | Yes | – | v0.34, 8.2 MiB | 8080 | Always |
-| NanoDNS | Yes | – | 4.1 MiB | – | The official set |
-| [ShadowMountPlus](https://github.com/drakmor/ShadowMountPlus) | Yes | 1.7beta10 | 1.7beta10, 25.2 MiB | 10101 | Starting from the home screen, WebUI tiles |
+| NanoDNS | Optional | – | 4.1 MiB | – | The official set; without it MihawkOS still runs |
+| [ShadowMountPlus](https://github.com/drakmor/ShadowMountPlus) | Yes | beta11 (asked, not checked) | 1.7beta10, 25.2 MiB | 10101 | Starting from the home screen, WebUI tiles |
 | [ftpsrv](https://github.com/ps5-payload-dev/ftpsrv) | Optional | – | 4.1 MiB | 2121 | Copying the title, the runtime or games over FTP |
 | [klogsrv](https://github.com/ps5-payload-dev/klogsrv) | Optional | – | 3.9 MiB | 3232 | The PC tools, and the kernel log in **Settings → Logging** |
 | pldmgr | Optional | – | 12.3 MiB | – | Loading the payloads |
 
-Any other payload keeps MihawkOS on its payload check, etaHEN among them: each one holds memory games need. The set above
+Any other payload keeps MihawkOS on its payload check, etaHEN among them: each one holds memory games need. A payload the
+console lists only as "payload" cannot be told apart, so the check shows it as unknown and lets you in (on firmware 13.60,
+NanoDNS loaded through websrv looks like this). The set above
 held 88 MiB on the base PS5 (`evidence/payloads-base-2026-10-29-01.json`).
 
 > [!WARNING]
@@ -379,6 +425,9 @@ MihawkOS starts the `/data` access service (the Lapy daemon) itself. Never start
 MihawkOS was tested on a **PS5 Pro on firmware 10.01** and a **standard PS5 on firmware 13.40 and 13.60**. Other models
 and firmwares are reported by testers, not proven here.
 
+- **A game that freezes on its loading screen may not be closed by itself yet.** Close MihawkOS from the PS button menu.
+  A fix comes in the first update after Alpha 7.
+- **The Witcher 3 started from the Mihawk OS desktop closes itself at once.** Start it from the library or Files.
 - **Pipe memory runs out after very many program starts.** Each boot, the console's kernel has a fixed budget of pipe
   memory, and every Windows program start uses some that is never given back. After very many starts, programs stop
   starting and MihawkOS says **Restart the PS5**. A restart is the only cure.
@@ -390,12 +439,13 @@ and firmwares are reported by testers, not proven here.
 - **The per-boot setup is yours to do.** The payload set after every cold boot, as above. Rest
   mode needs a full restart.
 - **ShadowMountPlus quirks.** Before 1.7beta6, another homebrew could refuse to start after MihawkOS closed
-  (`0x80940033`); 1.7beta6 and later keep ShellCore's launch hook in memory, the fix MihawkOS asks for by requiring
-  1.7beta10 ([docs/LAUNCH_AFTER_EXIT.md](docs/LAUNCH_AFTER_EXIT.md)). It installs and removes nothing while MihawkOS runs, which
+  (`0x80940033`); 1.7beta6 and later keep ShellCore's launch hook in memory, the fix MihawkOS asks for by asking for
+  beta11 or newer ([docs/LAUNCH_AFTER_EXIT.md](docs/LAUNCH_AFTER_EXIT.md)). It installs and removes nothing while MihawkOS runs, which
   is why a new home-screen tile appears only after MihawkOS closes.
 - **Some games stop at an error of their own at start-up**, the same one they show under Proton on a PC.
 - **Not supported:** kernel drivers and anti-cheat. Rumble is not proven. The desktop's focus does not follow the D-pad.
-- **The setup's Internet install** is not available in this release: use a USB drive or FTP.
+- **To update MihawkOS**, replace the `PPSA99170` folder with the new release's and open it: it updates its runtime by
+  itself.
 
 **For a bug report,** turn on **Settings → Logging**, reproduce the problem, open MihawkOS again and download the bug
 report from the WebUI's **Help** page. It masks addresses, but check it before you share it, and never post your
@@ -416,11 +466,13 @@ console's address.
 | The home-screen tile refuses to start right after install | ShadowMountPlus needs about 45 seconds to register a new title. Wait and try again. |
 | A game's screen stays black | Turn Game Mode off for that game in the WebUI, or in Settings, and start it again. |
 | A game sees no controller | **Settings → Controller**: choose Xbox 360. DualSense shows the pad only to programs made for it. |
-| *The last session … did not end normally* | It crashed, froze or lost power. Copy `logs/title-last.log` and `logs/wine-last.log` off before the next session moves them. |
+| *The last session … did not end normally* | It crashed, froze or lost power. Copy `logs/title-last.log` and `logs/wine-last.log` (and their `-end` files) off before the next session moves them. |
 | The console hangs | Wait at least 3 minutes before cutting power. |
 
 Logs are in `/data/ps5proton/logs/`: `title-last.log`, `wine-last.log`, and `sessions/0`, `1`, `2` for the last three
-sessions.
+sessions. A long session keeps each log's start and its end: past 4 MiB (title) or 8 MiB (Wine) the log goes on in
+`title-end.log` or `wine-end.log`, and `title-end.1.log` or `wine-end.1.log` holds the part just before. The Web UI's bug
+report includes them.
 
 </details>
 
@@ -541,6 +593,7 @@ full list, with every pin, is [NOTICE.md](NOTICE.md), and where the platform kno
 | The setup's flags and CJK faces | [flag-icons](https://github.com/lipis/flag-icons); Noto Sans SC and JP from [google/fonts](https://github.com/google/fonts) | MIT; OFL-1.1 |
 | Desktop type and glyphs | Proton UI, derived from [Selawik](https://github.com/microsoft/Selawik); [Fluent System Icons](https://github.com/microsoft/fluentui-system-icons); [Cascadia Mono](https://github.com/microsoft/cascadia-code) | OFL-1.1; MIT; OFL-1.1 |
 | Desktop theme | Mihawk Light, derived from Wine Light by Zhiyi Zhang for CodeWeavers and Wine contributors | LGPL-2.1-or-later |
+| Desktop wallpaper and home-screen background | *Bubble City* by Skeuoss | Used with the artist's permission; not under an open licence ([NOTICE.md](NOTICE.md)) |
 
 Pictures and details the WebUI saves come from the Steam store at your request and stay on your own console; the
 artwork remains its publishers'. This README's banner, dividers and heading orbs (`docs/media/readme/`) are drawn for the project, around the

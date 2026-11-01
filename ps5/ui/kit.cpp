@@ -116,7 +116,15 @@ hui::InputFrame Kit::scripted(const char *program, uint32_t frame) const
 	hui::InputFrame input;
 	input.connected = true;
 	for (const Ps5Press &press : ps5Presses) {
-		if (press.frame != frame || press.program != program) {
+		if (press.program != program) {
+			continue;
+		}
+		if (press.until && frame > press.frame && frame <= press.until && (press.action == "cross" || press.action == "triangle")) {
+			// a hold: down since its first frame
+			input.held |= hui::action_bit(press.action == "cross" ? hui::Action::confirm : hui::Action::north);
+			continue;
+		}
+		if (press.frame != frame) {
 			continue;
 		}
 		if (press.action == "left") {
@@ -147,6 +155,10 @@ hui::InputFrame Kit::scripted(const char *program, uint32_t frame) const
 			input.pressed |= hui::action_bit(hui::Action::touch);
 		} else if (press.action == "options") {
 			input.pressed |= hui::action_bit(hui::Action::menu);
+		} else if (press.action.rfind("stick-", 0) == 0) {   // the left stick pushed all the way that frame (the menu's pointer)
+			const std::string way = press.action.substr(6);
+			input.stick_x = way == "right" ? 1.0f : way == "left" ? -1.0f : 0.0f;
+			input.stick_y = way == "down" ? 1.0f : way == "up" ? -1.0f : 0.0f;
 		}
 		input.held |= input.pressed;
 	}

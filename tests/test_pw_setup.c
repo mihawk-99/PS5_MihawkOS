@@ -66,59 +66,77 @@ int main(int argc, char **argv)
     assert(pw_setup_start(&facts) == PW_SETUP_NONE);
     facts.asked = 1;
     assert(pw_setup_start(&facts) == PW_SETUP_WELCOME);
+    /* A set-up console whose runtime is not this title's (the title folder was replaced by a newer one): the copy
+     * alone, then the library (the owner, 2026-10-31: replace the folder and open MihawkOS) */
     facts = (PwSetupFacts){.data = 1, .done = 1, .prefix = 1};
-    assert(pw_setup_start(&facts) == PW_SETUP_METHOD);
+    assert(pw_setup_start(&facts) == PW_SETUP_INSTALLING && pw_setup_next(PW_SETUP_INSTALLING, &facts) == PW_SETUP_NONE);
     facts = (PwSetupFacts){.data = 1, .done = 1, .runtime = 1};
     assert(pw_setup_start(&facts) == PW_SETUP_PREPARING);
     facts = (PwSetupFacts){.data = 1, .returning = 1, .runtime = 1};
     assert(pw_setup_start(&facts) == PW_SETUP_PREPARING);
     facts.prefix = 1;
-    assert(pw_setup_start(&facts) == PW_SETUP_DONE);
+    assert(pw_setup_start(&facts) == PW_SETUP_LIMITS);
 
-    /* The way through: a first launch, then a re-run with everything installed. */
+    /* The way through: a first launch, then a re-run with everything installed. How to install, the USB drive and
+     * FTP are gone (the runtime is in the title folder, the owner, 2026-10-31): the install starts after the language,
+     * and the steps that stay keep their numbers (tools/run-launcher.py's walk expects 0, 1, 4 and 5). */
+    assert(PW_SETUP_LANGUAGE == 1 && PW_SETUP_INSTALLING == 4 && PW_SETUP_PREPARING == 5 && PW_SETUP_DONE == 6);
     facts = (PwSetupFacts){.data = 1};
-    const PwSetupStep first[] = {PW_SETUP_WELCOME, PW_SETUP_LANGUAGE, PW_SETUP_METHOD, PW_SETUP_USB,
-                                 PW_SETUP_INSTALLING, PW_SETUP_PREPARING, PW_SETUP_DONE, PW_SETUP_NONE};
+    const PwSetupStep first[] = {PW_SETUP_WELCOME, PW_SETUP_LANGUAGE, PW_SETUP_INSTALLING, PW_SETUP_PREPARING,
+                                 PW_SETUP_LIMITS, PW_SETUP_DONE, PW_SETUP_NONE};
     for (size_t i = 0; i + 1 < sizeof(first) / sizeof(first[0]); ++i) assert(pw_setup_next(first[i], &facts) == first[i + 1]);
     facts = (PwSetupFacts){.data = 1, .runtime = 1, .prefix = 1};
-    assert(pw_setup_next(PW_SETUP_METHOD, &facts) == PW_SETUP_DONE);
+    assert(pw_setup_next(PW_SETUP_LANGUAGE, &facts) == PW_SETUP_LIMITS);   /* a re-run passes the limits page too */
     facts.prefix = 0;
-    assert(pw_setup_next(PW_SETUP_METHOD, &facts) == PW_SETUP_PREPARING);
+    assert(pw_setup_next(PW_SETUP_LANGUAGE, &facts) == PW_SETUP_PREPARING);
     /* tools/run-setup-unattended.py's second launch: the runtime installed, the tour not finished. It starts at Welcome,
-     * and How to install goes on to Preparing, where Start is: one press a step, four in all (with the runtime in place
-     * How to install focuses Continue, examples/ps5proton/setup_tour.hpp). */
+     * and the language goes on to Preparing, where Start is: one press a step, three in all. */
     facts = (PwSetupFacts){.data = 1, .runtime = 1};
-    const PwSetupStep resumed[] = {PW_SETUP_WELCOME, PW_SETUP_LANGUAGE, PW_SETUP_METHOD, PW_SETUP_PREPARING};
+    const PwSetupStep resumed[] = {PW_SETUP_WELCOME, PW_SETUP_LANGUAGE, PW_SETUP_PREPARING};
     assert(pw_setup_start(&facts) == resumed[0]);
     for (size_t i = 0; i + 1 < sizeof(resumed) / sizeof(resumed[0]); ++i)
         assert(pw_setup_next(resumed[i], &facts) == resumed[i + 1]);
-    assert(pw_setup_back(PW_SETUP_USB) == PW_SETUP_METHOD && pw_setup_back(PW_SETUP_LANGUAGE) == PW_SETUP_WELCOME);
-    /* The FTP route: the same install after it, and back to How to install; numbered after Done, so the others keep
-     * their numbers (tools/run-launcher.py's walk expects 0 to 5). */
-    facts = (PwSetupFacts){.data = 1};
-    assert(pw_setup_next(PW_SETUP_FTP, &facts) == PW_SETUP_INSTALLING && pw_setup_back(PW_SETUP_FTP) == PW_SETUP_METHOD);
-    assert(PW_SETUP_FTP > PW_SETUP_DONE && PW_SETUP_DONE == 6);
-    /* No text of the install's pages speaks of a drive on the FTP route: "Keep the drive plugged in" was shown there
-     * (the owner, 2026-10-25). Every key those pages can show, routed, has no drive, USB or plugging in it, in English;
-     * and each key whose USB text does has a twin, so every language follows. */
-    static const PwSetupText install_pages[] = {
-        PW_TEXT_USB_TITLE, PW_TEXT_USB_STEP1, PW_TEXT_USB_STEP2, PW_TEXT_USB_STEP3, PW_TEXT_USB_STEP4, PW_TEXT_CHECK_DRIVE,
-        PW_TEXT_FOUND, PW_TEXT_INSTALL, PW_TEXT_RETRY, PW_TEXT_ERR_NO_STICK, PW_TEXT_ERR_NO_FOLDER, PW_TEXT_ERR_PARTIAL,
-        PW_TEXT_ERR_NO_SPACE, PW_TEXT_ERR_READ, PW_TEXT_ERR_DAMAGED, PW_TEXT_ERR_FULL, PW_TEXT_ERR_WRITE,
-        PW_TEXT_ERR_CANCELLED, PW_TEXT_ERR_BUILD, PW_TEXT_INSTALLING_TITLE, PW_TEXT_INSTALLING_BODY,
-        PW_TEXT_INSTALLING_CHECKING, PW_TEXT_INSTALLING_STATS, PW_TEXT_INSTALLED, PW_TEXT_STOP};
-    for (size_t i = 0; i < sizeof(install_pages) / sizeof(install_pages[0]); ++i) {
-        const PwSetupText usb = install_pages[i], ftp = pw_setup_route_text(1, usb);
-        const char *words = pw_setup_text(NULL, ftp);
-        assert(pw_setup_route_text(0, usb) == usb);
-        if (strstr(words, "drive") || strstr(words, "USB") || strstr(words, "plug")) {
-            fprintf(stderr, "the FTP route shows key %d: %s\n", (int)ftp, words);
+    assert(pw_setup_back(PW_SETUP_LANGUAGE) == PW_SETUP_WELCOME);
+    /* The limits page: numbered 8, no way back from it, and only a held cross goes on (the owner, 2026-10-31).
+     * A hold under PW_SETUP_HOLD_SECONDS does not; letting go starts it over; an unbroken one does. */
+    assert(PW_SETUP_LIMITS == 8 && pw_setup_back(PW_SETUP_LIMITS) == PW_SETUP_NONE);
+    float hold = 0.0f;
+    for (int frame = 0; frame < 9 * 120; ++frame) hold = pw_setup_hold(hold, 1, 1.0f / 120.0f);
+    assert(hold > 8.9f && hold < PW_SETUP_HOLD_SECONDS);
+    hold = pw_setup_hold(hold, 0, 1.0f / 120.0f);
+    assert(hold == 0.0f);
+    for (int frame = 0; frame < 5 * 120; ++frame) hold = pw_setup_hold(hold, 1, 1.0f / 120.0f);
+    assert(hold < PW_SETUP_HOLD_SECONDS);   /* 9 s, let go, 5 s: not 14 */
+    for (int frame = 0; frame < 5 * 120 + 2; ++frame) hold = pw_setup_hold(hold, 1, 1.0f / 120.0f);
+    assert(hold >= PW_SETUP_HOLD_SECONDS);
+    /* A re-run from Settings cannot be left either (the owner, 2026-10-31): asked, with everything installed, it goes
+     * Welcome, Language, Before you play, Done, and Back from any of its steps stays in the
+     * tour. The launcher clears done as it starts a re-run (examples/ps5proton/ps5proton.cpp), so a title closed on the
+     * way starts the tour again at Welcome (the record's half is below). */
+    facts = (PwSetupFacts){.data = 1, .done = 1, .runtime = 1, .prefix = 1, .asked = 1};
+    const PwSetupStep rerun[] = {PW_SETUP_WELCOME, PW_SETUP_LANGUAGE, PW_SETUP_LIMITS, PW_SETUP_DONE};
+    assert(pw_setup_start(&facts) == rerun[0]);
+    for (size_t i = 0; i < sizeof(rerun) / sizeof(rerun[0]); ++i) {
+        if (i + 1 < sizeof(rerun) / sizeof(rerun[0])) assert(pw_setup_next(rerun[i], &facts) == rerun[i + 1]);
+        const PwSetupStep back = pw_setup_back(rerun[i]);
+        assert(back == PW_SETUP_NONE || (back >= PW_SETUP_WELCOME && back < PW_SETUP_STEPS));
+    }
+    facts = (PwSetupFacts){.data = 1, .runtime = 1, .prefix = 1};   /* closed during the re-run: done cleared */
+    assert(pw_setup_start(&facts) == PW_SETUP_WELCOME);
+    /* The install's page speaks of the title folder alone: no drive, USB stick or FTP folder in any of its words */
+    static const PwSetupText install_page[] = {
+        PW_TEXT_RETRY, PW_TEXT_ERR_NO_PIECES, PW_TEXT_ERR_PARTIAL, PW_TEXT_ERR_NO_SPACE, PW_TEXT_ERR_READ,
+        PW_TEXT_ERR_DAMAGED, PW_TEXT_ERR_FULL, PW_TEXT_ERR_WRITE, PW_TEXT_ERR_CANCELLED, PW_TEXT_ERR_BUILD,
+        PW_TEXT_INSTALLING_TITLE, PW_TEXT_INSTALLING_BODY, PW_TEXT_INSTALLING_CHECKING, PW_TEXT_INSTALLING_STATS,
+        PW_TEXT_INSTALLED, PW_TEXT_STOP};
+    for (size_t i = 0; i < sizeof(install_page) / sizeof(install_page[0]); ++i) {
+        const char *words = pw_setup_text(NULL, install_page[i]);
+        if (strstr(words, "drive") || strstr(words, "USB") || strstr(words, "plug") || strstr(words, "/install")) {
+            fprintf(stderr, "the install page shows key %d: %s\n", (int)install_page[i], words);
             abort();
         }
-        const char *usb_words = pw_setup_text(NULL, usb);
-        if (strstr(usb_words, "drive") || strstr(usb_words, "USB")) assert(ftp != usb);
     }
-    assert(pw_setup_back(PW_SETUP_PREPARING) == PW_SETUP_METHOD);
+    assert(pw_setup_back(PW_SETUP_PREPARING) == PW_SETUP_LANGUAGE);
     assert(pw_setup_back(PW_SETUP_WELCOME) == PW_SETUP_NONE && pw_setup_back(PW_SETUP_INSTALLING) == PW_SETUP_NONE &&
            pw_setup_back(PW_SETUP_DONE) == PW_SETUP_NONE);
 
@@ -188,6 +206,12 @@ int main(int argc, char **argv)
     assert(!pw_setup_record_load(&read, path) && !read.done && !strcmp(read.language, "en-GB"));
     record = (PwSetupRecord){.done = 1};
     assert(!pw_setup_record_save(&record, path) && !pw_setup_record_load(&read, path) && read.done && !read.language[0]);
+    /* A re-run clears done and keeps the language: the next start is the tour again */
+    record = (PwSetupRecord){.language = "ja-JP", .done = 1};
+    assert(!pw_setup_record_save(&record, path) && !pw_setup_record_load(&read, path) && read.done);
+    read.done = 0;
+    assert(!pw_setup_record_save(&read, path) && !pw_setup_record_load(&record, path) && !record.done &&
+           !strcmp(record.language, "ja-JP"));
     char tmp[300];
     snprintf(tmp, sizeof(tmp), "%s.tmp", path);
     assert(access(tmp, F_OK) && !unlink(path) && !rmdir(folder));
@@ -277,6 +301,25 @@ int main(int argc, char **argv)
         assert(!fclose(out));
     }
 #undef AT
+    /* The memory guard's notice says what ran out: the page tables are no full memory (a Chromium game's processes ended
+     * one at 1,193 MiB, 2026-10-31), and each case has its own text in every language. */
+    assert(pw_setup_guard_notice(0, 0, 1) == PW_TEXT_NOTICE_MEMORY_ASKED && pw_setup_guard_notice(1, 0, 1) == PW_TEXT_NOTICE_TABLES_ASKED);
+    assert(pw_setup_guard_notice(0, 1, 1) == PW_TEXT_NOTICE_MEMORY_ENDED && pw_setup_guard_notice(1, 1, 1) == PW_TEXT_NOTICE_TABLES_ENDED);
+    assert(pw_setup_guard_notice(0, 1, 0) == PW_TEXT_NOTICE_MEMORY_STUCK && pw_setup_guard_notice(1, 1, 0) == PW_TEXT_NOTICE_TABLES_STUCK);
+    {
+        const PwSetupLanguage *english = pw_setup_language("en-US");
+        assert(english && strstr(pw_setup_text(english, PW_TEXT_NOTICE_TABLES_ENDED), "page tables") &&
+               !strstr(pw_setup_text(english, PW_TEXT_NOTICE_TABLES_ENDED), "memory stayed full"));
+        assert(strstr(pw_setup_text(english, PW_TEXT_NOTICE_MEMORY_ENDED), "memory stayed full"));
+        size_t planned = 0;
+        const PwSetupLanguage *every = pw_setup_languages(&planned);
+        for (size_t i = 0; i < planned; ++i) {
+            if (!pw_setup_language(every[i].tag)) continue;   /* planned, no text yet */
+            for (int key = PW_TEXT_NOTICE_MEMORY_ASKED; key <= PW_TEXT_NOTICE_TABLES_STUCK; ++key)
+                for (int other = key + 1; other <= PW_TEXT_NOTICE_TABLES_STUCK; ++other)
+                    assert(strcmp(pw_setup_text(&every[i], (PwSetupText)key), pw_setup_text(&every[i], (PwSetupText)other)));
+        }
+    }
     free(picture), free(frame), free(before);
     printf("setup: start and steps, %zu of %zu languages with complete drawable text, placeholders, record, prefix stamp, "
            "cover stages\n", shown, count);

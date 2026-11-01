@@ -1,0 +1,59 @@
+From 0000000000000000000000000000000000000000 Mon Sep 17 00:00:00 2001
+From: Mihawk <163614687+mihawk-99@users.noreply.github.com>
+Date: Sat, 31 Oct 2026 17:00:00 -0400
+Subject: [PATCH] ntdll: PS5: a shared image section not aligned to the host page is mapped private
+
+Two GameMaker games failed at image load on a tester's standard PS5
+(2026-10-31, klog/tester-ut-dr-2026-10-31, not in the tree): "unaligned shared
+mapping ... not supported", "Could not map ... shared section .mydata", and for
+the 64-bit one "failed to start ...: c000007b". The GameMaker runner has a
+4 KiB section marked shared and writable (.mydata) at a 4 KiB offset. Such a
+section is mapped MAP_SHARED from the image's shared-sections file, which needs
+whole host pages; the PS5's host page is 16 KiB, so map_file_into_view skipped
+the mmap and refused the writable fallback. On Linux, with 4 KiB pages, it
+never happens.
+
+Under __PROSPERO__, a shared writable section whose start or size is not a
+multiple of the host page is now mapped as an ordinary section: read in from
+the image and written in place, with one WARN per section. Only the sharing of
+that section between two running copies of the same program is lost (Windows
+programs use it for single-instance flags; games do not rely on it). The offset
+into the shared-sections file still advances past it, so a later aligned shared
+section maps its own bytes. An aligned shared section is mapped as before.
+---
+--- a/dlls/ntdll/unix/virtual.c
++++ b/dlls/ntdll/unix/virtual.c
+@@ -4285,6 +4285,7 @@
+     IMAGE_DATA_DIRECTORY *imports, *dir;
+     NTSTATUS status = STATUS_CONFLICTING_ADDRESSES;
+     int i;
++    BOOL shared;
+     off_t pos;
+     struct stat st;
+     char *header_end;
+@@ -4375,8 +4376,21 @@
+             goto done;
+         }
+ 
+-        if ((sec[i].Characteristics & IMAGE_SCN_MEM_SHARED) &&
+-            (sec[i].Characteristics & IMAGE_SCN_MEM_WRITE))
++        shared = (sec[i].Characteristics & IMAGE_SCN_MEM_SHARED) && (sec[i].Characteristics & IMAGE_SCN_MEM_WRITE);
++#ifdef __PROSPERO__
++        /* A shared writable section needs a MAP_SHARED mapping of whole host pages, 16 KiB here: GameMaker's runner
++         * has a 4 KiB .mydata at a 4 KiB offset, which failed the image (c000007b). Such a section is mapped
++         * private instead, read in and written in place; only its sharing between two running copies of the same
++         * program is lost. */
++        if (shared && ((sec[i].VirtualAddress | map_size) & host_page_mask))
++        {
++            WARN_(module)( "%s shared section %.8s at %x size %lx is not host-page aligned: mapped private\n",
++                           debugstr_us(nt_name), sec[i].Name, sec[i].VirtualAddress, map_size );
++            pos += map_size;   /* the next shared section's bytes follow this one's in shared_fd */
++            shared = FALSE;
++        }
++#endif
++        if (shared)
+         {
+             TRACE_(module)( "%s mapping shared section %.8s at %p off %x (%x) size %lx (%lx) flags %x\n",
+                             debugstr_us(nt_name), sec[i].Name, ptr + sec[i].VirtualAddress,
+-- 
+2.43.0

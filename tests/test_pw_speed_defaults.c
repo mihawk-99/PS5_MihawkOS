@@ -28,8 +28,8 @@ int main(void)
     assert(pw_speed_defaults_apply(get, setenv) == 0);
     /* The names the readers look for, exactly. */
     const char *const expected[] = {"WINE_PS5_NTSYNC", "WINE_PS5_HELPER_CPUS_WIDEN", "WINE_PS5_ASYNC_PRESENT",
-                                    "WINE_PS5_PRESENT_LINK", "PROTON_120HZ"};
-    assert(PW_SPEED_DEFAULTS == 5);
+                                    "WINE_PS5_PRESENT_LINK", "PROTON_120HZ", "PROTON_GPU_FAST_COPY"};
+    assert(PW_SPEED_DEFAULTS == 6);
     for (size_t i = 0; i < PW_SPEED_DEFAULTS; ++i) assert(!strcmp(pw_speed_defaults[i], expected[i]));
     puts("test_pw_speed_defaults: ok");
     return 0;

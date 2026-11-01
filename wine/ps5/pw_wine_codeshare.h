@@ -32,18 +32,22 @@ static inline uint64_t pw_wine_codeshare_hash(const void *bytes, size_t size)
 
 /* The title's registry: the JIT objects helpers gave it (PW_CHILD_CODE_OFFER), each held until no helper that gave or
  * took it lives. A holder is the helper's slot in the title's child table (pw_wine_process.c, 32 slots), forgotten once
- * that helper has ended. ENTRIES bounds the descriptors the title holds, under its 13,952 open-file limit (a Java launcher's chain run,
- * docs/history/2026-10-07/docs/WINDOWS_PROCESSES.md; shared memory does not count against the 250-file budget,
- * fd-budget-01): CEF's three processes copied 128,256 KiB at 16 KiB clusters (the cluster A/B), about 8,000 clusters,
- * most of them the same ones. One mutex; nothing under it waits but dup and close.
+ * that helper has ended. ENTRIES bounds the descriptors the title holds: they share its descriptor table, 12,555 slots
+ * whatever getrlimit's 13,952 says, with the in-process server's files and their parked placeholders. At 8,192 the
+ * store client's helpers filled the registry in 20 s, its download's files took the rest, and a CreateFile failed with
+ * "too many open files" (a tester's store-client download, 2026-10-31: 12,302 of 12,555). So 2,048, and a full table takes entries
+ * back (pw_wine_codeshare_release): a lost entry only costs a helper a private copy later. CEF's three processes copied
+ * 128,256 KiB at 16 KiB clusters (the cluster A/B), about 8,000 clusters, most of them the same ones. One mutex;
+ * nothing under it waits but dup and close.
  * shortcut: an object stays until every helper that took it ends, also when one unloaded the DLL; drop per unmap if a
  * long-lived helper is seen loading and unloading large images. */
-enum { PW_WINE_CODESHARE_ENTRIES = 8192, PW_WINE_CODESHARE_HOLDERS = 32 };
+enum { PW_WINE_CODESHARE_ENTRIES = 2048, PW_WINE_CODESHARE_HOLDERS = 32 };
 
 typedef struct PwWineCodeshareStats {
     uint64_t entries, bytes;             /* objects held now and their size */
     uint64_t finds, hits;                /* asks, and asks answered with an object */
     uint64_t offers, kept, closed;       /* objects given, kept, and closed when their last holder ended */
+    uint64_t released;                   /* of those closed, taken back for a full descriptor table */
 } PwWineCodeshareStats;
 
 /* The object of a cluster of bytes whose content hashes to hash, for holder: 0 with *fd a new descriptor of it (the
@@ -58,6 +62,9 @@ int pw_wine_codeshare_find_file(const uint64_t file[3], uint64_t bytes, unsigned
 int pw_wine_codeshare_offer_file(const uint64_t file[3], uint64_t bytes, unsigned holder, int fd);
 /* Holder has ended: it holds nothing now, and each object no live holder gave or took is closed. Returns how many. */
 unsigned pw_wine_codeshare_forget(unsigned holder);
+/* The descriptor table is full (EMFILE): close up to count entries, whoever holds them, so a file can open. A helper
+ * that already mapped an object keeps its mapping; one that asks later makes a private copy. Returns how many. */
+unsigned pw_wine_codeshare_release(unsigned count);
 void pw_wine_codeshare_stats(PwWineCodeshareStats *stats);
 /* Everything closed and forgotten (tests). */
 void pw_wine_codeshare_reset(void);

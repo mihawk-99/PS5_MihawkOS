@@ -18,9 +18,7 @@ TOOL = ROOT / 'tools/publication-check.py'
 _spec = importlib.util.spec_from_file_location('stage_licences', ROOT / 'tools/stage-licences.py')
 TOOL_LICENCES = importlib.util.module_from_spec(_spec)
 _spec.loader.exec_module(TOOL_LICENCES)
-_spec = importlib.util.spec_from_file_location('aero_wallpapers', ROOT / 'tools/make-aero-wallpapers.py')
-WALLPAPER = importlib.util.module_from_spec(_spec)
-_spec.loader.exec_module(WALLPAPER)
+WALLPAPER = ROOT / 'themes/windows11/wallpapers/skeuoss-bubble-city.jpg'  # the desktop's default
 CONSOLE = '.'.join(['192', '168', '77', '41'])
 SECRET = 'pl' + 'anted-ftp-' + 'secret'
 TOKEN = 'gh' + 'p_' + 'Q' * 36
@@ -62,6 +60,12 @@ class PublicationCheck(unittest.TestCase):
         code, output = self.run_tool('tree')
         self.assertEqual(code, 0, output)
         self.assertIn('verdict: clean', output)
+
+    def test_binary_dotted_numbers_are_no_address(self):
+        # A run of version bytes in a binary reads as "08.00.00.00"; the check must neither fail nor take it for one.
+        (self.repo / 'data.bin').write_bytes(b'\x00ver 08.00.00.00 and 1.02.003.4\x00')
+        code, output = self.run_tool('tree')
+        self.assertEqual(code, 0, output)
 
     def test_every_tree_category_is_caught(self):
         mac, serial, user = ':'.join(['aa', 'bb', 'cc', 'dd', 'ee', '01']), 'serial' + '=ABCD123456', 'Some' + 'one'
@@ -156,17 +160,16 @@ class PublicationCheck(unittest.TestCase):
         never = next(line for line in output.splitlines() if line.strip().startswith('FAIL') and 'never ship' in line)
         self.assertIn('never ship in a build: 4 in 4 places', never)  # wallpaper, native DLL, probe, ShadowMountPlus
         self.assertIn('dist/release/mount.elf (ShadowMountPlus)', output)
-        self.assertIn('a wallpaper that is not Bubble Earth', output)
+        self.assertIn('a wallpaper that is not Bubble City', output)
         self.assertIn('title: no licenses/ folder', output)
         self.assertNotIn('d3d9.dll', output)
         self.assertNotIn('eboot.bin (ShadowMountPlus)', output)
 
-    def test_a_build_with_bubble_earth_passes(self):
+    def test_a_build_with_the_default_wallpaper_passes(self):
         (self.repo / '.gitignore').write_text('.deps/\ndist/\n')
         wallpaper = self.repo / '.deps/staged/runtime/ge11-7/lib/wine/prefix/drive_c/windows/web/wallpaper'
         wallpaper.mkdir(parents=True)
-        WALLPAPER.render('bubble-earth', 480, 270).resize((1920, 1080), Image.Resampling.LANCZOS).save(
-            wallpaper / 'proton.bmp')
+        Image.open(WALLPAPER).convert('RGB').save(wallpaper / 'proton.bmp')
         licences = self.repo / '.deps/staged/runtime/ge11-7/share/licenses'
         for name in TOOL_LICENCES.STAGE_WINE + list(TOOL_LICENCES.RUNTIME):
             (licences / name).parent.mkdir(parents=True, exist_ok=True)

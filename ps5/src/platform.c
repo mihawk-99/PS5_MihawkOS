@@ -10,6 +10,7 @@
  * smoke test runs with; no SDK header declares them.
  */
 #include "platform.h"
+#include "../../src/pw_capped_log.h"
 
 #include <ps5platform/klog.h>
 
@@ -58,10 +59,12 @@ platform_init(const char *title_name)
 
 /* A file every say() line also goes to (platform_say_file): klog travels over the network, and when the console
  * froze under a launcher (2026-10-10; record removed from the tree) the network died first and nothing of the title's last seconds
- * survived. Bounded: past PLATFORM_SAY_FILE_BYTES the file says so and takes no more. */
+ * survived. Bounded: past PLATFORM_SAY_FILE_BYTES the file says so and takes no more. A session's log instead keeps its
+ * start and its end (platform_say_log, src/pw_capped_log.h). */
 enum { PLATFORM_SAY_FILE_BYTES = 8 << 20 };
 static int say_file = -1;
 static size_t say_file_bytes;
+static PwCappedLog *say_log;
 
 void
 platform_say_file(int fd)
@@ -71,11 +74,17 @@ platform_say_file(int fd)
 }
 
 void
+platform_say_log(PwCappedLog *log)
+{
+   say_log = log;
+}
+
+void
 say(const char *format, ...)
 {
    va_list args;
    va_start(args, format);
-   if (say_file >= 0 && say_file_bytes < PLATFORM_SAY_FILE_BYTES) {
+   if (say_log || (say_file >= 0 && say_file_bytes < PLATFORM_SAY_FILE_BYTES)) {
       char line[1024];
       va_list copy;
       va_copy(copy, args);
@@ -84,9 +93,13 @@ say(const char *format, ...)
       if (length > (int)sizeof(line) - 2) length = (int)sizeof(line) - 2;
       if (length >= 0) {
          line[length++] = '\n';
-         if (write(say_file, line, (size_t)length) == length) say_file_bytes += (size_t)length;
-         if (say_file_bytes >= PLATFORM_SAY_FILE_BYTES)
-            (void)!write(say_file, "(title log full)\n", 17);
+         if (say_log) {
+            pw_capped_log_write(say_log, line, (size_t)length);
+         } else {
+            if (write(say_file, line, (size_t)length) == length) say_file_bytes += (size_t)length;
+            if (say_file_bytes >= PLATFORM_SAY_FILE_BYTES)
+               (void)!write(say_file, "(title log full)\n", 17);
+         }
       }
    }
    vfprintf(stderr, format, args);
@@ -145,6 +158,7 @@ _Static_assert(offsetof(struct pad_sample, timestamp_us) == 0x50, "the timestamp
 
 static int32_t pad_handle = -1;
 static struct pad_sample pad_last;
+static bool pad_overlay;   /* the newest reading came from a pad that is there, with the shell holding it */
 static struct pad_reading pad_taken[64];
 static int pad_taken_count;
 
@@ -193,6 +207,7 @@ pad_poll(struct pad *pad)
          pad_taken[pad_taken_count++] = (struct pad_reading){0};
          memset(&pad_last, 0, sizeof(pad_last));
          pad_last.left_x = pad_last.left_y = pad_last.right_x = pad_last.right_y = 128;
+         pad_overlay = false;
       }
       for (int i = 0; i < count && i < 64; i++) {
          const struct pad_sample *s = &samples[i];
@@ -200,6 +215,7 @@ pad_poll(struct pad *pad)
             s->buttons, s->left_x, s->left_y, s->right_x, s->right_y, s->l2, s->r2,
             s->connected != 0, s->timestamp_us};
          pad_last = *s;
+         pad_overlay = pad_last.connected && (pad_last.buttons & PAD_INTERCEPTED);
          if (!pad_last.connected || (pad_last.buttons & PAD_INTERCEPTED)) {
             memset(&pad_last, 0, sizeof(pad_last));
             pad_last.left_x = pad_last.left_y = pad_last.right_x = pad_last.right_y = 128;
@@ -207,6 +223,7 @@ pad_poll(struct pad *pad)
       }
    }
    pad->connected = pad_handle >= 0 && pad_last.connected;
+   pad->intercepted = pad_handle >= 0 && pad_overlay;
    pad->held = pad->connected ? pad_last.buttons : 0;
    memcpy(pad->raw_axes, &pad_last.left_x, sizeof(pad->raw_axes));
    pad->touch_count = pad->connected ? pad_last.touch_count : 0;

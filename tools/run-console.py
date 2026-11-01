@@ -117,8 +117,10 @@ MARKERS = {'wine-probe.exe': 'PS5_PROTON_PE64_PROBE', 'gate-sequence.exe': 'PS5_
            'xinput-probe.exe': 'PS5_PROTON_XINPUT_PROBE', 'hid-probe.exe': 'PS5_PROTON_HID_PROBE', 'hid32-probe.exe': 'PS5_PROTON_HID_PROBE',
            'vk32-probe.exe': 'PS5_PROTON_VK_PROBE', 'vk64-probe.exe': 'PS5_PROTON_VK_PROBE',
            'gl-vertex32-probe.exe': 'PS5_PROTON_GL_VERTEX_PROBE', 'd3d11-32-probe.exe': 'PS5_PROTON_D3D11_PROBE',
+           'd3d12-levels-probe.exe': 'PS5_PROTON_D3D12_LEVELS', 'd3d12-sparse-probe.exe': 'PS5_PROTON_D3D12_SPARSE', 'many-files-probe.exe': 'PS5_PROTON_MANY_FILES', 'log-flood-probe.exe': 'PS5_PROTON_LOG_FLOOD', 'd3d12-shared-probe.exe': 'PS5_PROTON_D3D12_SHARED', 'd3d12-existing-heap-probe.exe': 'PS5_PROTON_D3D12_EXISTING_HEAP',
+           'd3d9ex-d3d11-share-probe.exe': 'PS5_PROTON_D3D9_D3D11_SHARE', 'osk-typed-probe.exe': 'PS5_PROTON_OSK_TYPED',
            'sync-probe.exe': 'PS5_PROTON_SYNC_PROBE', 'exit-probe.exe': 'PS5_PROTON_EXIT_PROBE',
-           'priority-probe.exe': 'PS5_PROTON_PRIORITY_PROBE', 'hang-probe.exe': 'PS5_PROTON_HANG_PROBE', 'window-probe.exe': 'PS5_PROTON_WINDOW_PROBE', 'fs-probe.exe': 'PS5_PROTON_FS_PROBE', 'stack-probe.exe': 'PS5_PROTON_STACK_PROBE', 'gl-exit-probe.exe': 'PS5_PROTON_GL_EXIT_PROBE', 'mem-probe.exe': 'PS5_PROTON_MEM_PROBE', 'gl-vertex-probe.exe': 'PS5_PROTON_GL_VERTEX_PROBE', 'gl-present-probe.exe': 'PS5_PROTON_GL_PRESENT_PROBE', 'gl-sprite-probe.exe': 'PS5_PROTON_GL_SPRITE_PROBE', 'vm-protect-probe.exe': 'PS5_PROTON_VM_PROTECT_PROBE', 'vm-protect32-probe.exe': 'PS5_PROTON_VM_PROTECT_PROBE', 'remote-memory-probe.exe': 'PS5_PROTON_REMOTE_MEMORY_PROBE', 'stdout-probe.exe': 'PS5_PROTON_STDOUT_PROBE', 'nt-file-probe.exe': 'PS5_PROTON_NT_FILE_PROBE', 'registry-flush64-probe.exe': 'PS5_PROTON_REGISTRY_FLUSH', 'file-write32-probe.exe': 'PS5_PROTON_FILE_WRITE', 'file-write64-probe.exe': 'PS5_PROTON_FILE_WRITE', 'relative-dir32-probe.exe': 'PS5_PROTON_NT_RELDIR_PROBE', 'relative-dir64-probe.exe': 'PS5_PROTON_NT_RELDIR_PROBE', 'file-cost32-probe.exe': 'PS5_PROTON_FILE_COST', 'file-cost64-probe.exe': 'PS5_PROTON_FILE_COST', 'handles-paths32-probe.exe': 'PS5_PROTON_HANDLES_PATHS', 'handles-paths64-probe.exe': 'PS5_PROTON_HANDLES_PATHS', 'pipe-cancel32-probe.exe': 'PS5_PROTON_PIPE_CANCEL', 'pipe-cancel64-probe.exe': 'PS5_PROTON_PIPE_CANCEL', 'lock32-probe.exe': 'PS5_PROTON_LOCK', 'lock64-probe.exe': 'PS5_PROTON_LOCK', 'continue64-probe.exe': 'PS5_PROTON_CONTINUE', 'stack-limit64-probe.exe': 'PS5_PROTON_STACK_LIMIT', 'syscall-cost32-probe.exe': 'PS5_PROTON_SYSCALL_COST', 'syscall-cost64-probe.exe': 'PS5_PROTON_SYSCALL_COST', 'net-throughput32-probe.exe': 'PS5_PROTON_NET_THROUGHPUT', 'net-throughput64-probe.exe': 'PS5_PROTON_NET_THROUGHPUT', 'thread-leak-probe.exe': 'PS5_PROTON_THREAD_LEAK_PROBE'}
+           'priority-probe.exe': 'PS5_PROTON_PRIORITY_PROBE', 'hang-probe.exe': 'PS5_PROTON_HANG_PROBE', 'window-probe.exe': 'PS5_PROTON_WINDOW_PROBE', 'fs-probe.exe': 'PS5_PROTON_FS_PROBE', 'stack-probe.exe': 'PS5_PROTON_STACK_PROBE', 'gl-exit-probe.exe': 'PS5_PROTON_GL_EXIT_PROBE', 'mem-probe.exe': 'PS5_PROTON_MEM_PROBE', 'gl-vertex-probe.exe': 'PS5_PROTON_GL_VERTEX_PROBE', 'gl-present-probe.exe': 'PS5_PROTON_GL_PRESENT_PROBE', 'gl-sprite-probe.exe': 'PS5_PROTON_GL_SPRITE_PROBE', 'vm-protect-probe.exe': 'PS5_PROTON_VM_PROTECT_PROBE', 'vm-protect32-probe.exe': 'PS5_PROTON_VM_PROTECT_PROBE', 'remote-memory-probe.exe': 'PS5_PROTON_REMOTE_MEMORY_PROBE', 'stdout-probe.exe': 'PS5_PROTON_STDOUT_PROBE', 'crash-probe.exe': 'PS5_PROTON_CRASH_PROBE', 'nt-file-probe.exe': 'PS5_PROTON_NT_FILE_PROBE', 'registry-flush64-probe.exe': 'PS5_PROTON_REGISTRY_FLUSH', 'file-write32-probe.exe': 'PS5_PROTON_FILE_WRITE', 'file-write64-probe.exe': 'PS5_PROTON_FILE_WRITE', 'relative-dir32-probe.exe': 'PS5_PROTON_NT_RELDIR_PROBE', 'relative-dir64-probe.exe': 'PS5_PROTON_NT_RELDIR_PROBE', 'file-cost32-probe.exe': 'PS5_PROTON_FILE_COST', 'file-cost64-probe.exe': 'PS5_PROTON_FILE_COST', 'handles-paths32-probe.exe': 'PS5_PROTON_HANDLES_PATHS', 'handles-paths64-probe.exe': 'PS5_PROTON_HANDLES_PATHS', 'pipe-cancel32-probe.exe': 'PS5_PROTON_PIPE_CANCEL', 'pipe-cancel64-probe.exe': 'PS5_PROTON_PIPE_CANCEL', 'lock32-probe.exe': 'PS5_PROTON_LOCK', 'lock64-probe.exe': 'PS5_PROTON_LOCK', 'continue64-probe.exe': 'PS5_PROTON_CONTINUE', 'stack-limit64-probe.exe': 'PS5_PROTON_STACK_LIMIT', 'syscall-cost32-probe.exe': 'PS5_PROTON_SYSCALL_COST', 'syscall-cost64-probe.exe': 'PS5_PROTON_SYSCALL_COST', 'net-throughput32-probe.exe': 'PS5_PROTON_NET_THROUGHPUT', 'net-throughput64-probe.exe': 'PS5_PROTON_NET_THROUGHPUT', 'thread-leak-probe.exe': 'PS5_PROTON_THREAD_LEAK_PROBE'}
 PERF = {
     'frames': re.compile(r'perf: (\w+) frames=(\d+) fps=([\d.]+) p50=([\d.]+) p95=([\d.]+) p99=([\d.]+) '
                          r'max=([\d.]+) ms present_avg=([\d.]+) present_max_all=([\d.]+)'),
@@ -190,6 +192,26 @@ def idle(settings):
     return ' count=0 ' in ps5_console.ps5vkctl_command(settings, 'procs') + ' '
 
 
+# A probe that measures something can end on a named result that is neither PASS nor FAIL: the line says what it saw.
+# Without the name the runner read "no verdict" (and never started the exit-stall clock). Such a result is recorded as
+# the probe's verdict and does not pass; it is not a failure of the run to finish.
+NAMED_VERDICTS = {
+    'PS5_PROTON_D3D9_D3D11_SHARE': ('NOSHARE',),   # tests/d3d9ex-d3d11-share-probe.c: a shared texture the other device cannot open
+}
+
+
+def probe_verdict(marker, line):
+    """The verdict one probe line carries, or None: PASS or FAIL after the marker, or a name NAMED_VERDICTS gives it."""
+    if f'{marker} PASS' in line:
+        return 'PASS'
+    if f'{marker} FAIL' in line:
+        return 'FAIL'
+    for name in NAMED_VERDICTS.get(marker, ()):
+        if f'{marker} {name}' in line:
+            return name
+    return None
+
+
 def probe_completed(verdict, stop_requested):
     # A watchdog stop can change the workload (e.g. disconnecting input unblocks a stuck message loop).
     # A PASS printed afterward is not an autonomous probe completion.
@@ -201,7 +223,7 @@ def touchpad_touched_at_start(lines):
     0. A contact there drives the title's touchpad-as-mouse, so every probe's parked cursor moves (17 cases of
     alpha5-pro-2026-10-29-02, touch=1 in each): such a run says so and fails, instead of failing as a probe."""
     for line in lines:
-        match = re.search(r'Wine: pad connected=(\d+) buttons=\S+ touch=(\d+)', line)
+        match = re.search(r'Wine: pad connected=(\d+)(?: \([^)]*\))? buttons=\S+ touch=(\d+)', line)
         if match:
             return int(match.group(2)) if match.group(1) == '1' else 0
     return 0
@@ -712,6 +734,47 @@ def installed_profiles(lines):
             if len(fields) == 9 and fields[0].startswith('d') and not fields[8].startswith('.')}
 
 
+def log_ends(ftp, name):
+    """A log's end files after its head (src/pw_capped_log.h): the older one, then the newest; nothing when the log never
+    filled its head."""
+    data = b''
+    for part in (f'{name}-end.1.log', f'{name}-end.log'):
+        raw = io.BytesIO()
+        try:
+            ftp.retrbinary(f'RETR {DATA}/logs/{part}', raw.write)
+        except ftplib.error_perm:
+            continue
+        data += f'=== {part} ===\n'.encode() + raw.getvalue()
+    return data
+
+
+def log_ends_kept(wine, title_lines):
+    """tests/log-flood-probe.c's 200,000 lines through the in-title Wine's log (src/pw_capped_log.h): its head holds the
+    first, an end file the last, the set at most 8 + 2 x 4 MiB and some lines over; the title's log ends with its end line."""
+    first, last = b'log-flood line 0000000 ', b'log-flood line 0199999 '
+    head = wine.split(b'=== wine-end', 1)[0]
+    checks = {'first line in the head': first in head, 'end files': b'=== wine-end.log ===' in wine,
+              'last line kept': last in wine[len(head):], 'bounded': len(wine) <= (16 << 20) + (1 << 20),
+              'flood not in the title log': not any('log-flood line' in line for line in title_lines),
+              'title end line': any('Session: ended' in line for line in title_lines)}
+    print(f'log ends: wine log {len(wine)} bytes, ' + ', '.join(f'{name} {"yes" if ok else "NO"}' for name, ok in checks.items()))
+    return all(checks.values())
+
+
+def captures_lit(pictures, share):
+    """Every capture the run fetched shows a frame: at least SHARE of its pixels are not black. The broker's fast copy
+    (PROTON_GPU_FAST_COPY, src/pw_speed_defaults.h) once gave black captures, the pointer alone, while the TV showed the
+    game (w3-ab-b-pro-2026-11-01); a capture now reads what was scanned out (PS5_Vulkan gpu-broker display.cpp)."""
+    from PIL import Image
+    shares = []
+    for picture in pictures:
+        image = Image.open(picture).convert('RGB')
+        lit = sum(1 for pixel in image.getdata() if pixel != (0, 0, 0))
+        shares.append(lit / (image.width * image.height))
+    print('captures lit: ' + (', '.join(f'{Path(p).name} {s:.1%}' for p, s in zip(pictures, shares)) or 'none fetched'))
+    return bool(shares) and min(shares) >= share
+
+
 def session_logs_status(lines):
     """The title's last report of its session-log rotation (native/proton_wine.cpp); None when it gave none."""
     statuses = [int(match.group(1)) for line in lines if (match := SESSION_STATUS.search(line))]
@@ -811,6 +874,14 @@ def main():
     parser.add_argument('--skip', type=int, default=1, help='counter intervals left out of the medians')
     parser.add_argument('--expect-ended', action='store_true',
                         help="the probe holds on after its verdict and must be ended by the title's SIGKILL to its helpers")
+    parser.add_argument('--expect-title-game', metavar='EXE',
+                        help='Alpha 7\'s default: this executable, and only it, ran in the title (docs/TITLE_CLIENT.md)')
+    parser.add_argument('--expect-log-ends', action='store_true',
+                        help="tests/log-flood-probe.c: the Wine log kept its start, its end and the last line, within its bound, "
+                             "and the title's log its end line (src/pw_capped_log.h)")
+    parser.add_argument('--expect-captures-lit', type=float, metavar='PERCENT',
+                        help='every capture the run fetched has at least PERCENT of its pixels not black (a frame shown, '
+                             'not an empty copy)')
     parser.add_argument('--expect-direct-section', action='store_true',
                         help='a large section in direct memory, mapped by chunks, all given back with none lost')
     parser.add_argument('--reparse', action='store_true',
@@ -914,7 +985,7 @@ def main():
         if '[MihawkOS] Wine: load status=0' in line:
             state['loaded'] = True
         if marker and state['verdict'] is None and marker in line:
-            state['verdict'] = 'PASS' if f'{marker} PASS' in line else 'FAIL' if f'{marker} FAIL' in line else None
+            state['verdict'] = probe_verdict(marker, line)
             if state['verdict']:
                 state['verdict_at'] = time.monotonic()
                 marks['stages'].setdefault('marker', round(state['verdict_at'] - started, 2))
@@ -1017,6 +1088,7 @@ def main():
         wine_log = log_path.with_name(log_path.stem + '-wine.log')
         with connect(settings) as ftp, wine_log.open('wb') as output:
             ftp.retrbinary(f'RETR {DATA}/logs/wine-last.log', output.write)
+            output.write(log_ends(ftp, 'wine'))
         # The title's say() lines, kept on the console's disk (ps5/src/platform.c): what survives when klog does not.
         title_log = log_path.with_name(log_path.stem + '-title.log')
         title_lines = []
@@ -1024,6 +1096,7 @@ def main():
             raw = io.BytesIO()
             with connect(settings) as ftp:
                 ftp.retrbinary(f'RETR {DATA}/logs/title-last.log', raw.write)
+                raw.write(log_ends(ftp, 'title'))
             title_log.write_text(mask(raw.getvalue().decode(errors='replace')))
             title_lines = title_log.read_text().splitlines()
         except ftplib.error_perm:
@@ -1060,8 +1133,8 @@ def main():
         # written synchronously, so a verdict missing from klog is read there.
         if marker and state['verdict'] is None:
             for line in runtime_lines:
-                if f'{marker} PASS' in line or f'{marker} FAIL' in line:
-                    state['verdict'] = 'PASS' if f'{marker} PASS' in line else 'FAIL'
+                if probe_verdict(marker, line):
+                    state['verdict'] = probe_verdict(marker, line)
                     if (at := console_stage(marks, line)) is not None:
                         marks['stages'].setdefault('marker', at)
                     break
@@ -1180,6 +1253,17 @@ def main():
                 passed = passed and ended_record['why'] == 'hang breaker' and ended_record['stalled'] is not None
             if fault == 'broker-wedge':
                 passed = passed and broker_wedge_ended(ended_record) and 'test-hold' in (phases or {})
+        if args.expect_title_game:
+            in_title = [line.split('Wine: ', 1)[-1] for line in lines + title_lines
+                        if line.endswith(' runs in the title beside the broker')]
+            in_title = sorted(set(in_title))
+            passed = passed and len(in_title) == 1 and \
+                in_title[0].lower().endswith('\\' + args.expect_title_game.lower() + ' runs in the title beside the broker')
+            print(f'in the title: {in_title or "nothing"}')
+        if args.expect_log_ends:
+            passed = passed and log_ends_kept(wine_log.read_bytes(), title_lines)
+        if args.expect_captures_lit is not None:
+            passed = passed and captures_lit(pictures, args.expect_captures_lit / 100)
         if args.expect_direct_section:
             passed = passed and bool(memory['sections_mib']) and memory['gave_back_lines'] > 0 and memory['given_back'] > 0 \
                 and not memory['lost'] and bool(robustness['chunk_maps']) and robustness['ask_failures_max'] == 0

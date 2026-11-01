@@ -17,7 +17,7 @@ def main():
  a=p.parse_args();base=a.base.resolve();out=a.output.resolve();prx=out/'prx';prx.mkdir(parents=True,exist_ok=True);(prx/'sce_module').mkdir(exist_ok=True)
  sdk=(ROOT/'.deps/native/ps5-payload-sdk').resolve();foundation=(ROOT/'.deps/prx-foundation').resolve();tool=foundation/'build/host/ps5-native-tool';pie=foundation/'tooling/native/ps5-pie.ld'
  if run(['git','-C',foundation,'rev-parse','HEAD']).strip()!='30597512539e7edfde079cbcaf4a626bc0a948c5':raise RuntimeError('PRX converter pin differs')
- if (sdk/'.ps5-sdk-revision').read_text().strip()!='9d0487845ad50e3a266872cbbaaedc6ffafe3404':raise RuntimeError('Payload SDK pin differs')
+ if (sdk/'.ps5-sdk-revision').read_text().strip()!='e105cf6f25801d9e9981812a89a3b74021d2d2a2':raise RuntimeError('Payload SDK pin differs')
  report=json.loads((base/'report.json').read_text())
  if report['wine_commit']!='1c78596625336a73dbfc035dbbcf0dbdd95b06eb':raise RuntimeError('Wine pin differs')
  for name in ('ntdll','wineserver','win32u'):

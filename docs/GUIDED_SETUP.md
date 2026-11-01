@@ -9,7 +9,7 @@ the UI kit), not the Mihawk OS shell's. Status lives in [PLAN.md](PLAN.md); this
 | When it shows, where each step goes, the languages and their text, the record | `src/pw_setup.{h,c}`, host test `tests/test_pw_setup.c` |
 | The screens, the sounds, the pointer, the install engine's interface, the sky's pipeline and timer | `examples/ps5proton/setup_tour.hpp` |
 | The sky | `shaders/glsl/ps5proton/aero.{vert,frag}` |
-| The flags (lipis/flag-icons, MIT, pinned) and the QR code | `ps5/assets/flags/`, `gen_setup` in `ps5/tools/generate_assets.py` |
+| The flags (lipis/flag-icons, MIT, pinned) | `ps5/assets/flags/`, `gen_setup` in `ps5/tools/generate_assets.py` |
 | Pictures and their checks | `tools/test-setup-ui.py` |
 
 ## When it shows
@@ -22,11 +22,17 @@ A new user installs MihawkOS by copying its folder to `/data/homebrew` and openi
 - **Never without `/data`:** nothing could be saved, and the launcher's own complaint says why.
 - **Back from its first session** (the `setup-preparing` marker): Done, or Preparing again with "did not finish".
 - **On the first launch:** `/data/ps5proton/setup.txt` has no `done=1`.
-- **At "How to install"** when the runtime is missing, **at Preparing** when the `mihawk` prefix is missing.
+- **At Installing** when the runtime is missing or another build's (an updated title folder: the copy alone, then the
+  library), **at Preparing** when the `mihawk` prefix is missing.
 - **When asked:** Settings, Guided setup.
 
-Skip (△, or Skip setup on Welcome) writes `done=1` and returns to the library. The tour then comes back only when the
-runtime or the prefix is missing.
+The first setup cannot be skipped (the owner, 2026-10-31): there is no Skip button and no △ shortcut. `done=1` is
+written only when Done shows, after Before you play, so a console turned off on the way comes back to the tour. After
+that, the tour comes back only when the runtime or the prefix is missing, or when Settings asks. A re-run from Settings
+cannot be left either ("It should be impossible to leave there too"): Settings clears `done` as it starts, so a title
+closed on the way comes back to the tour, and with everything installed it is Welcome, language, Continue, Before you
+play, Done. A step that fails keeps its own Try again and Back, and nothing was added to move past it (the owner: no
+safeguard that offers a way forward). The counter has six steps: Before you play is 5 of 6, Done 6 of 6.
 
 **A first run on a set-up console** is played by the marker `/data/ps5proton/setup-first-run`. The tour shows the
 runtime and the prefix as missing and installs with the fake engine, so nothing is written over the runtime. Preparing
@@ -37,26 +43,25 @@ owner's prefix, runtime and saves are never touched.
 
 | Step | What it shows | Ways out |
 | --- | --- | --- |
-| Welcome | "Welcome to MihawkOS", ten minutes, the First Light theme (low, this step only) | Get started, Skip setup |
+| Welcome | "Welcome to MihawkOS", ten minutes, the First Light theme (low, this step only) | Get started |
 | Language | Flag tiles with each language's own name; only languages with complete text | ✕ chooses and goes on; ○ back |
-| How to install | Three tiles: USB drive, FTP, Internet "Coming soon"; the QR code; "already installed" + Continue when it is | USB, FTP, Continue |
-| Prepare a USB drive | Four numbered steps (exFAT + MBR, copy the folder, plug in, Check drive) and the QR code | Check drive, Install, Try again |
-| Copy the files over FTP | Four numbered steps (start an FTP server on the PS5, unzip usb-mihawkos on a computer, copy every file inside mihawkos into `/data/ps5proton/install`, Check files) and the QR code. Entering the step makes that folder | Check files, Install, Try again |
-| Installing | Percent, bar, "612 of 1,190 MB · 118 MB/s"; the bubbles calm down | Stop; on a failure Try again, Back |
+| Installing | Starts by itself after the language: the runtime from the title folder's `runtime-pieces/`, every file checked. Percent, bar, "612 of 1,190 MB · 118 MB/s"; the bubbles calm down | Stop; on a problem its sentence and Try again, nothing else |
 | Preparing Mihawk OS | What the first start does and how long; the controller note | Start |
-| Done | "You're all set" | Enter Mihawk OS |
+| Before you play | What MihawkOS is (a compatibility layer, an alpha) and, in a warning box, the games it cannot run: DRM such as Denuvo, anti-cheat or kernel-level protection such as Easy Anti-Cheat or BattlEye; they won't start or they close. Step 8 (`PW_SETUP_LIMITS`), after FTP, so the other numbers stay | ✕ held 10 s (`PW_SETUP_HOLD_SECONDS`): a ring around the ✕ fills, letting go empties it, and a hold counts only if it starts on the page. Nothing else goes on |
+| Done | "You're all set" and two tiles: Install Steam (focused first) and Go to the game library | Install Steam opens the Steam guide at its intro ("Not now" there lands in the library); the library tile closes the tour into the library, where Mihawk OS is one press away |
 
-**The FTP step is numbered 7** (`PW_SETUP_FTP`, after Done) so every other step keeps its number in the logs and in
-`tools/run-launcher.py --setup`'s expected walk; the progress dots place it with USB.
+**No How to install, USB or FTP step** since 2026-10-31 (the owner: "package everything in a single PPSA title file,
+and have the setup place the runtime by itself"). Their numbers, 2, 3 and 7, are not reused, so every other step keeps
+its number in the logs; `tools/run-launcher.py --setup` now expects 0, 1, 4 and 5.
 
 **Controls:**
-- Controller first: the D-pad moves to the nearest target in that direction, ✕ chooses, ○ goes back, △ skips.
+- Controller first: the D-pad moves to the nearest target in that direction, ✕ chooses, ○ goes back.
 - The touchpad moves a pointer that hovers and focuses; a touchpad click chooses.
 - The step's targets are one list, so the pad and the pointer cannot disagree.
 
 **The first session.** Start writes `setup-preparing` and starts Mihawk OS. The title ends that session itself once the
 prefix is made (`.update-timestamp` ends in ` wow64`). So nobody can open a game in it: in a new prefix's first session,
-games never get the DualSense (README "The Mihawk OS prefix"). The launcher then comes back at Done.
+games never get the DualSense (README "The Mihawk OS prefix"). The launcher then comes back at Before you play.
 
 **The first session's cover** (`src/pw_setup.h`). While wineboot makes the prefix, Explorer draws nothing, so the
 session showed a black screen with the pointer for its minute (first-install-unattended-2026-10-19-04: 75 s, "frames
@@ -81,22 +86,24 @@ reports is typed, so the tour says it in the chosen language with a way out:
 
 | Problem | Says (English) | Button |
 | --- | --- | --- |
-| `no_stick` | No USB drive found... the PS5 does not read GPT or NTFS drives. On the FTP step: No runtime files in /data/ps5proton/install... (`no_folder` too) | Try again |
-| `no_folder` | The drive has no mihawkos folder at its top... | Try again |
-| `partial` | The folder is incomplete: it has {have} of {pieces} pieces... On the FTP step: /data/ps5proton/install has {have} of {pieces} pieces... | Try again |
+| `no_pieces` | This copy of MihawkOS has no Windows runtime in its folder. Copy the whole PPSA99170 folder of the release to /data/homebrew again, then try again. | Try again |
+| `partial` | The PPSA99170 folder has {have} of {pieces} runtime pieces. Copy the whole folder again, then try again. | Try again |
 | `no_space` | Your PS5 needs {needed} free and has {available}... | Try again |
-| `read_failed` | The USB drive could not be read... What is already installed is kept. | Try again, Back |
-| `damaged` | A file on the drive is damaged or from another version... | Try again, Back |
-| `storage_full`, `write_failed` | Your PS5's storage is full / refused a write... | Try again, Back |
-| `cancelled` | The install stopped. What is already installed is kept. | Try again, Back |
+| `read_failed` | A runtime piece in the PPSA99170 folder could not be read... What is already installed is kept. | Try again |
+| `damaged` | A runtime piece in the PPSA99170 folder is damaged or from another version... | Try again |
+| `storage_full`, `write_failed` | Your PS5's storage is full / refused a write... | Try again |
+| `cancelled` | The install stopped. What is already installed is kept. | Try again |
 | `no_manifest` | This copy of MihawkOS cannot install a Windows runtime. Reinstall MihawkOS. | Try again |
 
 **The engine** is the installer's (`ps5/src/proton_install.h`, SELF_INSTALL phase 5, on main since a2b5617).
-`InstallSetupEngine` reads it from the USB sticks alone on the USB step (`proton_install_find("usb")`), and from
-`/data/ps5proton/install` alone on the FTP step (`proton_install_find("install")`, which never falls back to a download).
-After a failed install, Try again and Back return to the step the pieces came from. The size it shows is the
-engine's `bytes`, the pinned manifest's size. A download's problems cannot come from a drive: they read as `read_failed`. The
-Internet route stays "Coming soon" until the owner publishes a release. `FakeSetupEngine` plays the install, writing
+`InstallSetupEngine` reads the pieces from the title folder's `runtime-pieces/` alone (`proton_install_find("title")`,
+which never falls back to a download): `tools/package-install.py` puts them there, so a release is one folder to copy.
+Game helpers cannot read the title folder, so the copy into `/data/ps5proton` is needed. The engine checks every piece's
+and every file's SHA-256 against the title's `runtime-pack.txt` as it streams, and a file already in place with the
+right size and SHA-256 is not written again, so an update copies only what changed. A problem keeps the step with its
+sentence and Try again, which looks again and starts again; nothing moves past it (the owner: no safeguard that offers
+a way forward). The size it shows is the engine's `bytes`, the pinned manifest's size. A download's problems cannot
+come from the folder: they read as `read_failed`. `FakeSetupEngine` plays the install, writing
 nothing, in tests and in the simulated first run.
 
 ## Text and languages
@@ -173,15 +180,16 @@ default to it. The design, still to be built and proven on the console:
 
 **Host:**
 - `tools/host-tests.sh`: 128 passed, `test_pw_setup` and `test_pw_wine_inherit` among them.
-- `tools/test-setup-ui.py`: every step and error state, in all ten languages, and the gate's walk. The QR code reads
-  back as the instructions' address with `zbarimg`.
+- `tools/test-setup-ui.py`: every step and error state, in all ten languages, and the gate's walk; Try again after a
+  folder without pieces starts the install.
 - `tools/test-launcher-ui.py --render`: the library, Settings and themes, unchanged.
 
 **Console**, build 07421f38 (main 22e156f plus this), 2026-10-18. The klog had no maxpipekva, TTY(STDIN) or errno=5
 line before, between or after the runs.
 - [setup-tour-2026-10-18-02](../evidence/setup-tour-2026-10-18-02.json), PASS:
   - the first-run marker set, then Welcome, Japanese, How to install, USB, Check drive, Install (the fake engine) and
-    Preparing: steps 0 to 5;
+    Preparing: steps 0 to 5 (since 2026-10-31 the walk is Welcome, Japanese, Installing by itself, Preparing: 0, 1, 4
+    and 5);
   - 1500 frames at 59.9 fps on the launcher's 3840x2160 swapchain, with no faults or driver errors;
   - the sky's GPU time: 0.51 ms a frame. [Run 01](../evidence/setup-tour-2026-10-18-01.json) measured 1.75 ms,
     before the bubbles' fixed numbers stopped being hashed per pixel.

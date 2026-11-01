@@ -63,6 +63,20 @@ PwAppMatch pw_app_environment_find(const PwAppEntry *entries, size_t count, cons
     return PW_APP_AMBIGUOUS;
 }
 
+int pw_app_environment_join_overrides(const char *title, const char *word, char *out, size_t size)
+{
+    static const char name[] = "WINEDLLOVERRIDES=";
+    if (!title || !*title || !word || strncmp(word, name, sizeof(name) - 1)) return 0;
+    const char *value = word + sizeof(name) - 1;
+    const size_t length = sizeof(name) - 1 + strlen(title) + 1 + strlen(value);
+    if (!out || length >= size) return -1;
+    memcpy(out, name, sizeof(name) - 1);
+    memcpy(out + sizeof(name) - 1, title, strlen(title));
+    out[sizeof(name) - 1 + strlen(title)] = ';';
+    memcpy(out + sizeof(name) + strlen(title), value, strlen(value) + 1);
+    return 1;
+}
+
 int pw_app_environment_block(const PwAppEntry *entry, char *out, size_t capacity, uint32_t *bytes, size_t *kept)
 {
     const char *words[PW_APP_ENVIRONMENT_MAX_WORDS];

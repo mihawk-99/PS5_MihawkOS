@@ -96,6 +96,28 @@ int main(void)
     assert(pw_release_version_compare("1..2", "0") < 0 && pw_release_version_compare("0", "x") > 0);
     assert(pw_release_version_compare("", "") == 0 && pw_release_version_compare(NULL, "1") < 0);
 
+    /* Release tags (GitHub's names for MihawkOS releases) and the pick of the newest (the automatic check, 2026-10-31) */
+    assert(pw_release_tag_compare("v7.0.0-alpha-7", "v6.0.0-alpha-6") > 0);
+    assert(pw_release_tag_compare("v5.0.1-alpha-5", "5.0.0-alpha-5") > 0);
+    assert(pw_release_tag_compare("v7.0.0-alpha-7", "7.0.0-alpha-7") == 0);
+    assert(pw_release_tag_compare("v7.0.0-beta-1", "v7.0.0-alpha-9") > 0 && pw_release_tag_compare("v7.0.0-rc-1", "v7.0.0-beta-3") > 0);
+    assert(pw_release_tag_compare("v7.0.0", "v7.0.0-rc-4") > 0 && pw_release_tag_compare("v7.0.10-alpha-1", "v7.0.9") > 0);
+    assert(pw_release_tag_compare("v7.0.0-alpha-10", "v7.0.0-alpha-9") > 0);
+    assert(pw_release_tag_compare("nightly", "v1.0.0-alpha-1") < 0 && pw_release_tag_compare("v7", "v1.0.0") < 0);
+    assert(pw_release_tag_compare("v7.0.0-gamma-1", "v1.0.0") < 0 && pw_release_tag_compare("v7.0.0-alpha", "v1.0.0") < 0);
+    assert(pw_release_tag_compare(NULL, NULL) == 0);
+    const PwReleaseEntry listing[] = {
+        { "v8.0.0-alpha-8", 1, "https://example.invalid/d/mihawkos-release.txt" },   /* a draft: never */
+        { "v7.1.0-alpha-8", 0, "" },                                                 /* not signed: never */
+        { "v7.0.0-alpha-7", 0, "https://example.invalid/7/mihawkos-release.txt" },
+        { "v6.0.0-alpha-6", 0, "https://example.invalid/6/mihawkos-release.txt" },
+        { "garbage", 0, "https://example.invalid/g/mihawkos-release.txt" },
+    };
+    assert(pw_release_pick(listing, 5, "6.0.0-alpha-6") == 2);
+    assert(pw_release_pick(listing, 5, "7.0.0-alpha-7") == -1);   /* the running one is the newest offered */
+    assert(pw_release_pick(listing, 5, "8.0.0") == -1);
+    assert(pw_release_pick(listing, 0, "1.0.0") == -1);
+
     puts("test_pw_release: ok");
     return 0;
 }

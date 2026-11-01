@@ -1,0 +1,82 @@
+From 0000000000000000000000000000000000000000 Mon Sep 17 00:00:00 2001
+From: Mihawk <163614687+mihawk-99@users.noreply.github.com>
+Date: Sat, 31 Oct 2026 17:00:00 -0400
+Subject: [PATCH] ntdll: Make the missing parents of a folder made in a user's folders on the PS5.
+
+A game copied from a PC was never installed here, so the folders its installer makes in the user's own folders do not
+exist. Call of Juarez Gunslinger's engine makes AppData\Local\Techland\COJGunslinger, relies on the installer for
+Techland, and stopped on an uncaught C++ exception when that failed with STATUS_OBJECT_PATH_NOT_FOUND.
+
+When NtCreateFile is asked to make or open a directory by its full name under C:\users\<name>\ and the path is not found,
+the parent is made first (which comes back here for its own parent), and the creation is tried again. src/pw_user_folder.h
+(staged beside file.c by tools/build-wine-ps5.sh) says where the parent ends; it never names the users folder or a user's
+own folder, a name with a root directory, or one with an empty, "." or ".." component.
+
+The problem was found by reading bornaradusin/PC5 (LGPL-2.1-or-later; patch 0061 of its patches/prospero-win); this
+change is written independently here (NOTICE.md, "PC5").
+---
+ dlls/ntdll/unix/file.c | 44 ++++++++++++++++++++++++++++++++++++++++++++
+ 1 file changed, 44 insertions(+)
+
+diff --git a/dlls/ntdll/unix/file.c b/dlls/ntdll/unix/file.c
+index d95dad9..a9a09b5 100644
+--- a/dlls/ntdll/unix/file.c
++++ b/dlls/ntdll/unix/file.c
+@@ -5403,6 +5403,39 @@ NTSTATUS open_unix_file( HANDLE *handle, const char *unix_name, ACCESS_MASK acce
+ }
+ 
+ 
++#ifdef __PROSPERO__
++#include "pw_user_folder.h"
++/* A game copied from a PC was never installed here, so the folders its installer would have made in the user's own
++ * folders are missing. Call of Juarez Gunslinger's engine makes AppData\Local\Techland\COJGunslinger, relies on the
++ * installer for Techland, and stops on an uncaught C++ exception when that fails. The folders above a folder made (or
++ * opened as one) under C:\users\<name>\ are made first, nearest first (this calls NtCreateFile for the parent, which
++ * comes back here for its own); src/pw_user_folder.h says where the parent ends and which names are never touched.
++ * TRUE when the parent is there afterwards. */
++static BOOL ps5_make_user_folder_parent( const OBJECT_ATTRIBUTES *attr )
++{
++    const UNICODE_STRING *name = attr->ObjectName;
++    OBJECT_ATTRIBUTES parent_attr;
++    UNICODE_STRING parent;
++    IO_STATUS_BLOCK io;
++    HANDLE handle;
++    unsigned int cut;
++
++    if (attr->RootDirectory || !name->Buffer) return FALSE;
++    if (!(cut = pw_user_folder_parent_length( (const uint16_t *)name->Buffer, name->Length / sizeof(WCHAR) ))) return FALSE;
++
++    parent.Buffer = name->Buffer;
++    parent.Length = parent.MaximumLength = cut * sizeof(WCHAR);
++    InitializeObjectAttributes( &parent_attr, &parent, attr->Attributes, NULL, NULL );
++    if (NtCreateFile( &handle, FILE_LIST_DIRECTORY | SYNCHRONIZE, &parent_attr, &io, NULL, FILE_ATTRIBUTE_DIRECTORY,
++                      FILE_SHARE_READ | FILE_SHARE_WRITE | FILE_SHARE_DELETE, FILE_OPEN_IF,
++                      FILE_DIRECTORY_FILE | FILE_SYNCHRONOUS_IO_NONALERT, NULL, 0 ))
++        return FALSE;
++    NtClose( handle );
++    if (io.Information == FILE_CREATED) WARN( "made %s, which %s is in\n", debugstr_us(&parent), debugstr_us(name) );
++    return TRUE;
++}
++#endif
++
+ /******************************************************************************
+  *              NtCreateFile   (NTDLL.@)
+  */
+@@ -5437,6 +5470,17 @@ NTSTATUS WINAPI NtCreateFile( HANDLE *handle, ACCESS_MASK access, OBJECT_ATTRIBU
+     }
+     else status = get_nt_and_unix_names( &new_attr, &nt_name, &unix_name, disposition,
+                                          options & FILE_OPEN_REPARSE_POINT );
++#ifdef __PROSPERO__
++    if (status == STATUS_OBJECT_PATH_NOT_FOUND && (options & FILE_DIRECTORY_FILE) && !(options & FILE_OPEN_BY_FILE_ID) &&
++        (disposition == FILE_CREATE || disposition == FILE_OPEN_IF) && ps5_make_user_folder_parent( attr ))
++    {
++        free( unix_name );
++        free( nt_name.Buffer );
++        unix_name = NULL;
++        new_attr = *attr;
++        status = get_nt_and_unix_names( &new_attr, &nt_name, &unix_name, disposition, options & FILE_OPEN_REPARSE_POINT );
++    }
++#endif
+ 
+     if (status == STATUS_BAD_DEVICE_TYPE)
+     {

@@ -36,6 +36,8 @@ int __wine_ps5_mprotect(void *, size_t, int);
 int __wine_ps5_exec_convert(void *, size_t, int);
 int __wine_ps5_host_allows(const void *, int);
 void __wine_ps5_exec_refused(const void *);
+int __wine_ps5_kernel_prot(const void *);
+int __wine_ps5_dmem_gpu_keep(void *, size_t, int);
 unsigned int __wine_ps5_exec_stats(uint64_t *, unsigned int);
 unsigned int __wine_ps5_memory_stats(uint64_t *, unsigned int);
 int __wine_ps5_dmem_keep(void *, size_t);
@@ -122,10 +124,20 @@ static size_t released_bytes;
 static uintptr_t refuse_low, refuse_high;
 static int refuse_jit, refuse_scratch, wait_for_writer;
 static volatile int writer_faulted;
+/* The GPU bits the kernel keeps beside the CPU's, per page of one range from gpu_low (64 pages). */
+enum { GPU = 0x30 };
+static uintptr_t gpu_low;
+static unsigned char gpu_pages[64];
+static unsigned gpu_bits_at(const void *address)
+{
+    const uintptr_t at = (uintptr_t)address;
+    return gpu_low && at >= gpu_low && at < gpu_low + 64 * (uintptr_t)PAGE ? gpu_pages[(at - gpu_low) / PAGE] : 0;
+}
 
 int sceKernelMprotect(const void *address, size_t bytes, int protection)
 {
     const uintptr_t at = (uintptr_t)address;
+    const unsigned gpu = (unsigned)protection & 0xf0;
     if (call_count < 64) calls[call_count] = (Call){ at, bytes, protection };
     call_count++;
     if (at < refuse_high && at + bytes > refuse_low) return (int)0x8002000d;
@@ -138,6 +150,9 @@ int sceKernelMprotect(const void *address, size_t bytes, int protection)
         if (mprotect((void *)page, high - page, !exec_model || entry.jit ? protection & 7 : protection & 3))
             return (int)(0x80020000u | (unsigned)errno);
     }
+    for (uintptr_t page = at; page < at + bytes; page += PAGE)
+        if (gpu_low && page >= gpu_low && page < gpu_low + 64 * (uintptr_t)PAGE)
+            gpu_pages[(page - gpu_low) / PAGE] = (unsigned char)gpu;
     return 0;
 }
 int sceKernelQueryMemoryProtection(void *address, void **start, void **end, uint32_t *protection)
@@ -146,7 +161,7 @@ int sceKernelQueryMemoryProtection(void *address, void **start, void **end, uint
     if (!entry_at((uintptr_t)address, &entry)) return (int)0x80020016;
     *start = (void *)entry.low;
     *end = (void *)entry.high;
-    *protection = entry.protection;
+    *protection = entry.protection | gpu_bits_at(address);
     return 0;
 }
 int sceKernelJitCreateSharedMemory(const char *name, size_t bytes, int max_protection, int *fd)
@@ -407,6 +422,14 @@ static void direct_payload(void)
     assert(!__wine_ps5_host_allows(next, PROT_EXEC));
     stats(after);
     assert(after[GRANT_RETRIES] == before[GRANT_RETRIES] + 2);
+    /* An execute fault's record (virtual.c, ps5_note_exec_fault) reads the kernel's protection, counting nothing, and
+     * -1 where nothing is mapped. */
+    assert(__wine_ps5_kernel_prot(page + 100) == RWX && __wine_ps5_kernel_prot(next) == (int)kernel_protection(next));
+    assert(__wine_ps5_kernel_prot((void *)(uintptr_t)16) == -1);
+    stats(before);
+    (void)__wine_ps5_kernel_prot(page);
+    stats(after);
+    assert(after[GRANT_RETRIES] == before[GRANT_RETRIES]);
 
     /* A refusal: one call, no retry, counted; the page keeps its access. */
     refuse_low = (uintptr_t)next;
@@ -655,6 +678,54 @@ static void title(void)
     assert(!__wine_ps5_mprotect(page, PAGE, RX) && call_count == 1 && calls[0].protection == RX && run(page) == 42);
     errno = 0;
     assert(__wine_ps5_exec_convert(page, PAGE, RX) == -1 && errno == ENOTSUP);
+}
+
+/* (h) Host memory a program gave the GPU (pw_wine_gpu_keep.h, Wine patch 2425), in a title: every protection change keeps
+ * GPU read and write on those pages and on nothing else; a repeated import keeps them until both end; the import's
+ * end takes them away; a mapping unmapped or replaced there loses them first. */
+static void gpu_kept(void)
+{
+    const uintptr_t base = region(64 << 20);
+    unsigned char *heap = (unsigned char *)base + PAGE, *next = heap + 2 * PAGE;
+
+    exec_model = 0;
+    gpu_low = (uintptr_t)heap;
+    assert(!__wine_ps5_dmem_region((void *)base, 64 << 20));
+    assert(__wine_ps5_mmap(heap, 3 * PAGE, RW, FIXED_ANON, -1, 0) == heap);
+    /* Recorded before the GPU client's grant, as win32u does; an end with no record is refused. */
+    assert(!__wine_ps5_dmem_gpu_keep(heap + 100, 2 * PAGE - 100, 1));
+    assert(__wine_ps5_dmem_gpu_keep(next, PAGE, 0) == -1);
+    assert(!sceKernelMprotect(heap, 2 * PAGE, RW | GPU));
+    call_count = 0;
+    assert(!__wine_ps5_mprotect(heap, 3 * PAGE, PROT_READ));
+    assert(call_count == 2 && calls[0].address == (uintptr_t)heap && calls[0].bytes == 2 * PAGE &&
+           calls[0].protection == (PROT_READ | GPU) && calls[1].address == (uintptr_t)next &&
+           calls[1].protection == PROT_READ);
+    assert(gpu_bits_at(heap) == GPU && gpu_bits_at(heap + PAGE) == GPU && !gpu_bits_at(next));
+    assert(kernel_protection(heap) == PROT_READ && kernel_protection(next) == PROT_READ);
+
+    /* The same memory imported again: kept until both imports end; the end gives the CPU's protection back. */
+    assert(!__wine_ps5_dmem_gpu_keep(heap, 2 * PAGE, 1));
+    assert(!__wine_ps5_dmem_gpu_keep(heap, 2 * PAGE, 0));
+    assert(!__wine_ps5_mprotect(heap, PAGE, RW) && gpu_bits_at(heap) == GPU);
+    call_count = 0;
+    assert(!__wine_ps5_dmem_gpu_keep(heap, 2 * PAGE, 0));
+    assert(!gpu_bits_at(heap) && !gpu_bits_at(heap + PAGE) && kernel_protection(heap) == RW && call_count >= 1);
+    call_count = 0;
+    assert(!__wine_ps5_mprotect(heap, 2 * PAGE, RW) && call_count == 1 && calls[0].protection == RW);
+
+    /* Unmapped while imported (the program freed it first): the GPU's access goes before the mapping; the record ends
+     * later, over nothing. */
+    assert(!__wine_ps5_dmem_gpu_keep(heap, PAGE, 1) && !sceKernelMprotect(heap, PAGE, RW | GPU));
+    assert(!__wine_ps5_munmap(heap, 3 * PAGE) && !gpu_bits_at(heap));
+    assert(!__wine_ps5_dmem_gpu_keep(heap, PAGE, 0));
+
+    /* Replaced by a fixed mapping while imported: the same. */
+    assert(__wine_ps5_mmap(heap, PAGE, RW, FIXED_ANON, -1, 0) == heap);
+    assert(!__wine_ps5_dmem_gpu_keep(heap, PAGE, 1) && !sceKernelMprotect(heap, PAGE, RW | GPU));
+    assert(__wine_ps5_mmap(heap, PAGE, RW, FIXED_ANON, -1, 0) == heap && !gpu_bits_at(heap));
+    assert(!__wine_ps5_dmem_gpu_keep(heap, PAGE, 0));
+    gpu_low = 0;
 }
 
 /* (g) The self-check's RWX step: a kernel that keeps RX but not RWX on JIT memory is refused. */
@@ -921,6 +992,7 @@ int main(void)
     in_child(execute_not_kept, "execute not kept");
     in_child(no_scratch, "no scratch range");
     in_child(title, "title");
+    in_child(gpu_kept, "gpu kept");
     in_child(rwx_not_kept, "rwx not kept");
     in_child(caller_not_jit, "caller not jit");
     in_child(table_full, "table full");
@@ -933,7 +1005,8 @@ int main(void)
          "and neighbours kept, direct memory released, then one kernel call per change; failures restored and "
          "counted, JIT pages kept and never made read-only again, no write lost, nothing left after decommit and "
          "free, the self-check refusing a kernel without JIT execute or RWX or a helper without a range, a file page "
-         "in the range and a full run table refused, no alias after an adopt failed, the payload SDK never asked for execute, a title unchanged; a "
+         "in the range and a full run table refused, no alias after an adopt failed, the payload SDK never asked for execute, a title unchanged, host memory a "
+         "program gave the GPU keeping its access through protection changes until the import ends or it is unmapped; a "
          "foreign mapping inside a reservation never mapped over or unmapped, a release kept or made around it, Wine "
          "offered it as a hole, passed");
     return 0;

@@ -23,6 +23,9 @@ void platform_init(const char *title_name);
 void say(const char *format, ...) __attribute__((format(printf, 1, 2)));
 /* Every later say() line is also written to fd (bounded; the caller flushes it to disk), or none with -1. */
 void platform_say_file(int fd);
+/* Every later say() line goes to log instead of fd: its start and its end are kept (src/pw_capped_log.h). */
+struct PwCappedLog;
+void platform_say_log(struct PwCappedLog *log);
 
 double now_seconds(void);
 
@@ -50,6 +53,7 @@ struct pad {
    float left_x, left_y, right_x, right_y; /* -1..1, a dead zone removed; y is down-positive */
    float l2, r2;                           /* 0..1 */
    bool connected;                         /* false while disconnected or intercepted */
+   bool intercepted;                       /* the shell has the pad: connected, but the reading is not input */
    uint8_t raw_axes[6];                     /* LX, LY, RX, RY, L2, R2 */
    uint8_t touch_count, touch_id;
    uint16_t touch_x, touch_y;

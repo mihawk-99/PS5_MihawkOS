@@ -1,0 +1,22 @@
+The source is exported by revision without Git metadata, inside a PS5_Proton checkout: git describe
+would name that checkout. Name the upstream revision and our overlay instead. The build id (also the
+pipeline cache's key) is af89350cc2eacd9 with a last digit 1 for this series, where GE-Proton's
+prebuilt is ...d90, so no cache written by one is taken for the other; the version has no '+'.
+
+--- a/meson.build
++++ b/meson.build
+@@ -169,12 +169,12 @@
+ endif
+ 
+ vkd3d_build = vcs_tag(
+-  command : ['git', 'describe', '--always', '--exclude=*', '--abbrev=15', '--dirty=0'],
++  command : ['printf', 'af89350cc2eacd91'],
+   input   : 'vkd3d_build.h.in',
+   output  : 'vkd3d_build.h', fallback : '12345678')
+ 
+ vkd3d_version = vcs_tag(
+-  command : ['git', 'describe', '--always', '--tags', '--dirty=+'],
++  command : ['printf', 'v3.1.0-af89350cc-ps5-1'],
+   input   : 'vkd3d_version.h.in',
+   output  : 'vkd3d_version.h', fallback : '301000')
+ 

@@ -453,6 +453,13 @@ for header in src/pw_menu_style.h .deps/windows11-theme/pw_menu_sprites.h src/pw
     cp -p "$root/$header" "$tree/dlls/win32u/${header##*/}"
 done
 
+# The console GPU's identity (patches 2408 and 2409, src/pw_gpu_identity.h): win32u names the GPU by it, AGS gives its
+# figures.
+for target in dlls/win32u/sysparams.c dlls/amd_ags_x64/amd_ags_x64_main.c; do
+    cmp -s "$root/src/pw_gpu_identity.h" "$tree/${target%/*}/pw_gpu_identity.h" || touch "$tree/$target"
+    cp -p "$root/src/pw_gpu_identity.h" "$tree/${target%/*}/pw_gpu_identity.h"
+done
+
 # The PS5 OpenGL SDK is optional. When supplied, Wine's generic EGL/WGL
 # frontend binds directly to its static EGL symbols and the win32u PRX links
 # the SDK into the runtime.
@@ -464,7 +471,9 @@ for header in pw_wine_section.h pw_wine_section_ps5.h pw_wine_alias.h pw_wine_mm
 done
 cp -p "$root/wine/ps5/pw_wine_perf.h" "$tree/dlls/winedmo/pw_wine_perf.h"   # patch 2065's media counters
 cp -p "$root/src/pw_umip.h" "$tree/dlls/ntdll/unix/pw_umip.h"   # patch 2102's UMIP emulation
+cp -p "$root/src/pw_user_folder.h" "$tree/dlls/ntdll/unix/pw_user_folder.h"   # patch 2417: where a user folder's parent ends
 cp -p "$root/src/pw_window_snapshot.h" "$tree/server/pw_window_snapshot.h"
+cp -p "$root/src/pw_dialog_keys.h" "$tree/server/pw_dialog_keys.h"   # patch 2418: the controller's keys for a dialog box
 cp -p "$root/wine/ps5/pw_wine_cursor.h" "$tree/server/pw_wine_cursor.h"
 cp -p "$root/wine/ps5/pw_wine_xattr.h" "$tree/server/pw_wine_xattr.h"   # a reparse point's data (patch 2092)
 # cp -p keeps the source's time but sets the copy's change time, so what this run did not copy is older than the mark:
@@ -839,12 +848,12 @@ if [ "$prx_status" = 0 ]; then
         pw_wine_threads_sample pw_wine_describe_thread pw_wine_perf_ticks pw_wine_perf_frame pw_wine_perf_media pw_wine_server_flush pw_wine_server_terminate ps5_thread_is_terminating \
         pw_wine_add_exit_hook pw_wine_stop_audio pw_wine_fdv_stats pw_wine_add_thread_exit_hook \
         pw_wine_server_snapshot pw_ntsync_dump pw_ntsync_counters pw_ntsync_region_bytes pw_ntsync_process_gone pw_wine_ntsync_start pw_ps5_child_start pw_ps5_child_exit pw_ps5_child_doomed pw_ps5_child_doom \
-        pw_ps5_set_initial_environment pw_ps5_initial_environment pw_ps5_start_root pw_ps5_start_memory_helper pw_ps5_memory_lock_busy pw_ps5_helpers pw_ps5_shared_alloc pw_ps5_transport_alloc pw_ps5_shared_touch pw_ps5_dmem_alloc pw_ps5_dmem_free pw_ps5_dmem_grant pw_ps5_dsection_register pw_ps5_dsection_release pw_ps5_dsection_collect_now pw_ps5_end_spawns pw_ps5_dsection_page pw_ps5_memory_census pw_ps5_start_times pw_ps5_code_share_duplicate_bytes pw_ps5_child_memory pw_ps5_child_protocol pw_ps5_root_result pw_ps5_root_present pw_ps5_unload_root pw_ps5_wait_children pw_ps5_remote_signal pw_ps5_remote_close pw_ps5_set_graphics_start pw_ps5_set_title_client_start pw_ps5_set_application_lookup pw_ps5_set_fixed_base_lookup pw_ps5_set_child_notice pw_ps5_set_gpu_broker
+        pw_ps5_set_initial_environment pw_ps5_initial_environment pw_ps5_start_root pw_ps5_start_memory_helper pw_ps5_memory_lock_busy pw_ps5_helpers pw_ps5_shared_alloc pw_ps5_transport_alloc pw_ps5_shared_touch pw_ps5_dmem_alloc pw_ps5_dmem_free pw_ps5_dmem_grant pw_ps5_dsection_register pw_ps5_dsection_release pw_ps5_dsection_collect_now pw_ps5_end_spawns pw_ps5_dsection_page pw_ps5_memory_census pw_ps5_start_times pw_ps5_code_share_duplicate_bytes pw_ps5_child_memory pw_ps5_child_protocol pw_ps5_root_result pw_ps5_root_present pw_ps5_unload_root pw_ps5_wait_children pw_ps5_remote_signal pw_ps5_remote_close pw_ps5_set_graphics_start pw_ps5_set_title_client_start pw_ps5_set_title_client_live pw_ps5_set_application_lookup pw_ps5_set_fixed_base_lookup pw_ps5_set_child_notice pw_ps5_set_gpu_broker
     python3 "$root/tools/gen_prx_descriptor.py" "$prx/obj/win32u_desc.c" __wine_unix_call_funcs
     python3 "$root/tools/gen_prx_descriptor.py" "$prx/obj/wineserver_desc.c" \
         pw_wineserver_connect pw_wine_thread_register pw_wine_thread_unregister pw_wineserver_set_ntsync pw_wineserver_set_ntsync_region pw_wineserver_flush pw_wineserver_terminate \
         pw_wineserver_call_direct pw_wineserver_snapshot pw_wine_threads_set_remote_signal pw_wineserver_input pw_wineserver_cursor pw_wineserver_foreground pw_wineserver_windows pw_wineserver_set_shared_memory pw_wineserver_set_dsection_fd pw_wineserver_set_remote_memory \
-        pw_module_share pw_wineserver_user_processes
+        pw_module_share pw_wineserver_user_processes pw_wineserver_dialog
     python3 "$root/tools/gen_prx_descriptor.py" "$prx/obj/wineps5_desc.c" \
         __wine_unix_call_funcs __wine_unix_call_wow64_funcs
     python3 "$root/tools/gen_prx_descriptor.py" "$prx/obj/xinput_desc.c" \

@@ -17,6 +17,7 @@
 #include "pw_wine_codeshare.h"
 #include "pw_wine_code_budget.h"
 #include "pw_wine_dmem.h"
+#include "pw_wine_gpu_keep.h"
 #include "pw_wine_heap.h"
 #include "pw_wine_pages.h"
 #include "pw_wine_perf.h"
@@ -92,6 +93,8 @@ enum {
     MEMORY_TYPE = 0x0c,       /* as ps5-xash3d's heap */
     CPU_READ_WRITE = 0x03,
     CPU_GPU_READ_WRITE = 0xf2,  /* what ps5-xash3d's heap maps with */
+    GPU_READ_WRITE = 0x30,      /* PS5_KERNEL_PROT_GPU_READ | PS5_KERNEL_PROT_GPU_WRITE, as the GPU client grants */
+    GPU_BITS = 0xf0,
     RUNS = 32768,
 };
 
@@ -246,13 +249,14 @@ static int map(void *context, uintptr_t address, size_t bytes, int64_t offset)
     }
     return rc || at != (void *)address;
 }
+static int kernel_protect(uintptr_t address, size_t bytes, int protection);
 static int protect(void *context, uintptr_t address, size_t bytes, unsigned protection)
 {
     uint64_t t0 = slow_start();
     int rc;
     (void)context;
     if (payload_allocate_direct) return payload_protect((void *)address, bytes, (int)protection) != 0;
-    rc = sceKernelMprotect((const void *)address, bytes, (int)protection);
+    rc = kernel_protect(address, bytes, (int)protection);
     slow_end(t0, "protect", bytes);
     if (rc) refused("protect", rc, bytes);
     return rc != 0;
@@ -464,6 +468,101 @@ static uintptr_t page_down(const void *address) { return (uintptr_t)address & ~(
 static size_t page_span(const void *address, size_t bytes)
 {
     return (((uintptr_t)address + bytes + PAGE - 1) & ~(uintptr_t)(PAGE - 1)) - page_down(address);
+}
+
+/* Host memory a program gave the GPU (pw_wine_gpu_keep.h), under Wine's virtual mutex; and how many imports there were. */
+static PwWineGpuKeep gpu_keep;
+static unsigned gpu_imports;
+
+/* sceKernelMprotect over [address, address + bytes) that keeps GPU read and write on the pages a program gave the GPU: a
+ * protection change of Wine's never takes the GPU's access away while the GPU uses the memory. A kept page with no CPU
+ * access asks for GPU access alone; a kernel that refuses that gets the CPU's protection, and it is said once. */
+static int kernel_protect(uintptr_t address, size_t bytes, int protection)
+{
+    static int refused_alone;
+    const uintptr_t end = address + bytes;
+    uintptr_t at = address, to;
+    int rc = 0;
+
+    if (!gpu_keep.count) return sceKernelMprotect((const void *)address, bytes, protection);
+    for (; at < end && !rc; at = to) {
+        const int kept = pw_wine_gpu_keep_piece(&gpu_keep, at, end, &to);
+        rc = sceKernelMprotect((const void *)at, to - at, kept ? protection | GPU_READ_WRITE : protection);
+        if (rc && kept && !(protection & 7)) {
+            if (!refused_alone++)
+                fprintf(stderr, "wine-ps5: GPU access alone refused at %#lx (%#x): the GPU loses it there\n",
+                        (unsigned long)at, (unsigned)rc);
+            rc = sceKernelMprotect((const void *)at, to - at, protection);
+        }
+    }
+    return rc;
+}
+
+/* The CPU's own protection again on [at, end), kernel entry by entry: the GPU's access taken away. */
+static void cpu_only(uintptr_t at, uintptr_t end)
+{
+    while (at < end) {
+        void *start = NULL, *stop = NULL;
+        uint32_t protection = 0;
+        uintptr_t to;
+
+        if (sceKernelQueryMemoryProtection((void *)at, &start, &stop, &protection) || (uintptr_t)stop <= at) {
+            at += PAGE;
+            continue;
+        }
+        to = (uintptr_t)stop < end ? (uintptr_t)stop : end;
+        if (protection & GPU_BITS) sceKernelMprotect((const void *)at, to - at, (int)(protection & 7));
+        at = to;
+    }
+}
+
+/* Before a mapping over [at, end) is replaced or unmapped: the GPU's access to the pages a program gave it is taken away
+ * first, with a protection change, so the kernel never tears down pages the GPU holds through the engine. The record
+ * stays until the import ends (__wine_ps5_dmem_gpu_keep); a program that frees the memory first has it said, once. */
+static void gpu_keep_drop(uintptr_t at, uintptr_t end)
+{
+    static int said;
+    uintptr_t to;
+
+    if (!gpu_keep.count || !pw_wine_gpu_keep_touches(&gpu_keep, at, end)) return;
+    if (!said++)
+        fprintf(stderr, "wine-ps5: memory given to the GPU at %#lx is unmapped before its import ended\n",
+                (unsigned long)at);
+    for (; at < end; at = to)
+        if (pw_wine_gpu_keep_piece(&gpu_keep, at, end, &to)) cpu_only(at, to);
+}
+
+/* win32u's import of a program's host memory for the GPU (Wine patch 2425), under the virtual mutex: keep 1 records it
+ * before the import gives the pages GPU access, keep 0 removes the record when the import ends, and the pages no other
+ * import keeps go back to the CPU's own protection. 0, or -1 (a full table, or no such record). The first ones are
+ * logged, for the record of a run. */
+int __wine_ps5_dmem_gpu_keep(void *address, size_t bytes, int keep)
+{
+    const uintptr_t at = page_down(address), end = at + page_span(address, bytes);
+    uintptr_t piece_at, to;
+
+    if (keep) {
+        const int status = pw_wine_gpu_keep_add(&gpu_keep, at, end);
+        if (++gpu_imports <= 8 || status)
+            fprintf(stderr, "wine-ps5: host memory %#lx-%#lx given to the GPU%s (%u kept)\n", (unsigned long)at,
+                    (unsigned long)end, status ? ": refused, the table is full" : "", gpu_keep.count);
+        return status;
+    }
+    if (pw_wine_gpu_keep_remove(&gpu_keep, at, end)) return -1;
+    for (piece_at = at; piece_at < end; piece_at = to)
+        if (!pw_wine_gpu_keep_piece(&gpu_keep, piece_at, end, &to)) cpu_only(piece_at, to);
+    return 0;
+}
+
+/* A title's protection change outside the engine's runs: mprotect, keeping the GPU's access where a program gave it. */
+static int outside_protect(void *address, size_t bytes, int protection)
+{
+    if (!gpu_keep.count ||
+        !pw_wine_gpu_keep_touches(&gpu_keep, (uintptr_t)address, (uintptr_t)address + bytes))
+        return mprotect(address, bytes, protection);
+    if (!kernel_protect((uintptr_t)address, bytes, protection)) return 0;
+    errno = EACCES;
+    return -1;
 }
 
 /* Claim a range for direct-backed commits: the file-view read path in virtual.c registers a view before its
@@ -1444,6 +1543,17 @@ int __wine_ps5_host_allows(const void *address, int access)
     return 1;
 }
 
+/* The kernel's protection of the page at address (PROT_*, its own bits), or -1 when it holds none (nothing mapped
+ * there), for the record of an execute fault raised to the program (virtual.c, ps5_note_exec_fault). */
+int __wine_ps5_kernel_prot(const void *address)
+{
+    void *start = NULL, *end = NULL;
+    uint32_t protection = 0;
+
+    if (sceKernelQueryMemoryProtection((void *)page_down(address), &start, &end, &protection)) return -1;
+    return (int)(protection & 7);
+}
+
 /* An execute fault Wine allows that nothing can serve (a section or file view, or a failed conversion): counted, and
  * the first ones and then one in 1024 logged. */
 void __wine_ps5_exec_refused(const void *address)
@@ -1664,7 +1774,10 @@ static void *map_any(void *address, size_t bytes, int protection, int flags, int
 /* Whatever a fixed mapping replaced, a shared code copy included, is no longer this helper's mapping of it. */
 void *__wine_ps5_mmap(void *address, size_t bytes, int protection, int flags, int fd, off_t offset)
 {
-    void *mapped = map_any(address, bytes, protection, flags, fd, offset);
+    void *mapped;
+
+    if (flags & MAP_FIXED) gpu_keep_drop(page_down(address), page_down(address) + page_span(address, bytes));
+    mapped = map_any(address, bytes, protection, flags, fd, offset);
 
     if (mapped != MAP_FAILED && (flags & MAP_FIXED))
         shared_drop(page_down(mapped), page_down(mapped) + page_span(mapped, bytes));
@@ -1703,7 +1816,10 @@ static int unmap_any(void *address, size_t bytes)
 
 int __wine_ps5_munmap(void *address, size_t bytes)
 {
-    const int status = unmap_any(address, bytes);
+    int status;
+
+    gpu_keep_drop(page_down(address), page_down(address) + page_span(address, bytes));
+    status = unmap_any(address, bytes);
 
     if (!status) shared_drop(page_down(address), page_down(address) + page_span(address, bytes));
     return status;
@@ -1745,14 +1861,14 @@ int __wine_ps5_mprotect(void *address, size_t bytes, int protection)
         return status ? -1 : 0;
     }
     if (state <= 0) return payload_mprotect ? payload_protect(address, bytes, protection)
-                                          : mprotect(address, bytes, protection);
+                                          : outside_protect(address, bytes, protection);
     errno = 0;
     for (; at < end; at += piece)
         if (pw_wine_dmem_split(&dmem, at, end - at, &piece))
             status |= pw_wine_dmem_protect(&dmem, at, piece, (unsigned)protection & 7);
         else
             status |= payload_mprotect ? payload_protect((void *)at, piece, protection)
-                                       : mprotect((void *)at, piece, protection);
+                                       : outside_protect((void *)at, piece, protection);
     if (status) {
         refused_range("mprotect", address, bytes, protection);
         /* EEXIST: a commit refused over a foreign entry (patch 1128 then leaves the pages uncommitted). */

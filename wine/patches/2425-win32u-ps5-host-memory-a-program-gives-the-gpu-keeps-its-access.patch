@@ -1,0 +1,120 @@
+From 0000000000000000000000000000000000000000 Mon Sep 17 00:00:00 2001
+From: Mihawk <163614687+mihawk-99@users.noreply.github.com>
+Date: Sun, 1 Nov 2026 07:00:00 -0400
+Subject: [PATCH] win32u: PS5: host memory a program gives the GPU keeps its access
+
+A recompiled console game (a tester's, 2026-11-01) stopped at once on the
+console: "the D3D12 driver cannot open heaps over existing memory". It asks
+for D3D12_FEATURE_EXISTING_HEAPS and opens its memory with
+OpenExistingHeapFromAddress, which VKD3D-Proton builds on
+VK_EXT_external_memory_host. The GPU client's RADV did not offer it. It now
+does for a client in the title's own process, the only process whose memory
+the GPU reaches (PS5_Mesa's broker overlay, client-host-memory-winsys.patch;
+PS5_Vulkan's tooling/gpu-broker/client.c).
+
+The client gives the program's pages GPU read and write with one
+sceKernelMprotect. The kernel keeps those bits with the CPU's in one
+protection, so any later protection change Wine made there (the program's
+VirtualProtect, a write watch, a guard page) would take the GPU's access
+away while the GPU still uses the memory. win32u now records each import
+with ntdll before it is made (__wine_ps5_gpu_keep) and removes the record
+when the memory is freed. The PS5 memory layer keeps GPU read and write on
+the recorded pages in every protection change. It takes them away, with a
+protection change, before a mapping there is replaced or unmapped, and when
+the import ends (wine/ps5/pw_wine_gpu_keep.h).
+---
+diff --git a/dlls/ntdll/unix/virtual.c b/dlls/ntdll/unix/virtual.c
+index aa2fac4..15d9987 100644
+--- a/dlls/ntdll/unix/virtual.c
++++ b/dlls/ntdll/unix/virtual.c
+@@ -6509,6 +6509,26 @@ DECLSPEC_EXPORT int __wine_ps5_placed_range_bare( void *address, size_t bytes )
+     server_leave_uninterrupted_section( &virtual_mutex, &sigset );
+     return status;
+ }
++
++/***********************************************************************
++ *           __wine_ps5_gpu_keep
++ *
++ * win32u's import of a program's host memory for the GPU (VK_EXT_external_memory_host, Direct3D 12's existing heaps),
++ * recorded before the import (keep 1) and removed when it ends (keep 0): the PS5 memory layer keeps the GPU's access
++ * to those pages through every later protection change (wine/ps5/pw_wine_gpu_keep.h). Under the virtual mutex with
++ * Wine's signals blocked, as __wine_ps5_placed_range_bare. 0, or -1.
++ */
++DECLSPEC_EXPORT int __wine_ps5_gpu_keep( void *address, size_t bytes, int keep )
++{
++    extern int __wine_ps5_dmem_gpu_keep( void *address, size_t bytes, int keep );
++    sigset_t sigset;
++    int status;
++
++    server_enter_uninterrupted_section( &virtual_mutex, &sigset );
++    status = __wine_ps5_dmem_gpu_keep( address, bytes, keep );
++    server_leave_uninterrupted_section( &virtual_mutex, &sigset );
++    return status;
++}
+ #endif
+ 
+ 
+diff --git a/dlls/win32u/vulkan.c b/dlls/win32u/vulkan.c
+index fa1c9a4..2d03b31 100644
+--- a/dlls/win32u/vulkan.c
++++ b/dlls/win32u/vulkan.c
+@@ -133,8 +133,16 @@ struct device_memory
+     D3DKMT_HANDLE mutex;
+     VkSemaphore semaphore;
+     UINT64 semaphore_value;
++#ifdef __PROSPERO__
++    void *gpu_kept;  /* the program's host memory this allocation imports, kept for the GPU until it is freed */
++#endif
+ };
+ 
++#ifdef __PROSPERO__
++/* ntdll (Wine patch 2425): the program's pages keep the GPU's access through its later protection changes. */
++extern int __wine_ps5_gpu_keep( void *address, size_t bytes, int keep );
++#endif
++
+ static inline struct device_memory *device_memory_from_handle( VkDeviceMemory handle )
+ {
+     struct vulkan_device_memory *obj = vulkan_device_memory_from_handle( handle );
+@@ -1661,6 +1669,21 @@ static VkResult win32u_vkAllocateMemory( VkDevice client_device, const VkMemoryA
+ 
+     if (!(memory = calloc( 1, sizeof(*memory) ))) return VK_ERROR_OUT_OF_HOST_MEMORY;
+ 
++#ifdef __PROSPERO__
++    /* The import gives the program's pages GPU access (the GPU client in the title's process). Recorded first: a
++     * protection change between the import and the record would take that access away. */
++    if (pointer_info)
++    {
++        if (__wine_ps5_gpu_keep( pointer_info->pHostPointer, alloc_info->allocationSize, 1 ))
++        {
++            ERR( "host memory %p not kept for the GPU\n", pointer_info->pHostPointer );
++            free( memory );
++            return VK_ERROR_OUT_OF_HOST_MEMORY;
++        }
++        memory->gpu_kept = pointer_info->pHostPointer;
++    }
++#endif
++
+     if (import_win32)
+     {
+         switch (import_win32->handleType)
+@@ -1757,6 +1780,9 @@ static VkResult win32u_vkAllocateMemory( VkDevice client_device, const VkMemoryA
+ failed:
+     WARN( "Failed to allocate memory, res %d\n", res );
+     if (host_device_memory) device->p_vkFreeMemory( device->host.device, host_device_memory, NULL );
++#ifdef __PROSPERO__
++    if (memory->gpu_kept) __wine_ps5_gpu_keep( memory->gpu_kept, alloc_info->allocationSize, 0 );
++#endif
+     if (memory->semaphore) device->p_vkDestroySemaphore( device->host.device, memory->semaphore, NULL );
+     d3dkmt_destroy_resource( memory->local );
+     d3dkmt_destroy_mutex( memory->mutex );
+@@ -1788,6 +1814,10 @@ static void win32u_vkFreeMemory( VkDevice client_device, VkDeviceMemory client_m
+ 
+     device->p_vkFreeMemory( device->host.device, memory->obj.host.device_memory, NULL );
+     instance->p_remove_object( instance, &memory->obj.obj );
++#ifdef __PROSPERO__
++    /* The import ended: the pages go back to the CPU's own protection. */
++    if (memory->gpu_kept) __wine_ps5_gpu_keep( memory->gpu_kept, memory->size, 0 );
++#endif
+ 
+     if (memory->vm_map)
+     {

@@ -140,3 +140,58 @@ int pw_release_version_compare(const char *a, const char *b)
     }
     return 0;
 }
+
+/* "v7.1.0-alpha-8" into its numbers; 0 when it does not read */
+static int tag_read(const char *tag, unsigned long out[5])
+{
+    static const char *const stages[] = { "alpha", "beta", "rc" };
+    char *end;
+    if (!tag) return 0;
+    if (*tag == 'v' || *tag == 'V') tag++;
+    for (int k = 0; k < 3; ++k) {
+        if (*tag < '0' || *tag > '9') return 0;
+        out[k] = strtoul(tag, &end, 10);
+        tag = end;
+        if (k < 2) {
+            if (*tag != '.') return 0;
+            tag++;
+        }
+    }
+    out[3] = 3;   /* a release, after every stage */
+    out[4] = 0;
+    if (!*tag) return 1;
+    if (*tag != '-') return 0;
+    tag++;
+    for (unsigned long s = 0; s < 3; ++s) {
+        const size_t n = strlen(stages[s]);
+        if (strncmp(tag, stages[s], n)) continue;
+        tag += n;
+        if (*tag == '-' || *tag == '.') tag++;
+        if (*tag < '0' || *tag > '9') return 0;
+        out[3] = s;
+        out[4] = strtoul(tag, &end, 10);
+        return !*end;
+    }
+    return 0;
+}
+
+int pw_release_tag_compare(const char *a, const char *b)
+{
+    unsigned long x[5], y[5];
+    const int good_a = tag_read(a, x), good_b = tag_read(b, y);
+    if (!good_a || !good_b) return good_a - good_b;
+    for (int k = 0; k < 5; ++k)
+        if (x[k] != y[k]) return x[k] < y[k] ? -1 : 1;
+    return 0;
+}
+
+int pw_release_pick(const PwReleaseEntry *list, size_t count, const char *running)
+{
+    int best = -1;
+    for (size_t i = 0; i < count; ++i) {
+        const PwReleaseEntry *e = &list[i];
+        if (e->draft || !e->manifest_url || !*e->manifest_url || pw_release_tag_compare(e->tag, running) <= 0) continue;
+        if (best < 0 || pw_release_tag_compare(e->tag, list[best].tag) > 0) best = (int)i;
+    }
+    return best;
+}

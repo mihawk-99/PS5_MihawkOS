@@ -1,0 +1,53 @@
+From 0000000000000000000000000000000000000000 Mon Sep 17 00:00:00 2001
+From: Mihawk <163614687+mihawk-99@users.noreply.github.com>
+Date: Sun, 1 Nov 2026 03:30:00 -0400
+Subject: [PATCH] win32u: PS5: the console's GPU keeps its own name
+
+The GPU client's RADV now reports the PCI ID of the retail RDNA2 Radeon of the
+console model's class: 1002:73DF on the standard PS5, 1002:73BF on the Pro
+(PS5_Proton graphics patch 0045, src/pw_gpu_identity.h). It used to report
+1002:0000, which a survival-horror demo refused as an "Unsupported graphics card". The PS5
+driver registers the GPU with no PCI ID, so add_gpu takes Vulkan's. Its name
+then came from gpu_device_name's table ("AMD Radeon RX 6700 XT"), and Wine
+also gives Vulkan's deviceName that name. On the console the table's entry for
+the ID is now the console's own: "AMD Radeon PlayStation 5 GPU", or "... Pro
+GPU". That is the name Windows' display adapter, DXGI and Vulkan report.
+---
+--- a/dlls/win32u/sysparams.c
++++ b/dlls/win32u/sysparams.c
+@@ -36,6 +36,9 @@
+ #include "d3dkmdt.h"
+ #include "wine/wingdi16.h"
+ #include "wine/server.h"
++#ifdef __PROSPERO__
++#include "pw_gpu_identity.h"   /* PS5_Proton src/pw_gpu_identity.h, copied beside this file */
++#endif
+ 
+ WINE_DEFAULT_DEBUG_CHANNEL(system);
+ 
+@@ -1817,6 +1820,9 @@
+     struct gpu_info *vulkan_gpu = NULL, *opengl_gpu = NULL;
+     ULONGLONG memory = 0;
+     struct gpu *gpu;
++#ifdef __PROSPERO__
++    const PwGpuIdentity *identity;
++#endif
+     unsigned int i;
+     HKEY hkey, subkey;
+     DWORD len;
+@@ -1849,6 +1855,13 @@
+     if (!pci_id->vendor && !pci_id->device && opengl_gpu) pci_id = &opengl_gpu->pci_id;
+     fixup_device_id( &pci_id );
+ 
++#ifdef __PROSPERO__
++    /* The console's GPU keeps its own name. Its PCI ID, that of the retail RDNA2 Radeon of its class, which the GPU
++     * client's RADV reports (PS5_Proton graphics patch 0045, src/pw_gpu_identity.h), only says which GPU games take it
++     * for. The Vulkan device then reports this name too (get_gpu_info_from_uuid). */
++    if ((identity = pw_gpu_identity_of_device( pci_id->vendor, pci_id->device, NULL ))) name = identity->name;
++    else
++#endif
+     name = gpu_device_name( pci_id->vendor, pci_id->device, name );
+     if (!strcmp( name, "Wine Adapter" ) && vulkan_gpu) name = vulkan_gpu->name;
+     if (!strcmp( name, "Wine Adapter" ) && opengl_gpu) name = opengl_gpu->name;
+-- 
+2.56.0

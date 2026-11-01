@@ -8,9 +8,9 @@
 
 The deployed title must be this checkout's production build (its runtime-pack.txt is compared). Nothing is deleted:
   1. /data/ps5proton/runtime/ge11-7 and run/proton-payload-child.elf are renamed aside (<name>.aside-<time>);
-  2. dist/runtime's pieces go to /data/ps5proton/install over FTP, as a USB stick's would be found; or, with
+  2. dist/runtime's pieces go to the title folder's runtime-pieces/ over FTP, where a release's are; or, with
      --route http, this PC serves them (the LAN fixture), the title folder's install-source.txt names it for this run
-     only, and a pieces folder already on the console is renamed aside so the title downloads;
+     only, and a pieces folder already in the title folder is renamed aside so the title downloads;
   3. the title is started; the owner opens Settings, Install runtime, and presses CROSS;
   4. klog's "install: piece" lines give the write curve, "install: done" the end;
   5. every file of the manifest is read back over FTP and hashed: N of N must match.
@@ -99,8 +99,8 @@ def rehearse(args, settings, record):
             if exists(ftp, f'{DATA}/{moved}'):
                 ftp.rename(f'{DATA}/{moved}', f'{DATA}/{moved}.{aside}')
         if args.route == 'http':
-            if exists(ftp, f'{DATA}/install'):
-                ftp.rename(f'{DATA}/install', f'{DATA}/install.{aside}')
+            if exists(ftp, f'{TITLE}/runtime-pieces'):
+                ftp.rename(f'{TITLE}/runtime-pieces', f'{TITLE}/runtime-pieces.{aside}')
             with socket.socket(socket.AF_INET, socket.SOCK_DGRAM) as route:   # this PC as the console reaches it
                 route.connect((settings['host'], 9))
                 here = route.getsockname()[0]
@@ -112,7 +112,7 @@ def rehearse(args, settings, record):
             chunks = []
         else:
             try:
-                ftp.mkd(f'{DATA}/install')
+                ftp.mkd(f'{TITLE}/runtime-pieces')
             except ftplib.error_perm:
                 pass
             record['route'] = 'folder'
@@ -120,8 +120,8 @@ def rehearse(args, settings, record):
         for name in chunks:
             path = ROOT / 'dist/runtime' / name
             with path.open('rb') as data:
-                ftp.storbinary(f'STOR {DATA}/install/{name}', data, blocksize=1 << 20)
-            if ftp.size(f'{DATA}/install/{name}') != path.stat().st_size:
+                ftp.storbinary(f'STOR {TITLE}/runtime-pieces/{name}', data, blocksize=1 << 20)
+            if ftp.size(f'{TITLE}/runtime-pieces/{name}') != path.stat().st_size:
                 raise SystemExit(f'{name}: the upload has another size')
         record['upload_seconds'] = round(time.monotonic() - started, 1)
     curve, lines = [], []
@@ -157,6 +157,11 @@ def rehearse(args, settings, record):
         return
     passed = 0
     with connect(settings) as ftp:
+        # The FTP server decrypts a SELF (every .prx) as it sends it unless SELF is off, as tools/deploy-wine.py reads
+        # (exp3-smoke-pro-2026-10-31-install: 22 .prx files read back larger, all equal with SELF off).
+        for _ in range(2):
+            if 'disabled' in ftp.sendcmd('SELF').lower():
+                break
         for digest, size, _, relative in files:
             check = hashlib.sha256()
             try:
@@ -164,6 +169,7 @@ def rehearse(args, settings, record):
             except ftplib.error_perm:
                 continue
             passed += check.hexdigest() == digest
+        ftp.sendcmd('SELF')   # back to decrypting, as the server was
     record.update(hashes_passed=passed, hashes_total=len(files), passed=passed == len(files))
     if curve:
         seconds = curve[-1]['seconds']

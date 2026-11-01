@@ -16,7 +16,7 @@ A changed path counts for:
                       xinput1_3's, dinput8 from dinput's). A C file marked `#pragma makedep unix` is a Unix
                       side, which the PRX link builds: it must belong to a module named with --unix-module, or
                       nothing would build it, and that stops the build.
-  libs/X              a static library: every module that imports it.
+  libs/X              a static library (STATICLIB, or an EXTLIB linked as $(X_PE_LIBS)): every module that imports it.
   include/            every module with a PE source that includes the header, directly or through a header
                       that does.
   server/             the in-process wineserver, which the PRX link builds.
@@ -66,7 +66,9 @@ class Tree:
             if values.get('MODULE'):
                 self.modules[makefile.parent.relative_to(root).as_posix()] = values
         for makefile in sorted(root.glob('libs/*/Makefile.in')):
-            for lib in makefile_vars(makefile).get('STATICLIB', []):
+            # STATICLIB, or EXTLIB for a bundled library that modules link as $(<NAME>_PE_LIBS) (libs/faudio).
+            values = makefile_vars(makefile)
+            for lib in values.get('STATICLIB', []) + values.get('EXTLIB', []):
                 self.static.setdefault(makefile.parent.relative_to(root).as_posix(), set()).add(
                     re.sub(r'^lib|\.a$', '', lib))
         self._unix = {}
@@ -127,8 +129,9 @@ def classify(tree, changed, unix_modules):
             if not names:
                 problems.append(f'{path}: {"/".join(parts[:2])} is not a static library modules import')
             else:
+                imports = names | {f'$({name.upper()}_PE_LIBS)' for name in names}
                 pe.update(m for m, v in tree.modules.items()
-                          if names & set(v.get('IMPORTS', []) + v.get('DELAYIMPORTS', [])))
+                          if imports & set(v.get('IMPORTS', []) + v.get('DELAYIMPORTS', [])))
         elif parts[0] == 'include' and len(parts) > 1:
             headers.append(path)
         else:

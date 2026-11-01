@@ -1,0 +1,75 @@
+From 0000000000000000000000000000000000000000 Mon Sep 17 00:00:00 2001
+From: Mihawk <163614687+mihawk-99@users.noreply.github.com>
+Date: Sun, 1 Nov 2026 05:00:00 -0400
+Subject: [PATCH] ntdll: PS5: an execute fault raised to the program says what was there
+
+A game in the title that died on code said only "Unhandled page fault on
+execute access to <address>". The title keeps no fault record for it (helpers
+print theirs), and when the page is one Wine never let run, no PS5 line is
+written at all. That happened to a tester's Elden Ring (2026-11-01): it died
+at an address 1 GiB past its image, 2.5 minutes into play.
+
+Each execute fault raised to the program now logs, for the first 8, what Wine
+and the kernel hold there:
+- the 4 KiB page's vprot and the host page's vprot;
+- the view (none, private, image or section; its base, size and protection);
+- the kernel's protection of the page (__wine_ps5_kernel_prot, -1 with nothing
+  mapped);
+- the conversions made so far.
+That separates the three causes:
+- a jump to memory nothing allocated (no view);
+- data run as code (a view whose page Wine does not let run);
+- code the console would not run (also logged as refused).
+No behaviour changes.
+---
+--- a/dlls/ntdll/unix/virtual.c
++++ b/dlls/ntdll/unix/virtual.c
+@@ -220,6 +220,7 @@
+ extern int __wine_ps5_exec_convert_image( void *address, size_t bytes, int unix_prot );
+ extern int __wine_ps5_host_allows( const void *address, int access );
+ extern void __wine_ps5_exec_refused( const void *address );
++extern int __wine_ps5_kernel_prot( const void *address );
+ extern int __wine_ps5_munmap( void *addr, size_t len );
+ extern int __wine_ps5_mprotect( void *addr, size_t len, int prot );
+ extern int __wine_ps5_dmem_region( void *base, size_t size );
+@@ -6258,6 +6259,30 @@
+     data->ps5_granted.conversions = ps5_conversions;
+     return TRUE;
+ }
++
++/***********************************************************************
++ *           ps5_note_exec_fault
++ *
++ * An execute fault raised to the program: what Wine and the kernel hold at the address, the first ones logged. A game
++ * that dies on code then says which it was: a jump to memory nothing allocated (no view), data run as code (a view
++ * whose page Wine does not let run: the program's own protection, or one this layer lost), or code the console would
++ * not run (also logged as refused, above). Before, an in-title game said only "Unhandled page fault on execute
++ * access", with no fault record from the title (a tester's Elden Ring, 2026-11-01). Called with the virtual mutex held.
++ */
++static void ps5_note_exec_fault( void *addr, const void *pc )
++{
++    static LONG notes;
++    struct file_view *view = find_view( addr, 0 );
++    char *page = ROUND_ADDR( addr, host_page_mask );
++    const char *kind = !view ? "none (not allocated)" : is_view_valloc( view ) ? "private" :
++                       (view->protect & SEC_IMAGE) ? "image" : "section";
++
++    if (__atomic_add_fetch( &notes, 1, __ATOMIC_RELAXED ) > 8) return;
++    fprintf( stderr, "wine-ps5: execute fault raised at %p (pc %p): page vprot %#x, host page vprot %#x, view %s %p+%#lx "
++             "protect %#x, kernel protection %d, %llu conversions\n", addr, pc, get_page_vprot( addr ),
++             get_host_page_vprot( page ), kind, view ? view->base : NULL, view ? (unsigned long)view->size : 0UL,
++             view ? view->protect : 0, __wine_ps5_kernel_prot( addr ), (unsigned long long)ps5_conversions );
++}
+ #endif
+ 
+ 
+@@ -6387,6 +6412,7 @@
+     /* Code Wine lets run that no conversion could make executable (a section view, or a failed conversion). */
+     if (ret == STATUS_ACCESS_VIOLATION && err == EXCEPTION_EXECUTE_FAULT && (ps5_page_prot( addr ) & PROT_EXEC))
+         __wine_ps5_exec_refused( addr );
++    if (ret == STATUS_ACCESS_VIOLATION && err == EXCEPTION_EXECUTE_FAULT) ps5_note_exec_fault( addr, rec->ExceptionAddress );
+ done:
+ #endif
+     fault_top_note( addr, err, get_page_vprot( addr ), vprot, ret, rec->ExceptionAddress );
+-- 
+2.56.0

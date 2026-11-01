@@ -1,0 +1,14 @@
+<svg xmlns="http://www.w3.org/2000/svg" width="112" height="112" viewBox="-2 -2 28 28">
+<!-- SPDX-License-Identifier: GPL-3.0-or-later
+     The main menu's pointer (2026-10-31): the Mihawk pointer scheme's hand (themes/windows11/cursors, the prototype's
+     link cursor, original artwork) in Aero glass, with a blue glow; the left stick moves it. Its fingertip is at
+     (8.5, 1.5) of this 28-unit box: 34 x 6 px at 112 px. -->
+<defs><linearGradient id="g" x1="0" y1="0" x2="0" y2="1"><stop offset="0" stop-color="#ffffff"/><stop offset=".55" stop-color="#eaf6ff"/>
+<stop offset="1" stop-color="#9fd3ff"/></linearGradient>
+<linearGradient id="s" x1="0" y1="0" x2="0" y2="1"><stop offset="0" stop-color="#fff" stop-opacity=".95"/><stop offset="1" stop-color="#fff" stop-opacity="0"/></linearGradient>
+<filter id="glow" x="-40%" y="-40%" width="180%" height="180%"><feGaussianBlur stdDeviation="1.1"/></filter>
+<filter id="drop" x="-40%" y="-40%" width="180%" height="180%"><feDropShadow dx="0.6" dy="1.1" stdDeviation="0.8" flood-color="#03265e" flood-opacity=".45"/></filter></defs>
+<path id="hand" d="M6.5 15 V3.5 A2 2 0 0 1 10.5 3.5 V10.5 A1.5 1.5 0 0 1 13.5 10.5 V11.5 A1.5 1.5 0 0 1 16.5 11.5 V12.5 A1.5 1.5 0 0 1 19.5 12.5 V17.5 Q19.5 20.5 17.5 21.75 V24.5 H9.5 V22 C8.5 21 3.5 16.75 2.6 15.6 A1.5 1.5 0 0 1 4.75 13.5 Z" fill="#2a8cff" opacity=".55" filter="url(#glow)"/>
+<g filter="url(#drop)"><path d="M6.5 15 V3.5 A2 2 0 0 1 10.5 3.5 V10.5 A1.5 1.5 0 0 1 13.5 10.5 V11.5 A1.5 1.5 0 0 1 16.5 11.5 V12.5 A1.5 1.5 0 0 1 19.5 12.5 V17.5 Q19.5 20.5 17.5 21.75 V24.5 H9.5 V22 C8.5 21 3.5 16.75 2.6 15.6 A1.5 1.5 0 0 1 4.75 13.5 Z" fill="url(#g)" stroke="#0e2b46" stroke-width=".9" stroke-linejoin="round"/>
+<path d="M10.5 10.5 V13 M13.5 11.5 V13.5 M16.5 12.5 V14.5" fill="none" stroke="#0e2b46" stroke-width=".8" stroke-linecap="round"/>
+<path d="M7.6 4 A1.1 1.1 0 0 1 9.4 4 V9 H7.6 Z" fill="url(#s)"/></g></svg>

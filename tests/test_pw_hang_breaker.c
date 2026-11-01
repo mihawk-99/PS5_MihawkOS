@@ -73,6 +73,17 @@ int main(void)
     const PwHangSample sample = {0, 0, 1, 0};
     assert(pw_hang_breaker_decide(NULL, &verdict) == EINVAL && pw_hang_breaker_decide(&sample, NULL) == EINVAL);
 
+    /* The title watchdog: frames alone, once the game in the title has shown one; the census plays no part. */
+    const PwHangSample hung = {180000, 0, 0, 0}, early = {179999, 3600000, 1, 0}, tested = {5000, 0, 0, 5000};
+    const PwHangSample loading = {60003, 0, 0, 0}, raised = {200000, 0, 0, 900000};   /* the demo's loading gap; a raise */
+    assert(!pw_hang_breaker_title_decide(&loading, 1, &verdict) && verdict == PW_HANG_FINE);
+    assert(!pw_hang_breaker_title_decide(&raised, 1, &verdict) && verdict == PW_HANG_STALLED);
+    assert(!pw_hang_breaker_title_decide(&hung, 1, &verdict) && verdict == PW_HANG_STALLED);
+    assert(!pw_hang_breaker_title_decide(&hung, 0, &verdict) && verdict == PW_HANG_FINE);   /* never drew: not ended */
+    assert(!pw_hang_breaker_title_decide(&early, 1, &verdict) && verdict == PW_HANG_FINE);
+    assert(!pw_hang_breaker_title_decide(&tested, 1, &verdict) && verdict == PW_HANG_STALLED);
+    assert(pw_hang_breaker_title_decide(NULL, 1, &verdict) == EINVAL && pw_hang_breaker_title_decide(&hung, 1, NULL) == EINVAL);
+
     /* The hangs, each read both ways: the latest onset the log allows must be ended by the time given, the earliest
      * must not be ended before the hang began. */
     /* A 2026-10-14 freeze (record removed from the tree; its title log, not in the tree): 187 frames between alive 150 and

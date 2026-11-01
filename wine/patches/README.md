@@ -509,3 +509,172 @@ process that took the desktop window did it: a menu builder, a console host, an 
 dialog each held a 40-43 MiB Unix heap where a process without it held 9 MiB (the Pro, 2026-10-20).
 The desktop window now carries the mode last published (width, height, rate), and a process publishes only when its
 own differs, so the last rate still wins as patch 1187 describes; the others read the display from the registry.
+
+Patch 2407 makes memory asked to be exported ordinary memory when there is no host handle type. Every game's Vulkan
+on the console is the GPU broker's client, which offers no external memory. So an allocation with
+`VkExportMemoryAllocateInfo` got no host handle and no D3DKMT resource, and failed with
+`VK_ERROR_OUT_OF_HOST_MEMORY`: a Direct3D 12 game that makes a shared resource at start closed. The export request is
+now dropped and the memory is ordinary. `vkGetMemoryWin32HandleKHR` on memory that was neither exported nor imported
+returns `VK_ERROR_INVALID_EXTERNAL_HANDLE`. VKD3D-Proton's side is `platform/vkd3d-proton/patches/0003`;
+`tests/d3d12-shared-probe.c` is the console check. The problem was found by reading prospero-win 0054 as PC5 carries it
+(bornaradusin/PC5 at `81323dc3`, LGPL-2.1); this patch is independently written.
+
+Patches 2408 and 2409 give games the console GPU's identity (`src/pw_gpu_identity.h`, with graphics patch 0045, which
+makes the GPU client's RADV report the PCI ID of the retail RDNA2 Radeon of the console model's class: 1002:73DF on the
+standard PS5, 1002:73BF on the Pro). RADV reported 1002:0000, and a survival-horror demo refused it with an "Unsupported graphics
+card" box. 2408: win32u adopts Vulkan's PCI ID for the PS5 driver's GPU, and names it from the console's identity
+("AMD Radeon PlayStation 5 GPU") rather than from `gpu_device_name`'s table; Vulkan's deviceName follows. 2409: AGS
+took the family, compute units and clocks from libdrm, which the console has not, and reported a GCN4 GPU with none.
+It now reports the model's RDNA2 figures when Vulkan's device is the console's (its PCI ID and that name). Host test:
+`tests/test_pw_gpu_identity.c`.
+
+Patch 2425 keeps the GPU's access to host memory a program gives it. A recompiled console game stopped at once in the
+title: "the D3D12 driver cannot open heaps over existing memory" (a tester, 2026-11-01). VKD3D-Proton builds Direct3D
+12's existing heaps on VK_EXT_external_memory_host, which the GPU client's RADV now offers in the title's own process,
+the only one whose memory the GPU reaches (PS5_Mesa's `client-host-memory-winsys.patch`, PS5_Vulkan's client). The
+client gives the pages GPU read and write with one `sceKernelMprotect`, and the kernel keeps those bits with the CPU's.
+So win32u records each import with ntdll before it is made (`__wine_ps5_gpu_keep`, under the virtual mutex) and
+removes the record when the memory is freed. The PS5 memory layer keeps GPU read and write on recorded pages in every
+protection change. It takes them away, with a protection change, before a mapping there is replaced or unmapped, and
+when the import ends (`wine/ps5/pw_wine_gpu_keep.h`). The first 8 imports are logged. Host tests:
+`tests/test_pw_wine_gpu_keep.c`, and the gpu-kept case of `tests/test_pw_wine_dmem_ps5.c`. Console probe:
+`tests/d3d12-existing-heap-probe.c` (battery case `d3d12-existing-heap64-title`).
+
+Patch 2420 makes an execute fault raised to the program say what was there (the first 8). Logged: the 4 KiB page's
+and host page's vprot; the view (none, private, image or section, with base, size and protection); the kernel's
+protection of the page (`__wine_ps5_kernel_prot`, -1 with nothing mapped); and the conversions so far. A game in the
+title that died on code said only "Unhandled page fault on execute access" (a tester's Elden Ring, 2026-11-01).
+The title keeps no fault record for it, and a page Wine never let run gets no PS5 line otherwise. The record tells a
+jump to memory nothing allocated, data run as code, and code the console would not run apart. No behaviour changes.
+Host test: `tests/test_pw_wine_dmem_ps5.c` (the kernel query).
+
+Patch 2410 makes FAudio's `FAPOBase_AddRef` and `FAPOBase_Release` atomic, as Windows' `XAPOBase` is: a game that
+attaches one effect to voices it creates and destroys on several threads lost updates between them, the count reached
+zero while a voice held the effect, and the mixer read freed memory. `tests/test_pc5_apobase.py` compiles FAudio's own
+`FAPOBase.c` from the pin with the patch and runs eight threads on one effect (`PC5_SHOW_OLD=1` shows the pin failing it:
+count 2 and the destructor run). Written from the problem PC5's prospero-win 0002 describes (NOTICE.md, "PC5"); host-tested
+only.
+
+Patch 2411 makes calls on a destroyed XAudio2 voice do nothing, as on Windows: a destroyed voice has no FAudio voice
+(`voice_is_gone`), every method of the source, submix and mastering voices answers with nothing when it is gone (59 of them start with
+`RETURN_IF_GONE` or a variant; getters return zeros; a second `DestroyVoice` is ignored), a new voice's sends leave out a destroyed voice,
+and the destroyed voice's object goes to a new voice only ten seconds after the destroy (`slot_is_free`, `GetTickCount64`).
+`tests/test_pc5_xaudio_destroyed.py` holds those invariants on the pinned file with the patch applied and runs the reuse rule
+as written (the voices themselves cannot run on the host); the file compiles for XAudio2 versions 4, 7 and 9 against the
+build tree's generated headers. Written from the problem PC5's prospero-win 0007 describes; host-tested only.
+
+Patch 2412 keeps the process memory counts (patch 0905) for a second. Each query walked every view's pages with
+`virtual_mutex` held, the mutex every allocation and page fault waits for; a game that asks from several threads every
+few milliseconds (an Unreal Engine game's memory stats) kept it taken. A query within a second of the last walk now gets
+that walk's counts without the mutex, one walker runs at a time, and the peaks are kept per walk.
+`tests/test_pc5_vm_counts.py` cuts the function out of patches 0905 and 2412 and runs both on a made-up list of views: the
+values, the walk times and a threaded run (4 threads asking every 10 ms against a thread taking the mutex): on the host
+model the old function made 683 walks in 3 s and the allocator's lock waited 4.2 ms at p99 (13.8 ms worst) and got a
+quarter of the locks, the new one made 3 walks and waited 0 ms at p99. The walk's cost is a model, not the console's: the
+console run is still to do (8 threads polling `GetProcessMemoryInfo` every 10 ms while one allocates). Written from the problem
+PC5's prospero-win 0075 describes; host-tested only.
+
+Patch 2413 lets `SetPixelFormat` succeed for the format the window already has. Windows keeps a window's first format
+(the same one again succeeds, another fails); Wine's builtin opengl32 does this itself, but gdi32 hands the call to
+whichever opengl32 is loaded, and Mesa's WGL, loaded natively here for Zink, returns false on every second call. A game that sets
+the format twice (Godot 4 does, in `window_create` and again in `_create_context`) stopped at "Failed to create an OpenGL
+window". `tests/test_pc5_setpixelformat.py` compiles the pinned gdi32 `opengl.c` with the patch on the host, in front of an
+opengl32 stand-in that refuses a second call as Mesa's `DrvSetPixelFormat` does (`PC5_SHOW_OLD=1` shows the pin failing the
+repeat). Written from the problem PC5's prospero-win 0066 describes; host-tested only.
+
+Patch 2414 stops `register_builtin_classes` waiting on another thread. Its body, run in a `pthread_once`, takes the loader
+lock (each class's cursor and user32's part load through callbacks into user32), so a thread holding the lock in a `DllMain`
+that made its first window waited for the thread that waited for the lock. The first thread now registers and runs
+user32's part and says when it is done; a thread that finds it running registers the classes itself and leaves user32's
+part to the first. `tests/test_pc5_builtin_classes.py` runs the two functions' text, cut from the pinned `class.c` with and
+without the patch, against stand-ins that take the loader lock where win32u calls back into user32: the pin hangs
+(`PC5_SHOW_OLD=1`), the patch gets through, and eight threads register the classes once. No game reproduces it in this
+architecture yet; this closes a latent lock order, host-tested only. Written from the problem PC5's prospero-win 0066
+describes.
+
+`native/proton_wine.cpp` gives every game `OPENSSL_ia32cap=:~0x20000000`, which leaves OpenSSL's SHA-instruction code out: OpenSSL 1.0.2
+to 1.0.2k, which games bundle (PC5 names Unreal Engine 4.13 to 4.21), crashes on a CPU that has those instructions, as the console's
+does, and Proton sets the same for every game. The title's own settings were at `PW_WINE_START_MAX_ENV` (16), so it is now 32, a
+`static_assert` in `native/proton_wine.cpp` keeps the table inside it, and `tests/test_pw_wine_start.c` checks that 17 settings go
+through and one more than the limit is refused (it fails at 16). Written from the problem PC5's prospero-win 0025 describes;
+nothing was run on a console, and no game that crashes this way has been named here.
+
+Patch 2415 clears the nested-task flag (EFLAGS bit 14) a program set, on the fault it causes, and runs the instruction again, as
+Windows and Linux do: a CPU check (Far Cry's) sets it with `popf`, the console's kernel cannot return to code with it set, and the
+fault was reported as an access violation reading 0xFFFFFFFFFFFFFFFF. It sits in `segv_handler` ahead of patch 2102's UMIP decoder, and
+`pw_umip_clear_nested_task` in `src/pw_umip.h` decides (`tests/test_pw_umip.c` covers the bits it keeps and that a retry cannot loop).
+Written from the problem PC5's prospero-win 0062 describes; the handler itself compiles on the host but nothing ran on a console.
+
+Patch 2416 gives a large heap block a page of room after its data before its region is rounded up to 64 KiB: a program that writes
+one element past the end of one (harmless on Windows, whose heap leaves slack) faulted when the data ended exactly where the region did.
+`tests/test_pc5_heap_room.py` evaluates the sizing expression cut from the pinned `heap.c` with and without the patch for sizes that end on
+a 64 KiB boundary and for sizes that overflow (`PC5_SHOW_OLD=1` shows the pin leaving no room). `HeapSize` is unchanged. Written from
+the problem PC5's prospero-win 0077 describes; the expression is tested, not ntdll's heap.
+
+Patch 2417 makes the missing parents of a folder a program creates under `C:\users\<name>\`: a game copied from a PC was never installed
+here, so the folders its installer makes there are missing, and Call of Juarez Gunslinger's engine stopped on an uncaught C++ exception when
+`AppData\Local\Techland\COJGunslinger` could not be made. `NtCreateFile` makes the parent (which makes its own), then tries again.
+`pw_user_folder_parent_length` in `src/pw_user_folder.h` (staged beside `file.c` by `tools/build-wine-ps5.sh`) says where the parent ends and
+refuses the users folder, a user's own folder, other drives and folders, and names with empty, `.` or `..` components
+(`tests/test_pw_user_folder.c`, in `tools/host-tests.sh`). Written from the problem PC5's prospero-win 0061 describes; the
+`NtCreateFile` change compiles on the host but nothing ran on a console.
+
+Patch 2418 lets the controller answer a game's dialog box. The title sends Cross and the D-pad's presses and releases as
+`PW_WINE_INPUT_DIALOG_KEY` events (type 9 of `pw_wineserver_input`) carrying Enter's and the arrows' key codes; the server delivers a press as
+a key only while the active window is a dialog box (class #32770) and the release of one it delivered, so a game that uses these
+buttons itself never gets a stray Enter or arrow. `src/pw_dialog_keys.h` (staged beside `queue.c` by `tools/build-wine-ps5.sh`) holds the key
+codes and the deliver-or-drop rule (`tests/test_pw_dialog_keys.c`, in `tools/host-tests.sh`). Only the in-process server takes the event; the
+in-title input queue drops it. The console keyboard that PC5 also types text with (an IME dialog and Unicode key events) is not part of
+this. Written from the problem PC5's prospero-win 0013 describes; the server code compiles on the host, nothing ran on a console.
+
+Patch 2419 lets the title read the dialog box in front. A game in the title owns the display, so a message box it opens is drawn
+by nobody and the game looks hung until the title's watchdog ends it (a survival-horror demo's "Unsupported graphics card",
+2026-11-01). `ps5_windows_publish`, on the server thread, records the foreground's active window when it is a dialog box (class
+#32770): its caption and each child's text, one per line in UTF-8; `pw_wineserver_dialog` copies that out under the snapshot's
+lock. The title polls it once a second while a game runs in the title, logs the box, draws its words over the game
+(`PW_STEAM_SCREEN_DIALOG`, `src/pw_steam_screen.c`, through the guide's cover) with Cross to answer (patch 2418), and counts the box as
+shown for the watchdog. A window's text change marks the snapshot for rebuilding too.
+
+`tests/d3d9ex-d3d11-share-probe.c` (built by `tools/build-wine-probe.sh`, case `d3d9ex-d3d11-share64` in `tools/run-battery.py`, marker
+`PS5_PROTON_D3D9_D3D11_SHARE`) measures what Koei Tecmo's movie players need and DXVK cannot do without Win32 external memory: a Direct3D 9Ex device
+makes a shared render-target texture and clears it, a Direct3D 11 device opens its handle with `OpenSharedResource`, copies it and reads a pixel.
+It prints `PASS` (the colour arrived), `NOSHARE` (D3D9 or D3D11 refused honestly: what a game sees today, after DXVK patches 0003 and 0005) or
+`FAIL`, with each step's HRESULT. It is the measurement a DXVK change needs first; PC5 shares the image inside the process with a change to `d3d9` and
+`d3d11` (its patches/dxvk 0001 to 0003), which this project does not copy and has not written. The probe builds for x86-64 with the recipe's
+`-Werror`; it has not run (no GPU Wine runs on a host, nothing on a console).
+
+Patch 2421 makes the PS5 high area (patch 0600) as large as the kernel grants. A 64-bit game that reserves tens of GiB at once (28 GiB,
+48 GiB, a .NET runtime's 256 GiB) was refused: the area was one 16 GiB reservation, and a view that did not fit fell through to an
+anonymous mmap the console refuses. `mmap_init` now asks for 512 GiB at the high base and halves until the kernel grants the size, down to
+16 GiB; `PW_PS5_HIGH_RESERVE_GB` gives the size tried first (0 keeps 16 GiB), and a `wine-ps5: high area N GiB` line says what was
+granted. It reserves the high area before the view heap's, so the kernel cannot place that inside it. Protection tables already come from the
+native heap (0960). `tests/test_pw_high_area.py` cuts the sizing functions out of the patch and checks them against a kernel that grants
+at most N bytes. Not run on a console: the first Pro run reads the `high area` line and tries a game that asks for more than 16 GiB at once.
+
+Patch 2422 stops `UnhandledExceptionFilter` from starting a debugger in a PS5 title or helper (the starter sets `WINE_PS5_NTDLL_DIR` for both). The runtime has no
+winedbg, and the start reads AeDebug and allocates from the process heap, which a crashing thread's neighbour may hold: the crash froze the title instead of ending
+it. The game's own filter still runs first; then the exception is logged ("no debugger starts in a PS5 title") and the thread's handler ends the process.
+`tests/test_pw_no_debugger.py` cuts `ps5_no_debugger` out of the patch and runs it against a fake environment, and checks the order in the filter.
+
+Patch 2423 tells a game's windows when its controller connects or disconnects: the PS5 driver's `ProcessEvents` posts `WM_DEVICECHANGE` with `DBT_DEVNODES_CHANGED` to
+the top-level windows when `pw_wine_pad_changes` (`wine/ps5/pw_wine_sink.[ch]`) moved. The title counts each connect or disconnect as it sets the pad (and wakes the input
+fd); a helper counts the differences between its looks at the input page, the first look being the baseline. `tests/test_pw_wine_sink.c` covers both. The controller stays connected while the system
+has the DualSense (pw-01), so the overlay posts nothing. If the plug and play service already sends this in our prefix, a game gets it twice; the Pro probe is a Win32 program
+logging `WM_DEVICECHANGE` while the DualSense is switched off and on.
+
+Patch 2424 lets the title type text into the game as Unicode keys: a new input type (`PW_WINE_INPUT_CHAR`, 10) carries one UTF-16 unit, which the server queues as a
+`KEYEVENTF_UNICODE` key (a VK_PACKET key, then WM_CHAR) for the focused window and the in-process driver sends the same way, so a line with accents, Cyrillic or CJK arrives intact where
+virtual keys could not. It is the delivery half of the on-screen keyboard (`src/pw_osk.[ch]`, `native/pw_osk_ps5.[ch]`; Settings > Controls > On-screen keyboard, Off by default, saved as a
+`keyboard <gesture>` line of controls.txt only when chosen). `tests/test_pw_osk.c` covers each gesture (and that a single stick press, one finger or a gone pad fire nothing), the pad hand-over,
+the typing and the dialog's sequence against a fake console. The Settings row, its ten languages, the WebUI field and the title's wiring are the next patch.
+
+Patch 2426 gives another process pages and makes the log say what a program learns of it. The server counts a process's memory from /proc, which the console lacks, so every process but the
+caller's reported a working set of zero; `NtQueryInformationProcess(ProcessVmCounters)` now reports a floor (16 MiB working set, 256 MiB virtual) when the server has nothing, because a live
+Windows process always holds pages. And the +process trace shows who a program asks about and what it was told: `NtOpenProcess` logs the pid, access and result, and a query on a process that is
+not the caller's logs one line per distinct answer (pid, parent, exit status; working set; wow64; image name; or the failing status). Written after a tester's Witcher 3 (DirectX 12) log, where
+the game inspects another process and ends itself with exit code 0; `tests/test_pw_foreign_process.py` runs the two functions cut from the patch. Not run on a console.
+
+Patch 2427 answers `NtQueryInformationProcess(ProcessCommandLineInformation)` (class 60), which was not known here at all: every caller got `STATUS_INVALID_INFO_CLASS`. It
+answers as Windows does, a `UNICODE_STRING` followed by the text: the caller's own command line from its parameters, another process's through `NtReadVirtualMemory` along PEB,
+ProcessParameters and CommandLine; a buffer too small gets `STATUS_INFO_LENGTH_MISMATCH` and the needed length. The gate's chromium-game reads its child's command line this way
+(alpha7-gate-pro-2026-11-01 failed on it); `tests/test_pw_command_line.py` runs the answer's layout cut from the patch.

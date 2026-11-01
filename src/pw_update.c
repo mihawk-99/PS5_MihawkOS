@@ -175,8 +175,8 @@ int pw_update_switch(const char *update, const char *title, char *failed, size_t
     if (!record_moved) {
         for (size_t f = 0; !status && f < manifest.stamp; f++)
             status = move_in(stage, title, previous, manifest.files[f].path, failed, size);
-        /* What the old title had and the new one has not: aside, by the old record (none: a folder copied by hand,
-         * whose files are all kept). */
+        /* What the old title had and the new one has not: aside, by the old record. A folder copied by hand has none:
+         * its files are kept, but for the runtime's pieces the new manifest does not name (about 0.5 GB a release). */
         PwPackManifest old;
         char *old_text = status ? NULL : read_all(title_record, &length);
         if (old_text && pw_pack_parse(old_text, length, &old) == PW_PACK_OK) {
@@ -184,6 +184,15 @@ int pw_update_switch(const char *update, const char *title, char *failed, size_t
                 if (!listed(&manifest, old.files[f].path))
                     status = move_aside(title, previous, old.files[f].path, failed, size);
             pw_pack_manifest_free(&old);
+        } else if (!status && !old_text) {
+            char pieces[PATH], piece[PATH];
+            DIR *dir = join(pieces, title, "runtime-pieces") ? opendir(pieces) : NULL;
+            for (struct dirent *entry; dir && !status && (entry = readdir(dir));)
+                if (entry->d_name[0] != '.' &&
+                    snprintf(piece, sizeof(piece), "runtime-pieces/%s", entry->d_name) < (int)sizeof(piece) &&
+                    !listed(&manifest, piece))
+                    status = move_aside(title, previous, piece, failed, size);
+            if (dir) closedir(dir);
         }
         free(old_text);
         if (!status) status = move_in(stage, title, previous, PW_UPDATE_RECORD, failed, size);
@@ -206,4 +215,133 @@ int pw_update_confirm(const char *update)
     const int status = remove_tree(previous);
     if (status) return status;
     return unlink(switched) == 0 ? 1 : -errno;
+}
+
+int pw_update_discard(const char *update)
+{
+    char ready[PATH], stage[PATH];
+    if (!join(ready, update, "ready") || !join(stage, update, "stage")) return -ENAMETOOLONG;
+    if (unlink(ready) != 0 && errno != ENOENT) return -errno;
+    return remove_tree(stage);
+}
+
+int pw_update_check_due(int enabled, int64_t now, int64_t last)
+{
+    return enabled && (last <= 0 || now < last || now - last >= PW_UPDATE_CHECK_EVERY_S);
+}
+
+/* Moved in last, in this order: the runtime's pin (the title's runtime-stamp: the new title re-copies its runtime when
+ * it differs from the installed one, so it changes only once the pieces and runtime-pack.txt it pins are in place),
+ * then eboot.bin and sce_sys/param.json (ShadowMountPlus registers no half title). runtime-stamp is optional. */
+static const char *const title_last[] = { "runtime-stamp", "eboot.bin", "sce_sys/param.json" };
+
+static int last_rank(const char *path)
+{
+    for (int i = 0; i < 3; ++i)
+        if (!strcmp(path, title_last[i])) return i + 1;
+    return 0;
+}
+
+static int record_order(const void *a, const void *b)
+{
+    const PwUpdateFile *x = a, *y = b;
+    const int rx = last_rank(x->path), ry = last_rank(y->path);
+    if (rx != ry) return rx - ry;   /* the stamps after every other file, eboot.bin first */
+    return strcmp(x->path, y->path);
+}
+
+int pw_update_record_write(const char *stage, PwUpdateFile *files, size_t count)
+{
+    char path[PATH], part[PATH];
+    if (!join(path, stage, PW_UPDATE_RECORD) || snprintf(part, PATH, "%s.part", path) >= PATH) return -ENAMETOOLONG;
+    qsort(files, count, sizeof(*files), record_order);
+    if (count < 2 || strcmp(files[count - 2].path, title_last[1]) || strcmp(files[count - 1].path, title_last[2]))
+        return -EINVAL;
+    const int pinned = count > 2 && !strcmp(files[count - 3].path, title_last[0]);
+    uint64_t plain = 0;
+    for (size_t i = 0; i < count; ++i) {
+        if (i && !strcmp(files[i - 1].path, files[i].path)) return -EINVAL;
+        plain += files[i].size;
+    }
+    FILE *out = fopen(part, "wb");
+    if (!out) return -errno;
+    fprintf(out, "mihawkos-title-pack 1\nzstd 0 -19\n%s%s%sstamp %s\nstamp %s\n", pinned ? "stamp " : "",
+            pinned ? title_last[0] : "", pinned ? "\n" : "", title_last[1], title_last[2]);
+    /* one chunk line over every file: pw_pack_parse wants one, and the switch never fetches it */
+    fprintf(out, "chunk %064d 1 %llu %zu\n", 0, (unsigned long long)plain, count);
+    for (size_t i = 0; i < count; ++i) {
+        fputs("file ", out);
+        for (int b = 0; b < 32; ++b) fprintf(out, "%02x", files[i].sha256[b]);
+        fprintf(out, " %llu 0 %s\n", (unsigned long long)files[i].size, files[i].path);
+    }
+    const int bad = ferror(out) || fflush(out) || fsync(fileno(out));
+    const int saved = errno;
+    if (fclose(out) || bad) {
+        remove(part);
+        return -(saved ? saved : EIO);
+    }
+    return rename(part, path) ? -errno : 0;
+}
+
+const char *pw_update_status_text(int status)
+{
+    switch (status) {
+    case PW_UPDATE_NOT_A_TITLE: return "the update's archive holds no MihawkOS title";
+    case PW_UPDATE_RUNTIME_PIN: return "the update's runtime is not the one its signed description names";
+    case PW_UPDATE_STAGE: return "the update could not be prepared on the console's storage";
+    default: return pw_zip_status_text(status);
+    }
+}
+
+int pw_update_install_zip(const char *zip_path, const char *update, const char *prefix, const uint8_t runtime_sha256[32],
+                          const char *version, pw_zip_inflate_fn inflate, char *failed, size_t size)
+{
+    char stage[PATH], target[PATH];
+    if (failed && size) *failed = '\0';
+    if (!join(stage, update, "stage")) return PW_UPDATE_STAGE;
+    mkdir(update, 0777);
+    if (remove_tree(stage) || (mkdir(stage, 0777) && errno != EEXIST)) {
+        if (failed && size) snprintf(failed, size, "%s", stage);
+        return PW_UPDATE_STAGE;
+    }
+    FILE *file = fopen(zip_path, "rb");
+    if (!file) {
+        if (failed && size) snprintf(failed, size, "%s", zip_path);
+        return PW_ZIP_FORMAT;
+    }
+    PwZip zip;
+    int status = pw_zip_open(file, &zip);
+    PwUpdateFile *files = status ? NULL : calloc(zip.count ? zip.count : 1, sizeof(*files));
+    if (!status && !files) status = PW_ZIP_MEMORY;
+    size_t count = 0;
+    const size_t skip = strlen(prefix);
+    int pinned = 0;
+    for (size_t e = 0; !status && e < zip.count; ++e) {
+        const PwZipEntry *entry = &zip.entries[e];
+        const char *relative = entry->name + skip;
+        if (entry->folder || strncmp(entry->name, prefix, skip) || !*relative || !strcmp(relative, PW_UPDATE_RECORD))
+            continue;
+        if (!join(target, stage, relative)) status = PW_UPDATE_STAGE;
+        else if (!make_parents(target)) status = PW_ZIP_WRITE;
+        else status = pw_zip_extract(file, entry, target, inflate, files[count].sha256);
+        if (status) {
+            if (failed && size) snprintf(failed, size, "%s", entry->name);
+            break;
+        }
+        files[count].path = relative;
+        files[count].size = entry->size;
+        if (!strcmp(relative, "runtime-pack.txt"))
+            pinned = !runtime_sha256 || !memcmp(files[count].sha256, runtime_sha256, 32);
+        count++;
+    }
+    int stamps = 0;
+    for (size_t i = 0; i < count; ++i) stamps += last_rank(files[i].path) > 1;   /* eboot.bin and param.json */
+    if (!status && stamps != 2) status = PW_UPDATE_NOT_A_TITLE;
+    if (!status && !pinned) status = PW_UPDATE_RUNTIME_PIN;
+    if (!status && (pw_update_record_write(stage, files, count) || pw_update_mark_ready(update, version))) status = PW_UPDATE_STAGE;
+    free(files);
+    if (zip.entries) pw_zip_close(&zip);
+    fclose(file);
+    if (status) remove_tree(stage);
+    return status;
 }

@@ -47,6 +47,10 @@ extern "C" {
 #endif
 
 #define PW_HANG_STALL_MS 45000u   /* no frame, and a census this old */
+/* A game in the title, frames alone: three times the longest healthy gap on record. The 3D demo shows almost no frame
+ * for minutes while it loads (a frame about every 60 s, its GPU submissions stopped too: a 2026-10-29 base run's
+ * flight log, t=540-742; 50 s on the Pro, 2026-10-30) and then plays on, so frames cannot be read at the 45 s above. */
+#define PW_HANG_TITLE_STALL_MS 180000u
 #define PW_HANG_WEDGE_S 20u       /* the broker's client lock held at this many one-second samples in a row */
 #define PW_HANG_MAX_HELPERS 32u   /* the title's helper table (wine/ps5/pw_wine_process.c) */
 #define PW_HANG_SKIPPED (-1)      /* a pid never signalled: 1 or less, or the title's own */
@@ -62,6 +66,12 @@ typedef struct {
 
 /* EINVAL for a NULL argument. The same sample always gives the same verdict. */
 int pw_hang_breaker_decide(const PwHangSample *sample, PwHangVerdict *verdict);
+
+/* The title watchdog, for a game the title runs itself (docs/TITLE_CLIENT.md): stalled when the screen has shown no new
+ * frame for PW_HANG_TITLE_STALL_MS (or a test's lower stall_ms), once it showed one after the game started (shown, 0 until then: a program that never
+ * draws is not ended). The census plays no part: the game's memory is the title's, and the payload processes the
+ * census reads keep running under a game hung in the title. EINVAL for a NULL argument. */
+int pw_hang_breaker_title_decide(const PwHangSample *sample, int shown, PwHangVerdict *verdict);
 
 /* 1 when the broker's client lock was found held at this many samples in a row, PW_HANG_WEDGE_S or more, and the last
  * of them came span_ms after the first, PW_HANG_WEDGE_S - 1 s or more; else 0. */

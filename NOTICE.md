@@ -52,6 +52,21 @@ The upstream DXVK source revision is the GE fork's pin `601930949d111edbbcf9dd46
 For 32-bit programs, the same archive's i386 builds of those DLLs, of `d3d9` and `d3d8`, and of VKD3D-Proton's
 `d3d12`/`d3d12core` are extracted too (`tools/extract-dxvk.py`) and staged into a prefix's `syswow64`.
 
+VKD3D-Proton's `d3d12` and `d3d12core` are source-built in both architectures (`tools/build-vkd3d.py`) at the same
+revision GE-Proton11-7 ships, `af89350cc2eacd9da2293fbae96bd9ab4987c9bb` (LGPL-2.1-or-later), exported by Git with each
+submodule at the revision that commit records, and staged over GE's prebuilt builds. Its owned patch series
+`platform/vkd3d-proton/patches/` is LGPL-2.1-or-later like the code it changes: 0001 lets feature level 12_0 rest on
+tiled resources tier 1, the console's ceiling (sparse binding without PRT, a game's through the GPU broker's patch
+0041). The problem was found by reading PC5's
+`patches/vkd3d-proton/0001-vkd3d-Feature-level-12_0-with-tiled-resources-tier-1.patch`
+([bornaradusin/PC5](https://github.com/bornaradusin/PC5) at `81323dc3`, LGPL-2.1); our patch is independently
+written. 0002 names the build. 0003 makes a shared resource or fence ordinary when the device has no Win32 external
+handles, and `CreateSharedHandle` refuse it; with Wine patch 2407, which allocates memory asked to be exported as
+ordinary memory when there is no host handle type. Their problem was found by reading PC5's vkd3d-proton 0002 and
+prospero-win 0054 ([bornaradusin/PC5](https://github.com/bornaradusin/PC5) at `81323dc3`, LGPL-2.1); both patches are
+independently written. Its licence texts and those of its compiled-in subprojects are staged in the runtime's
+`share/licenses/vkd3d-patched/`.
+
 The shared prefix baseline also extracts that same verified GE-Proton11-7 archive's
 ICU 68 Windows DLLs and default font collection for both architectures. ICU carries
 the Unicode/ICU permissive licence; the font collection includes Liberation,
@@ -159,7 +174,10 @@ project's own source (GPL-3.0-or-later since 2026-10-15).
 | DXVK display metadata | [doitsujin/libdisplay-info](https://github.com/doitsujin/libdisplay-info) `275e6459c7ab1ddd4b125f28d0440716e4888078` | MIT |
 | DXVK Vulkan headers | [KhronosGroup/Vulkan-Headers](https://github.com/KhronosGroup/Vulkan-Headers) `8864cdc896bbc2a9b6eb36b3218fc9ef57908d77` | Apache-2.0 or MIT |
 | DXVK SPIR-V headers | [KhronosGroup/SPIRV-Headers](https://github.com/KhronosGroup/SPIRV-Headers) `04f10f650d514df88b76d25e83db360142c7b174`, compiler copy `c8ad050fcb29e42a2f57d9f59e97488f465c436d` | MIT |
-| VKD3D-Proton | the fork's `vkd3d-proton` submodule | LGPL-2.1-or-later |
+| VKD3D-Proton | [HansKristian-Work/vkd3d-proton](https://github.com/HansKristian-Work/vkd3d-proton) `af89350cc2eacd9da2293fbae96bd9ab4987c9bb` (the fork's `vkd3d-proton` submodule), source-built in both architectures with owned `platform/vkd3d-proton/patches/` | LGPL-2.1-or-later |
+| VKD3D-Proton's shader compilers | [HansKristian-Work/dxil-spirv](https://github.com/HansKristian-Work/dxil-spirv) `bed30ff2115d845fb6bf8752bcbe1c681efb0e01`, its [doitsujin/dxbc-spirv](https://github.com/doitsujin/dxbc-spirv) `37a97745bddaf56d717253b0e4565904ce5eb06c` | MIT |
+| dxil-spirv's compiled-in third-party code | `third_party/bc-decoder` (RenderDoc's LLVM bitcode reader, Baldur Karlsson), `third_party/glslang-spirv` (glslang's SPIR-V builder, LunarG and Google), `third_party/spirv-headers` (KhronosGroup/SPIRV-Headers `c63848ecf2200425511319fd8bf2c17b751e501e`), all at dxil-spirv `bed30ff2115d845fb6bf8752bcbe1c681efb0e01`; its `SPIRV-Cross` and `SPIRV-Tools` are not built | MIT; BSD-3-Clause; MIT |
+| VKD3D-Proton's headers | [KhronosGroup/Vulkan-Headers](https://github.com/KhronosGroup/Vulkan-Headers) `ee2ec5fd83dafce291024683b50dc89219333076`, [KhronosGroup/SPIRV-Headers](https://github.com/KhronosGroup/SPIRV-Headers) `f88a2d766840fc825af1fc065977953ba1fa4a91` | Apache-2.0 or MIT |
 | Title foundation | [mihawk-99/PS5_VulkanTemplate](https://github.com/mihawk-99/PS5_VulkanTemplate), a fork of [SaschaWillems/Vulkan](https://github.com/SaschaWillems/Vulkan) at `41a4410243fca7640a2dd0115a5ff5cb9a29494b` | MIT: Sascha Willems' examples ([`base/LICENSE.md`](base/LICENSE.md)) and the template's own files (`SPDX-License-Identifier: MIT`) |
 | GLM 0.9.9.0 (`external/glm`: headers, CMake files and manual; its `doc/`, `test/` and `util/` are not carried) | [g-truc/glm](https://github.com/g-truc/glm) `1ad55c5016339b83b7eec98c31007e0aee57d2bf`, SaschaWillems/Vulkan's submodule pin | Happy Bunny (modified MIT) or MIT; the text is in `external/glm/manual.md` (that revision has no `copying.txt`) |
 | Dear ImGui 1.65 (`external/imgui`) | as vendored by SaschaWillems/Vulkan `41a4410`; ocornut/imgui revision not recorded | MIT (`LICENSE.txt`) |
@@ -176,7 +194,7 @@ project's own source (GPL-3.0-or-later since 2026-10-15).
 | Wine Mono 10.4.1 (`share/wine/mono`, installed by wineboot into each prefix) | [dl.winehq.org](https://dl.winehq.org/wine/wine-mono/10.4.1/), SHA-256 `071f4b2887e1c97a11d791ff3d65be9429eed6dec4c2708888bfd546ba358e23` (the hash Wine's appwiz.cpl names) | MIT for Wine Mono's own code; the package's components (Mono, .NET Core libraries) carry their own notices |
 | Wine Gecko 2.47.4, x86_64 (`share/wine/gecko`) | [dl.winehq.org](https://dl.winehq.org/wine/wine-gecko/2.47.4/), SHA-256 `e590b7d988a32d6aa4cf1d8aa3aa3d33766fdd4cf4c89c2dcc2095ecb28d066f` | MPL-2.0 |
 | Wine Gecko 2.47.4, x86 (`share/wine/gecko`) | Same Wine Gecko release, SHA-256 `26cecc47706b091908f7f814bddb074c61beb8063318e9efc5a7f789857793d6` (Wine's i386 appwiz.cpl pin) | MPL-2.0 |
-| Mozilla's root certificates, as curl extracts them (`share/wine/ca-certificates.crt`) | [curl.se/ca](https://curl.se/ca/cacert-2025-09-09.pem), SHA-256 `f290e6acaf904a4121424ca3ebdd70652780707e28e8af999221786b86bb1975` | MPL-2.0 |
+| Mozilla's root certificates, as curl extracts them (`share/wine/ca-certificates.crt`) | [curl.se/ca](https://curl.se/ca/cacert-2026-10-20.pem), SHA-256 `796f1389bfea13c0ed78f663b765baaff54a508e5483786bd6ece73c5e3e3cbe` | MPL-2.0 |
 | Zstandard 1.5.7, decompression only (`external/zstd`: the single-file decoder, `zstd.h`, `zstd_errors.h`), built into the title for the runtime install (`src/pw_pack.c`) | [facebook/zstd](https://github.com/facebook/zstd) tag `v1.5.7`, commit `f8745da6ff1ad1e7bab384bd1f9d742439278e99`; `zstddeclib.c` is the output of that release's `build/single_file_libs/create_single_file_decoder.sh`, unchanged (`external/zstd/README.md`) | BSD-3-Clause (`external/zstd/LICENSE`), the BSD side of zstd's BSD-or-GPL-2.0 choice |
 | Mbed TLS 3.6.7, the TLS of the title's downloads (`src/pw_https.c`; its `library/` built with `platform/tls/pw_mbedtls_config.h`, nothing of `3rdparty/`) | [Mbed-TLS/mbedtls](https://github.com/Mbed-TLS/mbedtls/releases/tag/mbedtls-3.6.7), `mbedtls-3.6.7.tar.bz2` SHA-256 `a7e8bcbec0e6f761b4af24f25677626b35f762f68eef79c08677a363212d11f6` (the pin of `../PS5_RetroArch/tools/build-curl.sh`), unpacked by `tools/setup-mbedtls.sh` | Apache-2.0, the Apache side of its Apache-2.0-or-GPL-2.0-or-later choice (`LICENSE`, shipped beside the title) |
 | Monocypher 4.0.2, Ed25519 signature checks only (`external/monocypher`: `monocypher.c`, `monocypher.h`, `monocypher-ed25519.c`, `monocypher-ed25519.h`), built into the title for its updates (`src/pw_release.c`) | [monocypher.org](https://monocypher.org/download/monocypher-4.0.2.tar.gz) and the [GitHub release](https://github.com/LoupVaillant/Monocypher/releases/tag/4.0.2), the same `monocypher-4.0.2.tar.gz`, SHA-256 `38d07179738c0c90677dba3ceb7a7b8496bcfea758ba1a53e803fed30ae0879c`; files unchanged (`external/monocypher/README.md`) | BSD-2-Clause (`external/monocypher/LICENCE.md`), the BSD side of its BSD-2-Clause-or-CC0-1.0 choice |
@@ -255,11 +273,29 @@ license are under `themes/windows11/fonts/upstream/`, pinned from
 `tools/build-proton-ui-font.py` contains the complete modification. Neither Segoe
 UI nor Segoe UI Variable is bundled or used to build this derivative.
 
-The desktop wallpaper, Bubble Earth (a glossy Earth on a meadow among soap bubbles, a glass skyline behind), is original
+### The desktop's wallpaper: Bubble City by Skeuoss
+
+The desktop wallpaper since 2026-10-31 is Bubble City (soap bubbles and a globe holding a city and trees on a bright
+blue sky), artwork by **Skeuoss**, a Frutiger Aero artist and archive. It is used and redistributed with the artist's
+permission: on 2026-10-31 the project's author asked Skeuoss, in a Discord message, to feature their artwork in
+MihawkOS with credit and any terms they set, and Skeuoss answered "sure, use everything you want". No other terms were
+given. The permission is the project's, not a licence: the picture is not GPL, LGPL or any other open licence, and
+anyone reusing it outside MihawkOS needs the artist's own permission. A record of the message is kept privately by the
+author, not in the repository.
+
+- File: `themes/windows11/wallpapers/skeuoss-bubble-city.jpg`, 1920×1080 JPEG, 371,509 bytes, the copy the owner
+  received, with its metadata removed losslessly (`jpegtran -copy none`; the pixels are unchanged).
+- Use: `tools/build-wine-theme.py` stamps it with the corner note below and stages it as `proton.bmp`, the desktop
+  of every build (the owner's choice, 2026-10-31).
+- Also the title's PS5 home-screen background (the owner's choice, 2026-10-31): `ps5/sce_sys/pic0.dds` (the selected
+  app's background) and `ps5/sce_sys/pic1.dds` (the launch transition), the same picture scaled to 3840×2160 and
+  encoded as BC7 by PS5_Vulkan's `tools/prepare-assets.sh` (f410e67), with no corner note. The two files are identical.
+
+The earlier desktop wallpaper, Bubble Earth (a glossy Earth on a meadow among soap bubbles, a glass skyline behind), is original
 artwork drawn only by `tools/make-aero-wallpapers.py` (LGPL-2.1-or-later, seeded: the same pixels on every run; it also
 draws Glass City and Aqua World), with no photograph or third-party image as input; its soap bubbles are those of the
 earlier wallpaper, Aero Meadow (a sky with a sun glow, soap bubbles and green hills, `tools/make-mihawk-wallpaper.py`,
-the same licence). `tools/build-wine-theme.py` stages Bubble Earth as `proton.bmp`. Its top-right note
+the same licence). Bubble Earth was the desktop from 2026-10-25 to 2026-10-31. The desktop's top-right note
 (MihawkOS v<VERSION> and the community link) is set in Selawik Semibold and Regular from
 `themes/windows11/fonts/upstream/` (OFL-1.1, listed with the fonts); the OFL does not extend to images made with the
 font. It replaced Windows
@@ -347,8 +383,10 @@ which also takes `radv_ps5_platform.h` from PS5_Mesa
 RADV link recipe remains GPL-3.0-or-later. Build outputs are ignored, and no
 proprietary driver is included.
 
-`platform/graphics/patches/0001` to `0018` are local LGPL-2.1-or-later overlays on
-that pin, applied in order by the same script; the first three are described next.
+`platform/graphics/patches/0001` to `0018` were local LGPL-2.1-or-later overlays on
+that pin, applied in order by the same script; the first three are described next. Since 2026-11-01 every patch that
+folder carried (0001 to 0045 and 0050) is a commit of the foundation's own repository, mihawk-99/PS5_Vulkan (one commit
+each, the same licence; the pin is now 2e87500), and the folder is empty. The notes below keep their patch numbers.
 
 `platform/graphics/patches/0001-retain-the-foreground-process-frame.patch`
 is a local LGPL-2.1-or-later overlay on the graphics foundation pin.
@@ -399,6 +437,28 @@ SHA-256 to `c222b6d681096f9444d2c4863d2c1174019e27cacca0a4a5c114d36dd7d7bf78`.
 Its complete `LICENSE.md` is staged under `share/licenses/cares/`.
 The backend's native/WoW64 parameter adapters derive from the pinned Wine
 `dlls/dnsapi/libresolv.c` (Hans Leidekker, CodeWeavers; LGPL-2.1-or-later).
+## PC5: Wine fixes written after reading another prospero-win launcher
+
+[PC5](https://github.com/bornaradusin/PC5) (bornaradusin, LGPL-2.1-or-later, reviewed at `81323dc3`, 2026-10-31) is a
+launcher built on prospero-win. Nothing of it is copied or vendored: its patches were read as a list of problems the
+console exposes, and each fix below was written here from the problem and carries a host test (`tests/test_pc5_*`).
+Rows say which PC5 patch described the problem, or which upstream project's commit the fix follows and its licence.
+
+| Patch here | Problem | Read in |
+| --- | --- | --- |
+| 2410 | an XAPO effect's reference count lost updates between threads, so a voice used a freed effect | PC5 prospero-win 0002 |
+| 2411 | calls on a destroyed XAudio2 voice read freed FAudio memory, and its object went to the next voice | PC5 prospero-win 0007 |
+| 2412 | the process memory counts held `virtual_mutex` for a long walk, thousands of times a second | PC5 prospero-win 0075 |
+| 2413 | a window's pixel format set twice (Godot 4 does) failed under Mesa's WGL, which refuses a second call | PC5 prospero-win 0066 (Wine patch 0956 it carries from Leo Lobato's prospero-win) |
+| 2414 | a thread holding the loader lock that made its first window waited in a `pthread_once` for a thread that waited for the lock (Source engine games hung at start) | PC5 prospero-win 0066 (Wine patch 0981 it carries from Leo Lobato's prospero-win) |
+| (title) | OpenSSL 1.0.2 to 1.0.2k, which games bundle, crashes on a CPU with the SHA instructions: `OPENSSL_ia32cap=:~0x20000000`, the setting Proton gives every game, is in the title's environment | PC5 prospero-win 0025 |
+| 2415 | the nested-task flag a program set with `popf` made the next return fault, so old games' CPU checks crashed (Wine bug 33275) | PC5 prospero-win 0062 |
+| 2416 | a write one element past the end of a large heap block faulted when the block ended where its region did (Windows' heap leaves slack) | PC5 prospero-win 0077 (its Wine patch 0991) |
+| 2417 | a folder a game makes in a user's folders failed when its parent was never made, because the game was copied, not installed (an uncaught C++ exception) | PC5 prospero-win 0061 |
+| 2418 | a game's pop-up (a dialog box) could not be answered from the controller, which is the game's pad and not a keyboard | PC5 prospero-win 0013 (its Wine patch 0911) |
+| (probe) | a texture shared between a Direct3D 9Ex and a Direct3D 11 device of one process, where there is no Win32 external memory (Koei Tecmo's movie players); measured by a probe before any DXVK change | PC5 patches/dxvk 0001-0003 (read, not ported) |
+| DXVK 0007 | a texture shared by a Direct3D 9Ex device could not be opened by the same game's Direct3D 11 device where the driver has no Win32 external memory, so Koei Tecmo-style movie players showed nothing; now shared inside the process (zlib, as DXVK) | PC5 patches/dxvk 0001 to 0003 (zlib, DXVK's licence); the design here is independent |
+
 ## Media: winedmo and FFmpeg
 
 Media Foundation, DirectShow and the WM reader decode through winedmo, as in GE-Proton: patches 2001-2062 replace winegstreamer with winedmo's FFmpeg backend; patches 2063 and 2064 (this project's) make its source reader report a decoder's new frame size and keep `MFShutdown` from deadlocking with a work queue callback. FFmpeg is configured as GE-Proton configures it (every demuxer, decoder, encoder and bitstream filter, VVC off, no parsers), without GE's HTTPS, lzma and bzip2, which the console has no libraries for; `tools/build-ffmpeg-ps5.py` stops if FFmpeg's `config.h` reports anything but LGPL-2.1-or-later. `winedmo.prx` links unmodified FFmpeg 8.1.3 statically (`tools/build-ffmpeg-ps5.py`, pinned above); its `LICENSE.md` and `COPYING.LGPLv2.1` are staged under `share/licenses/ffmpeg/`, and the pins, patches and build scripts here rebuild that module from source, as LGPL-2.1 section 6 asks of a static link.
@@ -459,6 +519,11 @@ white squircle, an amber frame and a navy M), not derived from any Microsoft, So
 LGPL-2.1-or-later as the file states. The taskbar draws it natively (`src/pw_taskbar_logo.h`, Wine patch 1162) and the
 prototype shows the same file; no Start sprite is captured. The Windows logo, which the Start button showed from
 2026-10-16, is gone from the sprites, the native drawing and the prototype.
+
+`ps5/tools/icon0.svg`, the title's icon (`ps5/sce_sys/icon0.png` is its rendering), is a Frutiger Aero user tile:
+original artwork drawn for this project on 2026-10-31 (a white glass frame, a sky-over-meadow picture with bubbles and a
+glossy blue user), from gradients and shapes alone, not derived from any Microsoft, Sony or other asset, GPL-3.0-or-later
+as the file states.
 
 `themes/windows11/start/*.json` and `themes/windows11/flyouts/*.json` are measured the same way from the prototype's
 Start, Search, Quick Settings and notification centre: the project's own artwork and the prototype's original app and
@@ -543,7 +608,8 @@ Skia's licence:
 ## Licence texts shipped with the binaries
 
 Every binary carries its licence text beside it. The runtime's `share/licenses/` holds what `tools/stage-wine.py`
-stages itself (GE-Proton's `LICENSE` and `LICENSE.OFL`, DXVK and its five subprojects, Proton UI's OFL, the theme's
+stages itself (GE-Proton's `LICENSE` and `LICENSE.OFL`, DXVK and its five subprojects, VKD3D-Proton and its seven
+compiled-in subprojects and third-party parts, Proton UI's OFL, the theme's
 LGPL, Cascadia Mono's OFL, the Fluent icons' `LICENSE` and `NOTICE`, c-ares, FFmpeg) and what
 `tools/stage-licences.py` adds: this project's `LICENSE`, `NOTICE.md` and `LICENSING.md`; the PS5 OpenGL SDK's `LICENSE`,
 `THIRD_PARTY_NOTICES.md` and every component licence in its `LICENSES/` (`ps5-opengl/`), for the SDK linked into
@@ -594,6 +660,24 @@ Never shipped: the distribution's `d3dcompiler_47.dll` (Microsoft's), `vulkan-1.
 `vk_swiftshader.dll` and its ICD file, `dxcompiler.dll`, `dxil.dll`, the other locales and `chrome_200_percent.pak`.
 `tools/fetch-cef.py` unpacks the first four into `.deps` only, for host experiments (docs/MIHAWK_BROWSER.md decision
 5); no build or stage step copies them.
+
+## prospero-win and ProsperoMC: fixes written after reading them
+
+[prospero-win](https://github.com/mpereiraesaa/prospero-win) (mpereiraesaa, LGPL-2.1-or-later, reviewed at `18115ce1`,
+2026-11-01) and [ProsperoMC](https://github.com/Ayoubec/ProsperoMC) (Ayoubec, GPL-3.0, reviewed at `5cdcb996`) are other
+PS5 Wine launchers. Nothing here is copied from either: each fix is written for this tree, from the problem their
+commit described. Rows say which commit described the problem, or which upstream project's data the fix follows.
+
+| change | what it fixes | found by reading |
+| --- | --- | --- |
+| `pw-01` the game's controller stays connected, and reads idle, while the system has the DualSense | a game saw its XInput controller unplugged whenever the PS button's menu or the capture menu held the pad, and paused or asked to reconnect | prospero-win 83708cd |
+| `pw-02` the root certificates are curl's 2026-10-20 extract of Mozilla's store | the pinned bundle was 13 months old, so a site on a newer root failed certificate checks; the SHA-256 is curl.se's own published `cacert-2026-10-20.pem.sha256` | prospero-win 404cac6 (the bump); the checksum fetched from curl.se |
+| `pw-03` (Wine patch 2421) the PS5 high area is as large as the kernel grants | a 64-bit game that reserves tens of GiB at once (28 GiB, 48 GiB, 256 GiB) was refused by the fixed 16 GiB area and the console's mmap | prospero-win 0982 (ad7d313) |
+| `pw-04` (`platform/graphics/mesa/0001`, for PS5_Mesa) Mesa's `u_vbuf_draw_vbo` releases the retired uploader buffers of each draw of a multi-draw | each draw wrote over the previous draw's retired buffers, which were never released: a client-array game that draws many pieces in one call ran the GPU out of buffers | ProsperoMC 03e6e27 (GPL-3.0) |
+| `pw-05` (Wine patch 2422) no debugger starts in a PS5 title or helper | a crash called `start_debugger`, which allocates from the process heap another thread may hold (a frozen title), for a winedbg the runtime does not have | prospero-win 0971 (b9ee658) |
+| `pw-06` (Wine patch 2423, and `wine/ps5/pw_wine_sink.[ch]`) the game's windows are told when the controller connects or disconnects | a game whose controller went off kept it lost after it came back, because Windows tells windows through the plug and play service (`WM_DEVICECHANGE`) that a title cannot run | prospero-win 0984 (7aa5d3c) |
+| `pw-07` (Wine patch 2424, `src/pw_osk.[ch]`, `native/pw_osk_ps5.[ch]`) the on-screen keyboard's core: the gesture (touchpad with two fingers, L3 + R3, Options + touchpad), the pad hand-over, the Unicode typing into the game, the system IME dialog, and the setting (Off by default) | a game that asks for text has no keyboard unless one is plugged in | prospero-win d5a1601 (the idea of a system dialog whose line is typed into the game); the dialog's parameter block and status numbers follow this project's own working IME code (ps5-radio-browser) |
+| `pw-08` (the title's wiring, the scripted console check `WINE_PS5_OSK_TEST` with `tests/osk-typed-probe.c`, Settings > Controls > On-screen keyboard in ten languages, the WebUI's `keyboard` setting) the on-screen keyboard reaches the player | pw-07 is the core; this opens the dialog from the chosen gesture in the title, types the line into the game, and lets the player choose the gesture (Off by default) | prospero-win d5a1601 (the feature); the dialog follows this project's own working IME code (ps5-radio-browser) |
 
 ## Trademarks
 

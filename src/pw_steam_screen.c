@@ -501,6 +501,23 @@ void pw_steam_screen_draw(uint32_t *canvas, const uint32_t *backdrop, const PwSt
         paragraph(&ctx, 31, say(&ctx, PW_TEXT_STEAM_REOPEN_BODY), x, 414, width, 4, MUTED);
         break;
     }
+    case PW_STEAM_SCREEN_DIALOG: {
+        /* The game's words as it wrote them: its caption, then each of its lines, as many as fit above CROSS */
+        text_line(&ctx, 1, 46, state->dialog_title ? state->dialog_title : "", x, 300, width, INK);
+        float y = 372;
+        for (const char *at = state->dialog_text ? state->dialog_text : ""; *at && y < notes - 60;) {
+            const char *end = strchr(at, '\n');
+            const size_t length = end ? (size_t)(end - at) : strlen(at);
+            char line[512];
+            snprintf(line, sizeof(line), "%.*s", (int)(length < sizeof(line) - 1 ? length : sizeof(line) - 1), at);
+            const int left = (int)((notes - 60 - y) / (27 * 1.45f));
+            if (line[0]) y = paragraph(&ctx, 27, line, x, y, width, left > 0 ? left : 1, MUTED);
+            else y += 27 * 0.7f;
+            at += length + (end != NULL);
+        }
+        cross_hint(&ctx, PW_TEXT_CONTINUE, PW_STEAM_TEXT_X1 + 22, notes);
+        break;
+    }
     default:
         break;
     }

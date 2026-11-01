@@ -1,0 +1,33 @@
+From 0000000000000000000000000000000000000000 Mon Sep 17 00:00:00 2001
+From: Mihawk <163614687+mihawk-99@users.noreply.github.com>
+Date: Sat, 31 Oct 2026 12:00:00 -0400
+Subject: [PATCH] gdi32: Setting a window's pixel format again to the same one succeeds.
+
+On Windows a window keeps the pixel format it was given first: setting the same format again succeeds and another one
+fails. Wine's builtin opengl32 does this itself, but gdi32 hands SetPixelFormat to whichever opengl32 is loaded, and
+Mesa's WGL, which is loaded natively here for the Zink path, refuses every second call on a window (DrvSetPixelFormat
+returns false once the window has a framebuffer). A game that sets its window's format twice, as Godot 4 does in
+window_create and again in _create_context, stopped at "Failed to create an OpenGL window". gdi32 now answers a repeated
+call for the format the window already has before it reaches the driver; a different format still goes to the driver.
+
+The problem was found by reading bornaradusin/PC5 (LGPL-2.1-or-later; patch 0066 (its Wine patch 0956) of its patches/prospero-win); this
+change is written independently here (NOTICE.md, "PC5").
+---
+ dlls/gdi32/opengl.c | 4 ++++
+ 1 file changed, 4 insertions(+)
+
+diff --git a/dlls/gdi32/opengl.c b/dlls/gdi32/opengl.c
+index 0fbd851..1a2e4b6 100644
+--- a/dlls/gdi32/opengl.c
++++ b/dlls/gdi32/opengl.c
+@@ -92,6 +92,10 @@ BOOL WINAPI SetPixelFormat( HDC hdc, INT fmt, const PIXELFORMATDESCRIPTOR *pfd )
+         if (!(wglSetPixelFormat = (void *)GetProcAddress( opengl32, "wglSetPixelFormat" )))
+             return FALSE;
+     }
++    /* On Windows a window keeps the format it was given first: setting the same one again succeeds, another fails.
++     * Mesa's WGL, which is the opengl32 here, refuses every second call. A game that sets its window's format twice
++     * (Godot 4 does, in window_create and again in _create_context) then found no OpenGL window. */
++    if (fmt > 0 && GetPixelFormat( hdc ) == fmt) return TRUE;
+     return wglSetPixelFormat( hdc, fmt, pfd );
+ }
+ 

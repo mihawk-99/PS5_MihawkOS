@@ -1,0 +1,55 @@
+{
+ "run": "console-setup-2026-11-01-02",
+ "result": "stopped",
+ "stopped_at": "S4 (--until)",
+ "steps": {
+  "S0": {
+   "step": "host",
+   "state": "done",
+   "seconds": 1.5,
+   "detail": "dist and the staged runtime are there"
+  },
+  "S1": {
+   "step": "reach",
+   "state": "done",
+   "seconds": 0.0,
+   "detail": "ftpsrv and websrv answer; klog stream open"
+  },
+  "S2": {
+   "step": "guard",
+   "state": "done",
+   "seconds": 0.0,
+   "detail": "no drop, no storage block"
+  },
+  "S3": {
+   "step": "control",
+   "state": "did",
+   "seconds": 4.5,
+   "detail": "ps5vkctl pid 101, no title running, firmware 10010000"
+  },
+  "S4": {
+   "step": "klog",
+   "state": "done",
+   "seconds": 0.0,
+   "detail": "40 lines, no storage damage, no OnionHEN"
+  }
+ },
+ "klog": {
+  "connections": 1,
+  "lines": 40,
+  "storage_damage": 0,
+  "onionhen": 0
+ },
+ "build": {
+  "matches_tree": true,
+  "head": "7d7017dab9c8",
+  "time": "2026-11-01T09:14:03-0500"
+ },
+ "title_files": null,
+ "runtime": null,
+ "prefix_session": null,
+ "firmware": null,
+ "read_back": null,
+ "last_console_write": null,
+ "sync": null
+}

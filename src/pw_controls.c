@@ -25,7 +25,7 @@ const char *pw_controls_button_id(unsigned index)
 const char *pw_controls_button_label(unsigned index)
 { return index < PW_CONTROLS_BUTTONS ? buttons[index].label : NULL; }
 void pw_controls_defaults(pw_controls *controls)
-{ *controls = (pw_controls){{1, 0, 0}}; }
+{ *controls = (pw_controls){{1, 0, 0}, PW_OSK_OFF}; }
 
 int pw_controls_assign(pw_controls *controls, unsigned mouse, unsigned button)
 {
@@ -36,9 +36,16 @@ int pw_controls_assign(pw_controls *controls, unsigned mouse, unsigned button)
     return 0;
 }
 
+int pw_controls_set_keyboard(pw_controls *controls, unsigned trigger)
+{
+    if (trigger >= PW_OSK_TRIGGERS) return EINVAL;
+    controls->keyboard = trigger;
+    return 0;
+}
+
 int pw_controls_load(pw_controls *controls, const char *path)
 {
-    pw_controls parsed = {{0}};
+    pw_controls parsed = {{0}, PW_OSK_OFF};
     char action[32], id[32];
     pw_controls_defaults(controls);
     FILE *file = fopen(path, "r");
@@ -54,6 +61,13 @@ int pw_controls_load(pw_controls *controls, const char *path)
             if (index && parsed.button[j] == index) error = EINVAL;
         parsed.button[i] = index;
     }
+    /* an optional fourth line, "keyboard <trigger>": files from before the on-screen keyboard end after three */
+    if (!error) {
+        const int words = fscanf(file, "%31s %31s", action, id);
+        const int trigger = words == 2 && !strcmp(action, "keyboard") ? pw_osk_trigger_parse(id) : -1;
+        if (words == 1 || (words == 2 && trigger < 0)) error = EINVAL;
+        else if (words == 2) parsed.keyboard = (unsigned)trigger;
+    }
     if (!error && fscanf(file, "%31s", id) == 1) error = EINVAL;
     if (ferror(file)) error = EIO;
     fclose(file);
@@ -64,6 +78,7 @@ int pw_controls_load(pw_controls *controls, const char *path)
 int pw_controls_save(const pw_controls *controls, const char *path)
 {
     char temporary[1024];
+    if (controls->keyboard >= PW_OSK_TRIGGERS) return EINVAL;
     for (unsigned i = 0; i < 3; ++i) {
         if (controls->button[i] >= PW_CONTROLS_BUTTONS) return EINVAL;
         for (unsigned j = 0; j < i; ++j)
@@ -75,6 +90,8 @@ int pw_controls_save(const pw_controls *controls, const char *path)
     int error = 0;
     for (unsigned i = 0; i < 3; ++i)
         if (fprintf(file, "%s %s\n", actions[i], buttons[controls->button[i]].id) < 0) error = EIO;
+    /* only a chosen gesture is written: a file with the keyboard Off stays what an earlier version wrote and reads */
+    if (controls->keyboard && fprintf(file, "keyboard %s\n", pw_osk_trigger_id(controls->keyboard)) < 0) error = EIO;
     if (fflush(file) || fsync(fileno(file))) error = errno;
     if (fclose(file)) error = errno;
     if (!error && rename(temporary, path)) error = errno;
@@ -106,6 +123,11 @@ unsigned pw_controls_update(const pw_controls *controls, pw_controls_mouse *stat
         *previous[i-1] = clicked;
     }
     return count;
+}
+
+int pw_controls_game_connected(const struct pad *pad)
+{
+    return pad->connected || pad->intercepted;
 }
 
 void pw_controls_gamepad(const pw_controls *controls, const struct pad *input, struct pad *output)

@@ -1,0 +1,54 @@
+{
+  "battery": "rc5c2-pro-2026-11-01",
+  "expected_cases": [
+    "many-files64"
+  ],
+  "revision": "7d7017dab9c8f4af334fc1f3f6aaef46f2ff1603",
+  "dirty": true,
+  "cases": [
+    {
+      "case": "many-files64",
+      "run": "rc5c2-pro-2026-11-01-many-files64",
+      "runner_status": 0,
+      "seconds": 177.9,
+      "result": "finished",
+      "probe_verdict": "PASS",
+      "returned_to_launcher": true,
+      "exit_stall": false,
+      "passed": true,
+      "run_seconds": 177.0,
+      "launch_readiness": {
+        "ready": true,
+        "seconds": 0.151,
+        "settle_seconds": 0.0,
+        "census_seconds": 0.142,
+        "previous_cleanup_verified": true
+      },
+      "stages": {
+        "launched": 1.23,
+        "title_started": 1.8,
+        "elevated": 1.8,
+        "wine_loaded": 2.18,
+        "wineboot_started": 4.74,
+        "wineboot_ended": 5.86,
+        "program_started": 5.92,
+        "marker": 171.18,
+        "program_ended": 171.27,
+        "wine_ended": 173.54,
+        "launcher_started": 176.16,
+        "launcher_ended": 176.5,
+        "closed": 177.04
+      },
+      "runner_overhead_seconds": 0.9,
+      "layout": "launcher",
+      "fault_records": 0,
+      "helpers": 4,
+      "protocol_errors": 0,
+      "pipe_memory_exhausted": 0,
+      "search_errors": 0
+    }
+  ],
+  "complete": true,
+  "seconds": 177.9,
+  "passed": true
+}

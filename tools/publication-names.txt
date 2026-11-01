@@ -19,13 +19,13 @@ src/pw_setup.h
 examples/ps5proton/setup_tour.hpp
 tools/run-steam-guide-trial.py
 tools/test-setup-ui.py
+tools/run-setup-unattended.py
 docs/GUIDED_SETUP.md
 ps5/assets.json
 ps5/ASSETS.md
 ps5/tools/generate_assets.py
 
 [steam] the controller choice the owner asked for on 2026-10-26: Steam saw the DualSense twice (XInput and HID)
-platform/graphics/patches/0032-a-window-s-frame-does-not-replace-the-application-s-cover.patch
 src/pw_controller.h
 wine/patches/2400-xinput-ps5-controller-0-is-the-controller-the-player-chose.patch
 
@@ -405,7 +405,6 @@ evidence/tune-re3-default-2026-10-27-01.json
 
 [steam] Alpha 5's fixes for the store client (2026-10-27..29): its window larger than the screen, its services in a new prefix, its browser held while a library game runs, and the guide's gate cases
 docs/CONSOLE_TESTING.md
-platform/graphics/patches/0036-the-broker-shows-a-window-larger-than-the-screen-clipped.patch
 src/pw_window_scene.c
 tests/gpu-window-probe.c
 tests/test_pw_window_gpu_scene.c
@@ -420,8 +419,68 @@ src/pw_memory_guard.h
 src/pw_memory_helper.c
 src/pw_memory_helper.h
 tests/test_pw_memory_guard.c
-platform/graphics/patches/0039-the-broker-shows-a-display-swapchain-larger-than-the-screen-clipped.patch
 tests/test_pw_gpu_broker.c
 [games] Alpha 6's measurements (2026-10-29..30): reserved resources and the video-memory budget given to a Direct3D 12 game, from the owner's run of a 3D game from the store client's library
-platform/graphics/patches/0041-a-gpu-client-gets-sparse-ranges-from-the-owner.patch
-platform/graphics/patches/0042-a-game-is-told-the-video-memory-the-console-can-give.patch
+
+[steam] Alpha 7's default, "Run inside MihawkOS" (2026-10-31): a game from the store client's library folder runs in the title, the client's own tools stay in helpers (docs/TITLE_CLIENT.md, "Choosing the game")
+wine/ps5/pw_wine_title_game.h
+tests/test_pw_wine_title_game.c
+wine/patches/2404-kernelbase-ps5-start-a-chromium-based-game-as-one-process.patch
+
+[records] Alpha 7's ladder on the standard PS5 (2026-10-31), kept as measured: the store client started with a library game and alone
+evidence/rung7-base-2026-10-31-again.json
+evidence/rung7-base-2026-10-31-game.json
+[records] Alpha 7's Chromium-game and in-title runs (2026-10-31), kept as measured: a 2D NW.js game in the title and in helpers on the standard PS5, and the owner's grand-strategy game in the title on the Pro (launched through another library entry's prefix)
+evidence/moonstone-base-2026-10-31-01.json
+evidence/moonstone-base-2026-10-31-fallback.json
+evidence/moonstone-base-2026-10-31-helper-fallback.json
+evidence/moonstone-base-2026-10-31-helper-single.json
+evidence/moonstone-base-2026-10-31-nonone.json
+evidence/ck3-pro-2026-10-31-01.json
+evidence/ck3-pro-2026-10-31-02.json
+
+[steam] SteamGameId and SteamAppId for every launch (Alpha 7, the owner's yes on 2026-10-31; docs/PROTON_GAME_KNOWLEDGE.md): the code that reads a game's Steam app id, its tests and its notes
+docs/PROTON_GAME_KNOWLEDGE.md
+src/pw_steam_appid.c
+src/pw_steam_appid.h
+tests/test_pw_steam_appid.c
+tests/test_pw_wine_inherit.c
+ps5/src/proton_launch.cpp
+wine/ps5/pw_wine_inherit.h
+
+[records] Alpha 7's patch 2406 on the Pro (2026-10-31), kept as measured: the owner's GameMaker game in the title, launched through another library entry's prefix
+evidence/deltarune-pro-2026-10-31-01.json
+evidence/deltarune-rc1-pro-2026-10-31.json
+evidence/optout-rc1-pro-2026-10-31.json
+evidence/deltarune-rc1f-pro-2026-10-31.json
+
+[steam] the tile-grid main menu (Alpha 7, 2026-10-31; home-grid): Steam's tile and its words, the store client the launcher installs
+examples/ps5proton/home_grid.hpp
+src/pw_home_grid.c
+src/pw_home_grid.h
+tests/test_pw_home_grid.c
+tools/test-launcher-ui.py
+ps5/assets/launcher/steam-tile.svg
+
+[steam] the warning before the store client starts or installs on a console already short of memory (Alpha 7, the owner's ask, 2026-10-31): its census rule and tests name the client
+src/pw_steam_memory.h
+tests/test_pw_steam_memory.c
+
+[steam] a menu run's record on the Pro (2026-10-31), kept as measured: the launcher's note that the store client's earlier session did not end normally
+evidence/rc4-menu-pro-2026-10-31.json
+
+[records] the owner's survival-horror demo started through the store client on the Pro (2026-11-01: its stall after loading, runs 0 to 3) and the GameMaker game's audio after a chapter switch against a direct start (rc5 before, rc6 after the shared-mixer fix), kept as measured
+evidence/deltarune-direct-rc5b-pro-2026-11-01.json
+evidence/deltarune-direct-rc5-pro-2026-11-01.json
+evidence/deltarune-direct-rc6-pro-2026-11-01.json
+evidence/deltarune-switch-rc5-pro-2026-11-01.json
+evidence/deltarune-switch-rc6-pro-2026-11-01.json
+evidence/re9-run0-pro-2026-11-01.json
+evidence/re9-run1-ntsync0-pro-2026-11-01.json
+evidence/re9-run2-helper-sample-pro-2026-11-01.json
+evidence/re9-run3-pro-2026-11-01.json
+evidence/re9-rc7-run5-pro-2026-11-01.json
+evidence/re9-rc7-run6-seh-pro-2026-11-01.json
+evidence/re9-rc7-run7-name-pro-2026-11-01.json
+evidence/re9-rc7-run8-vkd3dwarn-pro-2026-11-01.json
+evidence/re9-rc7-run9-nosl-pro-2026-11-01.json

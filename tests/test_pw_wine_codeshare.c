@@ -71,6 +71,34 @@ static void registry(void)
     assert(closed == PW_WINE_CODESHARE_ENTRIES);
     pw_wine_codeshare_stats(&stats);
     assert(!stats.entries && !stats.bytes);
+
+    /* A full descriptor table takes entries back whoever holds them (files first): each released descriptor is closed,
+     * a later find misses, an offer is kept again, and a release past the last entry stops. */
+    pw_wine_codeshare_reset();
+    int fds[PW_WINE_CODESHARE_ENTRIES];
+    for (unsigned i = 0; i < PW_WINE_CODESHARE_ENTRIES; i++) {
+        fds[i] = dup(base);
+        assert(!pw_wine_codeshare_offer(i + 1, 16384, i % 32, fds[i]));
+    }
+    assert(pw_wine_codeshare_release(64) == 64);
+    unsigned open_now = 0;
+    for (unsigned i = 0; i < PW_WINE_CODESHARE_ENTRIES; i++) open_now += is_open(fds[i]);
+    assert(open_now == PW_WINE_CODESHARE_ENTRIES - 64);
+    pw_wine_codeshare_stats(&stats);
+    assert(stats.entries == PW_WINE_CODESHARE_ENTRIES - 64 && stats.released == 64);
+    other = dup(base);
+    assert(!pw_wine_codeshare_offer(PW_WINE_CODESHARE_ENTRIES + 1, 16384, 0, other));   /* room again */
+    unsigned misses = 0;
+    for (unsigned i = 0; i < PW_WINE_CODESHARE_ENTRIES; i++) {
+        int got_fd;
+        if (pw_wine_codeshare_find(i + 1, 16384, 1, &got_fd)) misses += errno == ENOENT;
+        else close(got_fd);
+    }
+    assert(misses == 64);
+    assert(pw_wine_codeshare_release(100000) == PW_WINE_CODESHARE_ENTRIES - 64 + 1);
+    assert(!pw_wine_codeshare_release(1));
+    pw_wine_codeshare_stats(&stats);
+    assert(!stats.entries && !stats.bytes && stats.released == PW_WINE_CODESHARE_ENTRIES + 1);
     close(base);
 }
 
@@ -283,8 +311,8 @@ static void duplicates(void)
 int main(void)
 {
     struct rlimit files;
-    /* The full registry holds 8,192 descriptors. */
-    assert(!getrlimit(RLIMIT_NOFILE, &files) && files.rlim_max >= 9000);
+    /* The full registry holds 2,048 descriptors. */
+    assert(!getrlimit(RLIMIT_NOFILE, &files) && files.rlim_max >= 3000);
     files.rlim_cur = files.rlim_max;
     assert(!setrlimit(RLIMIT_NOFILE, &files));
     hash();
@@ -294,6 +322,6 @@ int main(void)
     pages();
     duplicates();
     puts("codeshare: hash, registry (model with wrapping runs), shared ranges (bitmap, capacity), shared pages (model, "
-         "capacity), copies beyond the first: passed");
+         "capacity), copies beyond the first, release for a full table: passed");
     return 0;
 }

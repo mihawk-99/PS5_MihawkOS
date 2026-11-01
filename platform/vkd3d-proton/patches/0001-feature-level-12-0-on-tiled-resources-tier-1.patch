@@ -1,0 +1,24 @@
+The console's RADV binds sparse memory (a game's through the GPU broker, graphics patch 0041) but has no PRT
+page bits: it reports neither shaderResourceResidency nor residencyNonResidentStrict, so tiled resources stop at
+tier 1 and the feature level at 11_1, and D3D12CreateDevice refused every game that asks for 12_0 with
+E_INVALIDARG (a tester's DX12 game, 2026-10-31). 12_0 now asks for tiled resources tier 1; the tier is still
+reported as 1, and a shader that queries residency is still refused at pipeline creation, as before.
+The problem was found by reading PC5's patches/vkd3d-proton/0001 (github.com/bornaradusin/PC5 at 81323dc3,
+LGPL-2.1), which makes the same change; ours is independently written.
+
+--- a/libs/vkd3d/device.c
++++ b/libs/vkd3d/device.c
+@@ -9595,8 +9595,12 @@
+             vk_info->device_limits.maxPerStageDescriptorStorageImages >= D3D12_UAV_SLOT_COUNT)
+         caps->max_feature_level = D3D_FEATURE_LEVEL_11_1;
+ 
++    /* PS5: the console's RADV binds sparse memory (a game's through the GPU broker, PS5_Proton graphics patch 0041)
++     * but has no PRT page bits, so it reports neither shaderResourceResidency nor residencyNonResidentStrict and
++     * tiled resources stop at tier 1. 12_0 asks for tier 1: every 12_0 game requires the level, few use tier 2's
++     * residency feedback, and TiledResourcesTier is still reported as 1, so a game that checks it sees the truth. */
+     if (caps->max_feature_level >= D3D_FEATURE_LEVEL_11_1 &&
+-            caps->options.TiledResourcesTier >= D3D12_TILED_RESOURCES_TIER_2 &&
++            caps->options.TiledResourcesTier >= D3D12_TILED_RESOURCES_TIER_1 &&
+             caps->options.ResourceBindingTier >= D3D12_RESOURCE_BINDING_TIER_2 &&
+             caps->options.TypedUAVLoadAdditionalFormats)
+         caps->max_feature_level = D3D_FEATURE_LEVEL_12_0;

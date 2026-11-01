@@ -34,7 +34,8 @@ releases, pacbrew) were not downloaded again; their pins are recorded, not re-ve
 - **Proprietary material.** None found in the tree: no Sony or SCE copyright or confidentiality marker (the only
   "CONFIDENTIAL" lines are FreeBSD header boilerplate), no `.sprx` module (`.gitignore` excludes them), no firmware
   file. The `libSce*.so` files are the upstream link stubs, not console modules.
-- **Pinned.** The fork at `9d0487845ad50e3a266872cbbaaedc6ffafe3404` (`ps5/tools/setup-sdk.sh`), which installs upstream's payload SDK v0.42, SHA-256
+- **Pinned.** The fork at `e105cf6f25801d9e9981812a89a3b74021d2d2a2` (`ps5/tools/setup-sdk.sh`), its main: fdv tracks 16384 files instead of 8192 (a
+  10,000-file probe stopped at 8294 on a PS5 Pro, 2026-10-31, and passed with it). It installs upstream's payload SDK v0.42, SHA-256
   `8cfbc7cd5811e719eb4f0c47eea668d3dc7b40bc8ab11c4a5031d40c23ec02da`, and lays its headers and platform layer over it.
   The Lapy daemon builds with the same upstream v0.42 archive, SHA-256
   `8cfbc7cd5811e719eb4f0c47eea668d3dc7b40bc8ab11c4a5031d40c23ec02da` (`tools/fetch-all.sh`,

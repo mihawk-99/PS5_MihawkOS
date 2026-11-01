@@ -4,7 +4,9 @@
  * it uses are the real ones, under the names --wrap leaves them, so nothing
  * here goes through a wrapper itself. */
 #include "pw_wine_fdv.h"
+#include "pw_wine_codeshare.h"
 #include <ps5platform/fdv.h>
+#include <errno.h>
 #include <fcntl.h>
 #include <stdio.h>
 #include <stdlib.h>
@@ -40,10 +42,20 @@ static void api_dup_note(int from, int to) { ps5_fdv_dup_note(from, to); }
 static void api_forget(int fd) { ps5_fdv_forget(fd); }
 static void api_keep(uint32_t pin) { ps5_fdv_keep(pin); }
 static void api_renamed(const char *from, const char *to) { ps5_fdv_renamed(from, to); }
-static unsigned api_make_room(void) { return ps5_fdv_make_room(); }
+/* A full descriptor table (EMFILE from dup, fcntl or open): parking makes room under the 249-file budget, but a parked
+ * file keeps its slot (a placeholder socket), so the table itself gains only when something closes. The shared code
+ * copies are what can: files come first (pw_wine_codeshare.h, a tester's store-client download, 2026-10-31). */
+enum { RELEASE_BATCH = 64 };
+static unsigned api_make_room(void) { return ps5_fdv_make_room() + pw_wine_codeshare_release(RELEASE_BATCH); }
+static int api_open(const char *path, int flags, mode_t mode)
+{
+    int fd = ps5_fdv_open(path, flags, mode);
+    if (fd < 0 && errno == EMFILE && pw_wine_codeshare_release(RELEASE_BATCH)) fd = ps5_fdv_open(path, flags, mode);
+    return fd;
+}
 
 static const struct pw_wine_fdv table = {
-    ps5_fdv_open, ps5_fdv_close, api_enter, api_leave, api_sending, api_sent, api_received,
+    api_open, ps5_fdv_close, api_enter, api_leave, api_sending, api_sent, api_received,
     api_dup_note, api_forget, api_keep, api_renamed, api_make_room,
 };
 
@@ -91,4 +103,8 @@ void pw_wine_fdv_stats(PwWineFdvStats *out)
     out->limit_hits = stats.limit_hits;
     out->failures = stats.failures;
     out->disabled = stats.disabled;
+    PwWineCodeshareStats code;
+    pw_wine_codeshare_stats(&code);
+    out->code_copies = (unsigned)code.entries;
+    out->code_released = (unsigned long)code.released;
 }

@@ -40,7 +40,7 @@ class ChoiceTests(unittest.TestCase):
     def test_probes_and_runners_take_their_cases(self):
         self.assertEqual(quick.cases_for('tests/umip-probe.c'), ['umip32', 'umip64'])
         self.assertEqual(quick.cases_for('tests/vm-protect-probe.c'), ['payload-vm', 'vm-truth32', 'vm-truth64'])
-        self.assertEqual(quick.cases_for('tests/window-probe.c'), ['telemetry-teardown', 'doom-backstop'])
+        self.assertEqual(quick.cases_for('tests/window-probe.c'), ['telemetry-teardown', 'doom-backstop', 'osk-open64'])
         self.assertEqual(quick.cases_for('tests/desktop-view-probe.c'), ['desktop-view'])
         self.assertEqual(quick.cases_for('tools/run-shell.py'), ['shell32', 'shell64'])
         self.assertEqual(quick.cases_for('tools/run-launcher.py'), ['controls-menu', 'setup-tour', 'steam-guide-pages'])

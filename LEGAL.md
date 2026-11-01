@@ -65,8 +65,10 @@ Some things Microsoft itself published under open-source licences are used, each
 [`NOTICE.md`](NOTICE.md): Fluent System Icons (MIT), the Selawik font that Proton UI is derived from (OFL-1.1),
 Cascadia Mono (OFL-1.1), colour and size values from WinUI (MIT, values only), and the open-source .NET libraries
 inside Wine Mono (MIT), which Wine installs into each prefix. The browser prototype also shows Fluent Emoji (MIT).
-The desktop's wallpaper, Bubble Earth, is original artwork drawn by `tools/make-aero-wallpapers.py` (with Glass City
-and Aqua World, and the soap bubble of the earlier Aero Meadow, `tools/make-mihawk-wallpaper.py`); no Windows
+The desktop's wallpaper, which is also the title's PS5 home-screen background (`ps5/sce_sys/pic0.dds`, `pic1.dds`),
+is Bubble City by Skeuoss (`themes/windows11/wallpapers/skeuoss-bubble-city.jpg`), used with the artist's permission
+(below). The project's own wallpapers, Bubble Earth, Glass City and Aqua World
+(`tools/make-aero-wallpapers.py`) and Aero Meadow (`tools/make-mihawk-wallpaper.py`), are original artwork. No Windows
 wallpaper is included (the browser prototype can link a user's own local copy of one, which is never part of the
 repository).
 
@@ -86,5 +88,11 @@ The name "Mihawk" is the author's handle. The project uses no One Piece names, c
   `share/licenses/` and the title's `licenses/`.
 - **Source ships with any binary.** A binary release comes with its corresponding source: this repository at the same
   revision, its patch series and the pins that rebuild every input.
+- **The desktop's wallpaper is not covered** by any of these licences. Bubble City is the work of the artist Skeuoss
+  and is used and redistributed with their permission, given to the project's author in a Discord message on
+  2026-10-31 ("sure, use everything you want", in answer to a request to feature their artwork with credit). The
+  permission covers MihawkOS; it does not license the picture to anyone else. Its record is in
+  [`NOTICE.md`](NOTICE.md). The picture may be stock art that Skeuoss's archive re-hosts rather than their own; the
+  owner weighed that and decided on 2026-10-31 to publish it in public releases: "It is fine publishing it".
 - **Windows programs and games are not covered** by any of these licences. Running a program on the layer is use;
   its own licence and terms apply.

@@ -2,7 +2,7 @@
 /* steam-runtime.exe: the game entry the title starts. It starts SteamCMD (Valve's headless client) in the same
  * mihawk prefix, sends the login line for the account named on its command line (SteamCMD's own machine token,
  * ssfn, is the credential; the password is not here), waits for the console prompt, then starts the game with
- * SteamAppId in its environment so the game's SteamInternal_SteamAPI_Init sees a Steam client. It waits for the
+ * SteamAppId and SteamGameId in its environment so the game's SteamInternal_SteamAPI_Init sees a Steam client. It waits for the
  * game, then asks SteamCMD to quit. Built from the host with the MinGW cross compiler; not part of the title.
  *
  *   steam-runtime.exe <game.exe> --appid <id> --account <account> [--directory <dir>] [--log <path>] [-- game args]
@@ -123,13 +123,15 @@ int main(int argc, char **argv)
         size_t used = 0;
         while (*at) {
             size_t length = strlen(at);
-            if (strncmp(at, "SteamAppId=", 11) != 0 && used + length + 2 < sizeof env_block) {
+            if (strncmp(at, "SteamAppId=", 11) != 0 && strncmp(at, "SteamGameId=", 12) != 0 && used + length + 2 < sizeof env_block) {
                 memcpy(env_block + used, at, length + 1); used += length + 1;
             }
             at += length + 1;
         }
         FreeEnvironmentStringsA(env);
         used += (size_t)snprintf(env_block + used, sizeof env_block - used, "SteamAppId=%s", app_id) + 1;
+        /* SteamGameId too: Proton's Wine looks a game up by it (docs/PROTON_GAME_KNOWLEDGE.md). */
+        used += (size_t)snprintf(env_block + used, sizeof env_block - used, "SteamGameId=%s", app_id) + 1;
         env_block[used++] = 0;
         snprintf(game_line, sizeof game_line, "\"%s\"%s", game, extra);
         {

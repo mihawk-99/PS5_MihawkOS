@@ -5,7 +5,7 @@
 - PS5 model (standard, Digital, Slim or Pro) and firmware (Settings, System, System Software).
 - Your homebrew enabler and its version (kstuff or Kstuff Lite), and the versions of elfldr, websrv and
   ShadowMountPlus.
-- The MihawkOS release (for example v3.0.0-alpha-3), and how you installed it: USB stick, FTP, or built yourself.
+- The MihawkOS release (for example v3.0.0-alpha-3), and how you installed it: the release's folder, or built yourself.
 - Any other payloads you load.
 
 ## 2. What happened

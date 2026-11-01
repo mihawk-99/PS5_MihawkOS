@@ -27,6 +27,7 @@
 #include <string>
 #include <vector>
 #include "../../src/pw_payload_check.h"
+#include "../../src/pw_steam_memory.h"
 
 /* One game the launcher can start. */
 struct ProtonGame {
@@ -38,6 +39,9 @@ struct ProtonGame {
 	std::string directory;  /* the working directory ("start in"), an absolute Windows path; empty: the executable's */
 	std::string prefix;     /* optional prefix folder ID; empty: shared default or retained legacy folder */
 	std::vector<std::string> env; /* NAME=VALUE words for this game's environment, from game.json */
+	/* SteamGameId / SteamAppId words found from the installation (proton_add_steam_ids), given beside env at a launch;
+	 * kept apart so the WebUI never writes them back into game.json. Empty until proton_add_steam_ids runs. */
+	std::vector<std::string> steam_words;
 	bool desktop{ true };   /* game.json "desktop": false keeps a diagnostic entry off the Mihawk OS desktop */
 	bool launcher{ true };  /* game.json "launcher": false keeps it out of the launcher's list (the WebUI's "In MihawkOS's
 	                           game list" unticked); it still starts from the desktop, a tile or a profile */
@@ -45,6 +49,10 @@ struct ProtonGame {
 	/* The executable is a 32-bit-only Windows program (src/pw_pe_arch.h): it runs under WoW64 when
 	 * the runtime ships its i386 modules, and has a complaint (is not launched) when it does not. */
 	bool x86_32{ false };
+	std::string folder;     /* where its game.json is; empty for the built-in Mihawk OS */
+	/* A program to run instead, with this entry's prefix and settings (the launcher's Files: the title's path= launch);
+	 * empty: the entry's own executable */
+	std::string run_path;
 };
 
 struct ProtonLaunch {
@@ -73,6 +81,9 @@ struct ProtonLaunch {
 #define PROTON_SESSION_MARKER "/app0/session-running"
 /* What a session said on screen (native/proton_wine.cpp's notices), one line each, for the launcher after it. */
 #define PROTON_SESSION_NOTICES "/app0/session-notices"
+/* When this title last started the resident Lapy daemon (seconds since the epoch, as text): the payload check tells the
+ * daemon from other processes listed as "payload" by it (src/pw_payload_check.h). Written before root, in the title folder. */
+#define PROTON_DAEMON_STARTED "/app0/lapy-daemon-started"
 
 /* Where games and their prefixes live.
  *
@@ -121,6 +132,9 @@ std::string proton_title_path(const char *path);
  * ShadowMountPlus and websrv give on the loopback; every payload seen goes to the log. The launcher refuses entry and a
  * game start ends while it fails. */
 const PwPayloadReport &proton_payloads_check();
+/* The console's memory census now, as the memory helper takes it (src/pw_steam_memory.h, for the Steam warning); unknown
+ * (known 0) without /data or any figure. */
+PwSteamCensus proton_system_memory();
 /* The last one taken (one is taken if none was). */
 const PwPayloadReport &proton_payloads();
 const PwPayloadFacts &proton_payload_facts();
@@ -153,6 +167,12 @@ std::vector<ProtonGame> proton_read_games(std::string *problem);
  * invalid IDs; existing per-game folders remain untouched. */
 std::string proton_game_prefix(const ProtonGame &game);
 
+/* Fills game.steam_words: the game's Steam app id, from Steam's appmanifest for the folder holding its program or from
+ * the steam_appid.txt beside it (src/pw_steam_appid.h), as SteamGameId and SteamAppId words, for the name its env does
+ * not set. Proton's Wine changes behaviour for a game by those names; nothing else set them. Reads the disk (a few
+ * small files), so a launch calls it, not the catalog's listing. Safe to call again after the executable changes. */
+void proton_add_steam_ids(ProtonGame &game);
+
 /* Replace this process with the title again: the game, or the launcher when
  * game is NULL. Never returns when it works: the caller is gone. ended, when not empty, is the failed session's reason
  * for the launcher (ProtonLaunch::ended), on one line. */
@@ -160,6 +180,11 @@ void proton_restart(const ProtonGame *game, unsigned cycle, const char *reason, 
 
 /* Queue a launcher choice; dispatch only after its UI, audio and Vulkan device are destroyed. */
 void proton_queue_restart(const ProtonGame *game, unsigned cycle, const char *reason);
+/* A program's checks (an absolute Windows path that is there; 32-bit only where the runtime has its modules): the catalog
+ * applies them to every entry, the session to a program run by path. What fails is game.complaint. */
+void proton_check_program(ProtonGame &game);
+/* A game's own setting, its game.json env word name=value (none of name's when value is empty); "" when saved. */
+std::string proton_game_set_env(const ProtonGame &game, const std::string &name, const std::string &value);
 void proton_finish_restart();
 /* Whether proton_queue_restart has a restart waiting: a budgeted test run that queued one (the Steam option's) carries it out. */
 bool proton_restart_pending();

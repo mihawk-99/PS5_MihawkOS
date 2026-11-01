@@ -39,7 +39,7 @@ Played from a couch on a TV. Games run full screen and the desktop unloads durin
 
 - The visual world is Windows 11, played straight. The user's words: "a very faithful replica of Windows 11".
 - The user approved the original object icons and the Fluent command glyphs in `themes/windows11/icons/`, and the Proton UI font.
-- The wallpaper is the project's own Bubble Earth (`tools/make-aero-wallpapers.py`, the owner's choice on 2026-10-25, with Glass City and Aqua World beside it); it replaced the project's Aero Meadow (`tools/make-mihawk-wallpaper.py`, light and night), which had replaced the owner's local copy of Windows 11's Bloom on 2026-10-18, never vendored.
+- The wallpaper is Bubble City by Skeuoss (`themes/windows11/wallpapers/skeuoss-bubble-city.jpg`, used with the artist's permission; the owner's choice on 2026-10-31, NOTICE.md). It replaced the project's own Bubble Earth (`tools/make-aero-wallpapers.py`, 2026-10-25, with Glass City and Aqua World beside it), which replaced the project's Aero Meadow (`tools/make-mihawk-wallpaper.py`, light and night), which had replaced the owner's local copy of Windows 11's Bloom on 2026-10-18, never vendored.
 
 ## Evidence on Hand
 

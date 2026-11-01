@@ -1,5 +1,7 @@
 /* SPDX-License-Identifier: GPL-3.0-or-later */
 #include "../src/pw_update.h"
+#include "../src/pw_pack.h"
+#include <limits.h>
 
 #include <assert.h>
 #include <errno.h>
@@ -125,6 +127,11 @@ int main(void)
     assert(pw_update_switch(update, title, failed, sizeof(failed)) == 0 && holds(title, "eboot.bin", "old eboot"));
     assert(pw_update_confirm(update) == 0);
 
+    /* A due switch dropped: `ready` and the stage go, the title stays. */
+    prepare();
+    assert(pw_update_discard(update) == 0 && !exists(update, "ready") && !exists(update, "stage"));
+    assert(pw_update_pending(update, version, sizeof(version)) == 0 && holds(title, "eboot.bin", "old eboot"));
+
     /* A whole switch, then the confirm. */
     prepare();
     assert(pw_update_pending(update, version, sizeof(version)) == 1 && !strcmp(version, "01.001.000"));
@@ -179,6 +186,47 @@ int main(void)
     char command[700];
     snprintf(command, sizeof(command), "rm -rf '%s'", work);
     assert(system(command) == 0);
+    /* A release zip's record (2026-10-31): sorted, the stamps last, and a manifest the switch reads */
+    {
+        char records[PATH_MAX - 64];
+        snprintf(records, sizeof(records), "%s/pw-update-record-XXXXXX", getenv("TMPDIR") ? getenv("TMPDIR") : "/tmp");
+        assert(mkdtemp(records));
+        PwUpdateFile files[] = { { "sce_sys/param.json", 900, { 1 } }, { "eboot.bin", 35000000, { 2 } },
+                                 { "runtime-pack.txt", 300000, { 3 } }, { "assets/a.png", 10, { 4 } } };
+        assert(pw_update_record_write(records, files, 4) == 0);
+        assert(!strcmp(files[0].path, "assets/a.png") && !strcmp(files[1].path, "runtime-pack.txt") &&
+               !strcmp(files[2].path, "eboot.bin") && !strcmp(files[3].path, "sce_sys/param.json"));
+        char record[PATH_MAX + 32];
+        snprintf(record, sizeof(record), "%s/" PW_UPDATE_RECORD, records);
+        FILE *in = fopen(record, "rb");
+        char text[4096];
+        const size_t got = fread(text, 1, sizeof(text), in);
+        fclose(in);
+        PwPackManifest manifest;
+        assert(pw_pack_parse(text, got, &manifest) == PW_PACK_OK && manifest.title && manifest.file_count == 4);
+        assert(manifest.stamp == 2 && !strcmp(manifest.files[3].path, "sce_sys/param.json"));
+        pw_pack_manifest_free(&manifest);
+        /* with the runtime's pin: it goes in after every other file, before eboot.bin */
+        PwUpdateFile pinned[] = { { "sce_sys/param.json", 9, { 1 } }, { "runtime-stamp", 65, { 5 } }, { "eboot.bin", 7, { 2 } },
+                                  { "runtime-pieces/ab.zst", 3, { 6 } }, { "runtime-pack.txt", 4, { 3 } } };
+        assert(pw_update_record_write(records, pinned, 5) == 0);
+        in = fopen(record, "rb");
+        const size_t again = fread(text, 1, sizeof(text), in);
+        fclose(in);
+        assert(pw_pack_parse(text, again, &manifest) == PW_PACK_OK && manifest.stamp == 2);
+        assert(!strcmp(manifest.files[2].path, "runtime-stamp") && !strcmp(manifest.files[3].path, "eboot.bin"));
+        pw_pack_manifest_free(&manifest);
+        PwUpdateFile no_eboot[] = { { "sce_sys/param.json", 1, { 0 } }, { "a", 1, { 0 } } };
+        assert(pw_update_record_write(records, no_eboot, 2) == -EINVAL);
+        remove(record);
+        rmdir(records);
+    }
+
+    /* The automatic check: on and a day since the last; never when off; a clock set back checks again */
+    const int64_t day = PW_UPDATE_CHECK_EVERY_S, now = INT64_C(1793500000);
+    assert(pw_update_check_due(1, now, 0) && pw_update_check_due(1, now, now - day) && !pw_update_check_due(1, now, now - day + 1));
+    assert(!pw_update_check_due(0, now, 0) && pw_update_check_due(1, now, now + 3600));
+
     puts("test_pw_update: ok");
     return 0;
 }

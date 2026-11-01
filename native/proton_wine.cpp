@@ -16,6 +16,9 @@ extern "C" {
 #endif
 #include "../src/proton_touchpad.h"
 #include "../src/pw_controls.h"
+#include "../src/pw_osk.h"
+#include "pw_osk_ps5.h"
+#include "../src/pw_dialog_keys.h"
 #include "../src/pw_setup.h"
 #include "../src/pw_runtime_check.h"
 #include "../src/pw_sha256.h"
@@ -38,6 +41,8 @@ extern "C" {
 #include "../src/pw_firmware.h"
 #include "../src/pw_hang_breaker.h"
 #include "../src/pw_log_sessions.h"
+#include "../src/pw_capped_log.h"
+#include "../src/pw_missing_dll.h"
 #include "../src/pw_start_failure.h"
 #include "../src/pw_desktop_session.h"
 #include "../src/pw_app_environment.h"
@@ -60,6 +65,9 @@ extern "C" {
 #include "../wine/ps5/pw_wine_perf.h"
 #include "../wine/ps5/pw_wine_fdv.h"
 #include "../wine/ps5/pw_wine_process.h"
+#include "../wine/ps5/pw_wine_title_game.h"
+#include "../wine/ps5/pw_wine_pe_imports.h"
+#include "../src/pw_helper_sched.h"
 #include "pw_audio_ps5.h"
 #include "pw_usb_input_ps5.h"
 #include "../src/pw_game_mode.h"
@@ -117,8 +125,10 @@ namespace {
 PwWineStart wine;
 PwAudioPs5Ops audio;
 int audio_port = -1;
-int log_fd = -1;
-int title_log_fd = -1;   // /data/ps5proton/logs/title-last.log, the say() mirror (ps5/src/platform.c)
+// wine-last.log, the in-title Wine's output, and title-last.log, the say() mirror (ps5/src/platform.c): each keeps its
+// start and its end (src/pw_capped_log.h), so a game's Wine output can no longer push the title's last minutes out.
+PwCappedLog wine_log = PW_CAPPED_LOG_INIT;
+PwCappedLog title_log = PW_CAPPED_LOG_INIT;
 void log_line(const std::string &line);
 
 int (*flush_registry)(unsigned) = nullptr;
@@ -162,6 +172,7 @@ static int title_vm_query(void *, uintptr_t address, uint8_t raw[PW_VM_RECORD])
 extern "C" int sceKernelAllocateDirectMemory(int64_t, int64_t, size_t, size_t, int, int64_t *);
 extern "C" int sceKernelReleaseDirectMemory(int64_t, size_t);
 extern "C" int sceKernelMunmap(void *, size_t);
+extern "C" int sceKernelGetPageTableStats(int *, int *, int *, int *);
 
 // PROTON_PT2M_TITLE_PROBE=1 (a probe, never a default; docs/PLAN.md Part 3): does the kernel map direct memory that is
 // 2 MiB-aligned at both ends without page-table pages? The title maps 64 MiB of CPU+GPU direct memory as a game's
@@ -216,6 +227,10 @@ std::atomic<bool> leaving{false};
 std::atomic<bool> graphics_claimed{false};
 // The one program the title runs itself beside the broker (start_title_client).
 std::atomic<bool> title_client_claimed{false};
+// The session's root itself ran in the title (start_title_root): no helper root, so no initial status to report.
+static bool title_root_ran=false;
+// The screen's flips when it started: the title watchdog waits for the game's first frame after that.
+std::atomic<unsigned long long> title_client_flips{0};
 int (*owner_result)() = nullptr;
 // The Mihawk OS desktop session, supervised here (src/pw_desktop_session.h): the launch named its entry, Explorer is
 // the session root, and game mode unloads and restarts it. session_result is the session's own verdict when it ends
@@ -251,6 +266,18 @@ void gpu_memory_refused(int pid, unsigned long long bytes)
 }
 std::atomic<bool> spawn_said{false};
 std::string session_prefix;                         // the session's prefix, set before Wine starts
+
+// A notice in the player's language (the guided setup's record), English when it has none.
+const char *notice_text(PwSetupText key)
+{
+    static const PwSetupLanguage *language = [] {
+        PwSetupRecord record;
+        const PwSetupLanguage *chosen =
+            !pw_setup_record_load(&record, PROTON_DATA_ROOT "/setup.txt") ? pw_setup_language(record.language) : nullptr;
+        return chosen ? chosen : pw_setup_default_language();
+    }();
+    return pw_setup_text(language, key);
+}
 
 __attribute__((format(printf, 2, 3))) void notice_set(NoticeKind kind, const char *format, ...)
 {
@@ -937,8 +964,16 @@ void build_application_table(const std::vector<ProtonGame> &catalog, const std::
             applications.games.push_back(game);
     applications.words.resize(applications.games.size());
     for (size_t i = 0; i < applications.games.size(); ++i) {
-        const ProtonGame &game = applications.games[i];
+        ProtonGame &game = applications.games[i];
+        proton_add_steam_ids(game);   // a game started from the desktop gets its Steam ids as from the launcher
+        // Its WINEDLLOVERRIDES joins the session's, as the launcher's game's does (src/pw_app_environment.h).
+        for (auto &word : game.env) {
+            char joined[4096];
+            if (pw_app_environment_join_overrides(getenv("WINEDLLOVERRIDES"), word.c_str(), joined, sizeof(joined)) == 1)
+                word = joined;
+        }
         for (const auto &word : game.env) applications.words[i].push_back(word.c_str());
+        for (const auto &word : game.steam_words) applications.words[i].push_back(word.c_str());
         applications.entries.push_back(PwAppEntry{game.name.c_str(), game.executable.c_str(), game.arguments.c_str(),
                                                   applications.words[i].data(), applications.words[i].size()});
     }
@@ -1113,7 +1148,7 @@ void wait_for_ended_helpers()
             else
                 say("Wine: still waiting for process %d (%u s)", ended.pids[i], second);
         }
-        if (second % 30 == 0 && title_log_fd >= 0) fsync(title_log_fd);
+        if (second % 30 == 0) pw_capped_log_sync(&title_log);
         usleep(1000000);
     }
     for (unsigned i = 0; i < ended.count; ++i)
@@ -1129,8 +1164,13 @@ void wait_for_ended_helpers()
     say("Wine: after the kill: census %lld ms old, frames +%llu in %llu ms",
         read ? (long long)(monotonic_ms() - census.taken_ms) : -1ll, frames,
         (unsigned long long)(monotonic_ms() - ended.sent_ms));
-    if (title_log_fd >= 0) fsync(title_log_fd);
+    pw_capped_log_sync(&title_log);
 }
+
+// Why a program in the title could not start (src/pw_missing_dll.h): Wine shows no box for a missing DLL, so the
+// launcher shows the reason as the session's end. Wine's threads write at once, hence the lock (taken only for err lines).
+static PwMissingDll missing_dll;
+static std::mutex missing_dll_lock;
 
 // reason: why the session failed, shown by the launcher (ProtonLaunch::ended); null for an ordinary end.
 void return_to_launcher(const char *reason)
@@ -1144,7 +1184,7 @@ void return_to_launcher(const char *reason)
     // a wedged broker keeps the title here (pw_ps5_wait_children names the open slots every 30 s).
     if (owner_wait && ending.load(std::memory_order_acquire)) {
         say("Wine: waiting for the ended helpers' services to close");
-        if (title_log_fd >= 0) fsync(title_log_fd);
+        pw_capped_log_sync(&title_log);
     }
     if(owner_wait)owner_wait();
     // The client's standard output is flushed at its exit, which has just happened: the session's final read.
@@ -1198,8 +1238,11 @@ void return_to_launcher(const char *reason)
     }
     if(owner_result) {
         const int code=session_result>=0 ? session_result : owner_result();
+        // A root run in the title has no helper root (initial_status -1): its program's own verdict says how it did
+        // (rc1-pro-2026-10-31: a passing probe and Deltarune's clean end both read FAIL).
+        const bool ended=code==0 || (code<0 && title_root_ran);
         say("PS5_PROTON_OWNER_BOOTSTRAP %s initial_status=%d graphics_claimed=%d broker_stopped=%d title_client=%d",
-            code==0 && (broker_stopped || title_client_claimed) ? "PASS" : "FAIL",code,graphics_claimed.load(),broker_stopped,
+            ended && (broker_stopped || title_client_claimed) ? "PASS" : "FAIL",code,graphics_claimed.load(),broker_stopped,
             title_client_claimed.load());
     }
     log_line("Wine: process completed; returning to launcher");
@@ -1242,6 +1285,13 @@ void return_to_launcher(const char *reason)
     // messages before LoadExec replaces this process.
     usleep(500000);
     if (!reason && ended_ready.load(std::memory_order_acquire) && !ended_reason.empty()) reason = ended_reason.c_str();
+    if (!reason && missing_dll.reason[0]) reason = missing_dll.reason;
+    // The session's last line in both logs, on disk: a log that stops without it ended some other way (the launcher's
+    // next start notes that below it, examples/ps5proton/ps5proton.cpp).
+    say("Session: ended (%s); back to the launcher", reason ? reason : "normally");
+    log_line("Session: ended; back to the launcher");
+    pw_capped_log_sync(&title_log);
+    pw_capped_log_sync(&wine_log);
     // The session came back through the title: the launcher is told why only when it failed.
     remove(proton_title_path(PROTON_SESSION_MARKER).c_str());
     if (aurelia_next_set) {
@@ -1326,7 +1376,7 @@ bool end_helpers(const char *why)
         say("Wine: helper %d: SIGKILL %s (errno %d)", ended.pids[i],
             ended.sent[i] == PW_HANG_SKIPPED ? "not sent: not a helper's pid" : !ended.sent[i] ? "sent" :
             ended.sent[i] == ESRCH ? "found it gone already" : "refused", ended.sent[i] == PW_HANG_SKIPPED ? 0 : ended.sent[i]);
-    if (title_log_fd >= 0) fsync(title_log_fd);
+    pw_capped_log_sync(&title_log);
     ended_ready.store(true, std::memory_order_release);
     return true;
 }
@@ -1336,6 +1386,15 @@ bool end_helpers(const char *why)
 void end_game(const char *why, bool server_fallback)
 {
     if (!end_helpers(why)) return;
+    // A game in the title (docs/TITLE_CLIENT.md): its threads are the title's, and replacing the title under live
+    // threads powered the console off (2026-10-03). The server ends them as a TerminateProcess from outside would
+    // (patch 0899), and the game's end returns to the launcher as its own does (the in-title crash, 2026-10-31).
+    if (title_client_claimed) {
+        say("Wine: %s: ending the game in the title through the server (%d); the title returns once it has ended", why,
+            terminate_game ? terminate_game() : -1);
+        pw_capped_log_sync(&title_log);
+        return;
+    }
     bool refused = false;
     for (unsigned i = 0; i < ended.count; ++i) refused |= ended.sent[i] == EPERM;
     if (refused && server_fallback && server_terminate_asked() && terminate_game)
@@ -1355,21 +1414,19 @@ void output(const char *text, size_t length)
     // every chunk lands whole at its end.
     static thread_local char line[16384];
     static thread_local size_t used;
-    // Keep exception diagnostics even if the process dies before klog drains.
-    if (log_fd >= 0) {
-        size_t offset = 0;
-        while (offset < length) {
-            const ssize_t written = write(log_fd, text + offset, length - offset);
-            if (written > 0) offset += written;
-            else if (written < 0 && errno == EINTR) continue;
-            else break;
-        }
+    // The in-title Wine's output goes to wine-last.log only, as a helper's goes to its wine-child log: klog drains
+    // about 23 KB/s, and a game's 20 MB of debug lines through it held the game's threads 25 minutes (log-flood64-title,
+    // 2026-11-01). tools/run-console.py reads a verdict missing from klog in this log.
+    pw_capped_log_write(&wine_log, text, length);
+    if (pw_missing_dll_find(text, length, ":err:module:")) {
+        std::lock_guard<std::mutex> hold(missing_dll_lock);
+        if (pw_missing_dll_line(&missing_dll, text, length)) say("Wine: %s", missing_dll.reason);
     }
+    if (!aurelia_session()) return;
     for (size_t i = 0; i < length; ++i) {
         if (text[i] == '\n' || used == sizeof(line) - 1) {
             line[used] = 0;
-            if (aurelia_session()) aurelia_line(line);
-            say("Wine: %s", line);
+            aurelia_line(line);
             used = 0;
         }
         if (text[i] != '\n') line[used++] = text[i];
@@ -1455,6 +1512,37 @@ template<class T> T symbol(const char *name)
     return reinterpret_cast<T>(const_cast<void *>(pw_prx_lookup(wine.descriptor, name)));
 }
 
+// A game the title runs itself is scheduled as a helper's is (src/pw_helper_sched.h): each of its Windows threads takes
+// SCHED_RR at the program priority, 767 (the lowest) unless WINE_PS5_HELPER_PRIORITY says "S,P", as it registers
+// (Wine patch 2405); the threads it makes inherit it. Their default, SCHED_FIFO 700 like the title's own threads and the
+// payloads, kept a strategy game's 26 busy threads on the title's 13 CPUs and starved the title and the payloads until
+// the console froze (a tester's standard PS5, 2026-10-31). WINE_PS5_HELPER_SCHED=keep leaves them, as for helpers.
+static int title_program_priority=PW_HELPER_SCHED_PROGRAM_DEFAULT;
+static std::atomic<unsigned> title_program_set{0},title_program_failed{0};
+static std::atomic<int> title_program_error{0};
+static void title_program_thread_start()
+{
+    struct sched_param param{};
+    param.sched_priority=title_program_priority;
+    const int error=pthread_setschedparam(pthread_self(),PW_HELPER_SCHED_RR,&param);
+    if(!error) { title_program_set.fetch_add(1,std::memory_order_relaxed);return; }
+    title_program_error.store(error,std::memory_order_relaxed);
+    title_program_failed.fetch_add(1,std::memory_order_relaxed);
+}
+static void title_program_schedule()
+{
+    const char *mode=getenv("WINE_PS5_HELPER_SCHED");
+    if(mode && !strcmp(mode,"keep")) { say("Wine: the game in the title keeps the title's scheduling (WINE_PS5_HELPER_SCHED=keep)");return; }
+    if(const char *both=getenv("WINE_PS5_HELPER_PRIORITY"); both && strchr(both,',')) {
+        const long program=strtol(strchr(both,',')+1,nullptr,10);
+        if(program>=256 && program<=767) title_program_priority=(int)program;
+    }
+    auto set_hook=symbol<int (*)(void (*)(void))>("__wine_ps5_set_payload_thread_start");
+    const int status=set_hook ? set_hook(title_program_thread_start) : -1;
+    say("Wine: the game in the title runs as a helper's: its threads SCHED_RR at %d%s",title_program_priority,
+        status ? " -- NOT SET: this runtime has no thread start hook" : "");
+}
+
 int start_owner_graphics(int server_fd,const struct pw_child_bootstrap *boot)
 {
     // ponytail: one graphics client per native title; relaunch the title for
@@ -1504,9 +1592,104 @@ int start_title_client(int server_fd,const struct pw_child_bootstrap *boot)
     const char *const argv[]={"wine","title-client.exe",nullptr};
     const PwWineStartConfig config={.argc=2,.argv=argv,.stack_bytes=16u<<20};
     const PwWineStartOps ops={.start_thread=start_thread};
+    title_program_schedule();
+    title_client_flips=proton_gpu_broker_flips();
     if(pw_wine_start_run(&wine,&config,&ops)) { errno=EIO;return -1; }   // claimed for good: the environment is set
     say("Wine: %s runs in the title beside the broker",boot->image[0] ? boot->image : "a program");
     return 0;
+}
+
+// The image's own file and the DLLs beside it, for pw_pe_kind (wine/ps5/pw_wine_pe_imports.h): one open file at a time.
+struct RootFolder { std::string exe, dir, name; int fd=-1; };
+static int root_folder_read(void *context, const char *name, uint64_t offset, void *into, size_t size)
+{
+    RootFolder &folder=*static_cast<RootFolder *>(context);
+    const std::string wanted=name ? name : "";
+    if(folder.fd<0 || strcasecmp(folder.name.c_str(),wanted.c_str())) {
+        if(folder.fd>=0) close(folder.fd);
+        folder.name=wanted;
+        folder.fd=open(name ? (folder.dir+"/"+wanted).c_str() : folder.exe.c_str(),O_RDONLY);
+        if(folder.fd<0 && name) {   // shortcut: then all lower case; another case is not found (it stays a helper)
+            std::string lower=wanted;
+            for(char &c:lower) c=(char)tolower((unsigned char)c);
+            folder.fd=open((folder.dir+"/"+lower).c_str(),O_RDONLY);
+        }
+        if(folder.fd<0) return -1;
+    }
+    for(size_t have=0;have<size;) {
+        const ssize_t got=pread(folder.fd,(char *)into+have,size-have,(off_t)(offset+have));
+        if(got<=0) return -1;
+        have+=(size_t)got;
+    }
+    return 0;
+}
+
+// A session's root (a library entry the launcher starts) the title runs itself, by the same rules as a program a helper
+// starts (pw_ps5_title_route): a game started from the launcher is the session's root, which no helper requests, so
+// without this it never ran in the title wherever it lived (a big Direct3D 12 racing game on a USB drive, 2026-10-31).
+static bool root_in_title(const char *image)
+{
+    const char *setting=getenv("WINE_PS5_TITLE_GAMES");
+    char host[1024];
+    if(!image || !setting || strcmp(setting,"1") ||
+       pw_wine_launch_host_dir(session_prefix.c_str(),image,host,sizeof(host))) return false;
+    struct PwPeInfo pe;
+    const bool x64=pw_pe_arch_file(host,&pe)==PW_PE_X64;
+    // WINE_PS5_TITLE_PROCESS names the one program the title runs (a probe's launch): a pick for the root too, which a
+    // helper never asks for (dx12-pro-2026-10-31-01: the -title cases' root went to a helper, title_client=0).
+    const char *pick=getenv("WINE_PS5_TITLE_PICK"),*named=getenv("WINE_PS5_TITLE_PROCESS");
+    const std::string picked=std::string(pick ? pick : "")+";"+(named ? named : "");
+    enum PwTitleRoute route=pw_title_game_route(image,x64,setting,getenv("WINE_PS5_TITLE_OPTOUT"),picked.c_str(),
+                                                 getenv("WINE_PS5_TITLE_LISTED"));
+    enum PwPeKind kind=PW_PE_KIND_UNREAD;
+    char deepest[PW_PE_IMPORT_NAME]="";
+    if(route==PW_TITLE_ROUTE_CANDIDATE) {
+        RootFolder folder;
+        folder.exe=host;
+        folder.dir=folder.exe.substr(0,folder.exe.rfind('/'));
+        auto has=[&](const char *name) { return access((folder.dir+"/"+name).c_str(),F_OK)==0; };
+        route=pw_title_game_chromium(route,has("resources.pak") && has("icudtl.dat") &&
+                                     (has("v8_context_snapshot.bin") || has("snapshot_blob.bin")),has("libcef.dll"),0);
+        if(route==PW_TITLE_ROUTE_CANDIDATE) kind=pw_pe_kind(root_folder_read,&folder,deepest);
+        if(folder.fd>=0) close(folder.fd);
+    }
+    route=pw_title_game_decide(route,kind==PW_PE_KIND_GAME);
+    say("Wine: the session's root %s: %s (%s%s%s%s%s)",pw_title_game_name(image),
+        pw_title_route_in_title(route) ? "inside MihawkOS" : "a helper",pw_title_route_word(route),
+        kind!=PW_PE_KIND_UNREAD ? "; " : "",kind!=PW_PE_KIND_UNREAD ? pw_pe_kind_word(kind) : "",deepest[0] ? " through " : "",
+        deepest);
+    return pw_title_route_in_title(route);
+}
+
+// The root run in the title: start_title_client's environment, with the root's own command line for Wine to start as
+// its first process (no helper asked for it). Its end ends the session, as the program in the title's always does.
+static bool start_title_root(int server_fd,const char *cwd,int argc,const char *const *argv)
+{
+    if(title_client_claimed.exchange(true)) return false;
+    int cookie=0;
+    const int gpu=proton_gpu_broker_open_in_owner(&cookie);
+    const int socket=gpu>=0 ? dup(server_fd) : -1;
+    char server[24],broker[24];
+    snprintf(server,sizeof(server),"%d",socket);snprintf(broker,sizeof(broker),"%d",gpu);
+    auto set_cwd=symbol<int (*)(const char *)>("pw_cwd_set");
+    auto set_live=symbol<void (*)()>("pw_ps5_set_title_client_live");
+    if(socket<0 || !set_cwd || !set_live || set_cwd(cwd) || setenv("WINESERVERSOCKET",server,1) ||
+       setenv("WINE_PS5_GPU_FD",broker,1) || setenv("WINE_PS5_GPU_BROKER","1",1) || setenv("PROTON_GPU_IN_OWNER","1",1) ||
+       setenv("WINE_PS5_TITLE_CLIENT","1",1) || setenv("WINE_PS5_GRAPHICS_OWNER","1",1)) {
+        if(socket>=0) close(socket);
+        if(gpu>=0) { close(gpu);proton_gpu_broker_close(cookie,0); }
+        title_client_claimed=false;
+        return false;
+    }
+    set_live();
+    title_program_schedule();
+    title_client_flips=proton_gpu_broker_flips();
+    const PwWineStartConfig config={.argc=argc,.argv=argv,.stack_bytes=16u<<20};
+    const PwWineStartOps ops={.start_thread=start_thread};
+    if(pw_wine_start_run(&wine,&config,&ops)) return false;   // claimed for good: the environment is set
+    say("Wine: %s runs in the title beside the broker",argc>1 ? argv[1] : "the root");
+    title_root_ran=true;
+    return true;
 }
 #endif
 
@@ -1826,9 +2009,9 @@ PadScript pad_script;
 // process's last lines when the title replaces itself.
 void log_line(const std::string &line)
 {
-    if (line.empty() || log_fd < 0) return;
+    if (line.empty()) return;
     const std::string text = "title: " + line + "\n";
-    (void)!write(log_fd, text.data(), text.size());
+    pw_capped_log_write(&wine_log, text.data(), text.size());
 }
 int release_display(void *)
 {
@@ -1952,19 +2135,25 @@ void proton_run_wine()
         rename(PROTON_DATA_ROOT "/logs/title-last.log", PW_LOG_SESSIONS_ROOT "/1/title-last.log") ? errno : 0;
     const int kept_wine = session_status ? -1 :
         rename(PROTON_DATA_ROOT "/logs/wine-last.log", PW_LOG_SESSIONS_ROOT "/1/wine-last.log") ? errno : 0;
+    // Their ends too (src/pw_capped_log.h): missing when the log never filled its start.
+    if (!session_status)
+        for (const char *name : {"title-end.log", "title-end.1.log", "wine-end.log", "wine-end.1.log"})
+            rename((std::string(PROTON_DATA_ROOT "/logs/") + name).c_str(), (std::string(PW_LOG_SESSIONS_ROOT "/1/") + name).c_str());
     // The GPU broker empties its results file only when it starts: a run whose broker never started was read with the
     // previous run's (a 2026-10-14 run fetched another game's numbers; record removed from the tree).
     const int broker_results = unlink((std::string(proton_app_root()) + "/gpu-broker-results.txt").c_str()) ? errno : 0;
     say("Aurelia: capture=%s path=%s stdout=%s", aurelia_session() ? "on" : "off", launch.path.c_str(),
         getenv("WINE_PS5_STDOUT") ? getenv("WINE_PS5_STDOUT") : "(unset, the fallback)");
-    log_fd = open(PROTON_DATA_ROOT "/logs/wine-last.log", O_WRONLY | O_CREAT | O_TRUNC | O_APPEND, 0644);
+    const int wine_log_status = pw_capped_log_open(&wine_log, PROTON_DATA_ROOT "/logs/wine-last.log",
+        PROTON_DATA_ROOT "/logs/wine-end.log", PROTON_DATA_ROOT "/logs/wine-end.1.log", 8u << 20, 4u << 20);
     // Every say() line also lands on /data, flushed every 2 s by the loop below: a run that freezes the console
     // keeps the title's last seconds (a 2026-10-10 launcher run kept nothing; record removed from the tree).
-    title_log_fd = open(PROTON_DATA_ROOT "/logs/title-last.log", O_WRONLY | O_CREAT | O_TRUNC | O_APPEND, 0644);
-    if (title_log_fd >= 0) platform_say_file(title_log_fd);
+    if (!pw_capped_log_open(&title_log, PROTON_DATA_ROOT "/logs/title-last.log", PROTON_DATA_ROOT "/logs/title-end.log",
+                            PROTON_DATA_ROOT "/logs/title-end.1.log", 4u << 20, 2u << 20))
+        platform_say_log(&title_log);
     // The contract with tools/run-console.py, which fails a run whose status is not 0.
-    say("Wine: session logs status=%d removed=%u title=%d wine=%d broker-results=%d", session_status, session_removed,
-        kept_title, kept_wine, broker_results);
+    say("Wine: session logs status=%d removed=%u title=%d wine=%d broker-results=%d wine-log=%d", session_status,
+        session_removed, kept_title, kept_wine, broker_results, wine_log_status);
     // Which build this session is, at the top of its log: the title, the runtime it pins and the one installed. A runtime
     // that is not this build's starts no helper: every start comes here (a tile, a shortcut, profile=, a restart), and
     // the launcher it returns to opens the setup's install (src/pw_runtime_check.h, a tester's errno 92 of 2026-10-29).
@@ -2013,8 +2202,21 @@ void proton_run_wine()
         game.executable = launch.path;
         game.directory.clear();
         game.arguments.clear();
+        // Under Mihawk OS's entry (the launcher's Files) a program run by path is a program, not the desktop: none of the
+        // desktop's words (MIHAWK_DESKTOP, its window surfaces, its layout), as a library game has none, so no shell comes
+        // up around it; and it is checked as a library entry's is (there, and 32-bit only with the runtime's modules, then
+        // in the launcher layout), not by the desktop's own program. Other entries' path runs (tools/run-console.py
+        // --program) are as before.
+        if (game.id == "mihawk-os") {
+            game.env.clear();
+            game.name = launch.path.substr(launch.path.find_last_of("\\/") + 1);
+            game.complaint.clear();
+            game.x86_32 = false;
+            proton_check_program(game);
+        }
     }
     if (launch.arguments_override) game.arguments = launch.arguments;
+    proton_add_steam_ids(game);   // after the path override: the ids are those of the program that runs
     if (game.executable.empty() || !game.complaint.empty()) {
         fail("Wine: requested profile is missing or invalid%s%s", game.complaint.empty() ? "" : ": ",
              game.complaint.c_str());
@@ -2182,25 +2384,38 @@ void proton_run_wine()
         {"DOTNET_SYSTEM_GLOBALIZATION_USENLS", "1"},
         // The certificate authorities a Windows program's TLS trusts: crypt32's root store, from the runtime's bundle.
         {"WINE_ADDITIONAL_CERTS_DIR", PROTON_DATA_ROOT "/runtime/ge11-7/share/wine/ca-certificates.crt"},
-        {"DXVK_LOG_PATH", PROTON_DATA_ROOT "/logs"}, {"WINEESYNC", "0"}, {"WINEFSYNC", "0"}
+        {"DXVK_LOG_PATH", PROTON_DATA_ROOT "/logs"}, {"WINEESYNC", "0"}, {"WINEFSYNC", "0"},
+        // OpenSSL 1.0.2 up to 1.0.2k, which games bundle (Unreal Engine 4.13 to 4.21 among them), crashes on a CPU with
+        // the SHA instructions, as the console's has. Its SHA code is left out for every game, as Proton does for all.
+        {"OPENSSL_ia32cap", ":~0x20000000"}
     };
+    static_assert(sizeof(env) / sizeof(env[0]) <= PW_WINE_START_MAX_ENV, "pw_wine_start_environment refuses more settings");
     const PwWineStartOps ops = {sceKernelLoadStartModule, sceKernelGetModuleInfo, set_env, start_thread};
     const PwWineStartConfig config = {ntdll.c_str(), modules.c_str(), prefix.c_str(), env,
         sizeof(env) / sizeof(env[0]), count + 2, args, 16u << 20};
     int status = pw_wine_start_environment(&wine, &config, &ops);
     // The game's own environment (game.json "env") wins over the title's defaults,
-    // and this launch's test overrides win over both.
-    for (const auto &word : game.env) {
+    // and this launch's test overrides win over both. A WINEDLLOVERRIDES in either joins the title's, which Wine reads
+    // last-wins (src/pw_app_environment.h): a mod's dinput8=n,b, or a test's amdxc64=d, no longer takes DXVK and
+    // VKD3D-Proton away from the game (a test's replaced them: RE9 got Wine's own Direct3D 12, 2026-11-01).
+    auto apply_word = [](const std::string &word, const char *what) {
+        char joined[4096];
+        const int join = pw_app_environment_join_overrides(getenv("WINEDLLOVERRIDES"), word.c_str(), joined, sizeof(joined));
+        const std::string applied = join == 1 ? std::string(joined) : word;
+        const size_t equals = applied.find('=');
+        setenv(applied.substr(0, equals).c_str(), applied.c_str() + equals + 1, 1);
+        say("Wine: %s environment entry applied%s", what, join == 1 ? " (DLL overrides joined to the title's)" :
+            join < 0 ? " (DLL overrides too long to join: the game's alone)" : "");
+    };
+    for (const auto &word : game.env) apply_word(word, "game");
+    // The Steam ids the installation gives the program (SteamGameId, SteamAppId): the names Proton's Wine looks a game up by.
+    for (const auto &word : game.steam_words) {
         const size_t equals = word.find('=');
         setenv(word.substr(0, equals).c_str(), word.c_str() + equals + 1, 1);
-        say("Wine: game environment entry applied");
+        say("Wine: Steam id from the installation: %s", word.c_str());
     }
     // One-shot test overrides (env=NAME=VALUE in wine-run.txt) win over defaults.
-    for (const auto &word : launch.env) {
-        const size_t equals = word.find('=');
-        setenv(word.substr(0, equals).c_str(), word.c_str() + equals + 1, 1);
-        say("Wine: launch environment entry applied");
-    }
+    for (const auto &word : launch.env) apply_word(word, "launch");
     {
         // The player's Game Mode setting (src/pw_game_mode.h), or the game's or a test's own WINE_PS5_GAME_MODE: off
         // composes every frame, so the desktop never unloads. A program started in the session has its own the same
@@ -2349,9 +2564,10 @@ void proton_run_wine()
         // before DLL imports: first-launch and upgraded prefixes use the same path.
         const char *zink = getenv("PROTON_ZINK");
         const bool use_zink = !zink || strcmp(zink, "0");
+        // The defaults, and a game's own overrides joined after them (above), get OpenGL's at the front.
         const char *overrides = getenv("WINEDLLOVERRIDES");
-        if (overrides && !strcmp(overrides, default_overrides))
-            setenv("WINEDLLOVERRIDES", (std::string(use_zink ? "opengl32=n,b;" : "opengl32=b;") + default_overrides).c_str(), 1);
+        if (overrides && !strncmp(overrides, default_overrides, sizeof(default_overrides) - 1))
+            setenv("WINEDLLOVERRIDES", (std::string(use_zink ? "opengl32=n,b;" : "opengl32=b;") + overrides).c_str(), 1);
         if (use_zink) layout_env("GALLIUM_DRIVER", "zink");
     } else if (!strcmp(layout, "title")) {
         layout_env("WINE_PS5_CHILDREN", "1");
@@ -2397,6 +2613,7 @@ void proton_run_wine()
     // With every program in a helper (the launcher layout) the server takes the input itself (patch 0931).
     int (*server_input)(const void *, unsigned) = nullptr;
     int (*server_foreground)() = nullptr; // the native process of the foreground window, for the log
+    int (*server_dialog)(char *, unsigned) = nullptr; // the dialog box in front, its caption and lines (patch 2419)
     int (*server_windows)(void *, unsigned) = nullptr;
     auto deliver = [&](const PwWineInput *event) {
         return server_input ? server_input(event, 1) : post_input ? post_input(event) : -1;
@@ -2407,6 +2624,34 @@ void proton_run_wine()
         set_resolver(title_resolve);
     // A process another one starts gets its library entry's settings (src/pw_app_environment.h).
     build_application_table(catalog, prefix);
+    {
+        // The per-game opt-out from running inside MihawkOS (game.json "env": WINE_PS5_TITLE_GAMES=0): the helper that
+        // starts a game decides before the game's settings reach it, so it is told those games' executable names.
+        // And the pick (WINE_PS5_TITLE_GAME=<exe>): the one program of a game that runs in the title, for a game whose
+        // program the rules miss (one that loads its renderer only at run time, src/../wine/ps5/pw_wine_pe_imports.h).
+        std::string optout, picked, listed;
+        for (const auto &game : applications.games) {
+            // Every program the library names counts as a library program wherever it lives (a game on a USB drive),
+            // but the store client itself (its entry runs steam.exe, which restarts itself from a helper on an update).
+            const char *exe = pw_title_game_name(game.executable.c_str());
+            if (strcasecmp(exe, "steam.exe")) listed += (listed.empty() ? "" : ";") + std::string(exe);
+            for (const auto &word : game.env) {
+                if (word == "WINE_PS5_TITLE_GAMES=0")
+                    optout += (optout.empty() ? "" : ";") + std::string(pw_title_game_name(game.executable.c_str()));
+                else if (word.rfind("WINE_PS5_TITLE_GAME=", 0) == 0 && word.size() > 20 && word.find(';') == std::string::npos)
+                    picked += (picked.empty() ? "" : ";") + std::string(pw_title_game_name(word.c_str() + 20));
+            }
+        }
+        if (!listed.empty()) setenv("WINE_PS5_TITLE_LISTED", listed.c_str(), 1);
+        if (!optout.empty()) {
+            setenv("WINE_PS5_TITLE_OPTOUT", optout.c_str(), 1);
+            say("Run inside MihawkOS: not for %s (the game's own setting)", optout.c_str());
+        }
+        if (!picked.empty()) {
+            setenv("WINE_PS5_TITLE_PICK", picked.c_str(), 1);
+            say("Run inside MihawkOS: %s by the game's own setting", picked.c_str());
+        }
+    }
     if (auto set_lookup = symbol<void (*)(int (*)(const char *, const char *, char *, size_t, uint32_t *))>(
             "pw_ps5_set_application_lookup"))
         set_lookup(title_application_lookup);
@@ -2449,8 +2694,16 @@ void proton_run_wine()
     std::vector<const char *> application_entries;
     // Explorer enables its shell and sets up the desktop itself in the title's session (Wine patch 0996).
     if(desktop_session)application_entries.push_back("MIHAWK_SESSION=1");
-    for(const auto &entry : game.env)application_entries.push_back(entry.c_str());
-    for(const auto &entry : launch.env)application_entries.push_back(entry.c_str());
+    // A WINEDLLOVERRIDES entry is the joined value already in the environment (above), not the raw one, which as the
+    // last entry would take the title's overrides away from the initial process and every child it starts.
+    const char *const joined_overrides=getenv("WINEDLLOVERRIDES");
+    const std::string overrides_entry=std::string("WINEDLLOVERRIDES=")+(joined_overrides?joined_overrides:"");
+    auto entry_of=[&](const std::string &entry){
+        return entry.rfind("WINEDLLOVERRIDES=",0)==0 && joined_overrides ? overrides_entry.c_str() : entry.c_str();
+    };
+    for(const auto &entry : game.env)application_entries.push_back(entry_of(entry));
+    for(const auto &entry : game.steam_words)application_entries.push_back(entry.c_str());
+    for(const auto &entry : launch.env)application_entries.push_back(entry_of(entry));
     char application[sizeof(pw_child_bootstrap::application)];size_t application_bytes=0;
     auto set_application=symbol<int (*)(const char *,size_t)>("pw_ps5_set_initial_environment");
     if(!set_application || pw_environment_pack(application,sizeof(application),application_entries.data(),
@@ -2510,12 +2763,26 @@ void proton_run_wine()
             }
             set_gpu(proton_gpu_broker_open,proton_gpu_broker_close);
             owner_broker_running=true;
-            if(const char *named=getenv("WINE_PS5_TITLE_PROCESS"); named && *named) {
+            // Alpha 7's default, "Run inside MihawkOS" (wine/ps5/pw_wine_title_game.h): a 64-bit library game runs
+            // here, beside the broker; WINE_PS5_TITLE_GAMES=0 (this launch's) keeps games in helpers, as Alpha 6.
+            // Only with the broker: the title's other graphics path would refuse a game rather than send it to a helper.
+            setenv("WINE_PS5_TITLE_GAMES","1",0);
+            // A Chromium-based game starts as one process (kernelbase patch 2404), so the whole game sits in the title's
+            // pool; a launch's own WINE_PS5_CHROMIUM_ARGS (another set, or empty: none) wins.
+            setenv("WINE_PS5_CHROMIUM_ARGS","--single-process",0);
+            const bool title_games=!strcmp(getenv("WINE_PS5_TITLE_GAMES"),"1");
+            const char *named=getenv("WINE_PS5_TITLE_PROCESS");
+            if((named && *named) || title_games) {
                 auto set_title_client=symbol<void (*)(int (*)(int,const struct pw_child_bootstrap *))>("pw_ps5_set_title_client_start");
                 if(set_title_client)set_title_client(start_title_client);
-                say("Wine: %s runs in the title beside the broker when started (%s)",named,
-                    set_title_client ? "offered" : "an older runtime: in a helper");
+                say("Wine: %s runs in the title beside the broker when started (%s)",
+                    named && *named ? named : "a 64-bit library game",set_title_client ? "offered" : "an older runtime: in a helper");
             }
+            const char *title_stall=getenv("PROTON_HANG_STALL_MS");
+            const unsigned title_stall_ms=title_stall && strtoul(title_stall,nullptr,10) && strtoul(title_stall,nullptr,10)<PW_HANG_TITLE_STALL_MS ?
+                (unsigned)strtoul(title_stall,nullptr,10) : PW_HANG_TITLE_STALL_MS;
+            say("Run inside MihawkOS: %s; the title watchdog ends a game in the title after %u ms with no new frame",
+                title_games ? "on" : "off (WINE_PS5_TITLE_GAMES=0)",title_stall_ms);
             // Wine offers 120 Hz modes (patches 0924, 1188) only when the broker's display kept 119.88 Hz, asked here,
             // before any helper starts (graphics patch 0029); on a TV that refuses it every program sees 60 Hz alone.
             if(const char *high=getenv("PROTON_120HZ"); high && !strcmp(high,"1")) {
@@ -2557,6 +2824,7 @@ void proton_run_wine()
         // And the touchpad's pointer and the close request go to the desktop, wherever its windows are.
         server_input=module_symbol ? (int (*)(const void *,unsigned))module_symbol(server,"pw_wineserver_input") : nullptr;
         server_foreground=module_symbol ? (int (*)())module_symbol(server,"pw_wineserver_foreground") : nullptr;
+        server_dialog=module_symbol ? (int (*)(char *,unsigned))module_symbol(server,"pw_wineserver_dialog") : nullptr;
         server_windows=module_symbol ? (int (*)(void *,unsigned))module_symbol(server,"pw_wineserver_windows") : nullptr;
         if(owner_graphics) {
             if(!set_graphics) fail("PS5_PROTON_OWNER_BOOTSTRAP FAIL graphics export");
@@ -2697,7 +2965,13 @@ void proton_run_wine()
             say("Mihawk: this runtime cannot unload the desktop; game mode keeps it loaded");
         const int socket=connect_server((runtime+"/share/wine/nls").c_str());
         if(socket<0) fail("PS5_PROTON_OWNER_BOOTSTRAP FAIL server connection");
-        const int launched=start_root(socket,modules.c_str(),prefix.c_str(),cwd,config.argc,config.argv);
+        int launched=-1;
+#ifdef PS5_GPU_BROKER
+        // A root that is a game runs in the title (root_in_title); a start that fails before Wine runs falls back.
+        if(owner_broker_running && config.argc>=2 && root_in_title(config.argv[1]) &&
+           start_title_root(socket,cwd,config.argc,config.argv)) launched=0;
+#endif
+        if(launched) launched=start_root(socket,modules.c_str(),prefix.c_str(),cwd,config.argc,config.argv);
         close(socket);
         say("Wine: owner-only server, initial Windows client launch=%d",launched);
         if(launched) fail("PS5_PROTON_OWNER_BOOTSTRAP FAIL initial client");
@@ -2738,6 +3012,18 @@ void proton_run_wine()
     say("Controls: left=%s right=%s middle=%s", pw_controls_button_id(controls.button[0]),
         pw_controls_button_id(controls.button[1]), pw_controls_button_id(controls.button[2]));
     pw_controls_mouse mouse{};
+    // The on-screen keyboard (src/pw_osk.h, Settings > Controls; Off unless the player chose a gesture): the system's IME dialog
+    // over the game, its line typed into the game as Unicode keys (patch 2424), the pad idle for the game meanwhile.
+    static PwOskDetector osk_detector{};
+    static PwOskPad osk_pad{};
+    static PwOskTyper osk_typer{};
+    static PwOskPs5 osk{};
+    bool osk_ready = false, osk_failed = false, osk_test_done = false;
+    unsigned osk_test_end_tick = 0;
+    const char *osk_test = getenv("WINE_PS5_OSK_TEST");
+    if (osk_test && strcmp(osk_test, "type") && strcmp(osk_test, "open")) osk_test = nullptr;
+    pw_osk_typer_start(&osk_typer, "", 0);
+    say("Controls: on-screen keyboard=%s", pw_osk_trigger_id(controls.keyboard));
     // A USB keyboard and mouse (native/pw_usb_input_ps5.h): loaded here, after the /data grant, which needs the
     // title single-threaded; each load and open is logged, and a device plugged in later is found within 3 s.
     PwUsbInputPs5 usb{};
@@ -2748,6 +3034,7 @@ void proton_run_wine()
         pw_usb_input_ps5_open(&usb, user, [](const char *line) { say("%s", line); });
     }
     bool was_connected = false;
+    bool was_intercepted = false;
     unsigned stop_tick = 0;
     bool stop_escalated = false;
     // The guided setup's first session (its marker; examples/ps5proton/setup_tour.hpp) ends itself once wineboot has made
@@ -2913,6 +3200,12 @@ void proton_run_wine()
     // sound going on, shows as a long gap.
     unsigned long long shown_flips = 0, shown_at_report = 0;
     uint64_t shown_last_ms = 0, shown_gap_ms = 0;
+    // A game in the title owns the display, so its dialog box is drawn by nobody (a demo's "Unsupported graphics card",
+    // 2026-11-01): the title shows its words over the game and Cross answers it (patch 2418); meanwhile the watchdog counts
+    // the box as shown.
+    std::string dialog_up;
+    bool dialog_guide = false;
+    uint64_t dialog_seen_ms = 0;
     unsigned shown_gaps_100 = 0;
 #endif
     const unsigned xi_buttons[] = {1,2,4,8,16,64,128,256,512,4096,8192,16384,32768};
@@ -3079,7 +3372,7 @@ void proton_run_wine()
                              was_away ? "announced" : "unannounced", (unsigned long long)(at - before));
                 say("%s (suspends %u, unannounced %u)", line, title_suspend.suspends, title_suspend.unannounced);
                 proton_flight_note(line);
-                if (title_log_fd >= 0) fsync(title_log_fd);
+                pw_capped_log_sync(&title_log);
             }
             suspend_away.store(title_suspend.away, std::memory_order_relaxed);
             suspend_resumed_ms.store(title_suspend.resumed_ms, std::memory_order_relaxed);
@@ -3148,7 +3441,7 @@ void proton_run_wine()
                 unlink(marker);
                 say("PS5_PROTON_PAYLOAD_OWNER_CLOSE PASS children_ready=8");
                 log_line("payload owner-close: eight children alive; replacing the owner");
-                if(log_fd>=0)fsync(log_fd);
+                pw_capped_log_sync(&wine_log);
                 proton_restart(nullptr,proton_launch().cycle+1,"payload-owner-close");
                 catchReturnFromMain(1);
             }
@@ -3192,10 +3485,55 @@ void proton_run_wine()
             if (pressed & PAD_CROSS) steamcmd_key(PW_STEAMCMD_KEY_ENTER);
             if (pressed & PAD_CIRCLE) steamcmd_key(PW_STEAMCMD_KEY_ESCAPE);
         }
+        // WINE_PS5_OSK_TEST=type|open, 20 s in and once: the console check without a person (tests/osk-typed-probe.c). "type"
+        // types the fixed line as the keyboard does after the dialog; "open" shows the dialog as the gesture would and ends it 3 s later.
+        const bool osk_test_now = osk_test && !osk_test_done && tick >= 120 * 20;
+        if (osk_test_now) {
+            osk_test_done = true;
+            say("Wine: keyboard test %s", osk_test);
+            if (!strcmp(osk_test, "type")) pw_osk_typer_start(&osk_typer, PW_OSK_TEST_TEXT, 1);
+        }
+        if (controls.keyboard != PW_OSK_OFF || osk_pad.open || osk_test_now) {
+            const bool gesture = pw_osk_detect(&osk_detector, controls.keyboard, &pad);
+            if ((gesture || (osk_test_now && !strcmp(osk_test, "open"))) && !osk_pad.open && pw_osk_typer_done(&osk_typer) && !osk_failed) {
+                const PwOskPs5Ops *system_ops = pw_osk_ps5_system_ops();
+                PwOskPs5Ops ops = system_ops ? *system_ops : PwOskPs5Ops{};
+                ops.log = [](const char *line) { say("Wine: %s", line); };
+                if (!osk_ready) osk_ready = system_ops && pw_osk_ps5_open(&osk, &ops) == 0;
+                if (osk_ready && pw_osk_ps5_show(&osk, "Text for the game") == 0) {
+                    pw_osk_pad_open(&osk_pad, &pad);
+                    if (osk_test_now) osk_test_end_tick = tick + 360;
+                    say("Wine: keyboard opened (%s)", osk_test_now ? "test" : pw_osk_trigger_id(controls.keyboard));
+                } else if (!osk_ready) {
+                    osk_failed = true;   // this firmware will not load the dialog: say it once and leave the pad alone
+                    say("Wine: the on-screen keyboard is unavailable on this console");
+                }
+            }
+            if (osk_pad.open && osk_test_end_tick && tick >= osk_test_end_tick) {
+                osk_test_end_tick = 0;
+                pw_osk_ps5_close(&osk);   // the pad is given back by the poll just below, which finds the dialog gone
+            }
+            if (osk_pad.open) {
+                char line[PW_OSK_PS5_TEXT * 4] = {};
+                const int answer = pw_osk_ps5_poll(&osk, line, sizeof(line));
+                if (answer != 0) {   // finished, cancelled, or no longer shown
+                    pw_osk_pad_close(&osk_pad, &pad);
+                    if (answer == 1) pw_osk_typer_start(&osk_typer, line, 1);
+                    say("Wine: keyboard closed (%s, %u bytes)", answer == 1 ? "typing" : "nothing typed", (unsigned)strlen(line));
+                }
+            }
+        }
+        pw_osk_pad_filter(&osk_pad, &shown_pad);
+        // The line it returned, a few events a tick so the game's input queue keeps up.
+        for (unsigned i = 0; i < 8; ++i) {
+            PwWineInput typed_event{};
+            if (!pw_osk_typer_next(&osk_typer, &typed_event)) break;
+            deliver(&typed_event);
+        }
         struct pad gamepad{};
         pw_controls_gamepad(&controls, &shown_pad, &gamepad);
         PwWinePad state{};
-        state.connected = gamepad.connected;
+        state.connected = pw_controls_game_connected(&gamepad);
         for (size_t i = 0; i < sizeof(ps_buttons)/sizeof(ps_buttons[0]); ++i)
             if (gamepad.held & ps_buttons[i]) state.buttons |= xi_buttons[i];
         state.left_trigger = std::clamp(gamepad.l2, 0.f, 1.f) * 255;
@@ -3207,13 +3545,32 @@ void proton_run_wine()
         if (set_pad) set_pad(&state);
         uint8_t report[64];
         proton_dualsense_report(&gamepad, tick, report);
-        if (set_dualsense) set_dualsense(pad.connected ? report : nullptr);
-        if (tick == 0 || pad.pressed || (pad.connected != was_connected))
-            say("Wine: pad connected=%d buttons=%#x touch=%u", pad.connected, pad.held, pad.touch_count);
+        if (set_dualsense) set_dualsense(pw_controls_game_connected(&gamepad) ? report : nullptr);
+        if (tick == 0 || pad.pressed || (pad.connected != was_connected) || (pad.intercepted != was_intercepted))
+            say("Wine: pad connected=%d%s buttons=%#x touch=%u", pad.connected, pad.intercepted ? " (the system has it: idle to the game)" : "",
+                pad.held, pad.touch_count);
         was_connected = pad.connected;
+        was_intercepted = pad.intercepted;
         PwWineInput events[4];
         const unsigned event_count = pw_controls_update(&controls, &mouse, &shown_pad, events);
         for (unsigned i = 0; i < event_count; ++i) deliver(&events[i]);
+        {
+            // Cross and the D-pad as Enter and the arrows (src/pw_dialog_keys.h), sent as they change whatever the game is
+            // doing: the server delivers them as keys only while a dialog box is the active window (patch 2418), so a
+            // pop-up can be answered from the controller. The in-title input queue knows no such event and drops it.
+            static uint32_t dialog_keys_held;
+            static const uint32_t dialog_buttons[PW_DIALOG_KEYS] = {PAD_CROSS, PAD_UP, PAD_DOWN, PAD_LEFT, PAD_RIGHT};
+            const uint32_t now = shown_pad.connected ? shown_pad.held : 0;
+            for (unsigned i = 0; i < PW_DIALOG_KEYS; ++i) {
+                if (!((now ^ dialog_keys_held) & dialog_buttons[i])) continue;
+                PwWineInput key{};
+                key.type = PW_WINE_INPUT_DIALOG_KEY;
+                key.code = pw_dialog_key_code(i);
+                key.down = (now & dialog_buttons[i]) != 0;
+                deliver(&key);
+            }
+            dialog_keys_held = now;
+        }
         PwWineInput usb_events[PW_USB_KEYBOARD_EVENTS + PW_USB_MOUSE_EVENTS];
         const unsigned usb_count = pw_usb_input_ps5_poll(&usb, tick, usb_events,
                                                          sizeof(usb_events) / sizeof(usb_events[0]));
@@ -3239,7 +3596,7 @@ void proton_run_wine()
         // desktop session logs off as Start's Power does (patch 1214): a
         // close to the foreground window reached one of Explorer's own and
         // the session went on (2026-10-18; record removed from the tree).
-        if (tick % 240 == 0 && title_log_fd >= 0) fsync(title_log_fd);
+        if (tick % 240 == 0) pw_capped_log_sync(&title_log), pw_capped_log_sync(&wine_log);
         if (setup_preparing && tick % 120 == 0 && !stop_tick) {
             char stamp[128] = {};
             if (FILE *file = !prefix_made_tick ? fopen((prefix + "/.update-timestamp").c_str(), "r") : nullptr) {
@@ -3541,7 +3898,7 @@ void proton_run_wine()
                         fprintf(file, "%llu\n", (unsigned long long)(census.payloads >> 20));
                         fclose(file);
                     }
-                    if ((census.payloads >> 20) >= 64)
+                    if (pw_payloads_notice(census.payloads >> 20))
                         notice_set(NOTICE_PAYLOADS, "Payloads are using %llu MiB; closing them frees room.",
                                    (unsigned long long)(census.payloads >> 20));
                 }
@@ -3647,7 +4004,8 @@ void proton_run_wine()
                     PwWineInput close{};
                     close.type = PW_WINE_INPUT_CLOSE;
                     const int delivered = stop_tick ? 0 : deliver(&close);
-                    notice_set(NOTICE_MEMORY_CLOSE, "The PS5's memory is nearly full: the game was asked to close.");
+                    // What ran out, memory or the page tables (the pool the memory guard reads apart from memory).
+                    notice_set(NOTICE_MEMORY_CLOSE, "%s", notice_text(pw_setup_guard_notice(by_tables, 0, 1)));
                     if (by_tables) say("Wine: the console's %s (system memory %llu MiB; helpers in %u): %s (%d)", tables_why,
                                        (unsigned long long)(census.system >> 20), census.helper_count,
                                        stop_tick ? "the game is already closing" : "asking the game to close before they run out",
@@ -3664,8 +4022,8 @@ void proton_run_wine()
                     if (!stop_tick) stop_tick = tick;
                 } else if (verdict == PW_MEMORY_END) {
                     const bool can_end = programs_in_helpers && list_helpers;
-                    notice_set(NOTICE_MEMORY_END, "The PS5's memory stayed full: %s", can_end ? "the game was ended." :
-                               "close " PS5_TITLE_NAME " from the home screen.");
+                    // The page tables running out is no full memory (the Chromium game of 2026-10-31 ended at 1,193 MiB).
+                    notice_set(NOTICE_MEMORY_END, "%s", notice_text(pw_setup_guard_notice(by_tables, 1, can_end)));
                     char why[96];
                     if (by_tables) snprintf(why, sizeof(why), "was fine but its %s", tables_why);
                     else if (memory_guard.steep)
@@ -3685,18 +4043,48 @@ void proton_run_wine()
             }
         }
 #ifdef PS5_GPU_BROKER
+        if (server_dialog && tick % 120 == 30 && title_client_claimed.load() && !guide_screens && !setup_preparing &&
+            showcase.empty()) {
+            char text[2048];
+            const bool up = server_dialog(text, sizeof(text)) > 0;
+            if (up) dialog_seen_ms = monotonic_ms();
+            if (up && dialog_up != text) {
+                std::string flat(text);
+                std::replace(flat.begin(), flat.end(), '\n', '|');
+                say("Wine: the game's dialog box is in front: %s", flat.c_str());
+                if (dialog_up.empty() && !dialog_guide) {
+                    PwSetupRecord record;
+                    pw_setup_record_load(&record, PROTON_DATA_ROOT "/setup.txt");
+                    dialog_guide = proton_guide_start(record.language, proton_app_root(), proton_gpu_broker_set_cover);
+                }
+                const char *body = strchr(text, '\n');
+                const std::string title(text, body ? size_t(body - text) : strlen(text));
+                proton_guide_dialog(title.c_str(), body ? body + 1 : "");
+                dialog_up = text;
+            } else if (!up && !dialog_up.empty()) {
+                say("Wine: the game's dialog box closed");
+                proton_guide_dialog(nullptr, nullptr);
+                if (dialog_guide) log_line(proton_guide_stop("the dialog box closed"));
+                dialog_guide = false;
+                dialog_up.clear();
+            }
+        }
         // The hang breaker (src/pw_hang_breaker.h), once a second; the flight recorder prints what it saw.
         if (breaker_armed && tick % 120 == 60) {
             const uint64_t now = monotonic_ms();
             PwHangSample sample{};
             // Ages count from the app's last return (src/pw_suspend.h): a suspend is not a stall.
-            sample.present_age_ms = now - pw_suspend_since(&title_suspend, shown_last_ms ? shown_last_ms : breaker_armed_ms);
+            sample.present_age_ms = now - pw_suspend_since(&title_suspend, std::max(shown_last_ms ? shown_last_ms : breaker_armed_ms,
+                                                                                  dialog_seen_ms));
             sample.census_known = breaker_census_ms != 0;
             const uint64_t census_from = pw_suspend_since(&title_suspend, breaker_census_ms);
             sample.census_age_ms = breaker_census_ms && now > census_from ? now - census_from : 0;
             sample.stall_ms = breaker_stall_ms;
             PwHangVerdict verdict = PW_HANG_FINE;
-            pw_hang_breaker_decide(&sample, &verdict);
+            // A game in the title: its frames alone (the title watchdog, src/pw_hang_breaker.h).
+            const bool in_title = title_client_claimed.load();
+            if (in_title) pw_hang_breaker_title_decide(&sample, shown_flips > title_client_flips.load(), &verdict);
+            else pw_hang_breaker_decide(&sample, &verdict);
             proton_flight_publish(sample.present_age_ms, sample.census_age_ms, sample.census_known, verdict == PW_HANG_STALLED);
             if (verdict == PW_HANG_FINE) {
                 breaker_said = false;
@@ -3704,11 +4092,19 @@ void proton_run_wine()
                 // Away or just back: decided again once the grace is over (the ages count from the return anyway).
             } else if (!breaker_said) {
                 breaker_said = true;
-                say("Wine: hang breaker: stalled: no frame for %llu ms and the system memory census %llu ms old%s",
-                    (unsigned long long)sample.present_age_ms, (unsigned long long)sample.census_age_ms,
-                    breaker_acts && list_helpers ? "" : "; reporting only");
-                if (title_log_fd >= 0) fsync(title_log_fd);
-                if (breaker_acts) end_game("hang breaker", false);
+                if (in_title)
+                    say("Wine: title watchdog: the game in the title showed no new frame for %llu ms%s",
+                        (unsigned long long)sample.present_age_ms, breaker_acts ? "" : "; reporting only");
+                else
+                    say("Wine: hang breaker: stalled: no frame for %llu ms and the system memory census %llu ms old%s",
+                        (unsigned long long)sample.present_age_ms, (unsigned long long)sample.census_age_ms,
+                        breaker_acts && list_helpers ? "" : "; reporting only");
+                // What each blocked thread waits on, before the game is ended: a stalled game's waits and their objects
+                // (src/pw_ntsync.h; with WINE_PS5_NTSYNC_TRACE, the last operations on them too).
+                if (device_dump) device_dump(dump_line, nullptr, 400, 500);
+                pw_capped_log_sync(&title_log);
+                if (breaker_acts && in_title && !stop_tick) stop_tick = tick;   // its 60 s notice if the game stays
+                if (breaker_acts) end_game(in_title ? "title watchdog" : "hang breaker", false);
             }
         }
 #endif
@@ -3740,11 +4136,12 @@ void proton_run_wine()
             if (sink_stats) sink_stats(&stats);
             PwWineFdvStats files{};
             if (fdv_stats) fdv_stats(&files);
-            say("Wine: alive stage=%d seconds=%u pad=%d mouse=%llu/%llu dropped=%llu files live=%u parked=%u parks=%lu unparks=%lu limit=%lu failed=%lu%s",
+            // code copies: the shared code copies' descriptors, which share the table with the files (pw_wine_codeshare.h).
+            say("Wine: alive stage=%d seconds=%u pad=%d mouse=%llu/%llu dropped=%llu files live=%u parked=%u parks=%lu unparks=%lu limit=%lu failed=%lu code copies=%u released=%lu%s",
                 wine.stage, tick / 120, pad.connected, (unsigned long long)stats.inputs_delivered,
                 (unsigned long long)stats.inputs_posted, (unsigned long long)stats.inputs_dropped, files.live,
-                files.parked, files.parks, files.unparks, files.limit_hits, files.failures,
-                files.disabled ? " (budget off)" : "");
+                files.parked, files.parks, files.unparks, files.limit_hits, files.failures, files.code_copies,
+                files.code_released, files.disabled ? " (budget off)" : "");
             if (usb.keyboards || usb.mouse >= 0)
                 say("usb: keyboards=%u mouse=%s key events=%llu mouse events=%llu", usb.keyboards,
                     usb.mouse >= 0 ? "open" : "none", (unsigned long long)usb.keys_sent,
@@ -3760,6 +4157,21 @@ void proton_run_wine()
                     PW_MEMORY_GUARD_WINDOW_MS / 1000, memory_limit,
                     (unsigned long long)((code_share_duplicates ? code_share_duplicates() : 0) >> 20),
                     (unsigned long long)(census_address_space >> 20));
+            // Every 10 s, guard or not: the page tables (the title's own as it reads them, the system pool's from the census)
+            // and direct memory, synced at once, so a console that freezes leaves its last figures (2026-10-31, a game in
+            // the title).
+            int total = 0, spare = 0, gpu_total = 0, gpu_free = 0;
+            const bool tables = !sceKernelGetPageTableStats(&total, &spare, &gpu_total, &gpu_free);
+            struct ps5_memory_stats direct{};
+            const bool direct_read = ps5_memory_query(&direct);
+            say("Wine: every 10 s: page tables here %d free of %d (gpu %d of %d)%s; system pool %u free of %u (census %lld ms "
+                "old); system memory %llu MiB; direct memory %llu MiB free of %llu, largest %llu MiB%s",
+                spare, total, gpu_free, gpu_total, tables ? "" : " (no reading)", census.page_tables_free, census.page_tables,
+                census.taken_ms ? (long long)(monotonic_ms() - census.taken_ms) : -1ll,
+                (unsigned long long)(census.system >> 20), (unsigned long long)(direct.free_bytes >> 20),
+                (unsigned long long)(direct.total_bytes >> 20), (unsigned long long)(direct.largest_bytes >> 20),
+                direct_read ? "" : " (no reading)");
+            pw_capped_log_sync(&title_log);
             // A program in the title converts its code in the title's partition under a helper's budget; the same figures
             // as a helper's line (native/proton_wine_child.c, code_cache_tally).
             uint64_t cache[10] = {};

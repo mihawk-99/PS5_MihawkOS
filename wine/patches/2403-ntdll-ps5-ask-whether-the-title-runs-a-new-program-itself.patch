@@ -1,0 +1,58 @@
+From 0000000000000000000000000000000000000000 Mon Sep 17 00:00:00 2001
+From: Mihawk <163614687+mihawk-99@users.noreply.github.com>
+Date: Sat, 31 Oct 2026 14:00:00 -0400
+Subject: [PATCH] ntdll: PS5: ask the title's rules whether it runs a new program itself
+
+Alpha 7 runs a library game in the title by default ("Run inside MihawkOS"):
+its page tables are then the title's, whose own container is twice the
+helpers' on the standard PS5 (16,384 against 8,192). A program that holds the
+title's one place but is no game, such as a launcher that starts the game and
+exits, would end the session under the game it started. So the choice is
+made by what the program is, as well as where it lives and what it is named:
+spawn_process now asks pw_ps5_title_route (wine/ps5/pw_wine_process.c) with
+the image's Unix path, its machine and its Windows path. The PS5 code applies
+the path and name rules and the per-game lists (wine/ps5/pw_wine_title_game.h)
+and reads the image's import and delay-import tables, and one level deeper
+the DLLs it imports from its own folder (wine/ps5/pw_wine_pe_imports.h). Only
+a 64-bit program that reaches a graphics API, and is no browser shell and no
+.NET program, gets PW_CHILD_GRAPHICS, and a Chromium-based game's main process
+(told by its folder, with the command line for its own --type= processes). Every library program's route is logged
+with its reason. NtCreateUserProcess passes the Unix name it already has.
+---
+--- a/dlls/ntdll/unix/process.c	2026-10-31 12:47:32.957419291 -0400
++++ b/dlls/ntdll/unix/process.c	2026-10-31 13:21:58.700747828 -0400
+@@ -402,11 +402,13 @@
+  *           spawn_process
+  */
+ static NTSTATUS spawn_process( const RTL_USER_PROCESS_PARAMETERS *params, int socketfd,
+-                               int unixdir, char *winedebug, const struct pe_image_info *pe_info )
++                               int unixdir, char *winedebug, const struct pe_image_info *pe_info,
++                               const char *unix_name )
+ {
+ #ifdef __PROSPERO__
+     extern int pw_ps5_spawn(int, const char *, const char *, const char *, const char *, unsigned int,
+                             const char *, const char *);
++    extern unsigned int pw_ps5_title_route(const char *, unsigned short, const char *, const char *);
+     UNICODE_STRING nt_cwd = {0}, true_cwd = {0};
+     /* The new process's executable and command line, so the title can give it its catalog settings
+      * (wine/ps5/pw_wine_process.h, the bootstrap's image and command_line); a long command line keeps its start. */
+@@ -434,6 +436,10 @@
+     ntdll_wcstoumbs( params->CommandLine.Buffer, params->CommandLine.Length / sizeof(WCHAR) * 3 < sizeof(command_line)
+                      ? params->CommandLine.Length / sizeof(WCHAR) : (sizeof(command_line) - 1) / 3, command_line,
+                      sizeof(command_line) - 1, FALSE );
++    /* Whether the title runs this program itself (wine/ps5/pw_wine_process.h, pw_ps5_title_route): by its path, its
++     * name, the per-game lists, its folder (a Chromium-based game) and the DLLs its image imports, read here from its
++     * own file; the command line tells a Chromium game's own processes from its main one. */
++    if (!flags) flags = pw_ps5_title_route( unix_name, pe_info ? pe_info->machine : 0, image, command_line );
+     if (!status && pw_ps5_spawn(socketfd, getenv("WINE_PS5_NTDLL_DIR"), config_dir, cwd,
+                                winedebug ? strchr(winedebug, '=') + 1 : NULL, flags, image, command_line))
+         status = errno_to_status(errno);
+@@ -992,7 +998,7 @@
+ 
+     /* create the child process */
+ 
+-    if ((status = spawn_process( params, socketfd[0], unixdir, winedebug, &pe_info ))) goto done;
++    if ((status = spawn_process( params, socketfd[0], unixdir, winedebug, &pe_info, unix_name ))) goto done;
+ 
+     close( socketfd[0] );
+     socketfd[0] = -1;

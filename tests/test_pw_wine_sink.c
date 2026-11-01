@@ -121,6 +121,38 @@ static void start_dualsense_helper(void)
     _exit(4);
 }
 
+/* A second helper, for the pad: it makes its input page, takes the first look at the pad (a baseline), and then looks
+ * every millisecond until it has seen the pad connect and disconnect. */
+static int pad_helper_socket = -1;
+static pid_t pad_helper;
+static void start_pad_helper(void)
+{
+    int pair[2];
+    assert(!socketpair(AF_UNIX, SOCK_STREAM, 0, pair));
+    pad_helper = fork();
+    assert(pad_helper >= 0);
+    if (pad_helper) {
+        close(pair[1]);
+        pad_helper_socket = pair[0];
+        return;
+    }
+    close(pair[0]);
+    const int fd = pw_shared_page_create(PW_WINE_INPUT_PAGE_BYTES);
+    if (fd < 0) _exit(2);
+    send_fd(pair[1], fd);
+    char value[16];
+    snprintf(value, sizeof(value), "%d", fd);
+    setenv("WINE_PS5_INPUT_FD", value, 1);
+    const uint32_t first = pw_wine_pad_changes();
+    if (write(pair[1], "B", 1) != 1) _exit(3);
+    uint32_t seen = first;
+    for (int i = 0; i < 60000 && seen < first + 2; i++) {
+        usleep(1000);
+        seen = pw_wine_pad_changes();
+    }
+    _exit(seen == first + 2 ? 0 : 4);
+}
+
 static void *play(void *unused)
 {
     static int16_t grain[PW_WINE_AUDIO_GRAIN * 2];
@@ -129,9 +161,19 @@ static void *play(void *unused)
     return NULL;
 }
 
+/* The launcher that switches chapters: its own mixer keeps playing in the title while the game it started plays
+ * through a helper's ring. */
+static void *launcher_plays(void *count)
+{
+    int16_t frames[PW_WINE_AUDIO_GRAIN * 2];
+    fill(frames, 100);
+    for (int i = 0; i < *(int *)count; i++) pw_wine_audio_output(frames);
+    return NULL;
+}
 int main(void)
 {
     start_dualsense_helper();
+    start_pad_helper();
     /* the title's close and terminate requests travel like input */
     PwWineInput event = {.type = PW_WINE_INPUT_CLOSE}, out;
     assert(!pw_wine_post_input(&event));
@@ -141,6 +183,21 @@ int main(void)
     assert(pw_wine_post_input(&event) == -1);
     assert(pw_wine_next_input(&out) && out.type == PW_WINE_INPUT_CLOSE);
     assert(pw_wine_next_input(&out) && out.type == PW_WINE_INPUT_TERMINATE);
+    /* Typed text arrives as UTF-16 units (patch 2424): a press and a release carry the unit; no unit, a unit past 16 bits
+     * and a state past 1 are refused */
+    PwWineInput unit = {PW_WINE_INPUT_CHAR, 0xe9, 0, 0, 1};
+    assert(!pw_wine_post_input(&unit));
+    unit.down = 0;
+    assert(!pw_wine_post_input(&unit));
+    assert(pw_wine_next_input(&out) && out.type == PW_WINE_INPUT_CHAR && out.code == 0xe9 && out.down == 1);
+    assert(pw_wine_next_input(&out) && out.type == PW_WINE_INPUT_CHAR && out.code == 0xe9 && out.down == 0);
+    unit.code = 0;
+    assert(pw_wine_post_input(&unit) == -1);
+    unit.code = 0x10000;
+    assert(pw_wine_post_input(&unit) == -1);
+    unit.code = 'a';
+    unit.down = 2;
+    assert(pw_wine_post_input(&unit) == -1);
     /* Keys carry a scan code and the extended flag (a USB keyboard's Right arrow); a key without a virtual key, a
      * button past X2 and a code past the flag are refused. */
     PwWineInput key = {PW_WINE_INPUT_KEY, 0x27 | 0x4d << PW_WINE_KEY_SCAN_SHIFT | PW_WINE_KEY_EXTENDED, 0, 0, 1};
@@ -223,6 +280,50 @@ int main(void)
         pw_wine_input_page_release(page);
         assert(pw_wine_input_page_adopt(-1) == NULL);
     }
+    /* A helper (started first, before this process set a pad) saw the pad through its input page: its first look was the
+     * baseline, and each later look that finds the pad connected, then gone, counts. */
+    {
+        const int fd = receive_fd(pad_helper_socket);
+        assert(fd >= 0);
+        void *page = pw_wine_input_page_adopt(fd);
+        assert(page);
+        char ready;
+        assert(read(pad_helper_socket, &ready, 1) == 1 && ready == 'B');
+        PwWinePad pad = {.connected = 1};
+        pw_wine_set_pad(&pad);
+        usleep(20000);   /* the helper looks every millisecond: it has seen the pad */
+        pw_wine_set_pad(NULL);
+        int status = 0;
+        assert(waitpid(pad_helper, &status, 0) == pad_helper && WIFEXITED(status) && WEXITSTATUS(status) == 0);
+        pw_wine_input_page_release(page);
+        close(pad_helper_socket);
+    }
+    /* The pad connecting or disconnecting is counted, and wakes the driver, which tells the game's windows
+     * (WM_DEVICECHANGE); the same state again, a changed button or a second disconnect is not a change. */
+    {
+        const uint32_t before = pw_wine_pad_changes();
+        PwWinePad pad = {.connected = 1, .buttons = 1};
+        char byte[8];
+        while (read(pw_wine_input_fd(), byte, sizeof(byte)) > 0) {}   /* the fd is non-blocking: empty it */
+        pw_wine_set_pad(NULL);   /* disconnected already, or the first look: no change */
+        const uint32_t base = pw_wine_pad_changes();
+        assert(base == before || base == before + 1);
+        pw_wine_set_pad(&pad);
+        assert(pw_wine_pad_changes() == base + 1);
+        assert(read(pw_wine_input_fd(), byte, sizeof(byte)) == 1);   /* woken once */
+        pad.buttons = 2;
+        pw_wine_set_pad(&pad);
+        pw_wine_set_pad(&pad);
+        assert(pw_wine_pad_changes() == base + 1 && read(pw_wine_input_fd(), byte, sizeof(byte)) < 0);
+        pw_wine_set_pad(NULL);
+        pw_wine_set_pad(NULL);
+        assert(pw_wine_pad_changes() == base + 2 && read(pw_wine_input_fd(), byte, sizeof(byte)) == 1);
+        pw_wine_set_pad(&pad);
+        assert(pw_wine_pad_changes() == base + 3);
+        pw_wine_set_pad(NULL);
+        assert(pw_wine_pad_changes() == base + 4);
+        while (read(pw_wine_input_fd(), byte, sizeof(byte)) > 0) {}
+    }
     /* A helper's audio ring, adopted by the title: the helper plays into it, and the title's mixer plays each grain
      * through the sink, in order. (With no sink the mixer takes grains anyway and drops them, so that a helper's audio
      * clock keeps going: the sink is set first.) */
@@ -279,6 +380,50 @@ int main(void)
         pw_wine_audio_ring_release(second);
         close(fd);
         close(second_fd);
+        assert(!pw_wine_stop_audio(500));
+    }
+    /* Open, close, reopen in one process, with two players at once (Deltarune's game_change): the title's own mixer and
+     * a helper's ring play together. The sink must see each grain once, the two summed, not the title's and the
+     * helper's alternating, which halves the helper's rate and plays every second grain as silence or the other's. */
+    {
+        const int fd = pw_shared_page_create(PW_WINE_AUDIO_RING_BYTES);
+        assert(fd >= 0);
+        pw_wine_set_audio_sink(capture_sink, NULL);
+        for (int round = 0; round < 2; round++) {   /* open, close, reopen */
+            mixed_count = 0;
+            void *ring = pw_wine_audio_ring_adopt(fd);
+            assert(ring);
+            int launcher_grains = 40;
+            pthread_t launcher;
+            int16_t frames[PW_WINE_AUDIO_GRAIN * 2];
+            fill(frames, 1000);
+            for (int i = 0; i < 8; i++) assert(pw_audio_ring_write(ring, frames, 0, NULL, NULL) == PW_OK);
+            assert(!pthread_create(&launcher, NULL, launcher_plays, &launcher_grains));
+            for (int i = 0; i < 32; i++) {   /* the helper's writer, in step with the port */
+                for (int w = 0; w < 2000 && pw_audio_ring_write(ring, frames, 0, NULL, NULL) != PW_OK; w++) usleep(500);
+            }
+            pthread_join(launcher, NULL);
+            for (int i = 0; i < 2000 && pw_audio_ring_fill(ring) > 0; i++) usleep(1000);
+            usleep(5000);
+            int both = 0;
+            for (int i = 0; i < mixed_count && i < 64; i++) {
+                both += mixed_first[i] == 1100;
+            }
+            /* before the fix: 40 launcher-only grains and 40 ring-only ones, none summed */
+            assert(both >= 20);
+            assert(mixed_count < 60);
+            /* closed while one of the title's own grains still waits: it and those after it reach the sink in order */
+            gate_open = 0;
+            mixed_count = 0;
+            fill(frames, 5);
+            assert(!pw_wine_audio_output(frames));   /* through the mixer: the ring is still adopted */
+            pw_wine_audio_ring_release(ring);
+            gate_open = 1;
+            for (int16_t v = 6; v <= 8; v++) { fill(frames, v); assert(!pw_wine_audio_output(frames)); }
+            for (int i = 0; i < 2000 && mixed_count < 4; i++) usleep(1000);
+            assert(mixed_count == 4 && mixed_first[0] == 5 && mixed_first[1] == 6 && mixed_first[2] == 7 && mixed_first[3] == 8);
+        }
+        close(fd);
         assert(!pw_wine_stop_audio(500));
     }
     /* Frame allocation is native-owned, transferred once, and retained across

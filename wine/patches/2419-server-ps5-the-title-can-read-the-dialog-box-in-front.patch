@@ -1,0 +1,106 @@
+From 0000000000000000000000000000000000000000 Mon Sep 17 00:00:00 2001
+From: Mihawk <163614687+mihawk-99@users.noreply.github.com>
+Date: Sun, 1 Nov 2026 03:00:00 -0400
+Subject: [PATCH] server: PS5: the title can read the dialog box in front.
+
+A game in the title owns the display, so a Windows dialog box it opens (a message box) is drawn by nobody: the game waits
+for an answer nobody can see and looks hung until the title's watchdog ends it (a survival-horror demo's "Unsupported
+graphics card" box, 2026-11-01). ps5_windows_publish, on the server thread, now also records the dialog box in front (the
+foreground's active window, class #32770): its caption, then each child's text, one per line in UTF-8.
+pw_wineserver_dialog copies it out under the snapshot's lock, so the title never walks the server's lists; the title
+shows the lines over the game and the controller's Cross answers the box (patch 2418). A window's text change now marks
+the snapshot for rebuilding as well.
+---
+ server/window.c | 45 ++++++++++++++++++++-
+ 1 file changed, 45 insertions(+), 0 deletions(-)
+
+diff --git a/server/window.c b/server/window.c
+--- a/server/window.c
++++ b/server/window.c
+@@ -192,6 +192,44 @@
+     return 0;
+ }
+ 
++/* The dialog box in front (class #32770, the foreground's active window), for the title: a game in the title owns the
++ * display, so its message box is drawn by nobody and the game looks hung (the title shows these lines instead,
++ * native/proton_wine.cpp). Its caption, then each child's text, one per line, in UTF-8; empty when none is in front.
++ * Made by ps5_windows_publish on the server thread, read here under the snapshot's lock. */
++static char ps5_dialog[2048];
++
++static unsigned int ps5_dialog_put( char *out, unsigned int used, unsigned int size, const WCHAR *text, data_size_t bytes )
++{
++    data_size_t i, count = bytes / sizeof(WCHAR);
++
++    if (!count) return used;
++    if (used && used + 1 < size) out[used++] = '\n';
++    for (i = 0; i < count && used + 4 < size; i++)
++    {
++        unsigned int c = text[i];
++        if (c >= 0xd800 && c < 0xdc00 && i + 1 < count && text[i + 1] >= 0xdc00 && text[i + 1] < 0xe000)
++            c = 0x10000 + ((c - 0xd800) << 10) + (text[++i] - 0xdc00);
++        if (c < 0x80) out[used++] = c;
++        else if (c < 0x800) out[used++] = 0xc0 | (c >> 6), out[used++] = 0x80 | (c & 0x3f);
++        else if (c < 0x10000)
++            out[used++] = 0xe0 | (c >> 12), out[used++] = 0x80 | ((c >> 6) & 0x3f), out[used++] = 0x80 | (c & 0x3f);
++        else
++            out[used++] = 0xf0 | (c >> 18), out[used++] = 0x80 | ((c >> 12) & 0x3f), out[used++] = 0x80 | ((c >> 6) & 0x3f),
++            out[used++] = 0x80 | (c & 0x3f);
++    }
++    out[used] = 0;
++    return used;
++}
++
++DECLSPEC_EXPORT int pw_wineserver_dialog( char *out, unsigned int size )
++{
++    if (!out || !size) { errno = EINVAL; return -1; }
++    pthread_mutex_lock( &ps5_snapshot_mutex );
++    snprintf( out, size, "%s", ps5_dialog );
++    pthread_mutex_unlock( &ps5_snapshot_mutex );
++    return out[0] != 0;
++}
++
+ void ps5_windows_note_request(unsigned int request)
+ {
+     switch (request)
+@@ -203,6 +241,7 @@
+     case REQ_create_desktop: case REQ_set_input_desktop: case REQ_set_thread_desktop:
+     case REQ_ps5_set_window_dwm: case REQ_ps5_update_thumbnail: case REQ_ps5_unregister_thumbnail:
+     case REQ_set_active_window: case REQ_set_foreground_window: case REQ_attach_thread_input:
++    case REQ_set_window_text:
+         ps5_windows_dirty = 1;break;
+     }
+ }
+@@ -481,6 +520,7 @@
+     struct desktop *desktop;
+     struct window *win;
+     unsigned int saved_error, saved_global_error;
++    char dialog[sizeof(ps5_dialog)] = "";
+     if (!ps5_windows_dirty)return;
+     saved_error = get_error();
+     saved_global_error = global_error;
+@@ -490,6 +530,14 @@
+     if (desktop)
+     {
+         ps5_active_window = ps5_foreground_active( desktop );
++        if (ps5_window_is_dialog( ps5_active_window ) &&
++            (win = get_user_object( ps5_active_window, NTUSER_OBJ_WINDOW )))
++        {
++            struct window *child;
++            unsigned int used = ps5_dialog_put( dialog, 0, sizeof(dialog), win->text, win->text_len );
++            LIST_FOR_EACH_ENTRY( child, &win->children, struct window, entry )
++                used = ps5_dialog_put( dialog, used, sizeof(dialog), child->text, child->text_len );
++        }
+         if (desktop->top_window)
+         {
+             LIST_FOR_EACH_ENTRY(win, &desktop->top_window->children, struct window, entry)
+@@ -509,6 +557,7 @@
+     pthread_mutex_lock(&ps5_snapshot_mutex);
+     snapshot.sequence = ps5_snapshot.sequence + 1;
+     ps5_snapshot = snapshot;
++    memcpy( ps5_dialog, dialog, sizeof(dialog) );
+     pthread_mutex_unlock(&ps5_snapshot_mutex);
+     ps5_windows_dirty = 0;
+ }
+-- 
+2.56.0
+

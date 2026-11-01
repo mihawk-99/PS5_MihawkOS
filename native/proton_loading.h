@@ -61,6 +61,8 @@ std::string proton_cover_stop(const char *why);
 bool proton_guide_start(const char *language, const char *app_root, bool (*show)(const void *));
 // What shows now (PW_STEAM_SCREEN_NONE: the client's own windows); the drawing thread takes it up within 0.1 s.
 void proton_guide_show(PwSteamScreen screen, unsigned seconds, unsigned long long bytes, const char *persona);
+// A game's dialog box over its frames (PW_STEAM_SCREEN_DIALOG): its caption and its lines; NULL takes it off.
+void proton_guide_dialog(const char *title, const char *text);
 // Idempotent; the broker shows no cover once it returns. why: for the log.
 std::string proton_guide_stop(const char *why);
 #endif

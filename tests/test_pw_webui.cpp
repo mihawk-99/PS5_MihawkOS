@@ -107,6 +107,20 @@ int main()
     assert(call(context, "POST", "/api/settings", R"({"show_all":false})").status == 200 &&
            access((data + "/library-show-all").c_str(), F_OK) != 0);
 
+    // The on-screen keyboard's gesture: Off, four choices, saved only when chosen, and a bad one saves nothing
+    r = call(context, "GET", "/api/settings");
+    settings = json::parse(r.body);
+    assert(settings["keyboard"] == "off" && settings["choices"]["keyboards"].size() == 4 &&
+           settings["choices"]["keyboards"][2]["id"] == "l3-r3");
+    r = call(context, "POST", "/api/settings", R"({"keyboard":"l3-r3"})");
+    assert(r.status == 200 && json::parse(r.body)["keyboard"] == "l3-r3" && json::parse(r.body)["mouse"]["right"] == "touchpad");
+    assert(get(data + "/controls.txt").find("keyboard l3-r3\n") != std::string::npos);
+    assert(call(context, "POST", "/api/settings", R"({"keyboard":"nose"})").status == 400);
+    assert(call(context, "POST", "/api/settings", R"({"keyboard":3})").status == 400);
+    assert(json::parse(call(context, "GET", "/api/settings").body)["keyboard"] == "l3-r3");   // a bad value saved nothing
+    assert(call(context, "POST", "/api/settings", R"({"keyboard":"off"})").status == 200 &&
+           get(data + "/controls.txt").find("keyboard") == std::string::npos);
+
     // The theme and the music: kept by id in the title folder's hui/; the first is what nothing kept means
     context.themes = {{"gloss", "Gloss"}, {"aero", "Aero"}};
     context.music = {{"bubble-garden", "Bubble Garden"}, {"sky-lounge", "Sky Lounge"}};

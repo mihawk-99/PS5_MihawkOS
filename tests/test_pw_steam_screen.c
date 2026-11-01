@@ -84,13 +84,16 @@ int main(int argc, char **argv)
         unsigned seconds;
         unsigned long long bytes;
         const char *persona;
+        const char *dialog_title, *dialog_text;
     } screens[] = {
-        {PW_STEAM_SCREEN_INSTALLING, "installing", 12, 0, NULL},
-        {PW_STEAM_SCREEN_UPDATING, "updating", 134, 212000000ull, NULL},
-        {PW_STEAM_SCREEN_SLOW, "slow", 431, 241000000ull, NULL},
-        {PW_STEAM_SCREEN_SCAN, "scan", 318, 480000000ull, NULL},
-        {PW_STEAM_SCREEN_SIGNED_IN, "signed-in", 612, 480000000ull, "Mihawk"},
-        {PW_STEAM_SCREEN_SIGNED_IN, "signed-in-long", 612, 480000000ull, "a display name of thirty-two chars"},
+        {PW_STEAM_SCREEN_INSTALLING, "installing", 12, 0, NULL, NULL, NULL},
+        {PW_STEAM_SCREEN_UPDATING, "updating", 134, 212000000ull, NULL, NULL, NULL},
+        {PW_STEAM_SCREEN_SLOW, "slow", 431, 241000000ull, NULL, NULL, NULL},
+        {PW_STEAM_SCREEN_SCAN, "scan", 318, 480000000ull, NULL, NULL, NULL},
+        {PW_STEAM_SCREEN_SIGNED_IN, "signed-in", 612, 480000000ull, "Mihawk", NULL, NULL},
+        {PW_STEAM_SCREEN_SIGNED_IN, "signed-in-long", 612, 480000000ull, "a display name of thirty-two chars", NULL, NULL},
+        {PW_STEAM_SCREEN_DIALOG, "dialog", 0, 0, NULL, "A Game - Aborted",
+         "Unsupported graphics card.\nPlease read the system requirements for details.\nOK"},
     };
     size_t count = 0, drawn = 0, skipped = 0;
     const PwSetupLanguage *languages = pw_setup_languages(&count);
@@ -104,7 +107,7 @@ int main(int argc, char **argv)
         const PwSteamFaces faces = {own ? own : regular, own ? own : semibold, regular};
         for (size_t s = 0; s < sizeof(screens) / sizeof(screens[0]); ++s) {
             const PwSteamScreenState state = {screens[s].screen, language, screens[s].seconds, screens[s].bytes,
-                                              screens[s].persona};
+                                              screens[s].persona, screens[s].dialog_title, screens[s].dialog_text};
             PwSteamScreenReport report;
             pw_steam_screen_draw(still, backdrop, &state, &faces, &report);
             if (report.cut || report.missing || report.bottom > PW_STEAM_CARD_Y1 - 12 || report.bottom < PW_STEAM_CARD_Y0) {
@@ -126,13 +129,26 @@ int main(int argc, char **argv)
                     assert(x >= x0 && x <= x1 && y >= y0 && y <= y1);
                     ++moved;
                 }
-            assert(state.screen == PW_STEAM_SCREEN_SIGNED_IN ? moved == 0 : moved > 1000);
+            assert(state.screen == PW_STEAM_SCREEN_SIGNED_IN || state.screen == PW_STEAM_SCREEN_DIALOG ? moved == 0 : moved > 1000);
             if (pictures) write_ppm(pictures, language->tag, screens[s].name, frame);
             ++drawn;
         }
     }
+    /* A dialog box with more text than the card holds (a game's call stack after its message): cut, never past the card */
+    {
+        char text[6000] = "Unsupported graphics card.\nPlease read the system requirements for details.\n";
+        for (int i = 0; i < 60; ++i) {
+            char line[96];
+            snprintf(line, sizeof(line), "\ngame.exe!0x140000000 + 0x%07x a long frame name that wraps on its own line", i * 4099);
+            strcat(text, line);
+        }
+        const PwSteamScreenState state = {PW_STEAM_SCREEN_DIALOG, NULL, 0, 0, NULL, "A Game - Aborted", text};
+        PwSteamScreenReport report;
+        pw_steam_screen_draw(still, backdrop, &state, &latin, &report);
+        assert(!report.missing && report.bottom <= PW_STEAM_CARD_Y1 - 12 && report.bottom > PW_STEAM_CARD_Y0);
+    }
     /* Nothing over the client: the backdrop alone (the cover is taken off then, but a draw must not fail) */
-    const PwSteamScreenState none = {PW_STEAM_SCREEN_NONE, NULL, 0, 0, NULL};
+    const PwSteamScreenState none = {PW_STEAM_SCREEN_NONE, NULL, 0, 0, NULL, NULL, NULL};
     pw_steam_screen_draw(still, backdrop, &none, &latin, NULL);
     assert(!memcmp(still, backdrop, (size_t)PW_LOADING_WIDTH * PW_LOADING_HEIGHT * 4));
 

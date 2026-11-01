@@ -1,0 +1,141 @@
+From 0000000000000000000000000000000000000000 Mon Sep 17 00:00:00 2001
+From: Mihawk <163614687+mihawk-99@users.noreply.github.com>
+Date: Sun, 01 Nov 2026 14:00:00 -0400
+Subject: [PATCH] ntdll: PS5: Another process has pages, and the log says what a program learns of it.
+
+Witcher 3's DirectX 12 build starts, creates its device, then looks at another process (the image name of one handle, and four
+rounds of IsWow64Process, GetProcessId and GetProcessMemoryInfo on it), opens a config file one folder above the game, and
+ends itself with exit code 0 (tester log, 2026-11-01). The log shows what it asked, not what it was told, so there was no way
+to say which answer it did not like. Two changes:
+
+- The server counts another process's memory from /proc, which the console lacks, so every process but the caller's reported a
+  working set of zero (the caller's own is filled in separately). A live Windows process always holds pages, and a program that
+  sums or divides by what other processes hold, or checks that its parent is a real process, saw an empty one. When the server
+  has nothing for a process that is not the caller's, NtQueryInformationProcess(ProcessVmCounters) now reports a floor (16 MiB
+  working set and pagefile, 256 MiB virtual); it is not a measurement, only the least a running process holds.
+- The +process trace now shows what a program learns about a process that is not its own: NtOpenProcess logs the pid, access and
+  result, and NtQueryInformationProcess logs one line for each distinct answer (the first 64): pid, parent pid and exit status;
+  working set and virtual size; the wow64 value; the image name; or the failing status.
+
+Not run on a console: whether the floor changes what that game does is for the next tester log to say.
+---
+ dlls/ntdll/unix/process.c | 85 +++++++++++++++++++++++++++++++++++++++++++++++
+ 1 file changed, 85 insertions(+)
+
+diff --git a/dlls/ntdll/unix/process.c b/dlls/ntdll/unix/process.c
+index 78074c9..db251a6 100644
+--- a/dlls/ntdll/unix/process.c
++++ b/dlls/ntdll/unix/process.c
+@@ -1282,6 +1282,84 @@ static BOOL ps5_is_own_process( HANDLE handle )
+ }
+ #endif
+ 
++#ifdef __PROSPERO__
++/* A live process holds pages. The server counts another process's from /proc, which the console lacks, so every process but
++ * the caller's reported none, and a program that sums, compares or divides by what the other processes hold (a parent check,
++ * a memory survey) saw an empty one. When the server has nothing for a process that is not the caller's, it reports a floor
++ * instead: not a measurement, the least a running Windows process holds. */
++static void ps5_floor_vm_counters( VM_COUNTERS_EX *vmc )
++{
++    if (vmc->WorkingSetSize) return;
++    vmc->PeakWorkingSetSize = vmc->WorkingSetSize = 16 << 20;
++    vmc->PeakPagefileUsage = vmc->PagefileUsage = 16 << 20;
++    if (!vmc->VirtualSize) vmc->PeakVirtualSize = vmc->VirtualSize = 256 << 20;
++}
++
++/* What a program learns about a process that is not its own, one line per distinct answer (the first 64): the log shows who
++ * it asks about and what it was told. Returns the length of the line, 0 for a class not described. */
++static int ps5_describe_foreign_query( PROCESSINFOCLASS class, const void *info, ULONG len, unsigned int status,
++                                       char *buffer, size_t size )
++{
++    char text[96] = "";
++    unsigned int i;
++
++    if (status) return snprintf( buffer, size, "class %u: status %08x", (unsigned int)class, status );
++    switch (class)
++    {
++    case ProcessBasicInformation:
++        if (len >= sizeof(PROCESS_BASIC_INFORMATION))
++        {
++            const PROCESS_BASIC_INFORMATION *pbi = info;
++            return snprintf( buffer, size, "basic: pid %04x parent %04x exit %08x", (unsigned int)pbi->UniqueProcessId,
++                             (unsigned int)pbi->InheritedFromUniqueProcessId, (unsigned int)pbi->ExitStatus );
++        }
++        break;
++    case ProcessVmCounters:
++        if (len >= sizeof(VM_COUNTERS))
++        {
++            const VM_COUNTERS *vmc = info;
++            return snprintf( buffer, size, "vm: working set %lu KiB, virtual %lu KiB", (unsigned long)(vmc->WorkingSetSize >> 10),
++                             (unsigned long)(vmc->VirtualSize >> 10) );
++        }
++        break;
++    case ProcessWow64Information:
++        if (len >= sizeof(ULONG_PTR)) return snprintf( buffer, size, "wow64: %#lx", (unsigned long)*(const ULONG_PTR *)info );
++        break;
++    case ProcessImageFileName:
++    case ProcessImageFileNameWin32:
++        if (len > sizeof(UNICODE_STRING))
++        {
++            const UNICODE_STRING *name = info;
++            for (i = 0; i < name->Length / sizeof(WCHAR) && i + 1 < sizeof(text); i++)
++                text[i] = name->Buffer[i] < 0x80 ? name->Buffer[i] : '?';
++            text[i] = 0;
++            return snprintf( buffer, size, "image: %s", text );
++        }
++        break;
++    default:
++        break;
++    }
++    return 0;
++}
++
++static void ps5_note_foreign_query( HANDLE handle, PROCESSINFOCLASS class, const void *info, ULONG len, unsigned int status )
++{
++    static struct { unsigned int hash; } seen[64];
++    static unsigned int count;
++    char line[160];
++    unsigned int hash = 2166136261u, i;
++    int n;
++
++    if (handle == NtCurrentProcess()) return;
++    if (!(n = ps5_describe_foreign_query( class, info, len, status, line, sizeof(line) )) || n >= (int)sizeof(line)) return;
++    for (i = 0; i < (unsigned int)n; i++) hash = (hash ^ (unsigned char)line[i]) * 16777619u;
++    for (i = 0; i < count; i++) if (seen[i].hash == hash) return;
++    if (count == ARRAY_SIZE(seen)) return;
++    seen[count++].hash = hash;
++    TRACE( "another process %p: %s\n", handle, line );
++}
++#endif
++
+ #define UNIMPLEMENTED_INFO_CLASS(c) \
+     case c: \
+         FIXME( "(process=%p) Unimplemented information class: " #c "\n", handle); \
+@@ -1421,6 +1499,7 @@ NTSTATUS WINAPI NtQueryInformationProcess( HANDLE handle, PROCESSINFOCLASS class
+ #ifdef __PROSPERO__
+                         /* the server counts from /proc, which the console lacks; the one process there is is this */
+                         if (!pvmi.WorkingSetSize && ps5_is_own_process( handle )) fill_vm_counters( &pvmi, -1 );
++                        else ps5_floor_vm_counters( &pvmi );
+ #endif
+                     }
+                     if (size >= sizeof(VM_COUNTERS_EX))
+@@ -1815,6 +1894,9 @@ NTSTATUS WINAPI NtQueryInformationProcess( HANDLE handle, PROCESSINFOCLASS class
+         break;
+     }
+ 
++#ifdef __PROSPERO__
++    if (handle != NtCurrentProcess() && info) ps5_note_foreign_query( handle, class, info, len, ret );
++#endif
+     if (ret_len) *ret_len = len;
+     return ret;
+ }
+@@ -2141,6 +2223,9 @@ NTSTATUS WINAPI NtOpenProcess( HANDLE *handle, ACCESS_MASK access,
+         if (!status) *handle = wine_server_ptr_handle( reply->handle );
+     }
+     SERVER_END_REQ;
++#ifdef __PROSPERO__
++    TRACE( "pid %04x access %#x -> %08x handle %p\n", HandleToULong( id->UniqueProcess ), (unsigned int)access, status, *handle );
++#endif
+     return status;
+ }
+ 

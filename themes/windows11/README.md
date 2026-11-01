@@ -50,11 +50,11 @@ and bitmap checks, not a native Windows 11 pixel-equivalence claim.
 
 ## Wallpaper and fidelity
 
-The desktop's wallpaper is Bubble Earth, original artwork drawn by
-`tools/make-aero-wallpapers.py` (seeded, LGPL-2.1-or-later; Aero Meadow, `tools/make-mihawk-wallpaper.py`, before
-2026-10-25), staged as a
-1920×1080 `proton.bmp` by `tools/build-wine-theme.py` and redrawn only when the
-scripts change. Aero Meadow replaced the owner's local copy of Windows 11's Bloom on
+The desktop's wallpaper is Bubble City by Skeuoss (`wallpapers/skeuoss-bubble-city.jpg`, used with the artist's
+permission since 2026-10-31, under no open licence: NOTICE.md), stamped with the version note and staged as a
+1920×1080 `proton.bmp` by `tools/build-wine-theme.py`, again only when the picture, the stamp or the note changes.
+Before it the desktop showed the project's own Bubble Earth (`tools/make-aero-wallpapers.py`, seeded,
+LGPL-2.1-or-later) and Aero Meadow (`tools/make-mihawk-wallpaper.py`, before 2026-10-25). Aero Meadow replaced the owner's local copy of Windows 11's Bloom on
 2026-10-18, which was never vendored or licensed for redistribution, and every
 build ships the project's own wallpaper. Without the bitmap the desktop keeps a plain background. Patch 0966 supplies
 the legacy flattened route's startup background beneath retained windows;

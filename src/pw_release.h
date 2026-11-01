@@ -45,6 +45,21 @@ int pw_release_parse(const char *text, size_t size, const uint8_t public_key[32]
  * well-formed one. */
 int pw_release_version_compare(const char *a, const char *b);
 
+/* A release tag's version, as GitHub's releases name them ("v7.1.0-alpha-8", "6.0.0", "v8.0.0-rc-2"): X.Y.Z, then
+ * the stage (alpha < beta < rc < none), then its number. <0, 0 or >0; a tag that does not read compares below every
+ * one that does, so it is never taken as newer. */
+int pw_release_tag_compare(const char *a, const char *b);
+
+/* One release of a listing (GitHub's /releases, newest first or not). */
+typedef struct PwReleaseEntry {
+    const char *tag;
+    int draft;
+    const char *manifest_url;   /* its mihawkos-release.txt asset's download address; NULL or "" when it has none */
+} PwReleaseEntry;
+/* The release to offer: the newest by tag, not a draft, with a signed manifest, and newer than `running` (the
+ * build's VERSION). Its index, or -1 when none is. Pre-releases count: MihawkOS's releases are all pre-releases. */
+int pw_release_pick(const PwReleaseEntry *list, size_t count, const char *running);
+
 /* 64 hex digits into 32 bytes (the build's public key, a manifest's digests): 1 when it is exactly that. */
 int pw_release_hex32(const char *hex, uint8_t out[32]);
 

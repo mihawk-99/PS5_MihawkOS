@@ -125,6 +125,9 @@ bool readTestRun(TestRun &run)
 		} else if (key == "press") {
 			Ps5Press press;
 			if (words >> press.program >> press.frame >> press.action) ps5Presses.push_back(press);
+		} else if (key == "hold") {   // hold <program> <first frame> <last frame> <action>
+			Ps5Press press;
+			if (words >> press.program >> press.frame >> press.until >> press.action) ps5Presses.push_back(press);
 		} else if (key == "samples") {
 			for (std::string id; words >> id;) {
 				run.samples.push_back(id);
