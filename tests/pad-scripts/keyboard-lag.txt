@@ -1,0 +1,19 @@
+# The own keyboard's input lag (the owner, 2026-11-01: "insane input lag"; tools/run-battery.py osk-own-lag64): L3+R3 opens
+# it over the window probe, then single moves half a second apart, a typed key, a page change, and CIRCLE closes it. The
+# title logs each change's parts ("keyboard panel: change N seen … drawn … handed over …"), the broker its lock wait and
+# re-show ("gpu-overlay set N …").
+20 l3 0.3
+20 r3 0.3
+23 right
+23.5 right
+24 right
+24.5 down
+25 left
+25.5 up
+26 cross
+26.5 r1
+27 right
+27.5 right
+28 cross
+29 circle
+32 stop

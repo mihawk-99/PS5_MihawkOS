@@ -88,7 +88,7 @@ static void say(const PwOskPs5 *osk, const char *line)
 
 int pw_osk_ps5_open(PwOskPs5 *osk, const PwOskPs5Ops *ops)
 {
-    char line[96];
+    char line[320];
     if (!osk || !ops || !ops->common_dialog_init || !ops->load_module || !ops->foreground_user || !ops->dialog_init ||
         !ops->dialog_status || !ops->dialog_result || !ops->dialog_term)
         return -22;
@@ -101,6 +101,10 @@ int pw_osk_ps5_open(PwOskPs5 *osk, const PwOskPs5Ops *ops)
     osk->ready = module >= 0;
     snprintf(line, sizeof(line), "keyboard common=%#x module=%#x ready=%d", (unsigned)common, (unsigned)module, osk->ready);
     say(osk, line);
+    if (pw_osk_ps5_resolve_trail()[0]) {
+        snprintf(line, sizeof(line), "keyboard found: %s", pw_osk_ps5_resolve_trail());
+        say(osk, line);
+    }
     return osk->ready ? 0 : -19;
 }
 
@@ -170,6 +174,65 @@ int pw_osk_ps5_poll(PwOskPs5 *osk, char *text, size_t capacity)
     return finish(osk, 2);
 }
 
+/* Appends to the trail, keeping it a string however long the steps run. */
+static void trail_add(char *trail, size_t capacity, const char *format, long a, long b)
+{
+    const size_t used = strlen(trail);
+    if (used + 1 < capacity) snprintf(trail + used, capacity - used, format, a, b);
+}
+
+/* Every required call on one handle: 1, or 0 with the first missing one named. */
+static int resolve_on(const PwOskResolveOps *ops, int32_t handle, PwOskResolved *out, char *trail, size_t capacity)
+{
+    static const char *const names[] = {"sceImeDialogInit", "sceImeDialogGetStatus", "sceImeDialogGetResult", "sceImeDialogTerm"};
+    void **const slots[] = {&out->init, &out->status, &out->result, &out->term};
+    for (size_t i = 0; i < sizeof(names) / sizeof(names[0]); i++) {
+        *slots[i] = 0;
+        if (ops->dlsym(handle, names[i], slots[i]) || !*slots[i]) {
+            const size_t used = strlen(trail);
+            if (used + 1 < capacity) snprintf(trail + used, capacity - used, " missing=%s@%d", names[i], (int)handle);
+            return 0;
+        }
+    }
+    if (ops->dlsym(handle, "sceImeDialogAbort", &out->abort)) out->abort = 0;   /* optional */
+    out->handle = handle;
+    return 1;
+}
+
+int pw_osk_ps5_resolve(const PwOskResolveOps *ops, PwOskResolved *out, char *trail, size_t capacity)
+{
+    static const char *const paths[] = {"/system/common/lib/libSceImeDialog.sprx", "libSceImeDialog.sprx"};
+    if (!ops || !out || !trail || !capacity) return 0;
+    memset(out, 0, sizeof(*out));
+    out->handle = -1;
+    trail[0] = '\0';
+    const int loaded = ops->load_sysmodule(PW_OSK_IME_DIALOG_MODULE);
+    trail_add(trail, capacity, "load=%#lx", (long)(unsigned)loaded, 0);
+    /* a title refused the module by its id (a standard PS5 on 13.60) asks for it by its internal id */
+    if (loaded && ops->load_internal)
+        trail_add(trail, capacity, " load_internal=%#lx", (long)(unsigned)ops->load_internal(0x80000000u | PW_OSK_IME_DIALOG_MODULE), 0);
+    const uint32_t ids[] = {PW_OSK_IME_DIALOG_MODULE, 0x80000000u | PW_OSK_IME_DIALOG_MODULE};
+    for (size_t i = 0; i < sizeof(ids) / sizeof(ids[0]); i++) {
+        int32_t handle = -1;
+        const int status = ops->sysmodule_handle(ids[i], &handle);
+        trail_add(trail, capacity, i ? " internal=%#lx/%ld" : " id=%#lx/%ld", (long)(unsigned)status, (long)handle);
+        if (!status && handle >= 0 && resolve_on(ops, handle, out, trail, capacity)) {
+            trail_add(trail, capacity, i ? " found by the internal id" : " found by the id", 0, 0);
+            return 1;
+        }
+    }
+    for (size_t i = 0; i < sizeof(paths) / sizeof(paths[0]); i++) {
+        int result = 0;
+        const int32_t handle = ops->load_path(paths[i], &result);
+        trail_add(trail, capacity, " path%ld=%#lx", (long)i, (long)(unsigned)handle);
+        if (handle >= 0 && resolve_on(ops, handle, out, trail, capacity)) {
+            trail_add(trail, capacity, " found by path %ld", (long)i, 0);
+            return 1;
+        }
+    }
+    return 0;
+}
+
 #ifdef __PROSPERO__
 /* The system's libraries by name, as native/pw_usb_input_ps5.c does for the keyboard and mouse: the SDK has no link stub
  * for libSceCommonDialog, and a link stub for libSceImeDialog would make the loader ask for it by path at the title's start
@@ -208,21 +271,27 @@ static int32_t sysmodule_handle(uint16_t id)
     return -1;
 }
 
-/* Once: load the module and look every call up. 1 when all were found. */
+static int32_t load_path(const char *path, int *result) { return sceKernelLoadStartModule(path, 0, 0, 0, 0, result); }
+static int load_sysmodule(uint16_t id) { return sceSysmoduleLoadModule(id); }
+int sceSysmoduleLoadModuleInternal(uint32_t id);
+static char resolve_trail[256];
+
+/* Once: find the module and look every call up (pw_osk_ps5_resolve). 1 when all were found. */
 static int ime_resolve(void)
 {
     static const char *const paths[] = {"libSceCommonDialog.sprx", "/system/common/lib/libSceCommonDialog.sprx"};
+    static const PwOskResolveOps ops = {load_sysmodule, sceSysmoduleLoadModuleInternal, sceSysmoduleGetModuleHandleInternal,
+                                         load_path, sceKernelDlsym};
+    PwOskResolved found;
     if (ime.tried) return ime.found;
     ime.tried = 1;
-    (void)sceSysmoduleLoadModule(IME_DIALOG_MODULE);
-    ime.handle = sysmodule_handle(IME_DIALOG_MODULE);
-    if (ime.handle < 0) return 0;
-    if (sceKernelDlsym(ime.handle, "sceImeDialogInit", (void **)&ime.init) || !ime.init ||
-        sceKernelDlsym(ime.handle, "sceImeDialogGetStatus", (void **)&ime.status) || !ime.status ||
-        sceKernelDlsym(ime.handle, "sceImeDialogGetResult", (void **)&ime.result) || !ime.result ||
-        sceKernelDlsym(ime.handle, "sceImeDialogTerm", (void **)&ime.term) || !ime.term)
-        return 0;
-    if (sceKernelDlsym(ime.handle, "sceImeDialogAbort", (void **)&ime.abort)) ime.abort = 0;   /* optional */
+    if (!pw_osk_ps5_resolve(&ops, &found, resolve_trail, sizeof(resolve_trail))) return 0;
+    ime.handle = found.handle;
+    ime.init = (int (*)(const void *, const void *))found.init;
+    ime.status = (int (*)(void))found.status;
+    ime.result = (int (*)(void *))found.result;
+    ime.term = (int (*)(void))found.term;
+    ime.abort = (int (*)(void))found.abort;
     if (sceKernelDlsym(ime.handle, "sceCommonDialogInitialize", (void **)&ime.common)) ime.common = 0;
     for (size_t i = 0; !ime.common && i < sizeof(paths) / sizeof(paths[0]); i++) {
         int result = 0;
@@ -232,6 +301,8 @@ static int ime_resolve(void)
     ime.found = 1;   /* the common dialog's start-up is optional (pw_osk_ps5_open) */
     return 1;
 }
+
+const char *pw_osk_ps5_resolve_trail(void) { return resolve_trail; }
 
 static int system_common_init(void) { return ime_resolve() && ime.common ? ime.common() : -2; }
 static int system_load(void) { return ime_resolve() ? 0 : -2; }
@@ -258,4 +329,5 @@ const PwOskPs5Ops *pw_osk_ps5_system_ops(void)
 }
 #else
 const PwOskPs5Ops *pw_osk_ps5_system_ops(void) { return 0; }
+const char *pw_osk_ps5_resolve_trail(void) { return ""; }
 #endif

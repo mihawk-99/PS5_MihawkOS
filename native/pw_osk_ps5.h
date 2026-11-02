@@ -45,6 +45,28 @@ size_t pw_osk_ps5_utf16(const char *utf8, uint16_t *out, size_t capacity);
 size_t pw_osk_ps5_utf8(const uint16_t *utf16, char *out, size_t capacity);
 /* The console's operations (only where the system's libraries are linked: __PROSPERO__). */
 const PwOskPs5Ops *pw_osk_ps5_system_ops(void);
+/* How the console's operations found the IME dialog, step by step (empty before the first open, and on the host). */
+const char *pw_osk_ps5_resolve_trail(void);
+
+/* Finding the IME dialog's calls, run on the host against fakes. A standard PS5 on 13.60 found none of them where the Pro on
+ * 10.01 did (2026-11-01: "keyboard common=0xfffffffe module=0xfffffffe"), so each way is tried in turn and written to the
+ * trail: the module by its sysmodule id (refused on 13.60: 0x80020063), then by its internal id, its handle by that id and
+ * by the internal id, then libSceImeDialog.sprx by path
+ * (/system/common/lib, then the bare name) when the handle is missing or lacks a call. The first missing symbol is named. */
+typedef struct PwOskResolveOps {
+    int (*load_sysmodule)(uint16_t id);                          /* sceSysmoduleLoadModule */
+    int (*load_internal)(uint32_t id);                           /* sceSysmoduleLoadModuleInternal; may be 0 */
+    int (*sysmodule_handle)(uint32_t id, int32_t *handle);       /* sceSysmoduleGetModuleHandleInternal */
+    int32_t (*load_path)(const char *path, int *result);         /* sceKernelLoadStartModule */
+    int (*dlsym)(int32_t handle, const char *symbol, void **address);   /* sceKernelDlsym: 0 when found */
+} PwOskResolveOps;
+typedef struct PwOskResolved {
+    int32_t handle;
+    void *init, *status, *result, *term, *abort;
+} PwOskResolved;
+enum { PW_OSK_IME_DIALOG_MODULE = 0x0096 };
+/* 1 when init, status, result and term were all found on one handle (abort is optional); trail says how either way. */
+int pw_osk_ps5_resolve(const PwOskResolveOps *ops, PwOskResolved *out, char *trail, size_t capacity);
 
 #ifdef __cplusplus
 }

@@ -403,6 +403,23 @@ typedef enum {
     PW_TEXT_STEAM_MEM_STEP_INSTALL,
     PW_TEXT_STEAM_MEM_STEP_OPEN,
     PW_TEXT_STEAM_MEM_STEP_PAYLOADS,
+    /* The main menu's update line (src/pw_update_notice.h): checking, found, downloading ({1} the version, {2} MB so far,
+     * {3} MB in all, {4} percent; without a size, {2} only), checking the signature, unpacking ({2} percent), ready and
+     * its R2 hint (the status bar's and the detail's), and each failure */
+    PW_TEXT_UPDATE_CHECKING,
+    PW_TEXT_UPDATE_AVAILABLE,
+    PW_TEXT_UPDATE_DOWNLOADING,
+    PW_TEXT_UPDATE_DOWNLOADING_SO_FAR,
+    PW_TEXT_UPDATE_VERIFYING,
+    PW_TEXT_UPDATE_UNPACKING,
+    PW_TEXT_UPDATE_READY,
+    PW_TEXT_UPDATE_RESTART_SHORT,
+    PW_TEXT_UPDATE_RESTART_LONG,
+    PW_TEXT_UPDATE_FAIL_NETWORK,
+    PW_TEXT_UPDATE_FAIL_DOWNLOAD,
+    PW_TEXT_UPDATE_FAIL_STORAGE,
+    PW_TEXT_UPDATE_FAIL_SIGNATURE,
+    PW_TEXT_UPDATE_FAIL_PREPARE,
     PW_TEXT_COUNT
 } PwSetupText;
 

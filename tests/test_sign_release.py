@@ -57,10 +57,10 @@ class SignRelease(unittest.TestCase):
             self.assertEqual(signed.returncode, 0, signed.stderr)
             self.assertNotIn(secret.splitlines()[1], signed.stdout + signed.stderr)
             names = {p.name for p in out.iterdir()}
-            self.assertTrue({'mihawkos-release.txt', 'title-pack.txt', 'runtime-pack.txt'} <= names)
+            self.assertTrue({'mihawkos-update.txt', 'title-pack.txt', 'runtime-pack.txt'} <= names)
             self.assertFalse(any(name.endswith('.pem') for name in names))
             self.assertTrue(any(name.endswith('.zst') for name in names))
-            manifest = out / 'mihawkos-release.txt'
+            manifest = out / 'mihawkos-update.txt'
 
             def title_check(path, public_hex, running='01.001.000'):
                 return subprocess.run([str(driver), str(path), public_hex, running], capture_output=True, text=True,

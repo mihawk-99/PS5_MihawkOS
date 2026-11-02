@@ -18,6 +18,7 @@ extern "C" {
 #include "../src/pw_controls.h"
 #include "../src/pw_osk.h"
 #include "pw_osk_ps5.h"
+#include "../src/pw_vkbd.h"
 #include "../src/pw_dialog_keys.h"
 #include "../src/pw_setup.h"
 #include "../src/pw_runtime_check.h"
@@ -3021,6 +3022,14 @@ void proton_run_wine()
     bool osk_ready = false, osk_failed = false, osk_test_done = false;
     unsigned osk_test_end_tick = 0;
     const char *osk_test = getenv("WINE_PS5_OSK_TEST");
+    // MihawkOS's own keyboard (src/pw_vkbd.h), drawn by the guide over the game: where the system's will not load (a standard
+    // PS5 on 13.60), or everywhere with WINE_PS5_OSK=own. The system's stays where it loads: it has the CJK input methods.
+    static PwVkbd own{};
+    static PwVkbdStick own_stick{};
+    bool own_open = false, own_guide = false, own_touching = false;
+    unsigned own_end_tick = 0, own_capture_tick = 0;
+    const char *osk_mode = getenv("WINE_PS5_OSK");
+    const bool own_only = osk_mode && !strcmp(osk_mode, "own");
     if (osk_test && strcmp(osk_test, "type") && strcmp(osk_test, "open")) osk_test = nullptr;
     pw_osk_typer_start(&osk_typer, "", 0);
     say("Controls: on-screen keyboard=%s", pw_osk_trigger_id(controls.keyboard));
@@ -3491,29 +3500,121 @@ void proton_run_wine()
         if (osk_test_now) {
             osk_test_done = true;
             say("Wine: keyboard test %s", osk_test);
-            if (!strcmp(osk_test, "type")) pw_osk_typer_start(&osk_typer, PW_OSK_TEST_TEXT, 1);
+            // with the system's dialog the line goes straight to the typer; with MihawkOS's own it goes through the keyboard below
+            if (!strcmp(osk_test, "type") && !own_only && osk_ready) pw_osk_typer_start(&osk_typer, PW_OSK_TEST_TEXT, 1);
         }
         if (controls.keyboard != PW_OSK_OFF || osk_pad.open || osk_test_now) {
             const bool gesture = pw_osk_detect(&osk_detector, controls.keyboard, &pad);
-            if ((gesture || (osk_test_now && !strcmp(osk_test, "open"))) && !osk_pad.open && pw_osk_typer_done(&osk_typer) && !osk_failed) {
+            const bool own_type_test = osk_test_now && !strcmp(osk_test, "type") && (own_only || !osk_ready);
+            if ((gesture || (osk_test_now && !strcmp(osk_test, "open")) || own_type_test) && !osk_pad.open &&
+                pw_osk_typer_done(&osk_typer)) {
                 const PwOskPs5Ops *system_ops = pw_osk_ps5_system_ops();
                 PwOskPs5Ops ops = system_ops ? *system_ops : PwOskPs5Ops{};
                 ops.log = [](const char *line) { say("Wine: %s", line); };
-                if (!osk_ready) osk_ready = system_ops && pw_osk_ps5_open(&osk, &ops) == 0;
-                if (osk_ready && pw_osk_ps5_show(&osk, "Text for the game") == 0) {
+                if (!own_only && !osk_ready && !osk_failed) {
+                    osk_ready = system_ops && pw_osk_ps5_open(&osk, &ops) == 0;
+                    if (!osk_ready) {
+                        osk_failed = true;   // this firmware will not load the dialog: MihawkOS's own keyboard from now on
+                        say("Wine: the system's on-screen keyboard is unavailable on this console; MihawkOS's own is used");
+                    }
+                }
+                const char *why = osk_test_now ? "test" : pw_osk_trigger_id(controls.keyboard);
+                if (!own_only && osk_ready && !own_type_test && pw_osk_ps5_show(&osk, "Text for the game") == 0) {
                     pw_osk_pad_open(&osk_pad, &pad);
                     if (osk_test_now) osk_test_end_tick = tick + 360;
-                    say("Wine: keyboard opened (%s)", osk_test_now ? "test" : pw_osk_trigger_id(controls.keyboard));
-                } else if (!osk_ready) {
-                    osk_failed = true;   // this firmware will not load the dialog: say it once and leave the pad alone
-                    say("Wine: the on-screen keyboard is unavailable on this console");
+                    say("Wine: keyboard opened (%s)", why);
+                } else if (own_only || osk_failed) {
+#ifdef PS5_GPU_BROKER
+                    proton_guide_set_overlay(proton_gpu_broker_set_overlay, proton_gpu_broker_overlay_refresh);   // a bottom panel; the game stays live above it
+                    if (!guide_screens && !dialog_guide && !own_guide) {
+                        PwSetupRecord record;
+                        pw_setup_record_load(&record, PROTON_DATA_ROOT "/setup.txt");
+                        own_guide = proton_guide_start(record.language, proton_app_root(), proton_gpu_broker_set_cover);
+                    }
+#endif
+                    PwSetupRecord record;
+                    pw_setup_record_load(&record, PROTON_DATA_ROOT "/setup.txt");
+                    pw_vkbd_open(&own, !strncmp(record.language, "ru", 2) ? PW_VKBD_CYRILLIC : PW_VKBD_ABC);
+                    own_stick = PwVkbdStick{};
+                    own_touching = pad.touch_count > 0;
+                    if (own_type_test) {   // the test line through the keyboard, finished with Done a second later
+                        pw_vkbd_type(&own, PW_OSK_TEST_TEXT);
+                        own_end_tick = tick + 120;
+                    } else if (osk_test_now) {
+                        own_end_tick = tick + 360;
+                        own_capture_tick = tick + 120;   // the open test's picture of it, a second in (osk-open64)
+                    }
+                    proton_guide_keyboard(&own);
+                    pw_osk_pad_open(&osk_pad, &pad);
+                    own_open = true;
+                    say("Wine: keyboard opened (%s)", why);
+                    say("Wine: keyboard shown=1 own=1 page=%s", pw_vkbd_page_name(own.page));
+                }
+            }
+            if (own_open && own_capture_tick && tick >= own_capture_tick) {
+                own_capture_tick = 0;
+                bool asked = false;
+#ifdef PS5_GPU_BROKER
+                // As a pad script's capture: game-frame-90.ppm beside the run's frame name, fetched with the run's pictures
+                if (const char *frame = getenv("WINE_PS5_CAPTURE")) {
+                    std::string name(frame);
+                    const size_t dot = name.rfind(".ppm");
+                    name = (dot == std::string::npos ? name : name.substr(0, dot)) + "-90.ppm";
+                    unlink(name.c_str());
+                    asked = proton_gpu_broker_capture_next(name.c_str());
+                    if (asked) proton_guide_keyboard(&own);   // the panel again: over a waiting game the broker captures that
+                }
+#endif
+                say("Wine: keyboard picture asked of the GPU broker (%d)", asked);
+            }
+            if (own_open) {
+                // Its buttons: the pad as it is now, the game sees it idle (pw_osk_pad_filter below)
+                int result = PW_VKBD_NONE;
+                bool changed = false;
+                const uint32_t pressed = pad.pressed;
+                if (pressed & PAD_UP) pw_vkbd_move(&own, 0, -1), changed = true;
+                if (pressed & PAD_DOWN) pw_vkbd_move(&own, 0, 1), changed = true;
+                if (pressed & PAD_LEFT) pw_vkbd_move(&own, -1, 0), changed = true;
+                if (pressed & PAD_RIGHT) pw_vkbd_move(&own, 1, 0), changed = true;
+                int dx = 0, dy = 0;
+                if (pw_vkbd_stick(&own_stick, pad.left_x, pad.left_y, monotonic_ms(), &dx, &dy)) pw_vkbd_move(&own, dx, dy), changed = true;
+                if (pressed & PAD_L1) pw_vkbd_page(&own, -1), changed = true;
+                if (pressed & PAD_R1) pw_vkbd_page(&own, 1), changed = true;
+                if (pressed & PAD_SQUARE) pw_vkbd_backspace(&own), changed = true;
+                if (pressed & PAD_TRIANGLE) pw_vkbd_type(&own, " "), changed = true;
+                if (pressed & PAD_CROSS) result = pw_vkbd_press(&own), changed = true;
+                if (pad.touch_count && !own_touching) result = pw_vkbd_touch(&own, pad.touch_x, pad.touch_y), changed = true;
+                own_touching = pad.touch_count > 0;
+                if (pressed & PAD_OPTIONS) result = PW_VKBD_FINISHED;
+                if (pressed & PAD_CIRCLE) result = PW_VKBD_CANCELLED;
+                const char *by = nullptr;
+                if (own_end_tick && tick >= own_end_tick) {   // a test's end: the type test finishes, the open test closes
+                    result = osk_test && !strcmp(osk_test, "type") ? PW_VKBD_FINISHED : PW_VKBD_CANCELLED;
+                    by = "title";
+                }
+                if (result == PW_VKBD_FINISHED || result == PW_VKBD_CANCELLED) {
+                    char line[PW_VKBD_TEXT * 4 + 1] = {};
+                    if (result == PW_VKBD_FINISHED) pw_vkbd_utf8(&own, line, sizeof(line));
+                    proton_guide_keyboard(nullptr);
+#ifdef PS5_GPU_BROKER
+                    if (own_guide) log_line(proton_guide_stop("the keyboard closed"));
+#endif
+                    own_guide = false;
+                    own_open = false;
+                    own_end_tick = own_capture_tick = 0;
+                    pw_osk_pad_close(&osk_pad, &pad);
+                    if (line[0]) pw_osk_typer_start(&osk_typer, line, 1);
+                    say("Wine: keyboard ended by=%s (%s, %u bytes)", by ? by : "player",
+                        line[0] ? "typing" : "nothing typed", (unsigned)strlen(line));
+                } else if (changed) {
+                    proton_guide_keyboard(&own);
                 }
             }
             if (osk_pad.open && osk_test_end_tick && tick >= osk_test_end_tick) {
                 osk_test_end_tick = 0;
                 pw_osk_ps5_close(&osk);   // the pad is given back by the poll just below, which finds the dialog gone
             }
-            if (osk_pad.open) {
+            if (osk_pad.open && !own_open) {   // the system's dialog (MihawkOS's own is handled above)
                 char line[PW_OSK_PS5_TEXT * 4] = {};
                 const int answer = pw_osk_ps5_poll(&osk, line, sizeof(line));
                 if (answer != 0) {   // finished, cancelled, or no longer shown

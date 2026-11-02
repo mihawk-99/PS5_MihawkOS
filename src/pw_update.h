@@ -30,10 +30,12 @@
 extern "C" {
 #endif
 
-/* The automatic update check (Settings > Automatic update check, on unless turned off) is due: on, and none in the
- * last day. last 0: never checked; a clock behind `last` (a console clock set back) counts as due. */
-#define PW_UPDATE_CHECK_EVERY_S (24 * 60 * 60)
-int pw_update_check_due(int enabled, int64_t now, int64_t last);
+/* The automatic update check (Settings > Automatic update check, on unless turned off) is due: on, a cold start (MihawkOS
+ * opened from the home screen, an elevation retry included; not its restart after a game or into an update), and
+ * none in the last hour (the owner, 2026-11-01, for 7.1; it was once a day). last 0: never checked; a clock behind
+ * `last` (a console clock set back) counts as due. */
+#define PW_UPDATE_CHECK_EVERY_S (60 * 60)
+int pw_update_check_due(int enabled, int cold, int64_t now, int64_t last);
 
 /* A release zip into the stage (the automatic update, 2026-10-31; src/pw_update_flow.h). The zip's own SHA-256 is
  * checked against the signed manifest before this runs, so its files are trusted as they come; this adds:
@@ -41,11 +43,21 @@ int pw_update_check_due(int enabled, int64_t now, int64_t last);
  *   README.txt) is left, and a title-pack.txt in the zip is skipped (the record is written here);
  * - the title must have eboot.bin and sce_sys/param.json (PW_UPDATE_NOT_A_TITLE), and its runtime-pack.txt the
  *   SHA-256 the signed manifest pins (PW_UPDATE_RUNTIME_PIN), so the runtime the title installs is the signed one;
- * - the stage is emptied first, its record written (pw_update_record_write), then `ready` with `version`.
- * 0, a PW_ZIP_* status, or a PW_UPDATE_* one below; the path it stopped at in `failed`. */
+ * - the stage is emptied first, its record written (pw_update_record_write), then `ready` with `version`;
+ * - every file unpacked is given mode 0777, so the switched eboot.bin, its .prx and the payloads' .elf can be run.
+ * 0, a PW_ZIP_* status, or a PW_UPDATE_* one below; the path it stopped at in `failed`. progress (may be NULL): the
+ * title's bytes unpacked so far of all of them, after each file (the main menu's "Preparing" line). */
 enum { PW_UPDATE_NOT_A_TITLE = -30, PW_UPDATE_RUNTIME_PIN = -31, PW_UPDATE_STAGE = -32 };
+/* Why a check or an update failed, for the main menu's line (src/pw_update_notice.h): the release address could not be
+ * reached, the download stopped, the storage refused it, it is not the signed release, or it could not be unpacked. */
+typedef enum {
+    PW_UPDATE_FAIL_NONE, PW_UPDATE_FAIL_NETWORK, PW_UPDATE_FAIL_DOWNLOAD, PW_UPDATE_FAIL_STORAGE, PW_UPDATE_FAIL_SIGNATURE,
+    PW_UPDATE_FAIL_PREPARE
+} PwUpdateFailure;
+typedef void (*pw_update_progress_fn)(void *context, uint64_t done, uint64_t total);
 int pw_update_install_zip(const char *zip_path, const char *update, const char *prefix, const uint8_t runtime_sha256[32],
-                          const char *version, pw_zip_inflate_fn inflate, char *failed, size_t size);
+                          const char *version, pw_zip_inflate_fn inflate, char *failed, size_t size,
+                          pw_update_progress_fn progress, void *context);
 /* One sentence for a status pw_update_install_zip returns. */
 const char *pw_update_status_text(int status);
 

@@ -332,6 +332,10 @@ unsigned __wine_ps5_section_cluster(void)
 {
     return cluster;
 }
+unsigned __wine_ps5_section_failed_stage(void)
+{
+    return section.failed_stage;
+}
 int __wine_ps5_section_fault(uintptr_t at, unsigned prot, unsigned access, PwWineSectionRetry *retry, unsigned run)
 {
     if (!section.capacity)

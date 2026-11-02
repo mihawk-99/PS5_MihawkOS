@@ -371,6 +371,12 @@ for probe in sync-probe exit-probe priority-probe hang-probe vm-protect-probe; d
         "$root/tests/$probe.c" "$wine/build/dlls/kernel32/x86_64-windows/libkernel32.a" \
         -o "$root/.deps/probes/$probe.exe"
 done
+# A game's waits while its own threads spin, with no input (the in-title freeze of 2026-11-01): kernel32 and user32.
+clang --target=x86_64-windows --no-default-config -fuse-ld=lld -Wl,/timestamp:0 -nostdlib -O2 -Wall -Wextra -Werror \
+    -Wno-missing-field-initializers -I"$wine/source/include" -I"$wine/build/include" -I"$wine/source/include/msvcrt" \
+    -Wl,/entry:mainCRTStartup -Wl,/subsystem:console \
+    "$root/tests/intitle-stall-probe.c" "$wine/build/dlls/kernel32/x86_64-windows/libkernel32.a" \
+    "$wine/build/dlls/user32/x86_64-windows/libuser32.a" -o "$root/.deps/probes/intitle-stall-probe.exe"
 # A game folder with no game.json (tools/run-games-autodetect.py): where it runs from, then it closes its session.
 clang --target=x86_64-windows --no-default-config -fuse-ld=lld -Wl,/timestamp:0 -nostdlib -O2 -Wall -Wextra -Werror \
     -I"$wine/source/include" -I"$wine/build/include" -I"$wine/source/include/msvcrt" \

@@ -1,0 +1,37 @@
+From 0000000000000000000000000000000000000000 Mon Sep 17 00:00:00 2001
+From: Mihawk <163614687+mihawk-99@users.noreply.github.com>
+Date: Sun, 01 Nov 2026 19:00:00 -0400
+Subject: [PATCH] ntdll: PS5: A shared view's page that cannot be mapped says why, in the Wine log.
+
+A fault on a shared view's page that the section cache cannot map (wine/ps5/pw_wine_section.c) is raised to the program
+as STATUS_IN_PAGE_ERROR, and only the cache's own lines on standard error said why. In a title that output reaches the
+console's klog only when klogsrv runs: a tester's NFS Heat in the title (Alpha 7, 2026-11-01, no klogsrv) died of an
+in-page error at its start, and nothing in its session's logs named the view or the reason.
+
+The first eight such faults now write an err line to the Wine log as well (the title's log sink, on by default): the
+address and the faulting instruction, the cache's failed stage in words (pw_wine_section_stage_word), the view's range
+and protection, and whether the page is in the shared-section arena (only a helper has one).
+---
+--- a/dlls/ntdll/unix/virtual.c
++++ b/dlls/ntdll/unix/virtual.c
+@@ -6416,6 +6416,18 @@
+         if (resolved > 0) ret = STATUS_SUCCESS;
+         else if (resolved < 0)
+         {
++            /* The first ones in the Wine log too (err, on by default), not only on standard error, which reaches the
++             * console's klog only when klogsrv runs: a game's in-page error then says which view and why. */
++            static LONG noted;
++            if (__atomic_add_fetch( &noted, 1, __ATOMIC_RELAXED ) <= 8)
++            {
++                struct file_view *view = find_view( addr, 0 );
++                const unsigned int stage = __wine_ps5_section_failed_stage();
++                ERR( "shared view page at %p not mapped (pc %p): %s (stage %u); view %p+%#lx protect %#x, %s the arena\n",
++                     addr, (void *)rec->ExceptionAddress, pw_wine_section_stage_word( stage ), stage,
++                     view ? view->base : NULL, view ? (unsigned long)view->size : 0UL, view ? view->protect : 0,
++                     __wine_ps5_section_arena_contains( (uintptr_t)addr, 1 ) ? "in" : "outside" );
++            }
+             rec->NumberParameters = 3;
+             rec->ExceptionInformation[2] = STATUS_NO_MEMORY;
+             ret = STATUS_IN_PAGE_ERROR;
+-- 
+2.56.0

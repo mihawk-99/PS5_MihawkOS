@@ -1,0 +1,85 @@
+{
+ "run": "console-setup-2026-11-01-04",
+ "result": "stopped",
+ "stopped_at": "S9",
+ "steps": {
+  "S0": {
+   "step": "host",
+   "state": "done",
+   "seconds": 0.7,
+   "detail": "dist and the staged runtime are there"
+  },
+  "S1": {
+   "step": "reach",
+   "state": "done",
+   "seconds": 0.0,
+   "detail": "ftpsrv and websrv answer; klog stream open"
+  },
+  "S2": {
+   "step": "guard",
+   "state": "done",
+   "seconds": 0.0,
+   "detail": "no drop, no storage block"
+  },
+  "S3": {
+   "step": "control",
+   "state": "did",
+   "seconds": 3.3,
+   "detail": "ps5vkctl pid 102, no title running"
+  },
+  "S4": {
+   "step": "klog",
+   "state": "done",
+   "seconds": 0.0,
+   "detail": "38 lines, no storage damage, no OnionHEN"
+  },
+  "S5": {
+   "step": "salvage",
+   "state": "did",
+   "seconds": 0.1,
+   "detail": "3 log files"
+  },
+  "S6": {
+   "step": "dev.conf",
+   "state": "done",
+   "seconds": 0.0,
+   "detail": "loopback 8080"
+  },
+  "S7": {
+   "step": "title",
+   "state": "did",
+   "seconds": 12.7,
+   "detail": "4 of 178 files sent"
+  },
+  "S8": {
+   "step": "runtime",
+   "state": "did",
+   "seconds": 423.5,
+   "detail": "Uploaded and verified 4751 files; prefix probe: created"
+  },
+  "S9": {
+   "step": "prefix",
+   "state": "stopped",
+   "seconds": 236.3,
+   "detail": "the console runs firmware 13600007; this setup is pinned to 10010000 (the 10.01 image): reinstall that image, or re-pin FIRMWARE deliberately"
+  }
+ },
+ "klog": {
+  "connections": 2,
+  "lines": 276,
+  "storage_damage": 0,
+  "onionhen": 0
+ },
+ "build": {
+  "matches_tree": true,
+  "head": "cd3ea89c9234",
+  "time": "2026-11-01T14:46:58-0500"
+ },
+ "title_files": 178,
+ "runtime": "Uploaded and verified 4751 files; prefix probe: created",
+ "prefix_session": null,
+ "firmware": null,
+ "read_back": null,
+ "last_console_write": 1793565137.3339329,
+ "sync": "ok sync ms=126"
+}

@@ -63,6 +63,13 @@ bool proton_guide_start(const char *language, const char *app_root, bool (*show)
 void proton_guide_show(PwSteamScreen screen, unsigned seconds, unsigned long long bytes, const char *persona);
 // A game's dialog box over its frames (PW_STEAM_SCREEN_DIALOG): its caption and its lines; NULL takes it off.
 void proton_guide_dialog(const char *title, const char *text);
+// MihawkOS's own on-screen keyboard over the game (PW_STEAM_SCREEN_KEYBOARD, src/pw_vkbd.h): its state, copied; drawn again
+// within 0.1 s of each call. NULL takes it off.
+void proton_guide_keyboard(const struct PwVkbd *keyboard);
+// Where the keyboard's panel goes: the GPU broker's overlay (proton_gpu_broker_set_overlay), drawn over every frame in its
+// rectangle so the game stays live above it. Set before the keyboard shows.
+void proton_guide_set_overlay(bool (*overlay)(const void *pixels, unsigned x, unsigned y, unsigned w, unsigned h),
+                              void (*refresh)());
 // Idempotent; the broker shows no cover once it returns. why: for the log.
 std::string proton_guide_stop(const char *why);
 #endif

@@ -44,6 +44,19 @@ taskbar, Start, File Explorer and a web browser of its own.
 **Releases** are on the [Releases](https://github.com/mihawk-99/PS5_MihawkOS/releases) page. Each one says what
 changed and which consoles it was tested on.
 
+**New in 7.1:**
+- **MihawkOS's own on-screen keyboard**, at the bottom of the screen with the game visible above it: see-through
+  frosted glass with rising bubbles, and a key press on screen in 2 to 5 ms. It works on firmware 13.60, where the PS5's
+  system keyboard cannot be loaded by homebrew.
+- **Games inside MihawkOS no longer freeze until the mouse moves:** a wake-up meant for input that stayed set made the
+  game's main loop spin. Our test that reproduced it now passes in every release's checks.
+- **The update line says what it's doing** (checking, downloading with MB and percent, checking the signature,
+  preparing, ready) and why it failed when it does. MihawkOS checks each time you open it from the home screen, at most
+  once an hour.
+- **Updating:** from Alpha 7, update by replacing the PPSA99170 folder; from 7.1 on, MihawkOS updates itself.
+
+7.1 was tested on a standard PS5 (firmware 13.60).
+
 **New in Alpha 7:**
 - **Games run inside MihawkOS.** A 64-bit game from Steam's library or your Games folder now runs in MihawkOS's own
   process instead of a helper, with MihawkOS's larger page-table pool (16,384, against the helpers' 8,192). 32-bit
@@ -54,7 +67,7 @@ changed and which consoles it was tested on.
 - **One folder to install, and it updates itself.** The Windows runtime ships inside `PPSA99170`: copy the folder, open
   MihawkOS, and it installs the runtime by itself. To update, replace the folder and open MihawkOS: it writes only what
   changed, and `/data/ps5proton` (your prefix, games, Steam and settings) is left alone. A signed update check asks
-  GitHub for new releases.
+  GitHub for new releases: it checks when you open MihawkOS, at most once an hour.
 - **A new main menu.** A tile grid on a sky, Files to start any program on C:, Options for each game, and ten
   languages. An **on-screen keyboard** (off by default; Settings, Controls) types into games.
 - **Frames reach the screen sooner.** Each finished frame is copied to the TV in under 1 ms instead of about 7.4 ms.
@@ -426,7 +439,7 @@ MihawkOS was tested on a **PS5 Pro on firmware 10.01** and a **standard PS5 on f
 and firmwares are reported by testers, not proven here.
 
 - **A game that freezes on its loading screen may not be closed by itself yet.** Close MihawkOS from the PS button menu.
-  A fix comes in the first update after Alpha 7.
+  A fix comes in a later update.
 - **The Witcher 3 started from the Mihawk OS desktop closes itself at once.** Start it from the library or Files.
 - **Pipe memory runs out after very many program starts.** Each boot, the console's kernel has a fixed budget of pipe
   memory, and every Windows program start uses some that is never given back. After very many starts, programs stop

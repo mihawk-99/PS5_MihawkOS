@@ -1,0 +1,38 @@
+From 0000000000000000000000000000000000000000 Mon Sep 17 00:00:00 2001
+From: Mihawk <163614687+mihawk-99@users.noreply.github.com>
+Date: Sun, 01 Nov 2026 18:00:00 -0400
+Subject: [PATCH] win32u: PS5: ProcessEvents says the input pipe is drained, not that it made a message.
+
+win32u reads a driver's ProcessEvents answer as "the fd is drained": TRUE clears the queue's QS_DRIVER bit and polls the fd
+again (process_driver_events, set_queue_mask's poll_events), as X11DRV_ProcessEvents returns once its display has nothing
+left, whatever it read. The PS5 driver answered whether it turned input into messages. A wake of the title's input pipe with
+nothing for the thread that took it left QS_DRIVER set for good: every wait of that thread's queue then returned at once,
+wait_message called ProcessEvents again, and a MsgWaitForMultipleObjects or GetMessage never reached its timeout. Only the
+next input event, or another object of the wait, let the thread go on.
+
+Two wakes do that, and only in the title, whose sink has the pipe: a controller coming or going (patch 2423), and one pipe
+shared by every window thread of the game, so input one thread takes wakes the others too. A tester's Elden Ring in the title
+(Alpha 7, 2026-11-01; three window threads registered) froze for up to 11 s at a time with its music playing and moved on only
+while the mouse moved; tests/intitle-stall-probe.c, with no input, never finished its first 16 ms MsgWait in the title in 180 s
+(intitle-stall-title-base-2026-11-01-01: get_thread_input in a loop, 25,000 a second) and passed in a helper
+(intitle-stall-helper-base-2026-11-01-01).
+
+ProcessEvents now returns TRUE once it has drained the pipe and the queue, FALSE only when input is left past its batch.
+---
+--- a/dlls/win32u/ps5drv.c
++++ b/dlls/win32u/ps5drv.c
+@@ -842,7 +842,11 @@
+             break;
+         }
+     }
+-    return processed != 0;
++    /* TRUE: the wake pipe and the queue are drained, so win32u clears QS_DRIVER and polls the pipe again, as
++     * X11DRV_ProcessEvents says of its display. Not "did this make a message": a wake with nothing for this thread (a
++     * controller coming or going, or input another window thread took) left QS_DRIVER set, and every wait of the thread
++     * returned at once, its timeout never reached, until the next input (a game in the title froze until the mouse moved). */
++    return processed < PS5_INPUT_BATCH;
+ }
+ 
+ /***********************************************************************
+-- 
+2.56.0

@@ -201,3 +201,22 @@ now.
 - [ ] The tree names no game, launcher or emulator experiment: `python3 tools/publication-check.py tree` (category
   'named game or launcher'; only the trademark notices and upstream Wine identifiers are listed as allowed).
 - [ ] The open items above are decided.
+
+From 7.1.0-alpha-7 (the owner, 2026-11-01), three more steps block every release, because Alpha 7 shipped with no manifest
+and the contentVersion of its rc builds, so its updater offered it to nobody:
+
+- [ ] `contentVersion` in `ps5/sce_sys/param.json` is newer than the last release's (Alpha 7: 01.000.000; 7.1:
+  01.001.000), and `VERSION` names the release.
+- [ ] The zip is signed: `tools/sign-release.py sign --zip PS5_MihawkOS-v<version>.zip --base
+  https://github.com/mihawk-99/PS5_MihawkOS/releases/download/v<version>/` with the owner key
+  (`~/.config/mihawkos/release-ed25519.pem`), and `mihawkos-update.txt` is attached to the release.
+- [ ] Never attach `mihawkos-release.txt`: it is the only name Alpha 7's updater reads, and Alpha 7's updater cannot
+  install anything (it unpacks the new title without the execute bit, so the switched `eboot.bin` does not start:
+  errno 13, the base, 2026-11-01). Alpha 7 users update by replacing the `PPSA99170` folder. From 7.1 on the updater
+  reads only `mihawkos-update.txt` and gives every unpacked file mode 0777.
+- [ ] On a console running the previous release, its updater takes this one from a signed rehearsal source (the zip
+  served from the PC): the download, the SHA-256 check, the stage, the switch at the next start, and the restarted
+  title starting from the switched folder (its `Build:` line names the new contentVersion; `eboot.bin` is
+  `-rwxrwxrwx`), the new build's stamp, and `/data/ps5proton` kept, each recorded under `evidence/`. Nothing may mask
+  it: no other folder with the title's id under `/data/homebrew` (ShadowMountPlus may start that one instead: the
+  first 7.1 rehearsal passed that way while the switched folder could not start).

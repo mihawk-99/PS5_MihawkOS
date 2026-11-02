@@ -12,6 +12,7 @@
 #include "../../src/pw_sha256.h"
 #include "../../src/pw_update.h"
 #include "../../src/pw_update_flow.h"
+#include "../../src/pw_update_notice.h"
 #include "stb_image.h"   // its inflate: the title carries stb_image for its PNGs (base/VulkanglTFModel.cpp)
 
 #include <errno.h>
@@ -49,7 +50,7 @@ extern "C" int sceSystemServiceLoadExec(const char *path, char *const argv[]);
  * carries no account and nothing about the console (pw_https sends "User-Agent: MihawkOS/1"). */
 #define PROTON_RELEASES_URL "https://api.github.com/repos/mihawk-99/PS5_MihawkOS/releases?per_page=20"
 /* The release asset the title reads first: the signed manifest (src/pw_release.h, tools/sign-release.py). */
-#define PROTON_RELEASE_ASSET "mihawkos-release.txt"
+#define PROTON_RELEASE_ASSET "mihawkos-update.txt"
 
 namespace {
 
@@ -65,7 +66,10 @@ std::mutex gLock;
 std::atomic<bool> gCancel{ false };   /* shortcut: no cancel on screen; the title pack is small (about 25 MB) */
 ProtonUpdate gState;
 PwUpdateOffer gOffer;                 /* the release found, downloaded at once (the owner, 2026-10-31) */
-std::atomic<uint64_t> gDone{ 0 };     /* its bytes downloaded so far */
+std::atomic<uint64_t> gDone{ 0 };     /* its step's bytes so far (downloaded, then unpacked) */
+std::atomic<uint64_t> gTotal{ 0 };    /* of these (0: unknown) */
+std::atomic<int> gStep{ PW_UPDATE_STEP_DOWNLOAD };
+bool gColdStart = true;     /* proton_update_set_cold_start; an update's restart also is none (proton_update_started) */
 bool gSwitchedHere = false;   /* this process switched and its restart was refused: it is not the new title */
 std::chrono::steady_clock::time_point gStarted;
 
@@ -145,7 +149,8 @@ void check()
 		return finish(found);
 	}
 	PwUpdateOffer offer;
-	const std::string error = pw_update_find(fetch, PROTON_RELEASES_URL, source(), PROTON_VERSION, running.c_str(), key, offer);
+	const std::string error = pw_update_find(fetch, PROTON_RELEASES_URL, source(), PROTON_VERSION, running.c_str(), key, offer,
+	                                         &found.failure);
 	if (!error.empty()) {
 		found.message = PS5_TITLE_NAME " could not check for updates: " + error;
 		return finish(found);
@@ -181,7 +186,10 @@ void download(PwUpdateOffer offer)
 	found.version = offer.version;
 	// No free-space check: a title process has no statfs (measured in phase 8); a full disk is said as the write fails.
 	// Leaving the launcher (a game) ends this process and so the download; the next launcher start begins it again.
-	const std::string error = pw_update_take(fetch, offer, kUpdate, inflate, [](uint64_t done) { gDone = done; });
+	const std::string error = pw_update_take(fetch, offer, kUpdate, inflate, [](int step, uint64_t done, uint64_t total) {
+		if (step != gStep) proton_say("update: step %d of the download (%llu bytes so far)", step, (unsigned long long)gDone);
+		gStep = step, gDone = done, gTotal = total;
+	}, &found.failure);
 	found.seconds = std::chrono::duration<double>(std::chrono::steady_clock::now() - gStarted).count();
 	if (!error.empty()) {
 		found.message = error + " " PS5_TITLE_NAME " stays as it is.";
@@ -227,7 +235,7 @@ void proton_update_download()
 	gState.phase = ProtonUpdate::downloading;
 	gState.message = "Downloading " PS5_TITLE_NAME " " + gState.version;
 	gStarted = std::chrono::steady_clock::now();
-	gDone = 0;
+	gDone = 0, gTotal = gOffer.zip_size, gStep = PW_UPDATE_STEP_DOWNLOAD;
 	std::thread(download, gOffer).detach();
 }
 
@@ -246,7 +254,8 @@ ProtonUpdate proton_update_state()
 	ProtonUpdate state = gState;
 	if (state.phase == ProtonUpdate::downloading) {
 		state.progress.written = gDone;
-		state.progress.to_write = gOffer.zip_size;
+		state.progress.to_write = gTotal;
+		state.step = gStep;
 		state.seconds = std::chrono::duration<double>(std::chrono::steady_clock::now() - gStarted).count();
 	}
 	return state;
@@ -289,6 +298,10 @@ void proton_update_started()
 	if (gSwitchedHere) return;
 	const int status = pw_update_confirm(kUpdate);
 	if (status) proton_say("update: the new title started; the previous title's files are removed (%d)", status);
+	if (status) {
+		gColdStart = false;   /* the update's own restart */
+		remove(kFoundFile);   /* the release found is the one that runs now: nothing to finish (7.1's rehearsal asked) */
+	}
 }
 
 bool proton_update_auto_enabled()
@@ -302,38 +315,62 @@ void proton_update_set_auto(bool on)
 	proton_say("update: automatic check %s", on ? "on" : "off");
 }
 
+bool proton_update_scripted_check()
+{
+	return access(PROTON_DATA_ROOT "/update-check-scripted", F_OK) == 0;
+}
+
+void proton_update_set_cold_start(bool cold)
+{
+	gColdStart = cold;
+}
+
 void proton_update_auto()
 {
 	const int64_t now = (int64_t)time(nullptr), last = strtoll(read_file(kLastCheckFile).c_str(), nullptr, 10);
 	char staged[64];
 	// a release found earlier whose download a game cut short is taken up again at once, whatever the day's check
 	const bool unfinished = !read_file(kFoundFile).empty() && !pw_update_pending(kUpdate, staged, sizeof(staged));
-	if (!proton_update_auto_enabled() || (!pw_update_check_due(1, now, last) && !unfinished)) return;
+	if (!proton_update_auto_enabled()) return;
+	if (!pw_update_check_due(1, gColdStart, now, last) && !unfinished) {
+		proton_say("update: no automatic check (%s, last %lld)", gColdStart ? "one in the last hour" : "not a cold start",
+			(long long)last);
+		return;
+	}
 	write_file(kLastCheckFile, std::to_string(now) + "\n");
 	proton_say("update: the automatic check asks (last %lld%s)", (long long)last, unfinished ? ", a download to finish" : "");
 	proton_update_check();
 }
 
-std::string proton_update_notice()
+std::string proton_update_notice(const PwSetupLanguage *language)
 {
 	const ProtonUpdate state = proton_update_state();
-	char staged[64];
-	if (state.phase == ProtonUpdate::ready || (state.phase != ProtonUpdate::downloading && pw_update_pending(kUpdate, staged, sizeof(staged))))
-		return PS5_TITLE_NAME " " + (state.phase == ProtonUpdate::ready ? state.version : std::string(staged)) + " is ready.";
-	if (state.phase == ProtonUpdate::downloading) {
-		char line[160];
-		const double share = state.progress.to_write ? 100.0 * (double)state.progress.written / (double)state.progress.to_write : 0.0;
-		snprintf(line, sizeof(line), PS5_TITLE_NAME " %s is downloading in the background: %.0f%%.", state.version.c_str(), share);
-		return line;
+	char staged[64], line[512];
+	PwUpdateNotice notice{ PW_UPDATE_NOTICE_NONE, "", 0, 0, state.failure };
+	std::string version = state.version;
+	if (state.phase == ProtonUpdate::ready || (state.phase != ProtonUpdate::downloading && pw_update_pending(kUpdate, staged, sizeof(staged)))) {
+		notice.phase = PW_UPDATE_NOTICE_READY;
+		if (state.phase != ProtonUpdate::ready) version = staged;
+	} else if (state.phase == ProtonUpdate::downloading) {
+		notice.phase = state.step == PW_UPDATE_STEP_UNPACK ? PW_UPDATE_NOTICE_UNPACKING
+			: state.step == PW_UPDATE_STEP_VERIFY ? PW_UPDATE_NOTICE_VERIFYING : PW_UPDATE_NOTICE_DOWNLOADING;
+		notice.done = state.progress.written, notice.total = state.progress.to_write;
+	} else if (state.phase == ProtonUpdate::checking) {
+		notice.phase = PW_UPDATE_NOTICE_CHECKING;
+	} else if (state.phase == ProtonUpdate::failed) {
+		notice.phase = PW_UPDATE_NOTICE_FAILED;
+	} else if (state.phase != ProtonUpdate::current) {
+		if (state.phase != ProtonUpdate::available) {
+			version = read_file(kFoundFile);
+			version = version.substr(0, version.find_first_of("\r\n"));
+			// a kept release no newer than this title (it was installed since) is not offered
+			if (pw_release_version_compare(version.c_str(), running_version().c_str()) <= 0) version.clear();
+		}
+		if (!version.empty()) notice.phase = PW_UPDATE_NOTICE_AVAILABLE;
 	}
-	std::string version = state.phase == ProtonUpdate::available ? state.version : std::string();
-	if (version.empty() && state.phase != ProtonUpdate::current) {
-		version = read_file(kFoundFile);
-		version = version.substr(0, version.find_first_of("\r\n"));
-		// a kept release no newer than this title (it was installed since) is not offered
-		if (pw_release_version_compare(version.c_str(), running_version().c_str()) <= 0) version.clear();
-	}
-	return version.empty() ? std::string() : PS5_TITLE_NAME " " + version + " is available: it downloads in the background.";
+	notice.version = version.c_str();
+	pw_update_notice_text(language, &notice, line, sizeof(line));
+	return line;
 }
 
 bool proton_update_restartable()

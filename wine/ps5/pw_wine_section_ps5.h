@@ -27,6 +27,8 @@ int __wine_ps5_section_fault(uintptr_t, unsigned, unsigned, PwWineSectionRetry *
 /* Pages mapped per fault at most: WINE_PS5_SECTION_CLUSTER, 1 to 64 (1 maps a page at a time). */
 unsigned __wine_ps5_section_cluster(void);
 unsigned __wine_ps5_section_stats(uint64_t *, unsigned);
+/* The stage of the cache's last failure (pw_wine_section_stage_word), for the fault that raised it (patch 2429). */
+unsigned __wine_ps5_section_failed_stage(void);
 /* The direct memory of a direct section's mapped chunk under address, and the range of the view it backs contiguously,
  * for a second mapping (pw_wine_alias.h): 1, or 0. */
 int __wine_ps5_section_backing(uintptr_t address, int64_t *dmem, uintptr_t *low, uintptr_t *high);

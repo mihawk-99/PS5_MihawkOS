@@ -217,8 +217,79 @@ static void system_dialog(void)
     assert(pw_osk_ps5_utf8(units, back, sizeof(back)) == 10 && !strcmp(back, "a\xc3\xa9\xe6\x97\xa5\xf0\x9f\x98\x80"));
 }
 
+/* Finding the IME dialog (pw_osk_ps5_resolve): a fake console per case. handle_id/handle_internal: what each lookup gives
+ * (-1: fails); path_handle[i]: what loading the i-th path gives; symbols_on: the one handle with every call, lacking: a
+ * handle that has every call but sceImeDialogInit. */
+static struct { int32_t handle_id, handle_internal, path_handle[2], symbols_on, lacking, internal_gives; int loads, refused, internal_loads; } fake;
+static int fake_load(uint16_t id) { (void)id; fake.loads++; return fake.refused ? (int)0x80020063u : 0; }
+static int fake_internal(uint32_t id)
+{
+    fake.internal_loads++;
+    if (!(id & 0x80000000u)) return -1;
+    if (fake.internal_gives >= 0) fake.handle_internal = fake.internal_gives;   /* loaded: the internal lookup finds it */
+    return 0;
+}
+static int fake_handle(uint32_t id, int32_t *handle)
+{
+    *handle = (id & 0x80000000u) ? fake.handle_internal : fake.handle_id;
+    return *handle >= 0 ? 0 : -1;
+}
+static int32_t fake_path(const char *path, int *result)
+{
+    *result = 0;
+    return fake.path_handle[strstr(path, "/system/") ? 0 : 1];
+}
+static int fake_dlsym(int32_t handle, const char *symbol, void **address)
+{
+    static char call;
+    const int has = handle == fake.symbols_on || (handle == fake.lacking && strcmp(symbol, "sceImeDialogInit"));
+    *address = has ? (void *)&call : 0;
+    return has ? 0 : -1;
+}
+
+static void resolving(void)
+{
+    const PwOskResolveOps ops = {fake_load, fake_internal, fake_handle, fake_path, fake_dlsym};
+    PwOskResolved found;
+    char trail[256];
+    /* the Pro on 10.01: the handle by the id */
+    fake = (typeof(fake)){.handle_id = 5, .handle_internal = -1, .path_handle = {-1, -1}, .symbols_on = 5, .lacking = -2, .internal_gives = -1};
+    assert(pw_osk_ps5_resolve(&ops, &found, trail, sizeof(trail)) && found.handle == 5 && found.init && found.abort);
+    assert(strstr(trail, "found by the id") && fake.loads == 1);
+    /* a standard PS5 on 13.60, as it may be: no handle either way, the library by its path */
+    fake = (typeof(fake)){.handle_id = -1, .handle_internal = -1, .path_handle = {9, -1}, .symbols_on = 9, .lacking = -2, .internal_gives = -1};
+    assert(pw_osk_ps5_resolve(&ops, &found, trail, sizeof(trail)) && found.handle == 9);
+    assert(strstr(trail, "id=") && strstr(trail, "internal=") && strstr(trail, "found by path 0"));
+    /* a handle that lacks a call, then the bare name */
+    fake = (typeof(fake)){.handle_id = 4, .handle_internal = -1, .path_handle = {-1, 7}, .symbols_on = 7, .lacking = 4, .internal_gives = -1};
+    assert(pw_osk_ps5_resolve(&ops, &found, trail, sizeof(trail)) && found.handle == 7);
+    assert(strstr(trail, "missing=sceImeDialogInit@4") && strstr(trail, "found by path 1"));
+    /* nothing anywhere: 0, and the trail says every step */
+    fake = (typeof(fake)){.handle_id = -1, .handle_internal = -1, .path_handle = {-1, -1}, .symbols_on = -3, .lacking = -2, .internal_gives = -1};
+    assert(!pw_osk_ps5_resolve(&ops, &found, trail, sizeof(trail)) && found.handle == -1);
+    assert(strstr(trail, "load=0") && strstr(trail, "path0=") && strstr(trail, "path1=") && !strstr(trail, "found"));
+    /* the Pro loads by the id: the internal load is never asked */
+    fake = (typeof(fake)){.handle_id = 5, .handle_internal = -1, .path_handle = {-1, -1}, .symbols_on = 5, .lacking = -2, .internal_gives = 6};
+    assert(pw_osk_ps5_resolve(&ops, &found, trail, sizeof(trail)) && fake.internal_loads == 0 && !strstr(trail, "load_internal"));
+    /* 13.60 refuses the id; the internal load gives the module, found by the internal id */
+    fake = (typeof(fake)){.handle_id = -1, .handle_internal = -1, .path_handle = {-1, -1}, .symbols_on = 6, .lacking = -2,
+                          .internal_gives = 6, .refused = 1};
+    assert(pw_osk_ps5_resolve(&ops, &found, trail, sizeof(trail)) && found.handle == 6 && fake.internal_loads == 1);
+    assert(strstr(trail, "load=0x80020063 load_internal=0") && strstr(trail, "found by the internal id"));
+    /* no internal load on this console: the steps after it still run */
+    const PwOskResolveOps without = {fake_load, 0, fake_handle, fake_path, fake_dlsym};
+    fake = (typeof(fake)){.handle_id = -1, .handle_internal = -1, .path_handle = {9, -1}, .symbols_on = 9, .lacking = -2,
+                          .internal_gives = -1, .refused = 1};
+    assert(pw_osk_ps5_resolve(&without, &found, trail, sizeof(trail)) && found.handle == 9 && !strstr(trail, "load_internal"));
+    /* a trail too short stays a string */
+    fake = (typeof(fake)){.handle_id = -1, .handle_internal = -1, .path_handle = {-1, -1}, .symbols_on = -3, .lacking = -2, .internal_gives = -1};
+    char tiny[8];
+    assert(!pw_osk_ps5_resolve(&ops, &found, tiny, sizeof(tiny)) && strlen(tiny) < sizeof(tiny));
+}
+
 int main(void)
 {
+    resolving();
     detection();
     pad_hand_over();
     typing();

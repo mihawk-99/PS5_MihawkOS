@@ -383,7 +383,8 @@ part. PC-side and host-tested first, as before.
     - It writes the public half to `platform/update/release-key.txt`, which `ps5/CMakeLists.txt` builds in. Neither
       exists yet: the owner makes them.
     - `sign` makes the flat release folder (title pack, runtime pieces, both manifests, the signed
-      `mihawkos-release.txt`), and `verify` checks one.
+      `mihawkos-update.txt`; Alpha 7 read `mihawkos-release.txt`, which no release attaches any more), and `verify`
+      checks one.
   - **The title pack:** `tools/pack-runtime.py --title-pack` and `pw_pack`'s title packs came back from the setup
     program's archive. The new title is staged whole in `/data/ps5proton/update/stage`, every file checked by its
     SHA-256 (about 25 MB, so no reuse of unchanged files: `shortcut:` in `ps5/src/proton_update.cpp`).

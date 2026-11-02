@@ -9,6 +9,7 @@
  * Without the second folder Chinese and Japanese are skipped (they need the build's subsets), and the run says so. */
 #include "../src/pw_loading_art.h"
 #include "../src/pw_steam_screen.h"
+#include "../src/pw_vkbd.h"
 #include <assert.h>
 #include <stdio.h>
 #include <stdlib.h>
@@ -107,7 +108,7 @@ int main(int argc, char **argv)
         const PwSteamFaces faces = {own ? own : regular, own ? own : semibold, regular};
         for (size_t s = 0; s < sizeof(screens) / sizeof(screens[0]); ++s) {
             const PwSteamScreenState state = {screens[s].screen, language, screens[s].seconds, screens[s].bytes,
-                                              screens[s].persona, screens[s].dialog_title, screens[s].dialog_text};
+                                              screens[s].persona, screens[s].dialog_title, screens[s].dialog_text, NULL};
             PwSteamScreenReport report;
             pw_steam_screen_draw(still, backdrop, &state, &faces, &report);
             if (report.cut || report.missing || report.bottom > PW_STEAM_CARD_Y1 - 12 || report.bottom < PW_STEAM_CARD_Y0) {
@@ -142,13 +143,80 @@ int main(int argc, char **argv)
             snprintf(line, sizeof(line), "\ngame.exe!0x140000000 + 0x%07x a long frame name that wraps on its own line", i * 4099);
             strcat(text, line);
         }
-        const PwSteamScreenState state = {PW_STEAM_SCREEN_DIALOG, NULL, 0, 0, NULL, "A Game - Aborted", text};
+        const PwSteamScreenState state = {PW_STEAM_SCREEN_DIALOG, NULL, 0, 0, NULL, "A Game - Aborted", text, NULL};
         PwSteamScreenReport report;
         pw_steam_screen_draw(still, backdrop, &state, &latin, &report);
         assert(!report.missing && report.bottom <= PW_STEAM_CARD_Y1 - 12 && report.bottom > PW_STEAM_CARD_Y0);
     }
+    /* MihawkOS's own keyboard (src/pw_vkbd.h): every page, with and without Shift, in every language, its focus anywhere, a
+     * line typed: no character without a face (key labels fall back to Inter), nothing below the screen */
+    {
+        size_t kcount = 0;
+        const PwSetupLanguage *langs = pw_setup_languages(&kcount);
+        for (size_t l = 0; l < kcount; ++l) {
+            const PwSteamFace *own = !langs[l].font ? NULL : !strcmp(langs[l].font, "noto-sans-sc") ? sc : jp;
+            if (langs[l].font && !own) continue;
+            const PwSteamFaces faces = {own ? own : regular, own ? own : semibold, regular};
+            for (int page = 0; page < PW_VKBD_PAGES; ++page)
+                for (int shift = 0; shift < 2; ++shift) {
+                    PwVkbd kbd;
+                    pw_vkbd_open(&kbd, page);
+                    kbd.shift = shift;
+                    kbd.row = (page + shift) % PW_VKBD_ROWS;
+                    kbd.col = 1;
+                    pw_vkbd_type(&kbd, "héllo Жюль ł");
+                    PwSteamScreenState state = {PW_STEAM_SCREEN_KEYBOARD, &langs[l], 0, 0, NULL, NULL, NULL, &kbd};
+                    PwSteamScreenReport report;
+                    pw_steam_screen_draw(still, backdrop, &state, &faces, &report);
+                    if (report.missing || report.cut || report.bottom >= PW_LOADING_HEIGHT) {
+                        fprintf(stderr, "%s keyboard page %d shift %d: %d without a face, %d cut, down to row %d\n",
+                                langs[l].tag, page, shift, report.missing, report.cut, report.bottom);
+                        assert(0);
+                    }
+                    if (pictures && shift == 0) {
+                        char name[32];
+                        snprintf(name, sizeof(name), "keyboard-%s", pw_vkbd_page_name(page)[0] == 'a' ? "abc" :
+                                 page == PW_VKBD_SYMBOLS ? "123" : page == PW_VKBD_ACCENTS ? "accents" : "cyrillic");
+                        write_ppm(pictures, langs[l].tag, name, still);
+                    }
+                }
+        }
+    }
+    /* A change drawn over the keyboard as it was is the whole draw's, pixel for pixel: moves in every direction across rows
+     * and the specials row, keys typed and taken back, Shift and a page (those draw it whole) */
+    {
+        const PwSteamFaces faces = {regular, semibold, regular};
+        uint32_t *whole = malloc((size_t)PW_LOADING_WIDTH * PW_LOADING_HEIGHT * 4);
+        assert(whole);
+        PwVkbd kbd, before;
+        pw_vkbd_open(&kbd, PW_VKBD_ABC);
+        PwSteamScreenState state = {PW_STEAM_SCREEN_KEYBOARD, pw_setup_default_language(), 0, 0, NULL, NULL, NULL, &kbd};
+        pw_steam_screen_draw(still, backdrop, &state, &faces, NULL);
+        const char *steps = "rrrdllluuuxxrdddxbbsrxpdlx";   /* moves, x types, b backspace, s Shift, p the page key */
+        size_t panel = (size_t)PW_VKBD_PANEL_Y * PW_LOADING_WIDTH, rows = (size_t)PW_VKBD_PANEL_H * PW_LOADING_WIDTH * 4;
+        for (const char *s = steps; *s; ++s) {
+            before = kbd;
+            switch (*s) {
+            case 'r': pw_vkbd_move(&kbd, 1, 0); break;
+            case 'l': pw_vkbd_move(&kbd, -1, 0); break;
+            case 'u': pw_vkbd_move(&kbd, 0, -1); break;
+            case 'd': pw_vkbd_move(&kbd, 0, 1); break;
+            case 'x': pw_vkbd_press(&kbd); break;
+            case 'b': pw_vkbd_backspace(&kbd); break;
+            case 's': kbd.shift = !kbd.shift; break;
+            case 'p': pw_vkbd_page(&kbd, 1); break;
+            }
+            pw_steam_screen_keyboard_changed(still, backdrop, &state, &faces, &before);
+            pw_steam_screen_draw(whole, backdrop, &state, &faces, NULL);
+            if (memcmp(still + panel, whole + panel, rows)) {
+                fprintf(stderr, "keyboard: step %ld ('%c') drawn as a change differs from the whole draw\n", (long)(s - steps), *s);
+                assert(0);
+            }
+        }
+        free(whole);
+    }
     /* Nothing over the client: the backdrop alone (the cover is taken off then, but a draw must not fail) */
-    const PwSteamScreenState none = {PW_STEAM_SCREEN_NONE, NULL, 0, 0, NULL, NULL, NULL};
+    const PwSteamScreenState none = {PW_STEAM_SCREEN_NONE, NULL, 0, 0, NULL, NULL, NULL, NULL};
     pw_steam_screen_draw(still, backdrop, &none, &latin, NULL);
     assert(!memcmp(still, backdrop, (size_t)PW_LOADING_WIDTH * PW_LOADING_HEIGHT * 4));
 

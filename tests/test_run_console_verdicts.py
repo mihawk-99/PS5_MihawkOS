@@ -506,5 +506,34 @@ class ProbeVerdicts(unittest.TestCase):
             self.assertTrue(all(name in (ROOT / 'tests/d3d9ex-d3d11-share-probe.c').read_text() for name in names))
 
 
+class CaptureSplit(unittest.TestCase):
+    """--expect-capture-split: the game above the row, the own keyboard's glass panel from it (src/pw_steam_screen.c)."""
+    def picture(self, top, panel):
+        import tempfile
+        from PIL import Image, ImageDraw
+        image = Image.new('RGB', (1920, 1080), top)
+        if panel:
+            draw = ImageDraw.Draw(image)
+            draw.rectangle((0, 600, 1919, 1079), fill=(120, 150, 200))   # the slab over a blurred game
+            draw.rectangle((0, 600, 1919, 601), fill=(250, 252, 255))    # its rim
+            draw.rectangle((165, 618, 1755, 678), fill=(236, 242, 250))  # the field's glass
+        path = Path(tempfile.mkdtemp()) / 'game-frame-90.ppm'
+        image.save(path)
+        return [str(path)]
+
+    def test_source_draws_the_glass(self):
+        printed('src/pw_steam_screen.c', 'if (y < PW_VKBD_PANEL_Y + 2) blend(canvas, x0, y, 0xffffffffu, 0.95f);',
+                '0xffffffffu, 0.86f, 0xffffffffu, 0.82f')
+
+    def test_game_above_panel_below(self):
+        self.assertTrue(runner.captures_split(self.picture((40, 90, 30), True), 600))
+
+    def test_what_fails(self):
+        self.assertFalse(runner.captures_split(self.picture((40, 90, 30), False), 600))    # no panel
+        self.assertFalse(runner.captures_split(self.picture((0, 0, 0), True), 600))        # nothing above it
+        self.assertFalse(runner.captures_split(self.picture((240, 244, 250), True), 600))  # a full white cover
+        self.assertFalse(runner.captures_split([], 600))
+
+
 if __name__ == '__main__':
     unittest.main()

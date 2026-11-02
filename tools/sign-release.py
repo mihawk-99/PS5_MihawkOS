@@ -9,13 +9,13 @@
   tools/sign-release.py sign --base URL [--version V] [--title dist/PPSA99170] [--runtime dist/runtime]
                              [--out dist/release] [--key keys/release-ed25519.pem]
       The release folder, flat, as its assets are published: the title pack (tools/pack-runtime.py --title-pack) and its
-      title-pack.txt, the runtime's pieces and runtime-pack.txt, and mihawkos-release.txt signed with the key. --base is
+      title-pack.txt, the runtime's pieces and runtime-pack.txt, and the manifest (mihawkos-update.txt) signed with the key. --base is
       where those assets will be, the release's own tag folder (never a "latest" URL); --version defaults to the
       title's contentVersion. The manifest is checked against the public half before the command ends.
   tools/sign-release.py sign --zip PS5_MihawkOS-v<VERSION>.zip --base URL [--out DIR] [--key ...]
       The automatic update's form (2026-10-31): the manifest names the release zip itself (its SHA-256) and the
       SHA-256 of the runtime-pack.txt in its PPSA99170 folder; --version defaults to that folder's contentVersion.
-      Only mihawkos-release.txt is written to --out; attach it to the GitHub release beside the zip. --base is the
+      Only mihawkos-update.txt is written to --out; attach it to the GitHub release beside the zip. --base is the
       release's download folder: https://github.com/mihawk-99/PS5_MihawkOS/releases/download/<tag>/
   tools/sign-release.py verify FILE [--public platform/update/release-key.txt]
       Check a manifest's signature and fields as the title does.
@@ -38,6 +38,9 @@ from pathlib import Path
 ROOT = Path(__file__).resolve().parents[1]
 KEY = ROOT / 'keys/release-ed25519.pem'
 PUBLIC = ROOT / 'platform/update/release-key.txt'
+# The manifest's file name from 7.1 on; never mihawkos-release.txt, the only name Alpha 7's updater reads (it cannot
+# install a title: src/pw_update_flow.cpp kManifestAsset).
+MANIFEST = 'mihawkos-update.txt'
 DER_PREFIX = bytes.fromhex('302a300506032b6570032100')   # SubjectPublicKeyInfo of an Ed25519 key, before its 32 bytes
 
 
@@ -134,7 +137,7 @@ def sign(args):
         signature = openssl('pkeyutl', '-sign', '-rawin', '-inkey', str(args.key), '-in', str(Path(work) / 'body'))
     text = body + b'signature ' + signature.hex().encode() + b'\n'
     check(text, public_half(args.key))
-    (args.out / 'mihawkos-release.txt').write_bytes(text)
+    (args.out / MANIFEST).write_bytes(text)
     size = sum(p.stat().st_size for p in args.out.iterdir())
     print(f'release {version}: {len(pieces)} pieces and 3 manifests, {size} bytes, in {args.out}; base {args.base}')
     return 0
@@ -169,8 +172,8 @@ def sign_zip(args):
             f'title {digest.hexdigest()} {args.zip.name}\n'
             f'runtime {runtime} runtime-pack.txt\n').encode()
     args.out.mkdir(parents=True, exist_ok=True)
-    (args.out / 'mihawkos-release.txt').write_bytes(signed(body, args.key))
-    print(f'release {version}: {args.zip.name} signed; {args.out / "mihawkos-release.txt"}; base {args.base}')
+    (args.out / MANIFEST).write_bytes(signed(body, args.key))
+    print(f'release {version}: {args.zip.name} signed; {args.out / MANIFEST}; base {args.base}')
     return 0
 
 

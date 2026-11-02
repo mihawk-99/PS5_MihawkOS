@@ -119,7 +119,7 @@ MARKERS = {'wine-probe.exe': 'PS5_PROTON_PE64_PROBE', 'gate-sequence.exe': 'PS5_
            'gl-vertex32-probe.exe': 'PS5_PROTON_GL_VERTEX_PROBE', 'd3d11-32-probe.exe': 'PS5_PROTON_D3D11_PROBE',
            'd3d12-levels-probe.exe': 'PS5_PROTON_D3D12_LEVELS', 'd3d12-sparse-probe.exe': 'PS5_PROTON_D3D12_SPARSE', 'many-files-probe.exe': 'PS5_PROTON_MANY_FILES', 'log-flood-probe.exe': 'PS5_PROTON_LOG_FLOOD', 'd3d12-shared-probe.exe': 'PS5_PROTON_D3D12_SHARED', 'd3d12-existing-heap-probe.exe': 'PS5_PROTON_D3D12_EXISTING_HEAP',
            'd3d9ex-d3d11-share-probe.exe': 'PS5_PROTON_D3D9_D3D11_SHARE', 'osk-typed-probe.exe': 'PS5_PROTON_OSK_TYPED',
-           'sync-probe.exe': 'PS5_PROTON_SYNC_PROBE', 'exit-probe.exe': 'PS5_PROTON_EXIT_PROBE',
+           'sync-probe.exe': 'PS5_PROTON_SYNC_PROBE', 'intitle-stall-probe.exe': 'PS5_PROTON_INTITLE_STALL', 'exit-probe.exe': 'PS5_PROTON_EXIT_PROBE',
            'priority-probe.exe': 'PS5_PROTON_PRIORITY_PROBE', 'hang-probe.exe': 'PS5_PROTON_HANG_PROBE', 'window-probe.exe': 'PS5_PROTON_WINDOW_PROBE', 'fs-probe.exe': 'PS5_PROTON_FS_PROBE', 'stack-probe.exe': 'PS5_PROTON_STACK_PROBE', 'gl-exit-probe.exe': 'PS5_PROTON_GL_EXIT_PROBE', 'mem-probe.exe': 'PS5_PROTON_MEM_PROBE', 'gl-vertex-probe.exe': 'PS5_PROTON_GL_VERTEX_PROBE', 'gl-present-probe.exe': 'PS5_PROTON_GL_PRESENT_PROBE', 'gl-sprite-probe.exe': 'PS5_PROTON_GL_SPRITE_PROBE', 'vm-protect-probe.exe': 'PS5_PROTON_VM_PROTECT_PROBE', 'vm-protect32-probe.exe': 'PS5_PROTON_VM_PROTECT_PROBE', 'remote-memory-probe.exe': 'PS5_PROTON_REMOTE_MEMORY_PROBE', 'stdout-probe.exe': 'PS5_PROTON_STDOUT_PROBE', 'crash-probe.exe': 'PS5_PROTON_CRASH_PROBE', 'nt-file-probe.exe': 'PS5_PROTON_NT_FILE_PROBE', 'registry-flush64-probe.exe': 'PS5_PROTON_REGISTRY_FLUSH', 'file-write32-probe.exe': 'PS5_PROTON_FILE_WRITE', 'file-write64-probe.exe': 'PS5_PROTON_FILE_WRITE', 'relative-dir32-probe.exe': 'PS5_PROTON_NT_RELDIR_PROBE', 'relative-dir64-probe.exe': 'PS5_PROTON_NT_RELDIR_PROBE', 'file-cost32-probe.exe': 'PS5_PROTON_FILE_COST', 'file-cost64-probe.exe': 'PS5_PROTON_FILE_COST', 'handles-paths32-probe.exe': 'PS5_PROTON_HANDLES_PATHS', 'handles-paths64-probe.exe': 'PS5_PROTON_HANDLES_PATHS', 'pipe-cancel32-probe.exe': 'PS5_PROTON_PIPE_CANCEL', 'pipe-cancel64-probe.exe': 'PS5_PROTON_PIPE_CANCEL', 'lock32-probe.exe': 'PS5_PROTON_LOCK', 'lock64-probe.exe': 'PS5_PROTON_LOCK', 'continue64-probe.exe': 'PS5_PROTON_CONTINUE', 'stack-limit64-probe.exe': 'PS5_PROTON_STACK_LIMIT', 'syscall-cost32-probe.exe': 'PS5_PROTON_SYSCALL_COST', 'syscall-cost64-probe.exe': 'PS5_PROTON_SYSCALL_COST', 'net-throughput32-probe.exe': 'PS5_PROTON_NET_THROUGHPUT', 'net-throughput64-probe.exe': 'PS5_PROTON_NET_THROUGHPUT', 'thread-leak-probe.exe': 'PS5_PROTON_THREAD_LEAK_PROBE'}
 PERF = {
     'frames': re.compile(r'perf: (\w+) frames=(\d+) fps=([\d.]+) p50=([\d.]+) p95=([\d.]+) p99=([\d.]+) '
@@ -775,6 +775,37 @@ def captures_lit(pictures, share):
     return bool(shares) and min(shares) >= share
 
 
+def bright(pixel, floor=190):
+    """Near white: the own keyboard's glass (its rim, its field) over any game, as it is drawn (white at 0.86 and up)."""
+    return min(pixel) >= floor
+
+
+def captures_split(pictures, split):
+    """The own keyboard over a live game (src/pw_steam_screen.c, the Frosted Meadow look): in every capture the rows above
+    SPLIT are the game's frame (at least 75% lit, since the window probe's own window is black inside, 18% of them on the
+    base in overlay-osk-base-2026-11-01) and the rows from SPLIT are the panel: its white rim on row SPLIT (90% near
+    white) and the field's glass box (rows SPLIT + 26 to SPLIT + 70, columns 200 to 1700) 80% near white, while the top
+    rows are not (under 50% near white). The owner: "the bottom part of the screen with the game visible above it"."""
+    from PIL import Image
+    verdicts = []
+    for picture in pictures:
+        image = Image.open(picture).convert('RGB')
+        width, height = image.size
+        data = list(image.getdata())
+        top = data[:split * width]
+        top_lit = sum(1 for pixel in top if pixel != (0, 0, 0)) / max(len(top), 1)
+        top_bright = sum(map(bright, top)) / max(len(top), 1)
+        rim = data[split * width:(split + 1) * width]
+        rim_share = sum(map(lambda p: bright(p, 220), rim)) / width
+        field = [data[y * width + x] for y in range(split + 26, split + 70, 4) for x in range(200, min(1700, width), 4)]
+        field_share = sum(map(bright, field)) / max(len(field), 1)
+        passed = top_lit >= 0.75 and top_bright < 0.5 and rim_share >= 0.9 and field_share >= 0.8
+        print(f'capture split {Path(picture).name}: top lit {top_lit:.1%} bright {top_bright:.1%}; panel rim {rim_share:.1%} '
+              f'field {field_share:.1%}: {"ok" if passed else "FAIL"}')
+        verdicts.append(passed)
+    return bool(verdicts) and all(verdicts)
+
+
 def session_logs_status(lines):
     """The title's last report of its session-log rotation (native/proton_wine.cpp); None when it gave none."""
     statuses = [int(match.group(1)) for line in lines if (match := SESSION_STATUS.search(line))]
@@ -879,6 +910,11 @@ def main():
     parser.add_argument('--expect-log-ends', action='store_true',
                         help="tests/log-flood-probe.c: the Wine log kept its start, its end and the last line, within its bound, "
                              "and the title's log its end line (src/pw_capped_log.h)")
+    parser.add_argument('--expect-title-line', action='append', default=[], metavar='TEXT',
+                        help="the title's log (or its klog) has a line with TEXT; repeatable (osk-open64: the system's "
+                             "keyboard really opened and showed, not only the probe's own verdict)")
+    parser.add_argument('--expect-capture-split', type=int, metavar='ROW',
+                        help='every capture shows the game above ROW and the own keyboard\'s panel from ROW')
     parser.add_argument('--expect-captures-lit', type=float, metavar='PERCENT',
                         help='every capture the run fetched has at least PERCENT of its pixels not black (a frame shown, '
                              'not an empty copy)')
@@ -1262,8 +1298,14 @@ def main():
             print(f'in the title: {in_title or "nothing"}')
         if args.expect_log_ends:
             passed = passed and log_ends_kept(wine_log.read_bytes(), title_lines)
+        if args.expect_title_line:
+            missing = [text for text in args.expect_title_line if not any(text in line for line in title_lines + lines)]
+            print('title lines: ' + ('all found' if not missing else 'MISSING ' + '; '.join(missing)))
+            passed = passed and not missing
         if args.expect_captures_lit is not None:
             passed = passed and captures_lit(pictures, args.expect_captures_lit / 100)
+        if args.expect_capture_split is not None:
+            passed = passed and captures_split(pictures, args.expect_capture_split)
         if args.expect_direct_section:
             passed = passed and bool(memory['sections_mib']) and memory['gave_back_lines'] > 0 and memory['given_back'] > 0 \
                 and not memory['lost'] and bool(robustness['chunk_maps']) and robustness['ask_failures_max'] == 0

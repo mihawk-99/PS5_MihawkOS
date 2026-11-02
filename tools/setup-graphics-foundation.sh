@@ -11,7 +11,17 @@ fork=${PS5_VULKAN_GIT:-$root/../PS5_Vulkan}
 # 6c52e6f0: e71d115 plus a client in the owner's process giving host memory to the GPU (Mesa overlay 2a53a8e, PS5_Mesa's
 # host-memory-import branch; Wine 2425 keeps the access). Not pushed until the console proves d3d12-existing-heap64-title.
 # 04c52ce: 6c52e6f0 plus captures that read the frame scanned out when the fast copy is on (the fast-copy-capture case).
-revision=04c52ce988565e1358e0a67242b728804c666c10
+# 8cc2e4d: 04c52ce plus an application's panel over every frame (ps5_gpu_broker_set_overlay): the own keyboard at the
+# bottom of the screen with the game live above it (the Alpha 7 hotfix).
+# 6224e4c: 8cc2e4d plus a capture of the frame shown again with the panel when the game waits (osk-own-open64).
+# 47b3fc8: 6224e4c plus the panel's lock wait and re-show time in the broker's log (the keyboard's input lag).
+# 98bf667: 47b3fc8 plus the panel's frame shadow: a re-show takes a few ms, not 137 (osk-lag-desktop-base-2026-11-01-01).
+# 8bbd744: 98bf667 plus the see-through panel (the keyboard's Frosted Meadow look): blended over the frame blurred under it,
+# bubbles in its margins, and a refresh that moves them while the game waits.
+# 64e1050: 8bbd744 plus the panel's cost in the broker's log (gpu-overlay compose avg_us, max_us).
+# a62b05d: 64e1050 plus a panel change shown at once over a waiting game (the bubbles' re-shows do not hold it back).
+# 66dad9f: a62b05d plus the blur made every second frame (half the cost) and the rare glass sweep (the owner's picks).
+revision=66dad9f1670e031d29e244e08a8a930755a44253
 out=$root/.deps/graphics-foundation
 shopt -s nullglob
 patches=("$root/platform/graphics/patches/"*.patch)

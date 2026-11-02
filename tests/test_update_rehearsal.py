@@ -15,6 +15,7 @@ import hashlib
 import json
 import os
 import random
+import socket
 import subprocess
 import sys
 import tempfile
@@ -41,7 +42,8 @@ def build():
     out.mkdir(parents=True, exist_ok=True)
     flags = ['-O1', '-g', '-I', str(mbed / 'include'), '-I', str(ROOT), '-I', str(ROOT / 'external/tinygltf'),
              '-DMBEDTLS_USER_CONFIG_FILE="platform/tls/pw_mbedtls_config.h"', '-fsanitize=address,undefined']
-    c_sources = ['src/pw_https.c', 'src/pw_sha256.c', 'src/pw_release.c', 'src/pw_update.c', 'src/pw_zip.c',
+    c_sources = ['src/pw_https.c', 'src/pw_sha256.c', 'src/pw_release.c', 'src/pw_update.c', 'src/pw_update_notice.c',
+                 'src/pw_setup.c', 'src/pw_zip.c',
                  'src/pw_pack.c', 'external/zstd/zstddeclib.c', 'external/monocypher/monocypher.c',
                  'external/monocypher/monocypher-ed25519.c']
     c_objects = []
@@ -71,6 +73,7 @@ def title_folder(path, version, eboot, runtime, extra):
 class Fixture(BaseHTTPRequestHandler):
     files = {}       # path -> bytes
     listing = b''
+    cut = False      # the zip's connection ends halfway, as a dropped network does
 
     def log_message(self, *args):
         pass
@@ -94,6 +97,10 @@ class Fixture(BaseHTTPRequestHandler):
         self.send_response(200)
         self.send_header('Content-Length', str(len(body)))
         self.end_headers()
+        if self.cut and self.path.endswith('.zip'):
+            self.wfile.write(body[:len(body) // 2])
+            self.close_connection = True
+            return
         self.wfile.write(body)
 
 
@@ -122,7 +129,7 @@ class UpdateRehearsal(unittest.TestCase):
         cls.server.shutdown()
         cls.work.cleanup()
 
-    def release(self, name, runtime=b'runtime B\n', key=None, extra=None, tamper=False):
+    def release(self, name, runtime=b'runtime B\n', key=None, extra=None, tamper=False, cut=False, manifest='mihawkos-update.txt'):
         """The new title as a release zip, its signed manifest, and GitHub's listing of it beside three it must skip."""
         folder = self.base / f'{name}-src/PPSA99170'
         title_folder(folder, '07.001.000', self.eboot, runtime, {'assets/x.txt': b'new\n', 'runtime-pieces/abc.zst': self.piece,
@@ -143,22 +150,23 @@ class UpdateRehearsal(unittest.TestCase):
         data = archive.read_bytes()
         if tamper:
             data = data[:1000] + bytes([data[1000] ^ 1]) + data[1001:]
-        Fixture.files = {archive.name: data, 'mihawkos-release.txt': (archive.parent / 'mihawkos-release.txt').read_bytes()}
+        Fixture.cut = cut
+        Fixture.files = {archive.name: data, manifest: (archive.parent / 'mihawkos-update.txt').read_bytes()}
         asset = lambda n, size=0: {'name': n, 'size': size, 'browser_download_url': base + n}
         Fixture.listing = json.dumps([
-            {'tag_name': 'v8.0.0-alpha-9', 'draft': True, 'prerelease': True, 'assets': [asset('mihawkos-release.txt')]},
+            {'tag_name': 'v8.0.0-alpha-9', 'draft': True, 'prerelease': True, 'assets': [asset('mihawkos-update.txt')]},
             {'tag_name': 'v7.2.0-alpha-9', 'draft': False, 'prerelease': True, 'assets': [asset('PS5_MihawkOS-v7.2.0.zip', 9)]},
             {'tag_name': TAG, 'draft': False, 'prerelease': True,
-             'assets': [asset(archive.name, len(data)), asset('mihawkos-release.txt')]},
-            {'tag_name': 'v6.0.0-alpha-6', 'draft': False, 'prerelease': True, 'assets': [asset('mihawkos-release.txt')]},
+             'assets': [asset(archive.name, len(data)), asset(manifest)]},
+            {'tag_name': 'v6.0.0-alpha-6', 'draft': False, 'prerelease': True, 'assets': [asset('mihawkos-update.txt')]},
         ]).encode()
 
-    def run_update(self, name, public=None, build_tag='7.0.0-alpha-7'):
+    def run_update(self, name, public=None, build_tag='7.0.0-alpha-7', port=None):
         title = self.base / f'{name}-title'
         title_folder(title, '07.000.000', b'old eboot', b'runtime A\n', {'assets/x.txt': b'old\n', 'settings.txt': b'mine\n',
                                                                      'runtime-pieces/old.zst': b'old piece'})
         update = self.base / f'{name}-update'
-        url = f'http://127.0.0.1:{self.port}/repos/mihawk-99/PS5_MihawkOS/releases?per_page=20'
+        url = f'http://127.0.0.1:{port or self.port}/repos/mihawk-99/PS5_MihawkOS/releases?per_page=20'
         out = subprocess.run([str(self.driver), str(self.roots), url, (public or self.public).read_text().split()[0], build_tag,
                               '07.000.000', str(update), str(title)], capture_output=True, text=True, timeout=120)
         self.assertEqual(out.returncode, 0, out.stderr)
@@ -169,10 +177,25 @@ class UpdateRehearsal(unittest.TestCase):
         out, title, update = self.run_update('whole')
         self.assertIn(f'find=ok found=1 tag={TAG} version=07.001.000', out)
         self.assertIn('take=ok', out)
+        # the main menu's line at each step, in the player's language (src/pw_update_notice.h)
+        self.assertIn('notice en=Checking for a newer MihawkOS…\n', out)
+        self.assertIn('notice en=MihawkOS 07.001.000 is available: it downloads in the background.\n', out)
+        self.assertRegex(out, r'notice en=Downloading MihawkOS 07\.001\.000: [0-9]+ of [0-9]+ MB \(100%\)\n')
+        self.assertIn('notice en=Checking the download of MihawkOS 07.001.000 against its signature…\n', out)
+        self.assertIn('notice en=Preparing MihawkOS 07.001.000: 100%\n', out)
+        self.assertIn('notice en=MihawkOS 07.001.000 is ready.\n', out)
+        self.assertIn('notice fr=MihawkOS 07.001.000 est prêt.\n', out)
+        steps = [line for line in out.splitlines() if line.startswith('notice en=')]
+        self.assertTrue(steps[0].endswith('Checking for a newer MihawkOS…') and 'is available' in steps[1])
+        self.assertTrue(steps[-1].endswith('is ready.'))   # in the order they happen
         self.assertIn('pending=1 version=07.001.000', out)
         self.assertIn('switch=1 failed=\n', out)
         self.assertIn('previous=1', out)
         self.assertIn('confirm=1', out)
+        # every file of the switched title may be run: the system refuses an eboot.bin without its execute bit
+        # (Alpha 7's update to 7.1 on the base, 2026-11-01: errno 13, "can't start the app")
+        for name in ('eboot.bin', 'sce_sys/param.json', 'runtime-pieces/abc.zst'):
+            self.assertEqual((title / name).stat().st_mode & 0o777, 0o777, name)
         self.assertEqual((title / 'eboot.bin').read_bytes(), self.eboot)
         self.assertEqual((title / 'runtime-pieces/abc.zst').read_bytes(), self.piece)
         self.assertEqual((title / 'assets/x.txt').read_bytes(), b'new\n')
@@ -194,15 +217,41 @@ class UpdateRehearsal(unittest.TestCase):
         self.assertEqual((title / 'eboot.bin').read_bytes(), b'old eboot')   # the running title untouched
         self.assertFalse((update / 'stage').exists())
         self.assertFalse((update / 'download.zip').exists() or (update / 'download.zip.part').exists())
+        return out
 
     def test_a_damaged_download(self):
         self.refused('tampered', "is not the one its signed description names", tamper=True)
+        self.refused('tampered2', 'notice en=An update was found, but it does not match MihawkOS’s signature, so it was not '
+                     'used.\n', tamper=True)
+
+    def test_a_cut_download(self):
+        out = self.refused('cut', 'notice en=The download of MihawkOS 07.001.000 stopped: check the network. It starts again '
+                           'the next time you open MihawkOS.\n', cut=True)
+        self.assertNotIn('against its signature', out)   # a cut download never reaches its check
+
+    def test_the_server_unreachable(self):
+        closed = socket.socket()
+        closed.bind(('127.0.0.1', 0))
+        port = closed.getsockname()[1]
+        closed.close()
+        self.release('unreachable')
+        out, title, _ = self.run_update('unreachable', port=port)
+        self.assertIn('notice en=MihawkOS could not reach the update server. It tries again later.\n', out)
+        self.assertEqual((title / 'eboot.bin').read_bytes(), b'old eboot')
 
     def test_another_key(self):
         self.refused('otherkey', 'not signed with MihawkOS', key=self.other_key)
+        self.refused('otherkey2', 'notice en=An update was found, but it does not match MihawkOS’s signature', key=self.other_key)
 
     def test_a_name_outside_the_folder(self):
         self.refused('outside', 'outside its folder', extra={'PPSA99170/../evil.txt': b'x'})
+
+    def test_alpha7s_manifest_name_is_not_read(self):
+        # A release that carries only mihawkos-release.txt (the name Alpha 7 reads) is offered to nobody from 7.1 on
+        self.release('oldname', manifest='mihawkos-release.txt')
+        out, title, _ = self.run_update('oldname')
+        self.assertIn('find=ok found=0', out)
+        self.assertEqual((title / 'eboot.bin').read_bytes(), b'old eboot')
 
     def test_nothing_newer(self):
         self.release('newest')

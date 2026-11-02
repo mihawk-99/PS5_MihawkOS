@@ -1,0 +1,21 @@
+{
+ "run": "alpha7-hotfix-gate-base-2026-11-01-log-flood64-title",
+ "what": "log-flood-probe.exe",
+ "env": [
+  "WINEDEBUG=warn+debugstr",
+  "WINE_PS5_TITLE_PROCESS=log-flood-probe.exe",
+  "PROTON_LAYOUT=launcher",
+  "WINE_PS5_CONTROLLER=xbox-360",
+  "WINE_PS5_GAME_MODE=1",
+  "PROTON_120HZ=1",
+  "PROTON_STOP_TERMINATE=0"
+ ],
+ "passed": false,
+ "result": "runner_error",
+ "error": "550 No space left on device",
+ "loaded": false,
+ "probe_verdict": null,
+ "stop_requested": null,
+ "cleanup_verified": false,
+ "hooks_removed": true
+}

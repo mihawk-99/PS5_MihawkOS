@@ -225,9 +225,9 @@ int pw_update_discard(const char *update)
     return remove_tree(stage);
 }
 
-int pw_update_check_due(int enabled, int64_t now, int64_t last)
+int pw_update_check_due(int enabled, int cold, int64_t now, int64_t last)
 {
-    return enabled && (last <= 0 || now < last || now - last >= PW_UPDATE_CHECK_EVERY_S);
+    return enabled && cold && (last <= 0 || now < last || now - last >= PW_UPDATE_CHECK_EVERY_S);
 }
 
 /* Moved in last, in this order: the runtime's pin (the title's runtime-stamp: the new title re-copies its runtime when
@@ -294,7 +294,8 @@ const char *pw_update_status_text(int status)
 }
 
 int pw_update_install_zip(const char *zip_path, const char *update, const char *prefix, const uint8_t runtime_sha256[32],
-                          const char *version, pw_zip_inflate_fn inflate, char *failed, size_t size)
+                          const char *version, pw_zip_inflate_fn inflate, char *failed, size_t size,
+                          pw_update_progress_fn progress, void *context)
 {
     char stage[PATH], target[PATH];
     if (failed && size) *failed = '\0';
@@ -316,6 +317,9 @@ int pw_update_install_zip(const char *zip_path, const char *update, const char *
     size_t count = 0;
     const size_t skip = strlen(prefix);
     int pinned = 0;
+    uint64_t total = 0, done = 0;
+    for (size_t e = 0; !status && e < zip.count; ++e)
+        if (!zip.entries[e].folder && !strncmp(zip.entries[e].name, prefix, skip)) total += zip.entries[e].size;
     for (size_t e = 0; !status && e < zip.count; ++e) {
         const PwZipEntry *entry = &zip.entries[e];
         const char *relative = entry->name + skip;
@@ -324,12 +328,17 @@ int pw_update_install_zip(const char *zip_path, const char *update, const char *
         if (!join(target, stage, relative)) status = PW_UPDATE_STAGE;
         else if (!make_parents(target)) status = PW_ZIP_WRITE;
         else status = pw_zip_extract(file, entry, target, inflate, files[count].sha256);
+        /* Every file of the new title may be run: a file made by fopen is 0666, and the system refuses to start an
+         * eboot.bin (or load a .prx, a payload .elf) without the execute bit (errno 13: Alpha 7's update to 7.1 on the
+         * base, 2026-11-01, "can't start the app"). As a copy over FTP leaves them. */
+        if (!status && chmod(target, 0777) != 0) status = PW_UPDATE_STAGE;
         if (status) {
             if (failed && size) snprintf(failed, size, "%s", entry->name);
             break;
         }
         files[count].path = relative;
         files[count].size = entry->size;
+        if (progress) progress(context, done += entry->size, total);
         if (!strcmp(relative, "runtime-pack.txt"))
             pinned = !runtime_sha256 || !memcmp(files[count].sha256, runtime_sha256, 32);
         count++;

@@ -449,6 +449,10 @@ int main(int argc, char **argv)
 	{
 		const auto requestPath = proton_title_path("/app0/wine-run.txt");
 		std::ifstream request(requestPath);
+		// The title's own restarts (after a game, into one) always leave this handoff (proton_restart); a cold start none.
+		// An elevation retry is still the same open from the home screen: without the check then, a console whose
+		// daemon needs the retry would never check.
+		proton_update_set_cold_start(!request);
 		if (request) {
 			std::vector<std::string> words{ "ps5proton" };
 			for (std::string line; std::getline(request, line); )

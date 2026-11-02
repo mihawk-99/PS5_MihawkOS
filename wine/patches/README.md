@@ -678,3 +678,13 @@ Patch 2427 answers `NtQueryInformationProcess(ProcessCommandLineInformation)` (c
 answers as Windows does, a `UNICODE_STRING` followed by the text: the caller's own command line from its parameters, another process's through `NtReadVirtualMemory` along PEB,
 ProcessParameters and CommandLine; a buffer too small gets `STATUS_INFO_LENGTH_MISMATCH` and the needed length. The gate's chromium-game reads its child's command line this way
 (alpha7-gate-pro-2026-11-01 failed on it); `tests/test_pw_command_line.py` runs the answer's layout cut from the patch.
+
+Patch 2428 makes the PS5 driver's `ProcessEvents` answer what win32u asks: whether its input pipe is drained (TRUE clears the queue's `QS_DRIVER` and polls the pipe
+again, as `X11DRV_ProcessEvents` answers for its display), not whether it made a message. A wake of the title's pipe with nothing for the thread that took it (a controller
+coming or going, patch 2423, or input another of the game's window threads took: they share the pipe) left `QS_DRIVER` set, and every wait on that thread's queue returned at
+once, its timeout never reached, until the next input: a game in the title froze until the mouse moved (a tester's Elden Ring, 2026-11-01). `tests/intitle-stall-probe.c`
+never finished its first 16 ms `MsgWaitForMultipleObjects` in the title in 180 s and passed in a helper (`intitle-stall-title-base-2026-11-01-01`, `-helper-`).
+
+Patch 2429 writes the first eight shared-view faults the section cache cannot serve (raised as `STATUS_IN_PAGE_ERROR`) to the Wine log as an err line: the address
+and instruction, the failed stage in words (`pw_wine_section_stage_word`, `tests/test_pw_wine_section_stage.c`), the view and whether it lies in the shared-section
+arena. The cache said it only on standard error, which a title's session keeps only with klogsrv (a tester's NFS Heat in the title, 2026-11-01).

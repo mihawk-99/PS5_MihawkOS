@@ -41,6 +41,7 @@ typedef struct PwSteamScreenState {
     const char *persona;             /* the signed-in display name (UTF-8), or NULL */
     const char *dialog_title;        /* PW_STEAM_SCREEN_DIALOG: the box's caption (UTF-8), or NULL */
     const char *dialog_text;         /* its text, lines split by '\n' (UTF-8), or NULL; cut to what fits */
+    const struct PwVkbd *keyboard;   /* PW_STEAM_SCREEN_KEYBOARD: the keyboard as it stands, or NULL */
 } PwSteamScreenState;
 
 /* What a drawing did with its words (for the test): the lowest pixel row one reached, how many lines were cut because
@@ -54,6 +55,12 @@ typedef struct PwSteamScreenReport {
  * alone. report may be NULL. */
 void pw_steam_screen_draw(uint32_t *canvas, const uint32_t *backdrop, const PwSteamScreenState *state,
                           const PwSteamFaces *faces, PwSteamScreenReport *report);
+/* The keyboard screen after one change, over a canvas that shows it as it was (`before`): only the field and the keys
+ * whose focus moved are drawn again, about a tenth of the panel's 19 ms on a standard PS5 (the owner, 2026-11-01:
+ * "insane input lag"). Another page or Shift, or no `before`, draws it whole. The result is the whole draw's, pixel for
+ * pixel (tests/test_pw_steam_screen.c). */
+void pw_steam_screen_keyboard_changed(uint32_t *canvas, const uint32_t *backdrop, const PwSteamScreenState *state,
+                                      const PwSteamFaces *faces, const struct PwVkbd *before);
 /* What moves, over a copy of the still picture: the tube's liquid (installing, updating, slow) or the line scanning the
  * code (the phone screen), for tick (the loading screen's frame count). Nothing outside their rectangles is written. */
 void pw_steam_screen_animate(uint32_t *canvas, const PwSteamScreenState *state, unsigned tick);

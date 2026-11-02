@@ -17,6 +17,7 @@
 #include <cstdint>
 #include <functional>
 #include <string>
+#include "pw_update.h"
 #include "pw_zip.h"
 
 /* GET url, its body to sink (false from sink stops); "" or the failure in plain words. More than limit bytes fails. */
@@ -34,12 +35,19 @@ struct PwUpdateOffer {
 };
 
 /* releases_url: GitHub's listing; manifest_url: a set address instead (a rehearsal), or "". build_tag: VERSION.
- * running: the title's contentVersion. key: the build's public key. "" with offer.found false: nothing newer. */
+ * running: the title's contentVersion. key: the build's public key. "" with offer.found false: nothing newer.
+ * failure (may be null): PW_UPDATE_FAIL_NETWORK when nothing readable came back, _SIGNATURE when the manifest did not
+ * pass its key. */
 std::string pw_update_find(const PwUpdateGet &get, const std::string &releases_url, const std::string &manifest_url,
-                           const char *build_tag, const char *running, const uint8_t key[32], PwUpdateOffer &offer);
-/* Download, check and stage `offer` under `update`; progress(bytes so far) as it downloads. */
+                           const char *build_tag, const char *running, const uint8_t key[32], PwUpdateOffer &offer,
+                           PwUpdateFailure *failure = nullptr);
+/* The steps pw_update_take reports (the main menu's line, src/pw_update_notice.h); why one failed: pw_update.h. */
+enum PwUpdateStep { PW_UPDATE_STEP_DOWNLOAD, PW_UPDATE_STEP_VERIFY, PW_UPDATE_STEP_UNPACK };
+/* Download, check and stage `offer` under `update`. progress(step, done, total): the bytes downloaded of the zip's size
+ * (0 when unknown), then the check of its SHA-256, then the title's bytes unpacked. failure (may be null): why it failed. */
 std::string pw_update_take(const PwUpdateGet &get, const PwUpdateOffer &offer, const std::string &update,
-                           pw_zip_inflate_fn inflate, const std::function<void(uint64_t)> &progress);
+                           pw_zip_inflate_fn inflate, const std::function<void(int, uint64_t, uint64_t)> &progress,
+                           PwUpdateFailure *failure = nullptr);
 /* The release zip's top folder: the title folder, as copied to /data/homebrew. */
 #define PW_UPDATE_ZIP_PREFIX "PPSA99170/"
 #endif

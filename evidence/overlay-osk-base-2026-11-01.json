@@ -1,0 +1,54 @@
+{
+  "battery": "overlay-osk-base-2026-11-01",
+  "expected_cases": [
+    "osk-own-open64"
+  ],
+  "revision": "cd3ea89c9234c9481b72c0c5ecd1c05e70a6788e",
+  "dirty": true,
+  "cases": [
+    {
+      "case": "osk-own-open64",
+      "run": "overlay-osk-base-2026-11-01-osk-own-open64",
+      "runner_status": 1,
+      "seconds": 142.7,
+      "result": "finished",
+      "probe_verdict": "PASS",
+      "returned_to_launcher": true,
+      "exit_stall": false,
+      "passed": false,
+      "run_seconds": 100.2,
+      "launch_readiness": {
+        "ready": true,
+        "seconds": 0.16,
+        "settle_seconds": 0.0,
+        "census_seconds": 0.147,
+        "previous_cleanup_verified": true
+      },
+      "stages": {
+        "launched": 1.02,
+        "title_started": 1.54,
+        "elevated": 1.54,
+        "wine_loaded": 1.78,
+        "wineboot_started": 4.3,
+        "wineboot_ended": 5.45,
+        "program_started": 5.47,
+        "marker": 5.75,
+        "program_ended": 95.62,
+        "wine_ended": 97.95,
+        "launcher_started": 99.43,
+        "launcher_ended": 99.71,
+        "closed": 100.25
+      },
+      "runner_overhead_seconds": 42.5,
+      "layout": "launcher",
+      "fault_records": 0,
+      "helpers": 5,
+      "protocol_errors": 0,
+      "pipe_memory_exhausted": 0,
+      "search_errors": 0
+    }
+  ],
+  "complete": true,
+  "seconds": 142.7,
+  "passed": false
+}

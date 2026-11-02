@@ -31,6 +31,9 @@ int proton_gpu_broker_game_mode();
 bool proton_gpu_broker_capture_next(const char *path);
 /* The guided setup's cover, shown instead of the desktop (graphics patch 0030; native/proton_loading.h). */
 bool proton_gpu_broker_set_cover(const void *pixels);
+// A panel over every frame (the own keyboard): linear B8G8R8A8 w x h at (x, y), copied by the broker; NULL takes it off.
+bool proton_gpu_broker_set_overlay(const void *pixels, unsigned x, unsigned y, unsigned w, unsigned h);
+void proton_gpu_broker_overlay_refresh();   // the panel's bubbles shown again while no frame comes
 /* The broker's locks and GPU fences as of now, without waiting on either lock (graphics patch 0012), and the call the
  * client lock's holder waits in, for how long, on which thread (patch 0017; phase null: none named): the flight
  * recorder's (native/proton_flight_recorder.h). */

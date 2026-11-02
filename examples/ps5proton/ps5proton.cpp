@@ -1295,11 +1295,12 @@ class VulkanExample : public ps5ui::KitExample
 			drawnOnce = true;
 			proton_update_started();
 			// The automatic update check: only the launcher asks, never a game; a scripted run asks nothing of the network
-			if (dataAvailable && !ps5.frameBudget) proton_update_auto();
+			// unless a harness planted its hook (proton_update_scripted_check: the on-console update proof)
+			if (dataAvailable && (!ps5.frameBudget || proton_update_scripted_check())) proton_update_auto();
 		}
 		if (!ps5.frameBudget && (updateNoticePoll -= dt) <= 0.0f) {
 			updateNoticePoll = 1.0f;
-			updateNotice = proton_update_notice();
+			updateNotice = proton_update_notice(homeLanguage);
 			updateRestart = proton_update_restartable();
 		}
 		kit.play(feedback, theme().sounds);
@@ -1402,7 +1403,7 @@ class VulkanExample : public ps5ui::KitExample
 		} else if (!runtimeBlocked.empty()) {
 			*text = runtimeBlocked, *color = look.danger;
 		} else if (!updateNotice.empty()) {   // a newer release (the owner, 2026-10-31): never blocking, never in a game
-			*text = updateRestart ? updateNotice + " Press R2 to restart now." : updateNotice, *color = look.primary;
+			*text = updateRestart ? updateNotice + " " + tr(PW_TEXT_UPDATE_RESTART_SHORT) : updateNotice, *color = look.primary;
 		} else if (!payloadsNote.empty()) {
 			*text = payloadsNote, *color = hui::gfx::Color::rgb(0x2c5272, 0.85f);
 		}
@@ -1819,8 +1820,8 @@ class VulkanExample : public ps5ui::KitExample
 				}
 				if (!updateNotice.empty()) {   // a newer release (the owner, 2026-10-31): never blocking, never in a game
 					y += 30;
-					paragraph(paint, updateRestart ? updateNotice + " Press R2 to restart now; otherwise it is switched in the next "
-						"time " PS5_TITLE_NAME " starts." : updateNotice, 1240, y, 22, look.primary);
+					paragraph(paint, updateRestart ? updateNotice + " " + tr(PW_TEXT_UPDATE_RESTART_LONG) : updateNotice, 1240, y, 22,
+						look.primary);
 				}
 				if (!payloadsNote.empty()) {
 					y += 30;

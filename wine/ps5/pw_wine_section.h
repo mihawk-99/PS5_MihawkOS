@@ -114,6 +114,15 @@ int pw_wine_section_fault(PwWineSection *, uintptr_t, unsigned protection, unsig
  * protection (a Windows program's first touch of a large buffer faults every 16 KiB otherwise: a HashLink game in an emulator took 1,400
  * faults a second). The run is cut at the end of the view, at the first page already cached, and at a quarter of the cache.
  * Caller guarantees every page of the run has `protection`. */
+/* What failed_stage says, for a log line a person reads (patch 2429). */
+static inline const char *pw_wine_section_stage_word(unsigned stage)
+{
+    static const char *const words[] = {
+        "none", "adding the view", "flushing an evicted page", "unmapping an evicted page",
+        "restoring a guard (the view is refused from now on)", "the kernel refused the mapping", "changing protection",
+        "closing the view", "the title's answer failed", "a mapping that is not Wine's lies in the range"};
+    return stage < sizeof(words) / sizeof(words[0]) ? words[stage] : "unknown";
+}
 int pw_wine_section_fault_run(PwWineSection *, uintptr_t, unsigned protection, unsigned access, int bus,
                               PwWineSectionRetry *, size_t run);
 /* For a second mapping of the memory under address (pw_wine_alias.h): a direct view whose chunk holding address is

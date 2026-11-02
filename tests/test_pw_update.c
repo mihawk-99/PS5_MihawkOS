@@ -223,9 +223,15 @@ int main(void)
     }
 
     /* The automatic check: on and a day since the last; never when off; a clock set back checks again */
-    const int64_t day = PW_UPDATE_CHECK_EVERY_S, now = INT64_C(1793500000);
-    assert(pw_update_check_due(1, now, 0) && pw_update_check_due(1, now, now - day) && !pw_update_check_due(1, now, now - day + 1));
-    assert(!pw_update_check_due(0, now, 0) && pw_update_check_due(1, now, now + 3600));
+    const int64_t hour = PW_UPDATE_CHECK_EVERY_S, now = INT64_C(1793500000);
+    assert(hour == 3600);
+    /* a cold start: due after an hour, not within it */
+    assert(pw_update_check_due(1, 1, now, 0) && pw_update_check_due(1, 1, now, now - hour - 1) &&
+           pw_update_check_due(1, 1, now, now - hour) && !pw_update_check_due(1, 1, now, now - hour + 1));
+    /* a restart (after a game, or into an update) never asks, however long ago the last check was */
+    assert(!pw_update_check_due(1, 0, now, 0) && !pw_update_check_due(1, 0, now, now - 30 * hour));
+    /* turned off; a clock set back counts as due */
+    assert(!pw_update_check_due(0, 1, now, 0) && pw_update_check_due(1, 1, now, now + 3600));
 
     puts("test_pw_update: ok");
     return 0;

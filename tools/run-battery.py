@@ -283,6 +283,10 @@ CASES = [
     ('d3d12-levels64', ['--exe', 'd3d12-levels-probe.exe', '--marker', 'PS5_PROTON_D3D12_LEVELS'] + LAUNCHER),
     ('d3d12-levels64-title', ['--exe', 'd3d12-levels-probe.exe', '--marker', 'PS5_PROTON_D3D12_LEVELS',
                               '--env', 'WINE_PS5_TITLE_PROCESS=d3d12-levels-probe.exe'] + LAUNCHER),
+    # A game's waits in the title with no input (tests/intitle-stall-probe.c, Wine patch 2428): a 16 ms MsgWait must time
+    # out while its threads spin; before 2428 the first one never returned (intitle-stall-title-base-2026-11-01-01).
+    ('intitle-stall64-title', ['--exe', 'intitle-stall-probe.exe', '--marker', 'PS5_PROTON_INTITLE_STALL',
+                               '--env', 'WINE_PS5_TITLE_PICK=intitle-stall-probe.exe'] + LAUNCHER),
     # 10,000 files open for writing at once from a helper (tests/many-files-probe.c): the title's descriptor table keeps
     # room for them (wine/ps5/pw_wine_codeshare.h's cap and release).
     ('many-files64', ['--exe', 'many-files-probe.exe', '--marker', 'PS5_PROTON_MANY_FILES', '--watchdog', '600'] + LAUNCHER),
@@ -314,7 +318,19 @@ CASES = [
                            '--env', 'WINE_PS5_TITLE_PROCESS=osk-typed-probe.exe', '--env', 'WINE_PS5_OSK_TEST=type'] + LAUNCHER),
     ('osk-typed64-helper', ['--exe', 'osk-typed-probe.exe', '--marker', 'PS5_PROTON_OSK_TYPED',
                             '--env', 'WINE_PS5_OSK_TEST=type'] + LAUNCHER),
-    ('osk-open64', ['--exe', 'window-probe.exe', '--marker', 'PS5_PROTON_WINDOW_PROBE', '--env', 'WINE_PS5_OSK_TEST=open'] + LAUNCHER),
+    # The dialog itself must open and show: a standard PS5 on 13.60 passed this case on the probe's verdict alone while the
+    # keyboard was unavailable there (hotfix-osk-base-2026-11-01).
+    ('osk-open64', ['--exe', 'window-probe.exe', '--marker', 'PS5_PROTON_WINDOW_PROBE', '--env', 'WINE_PS5_OSK_TEST=open',
+                    '--expect-title-line', 'keyboard opened (test)', '--expect-title-line', 'keyboard shown=1'] + LAUNCHER),
+    # MihawkOS's own keyboard on any console (WINE_PS5_OSK=own; the only one where the system's will not load): shown over
+    # the bottom 480 rows with the game live above them, pictured a second in (game-frame-90: the probe's frame above row
+    # 600, the panel from it), and the test line typed through it reaches the game.
+    ('osk-own-open64', ['--exe', 'window-probe.exe', '--marker', 'PS5_PROTON_WINDOW_PROBE', '--env', 'WINE_PS5_OSK_TEST=open',
+                        '--env', 'WINE_PS5_OSK=own', '--expect-title-line', 'keyboard shown=1 own=1',
+                        '--expect-title-line', 'keyboard ended by=title', '--expect-capture-split', '600'] + LAUNCHER),
+    ('osk-own-typed64-title', ['--exe', 'osk-typed-probe.exe', '--marker', 'PS5_PROTON_OSK_TYPED', '--env', 'WINE_PS5_OSK=own',
+                               '--env', 'WINE_PS5_TITLE_PROCESS=osk-typed-probe.exe', '--env', 'WINE_PS5_OSK_TEST=type',
+                               '--expect-title-line', 'keyboard shown=1 own=1'] + LAUNCHER),
     ('d3d11', ['--exe', 'd3d11-probe.exe', '--marker', 'PS5_PROTON_D3D11_PROBE']),
     # The broker's fast copy (src/pw_speed_defaults.h), on by default since Alpha 7: the frame a Direct3D 11 program presents
     # reaches the screen. Its capture reads what was scanned out and must show the frame, not black (w3-ab-b-pro-2026-11-01).
@@ -438,7 +454,7 @@ ON_REQUEST = {'section-dmem', 'memory-stall', 'payload-vm-contention', 'vm-speed
 # here, and from then on no code is committed without it.
 GATE_CASES = ['shell32', 'shell64', 'work-area32', 'work-area64', 'wallpaper32', 'wallpaper64', 'cursor-scheme32', 'cursor-scheme64', 'theme-parts32', 'theme-parts64', 'monospace32', 'monospace64', 'gpu-window32', 'gpu-window64', 'dxvk-window32', 'dxvk-window64', 'host-dmem64', 'host-dmem-fallback64', 'window-compose32', 'window-compose64', 'window-effects32', 'window-effects64', 'window-snapshot32', 'window-snapshot64', 'initial-env32', 'initial-env64', 'locale64', 'appearance32', 'appearance64', 'theme-notify32', 'theme-notify64', 'proton-ui32', 'proton-ui64', 'memory-classes', 'graphics-teardown', 'title-games', 'launcher-pair', 'chromium-game', 'dnsapi32', 'dnsapi64', 'mf-video32', 'mf-video64', 'network-adapters32', 'network-adapters64', 'socket-options32', 'socket-options64', 'late-library', 'large-shared-section', 'virtual-query32', 'virtual-query64', 'image-protect32', 'image-protect64', 'shared-section32', 'shared-section64', 'suspend-context64', 'kill-convert', 'stack-limit64', 'remote-memory64', 'system-memory32', 'system-memory64', 'file-write32', 'file-write64', 'relative-dir32', 'relative-dir64', 'umip32', 'umip64', 'manual-stdout', 'redirected-stdout', 'prefix-fresh64', 'prefix-fresh32',
               'pe64', 'payload-eight', 'payload-memory', 'payload-vm', 'descendants', 'launcher-render', 'launcher-tls',
-              'sync64', 'shell-open64',
+              'sync64', 'intitle-stall64-title', 'shell-open64',
               # A write tracker's truth on 16 KiB host pages (patch 1134): no write reported that did not happen,
               # each one faulting at the store (docs/MMU4K.md I1, I2).
               'vm-truth32', 'vm-truth64',
@@ -461,7 +477,7 @@ GATE_CASES = ['shell32', 'shell64', 'work-area32', 'work-area64', 'wallpaper32',
               'broker-wedge64',
               # HID's nested INPUT32 must be widened too (0955); otherwise device reports become message zero
               # and a normal PeekMessage loop stalls even when texture uploads and SwapBuffers succeed.
-              'input32', 'gl-upload32', 'osk-typed64-title', 'osk-typed64-helper', 'osk-open64', 'many-files64', 'log-flood64-title', 'd3d12-existing-heap64-title', 'parent-query64-title', 'missing-import64-title', 'fast-copy-capture']
+              'input32', 'gl-upload32', 'osk-typed64-title', 'osk-typed64-helper', 'osk-open64', 'many-files64', 'log-flood64-title', 'd3d12-existing-heap64-title', 'parent-query64-title', 'missing-import64-title', 'fast-copy-capture', 'osk-own-open64', 'osk-own-typed64-title']
 
 
 # Grouped launches (--grouped). A short probe spends about 1 s of its 14 s launch on its own checks
