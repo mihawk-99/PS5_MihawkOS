@@ -109,7 +109,7 @@ int main(void)
     const PwAppEntry xbox = {"Xbox", "C:\\Games\\X\\x.exe", NULL, xbox_env, 3};
     assert(!pw_app_environment_block(&xbox, block, sizeof(block), &bytes, &kept) && kept == 3);
     assert(!strcmp(block, "WINE_PS5_CONTROLLER=xbox-one") && !strcmp(block + 29, "WINE_PS5_GAME_MODE=0") &&
-           !strcmp(block + 50, "WINE_PS5_HID=0"));
+           !strcmp(block + 50, "WINE_PS5_HID=live"));
     const char *pad_env[] = {"WINE_PS5_CONTROLLER=dualsense", "SDL_XINPUT_ENABLED=0"};
     const PwAppEntry pad = {"Pad", "C:\\Games\\P\\p.exe", NULL, pad_env, 2};
     assert(!pw_app_environment_block(&pad, block, sizeof(block), &bytes, &kept) && kept == 3);

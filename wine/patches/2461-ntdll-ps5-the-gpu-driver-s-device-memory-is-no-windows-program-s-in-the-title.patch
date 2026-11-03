@@ -1,0 +1,78 @@
+From 0000000000000000000000000000000000000000 Mon Sep 17 00:00:00 2001
+From: Mihawk <163614687+mihawk-99@users.noreply.github.com>
+Date: Mon, 02 Nov 2026 20:00:00 -0400
+Subject: [PATCH] ntdll: PS5: The GPU driver's device memory is no Windows program's in the title.
+
+The console's Vulkan driver places VkDeviceMemory in a 256 GiB region at 0x4000000000 (PS5_Vulkan
+driver/ps5vk_private.h, PS5VK_DEVICE_MEMORY_REGION), mapping into it on demand at the addresses it picks. In the title
+the driver (the GPU broker's) shares the process with the program the title runs, and Wine knew nothing of the region:
+Steam's browser in the title asked for its V8 cage at 0x3fffff0000 for 16 GiB and was given it ("reserved 0x400010000
+bytes at 3fffff0000"), the broker's memory came at 0x4000000000 ("gpu-broker fences address=0x4000000000"), and the
+browser's threads faulted on pages Wine counted MEM_COMMIT where the kernel had nothing ("kernel none",
+e1-webhelper-title-base-2026-11-02-04/-05).
+
+For the program in the title only (WINE_PS5_TITLE_CLIENT=1, 64-bit): the region leaves Wine's free ranges at start, so no
+search lands there, and a request at a fixed address that overlaps it is refused with STATUS_CONFLICTING_ADDRESSES, which
+V8 takes as for its other refused hints. No view is made for it: one byte of page protection per 4 KiB page of 256 GiB
+would be 64 MiB of the title's memory.
+---
+diff --git a/dlls/ntdll/unix/virtual.c b/dlls/ntdll/unix/virtual.c
+index 8fb7619..e213668 100644
+--- a/dlls/ntdll/unix/virtual.c
++++ b/dlls/ntdll/unix/virtual.c
+@@ -3461,6 +3461,20 @@ static NTSTATUS ps5_placeholder_refused( struct file_view *view )
+  * Create a view and mmap the corresponding memory area.
+  * virtual_mutex must be held by caller.
+  */
++#ifdef __PROSPERO__
++/* The GPU driver's device-memory region (PS5_Vulkan driver/ps5vk_private.h, PS5VK_DEVICE_MEMORY_REGION: 256 GiB at
++ * 0x4000000000), where it maps VkDeviceMemory at the addresses it chooses, on demand. In the title the driver shares the
++ * process with the program the title runs, so no Windows view may lie there: Steam's browser in the title had its V8
++ * cage granted at 0x3fffff0000 for 16 GiB, the driver's memory came over it, and the browser faulted on pages Wine
++ * counted committed and the kernel no longer had (e1-webhelper-title-base-2026-11-02-04/-05). Set in virtual_init for
++ * the program in the title only; 0 elsewhere (a helper's driver is the broker's, in the title). */
++static char *ps5_device_low, *ps5_device_high;
++static BOOL ps5_device_overlaps( const void *base, size_t size )
++{
++    return ps5_device_high && (const char *)base < ps5_device_high && (const char *)base + size > ps5_device_low;
++}
++#endif
++
+ static NTSTATUS map_view( struct file_view **view_ret, void *base, size_t size,
+                           unsigned int alloc_type, unsigned int vprot,
+                           ULONG_PTR limit_low, ULONG_PTR limit_high, size_t align_mask )
+@@ -3518,6 +3532,9 @@ static NTSTATUS map_view( struct file_view **view_ret, void *base, size_t size,
+         if (limit_low && base < (void *)limit_low) return STATUS_CONFLICTING_ADDRESSES;
+         if (limit_high && is_beyond_limit( base, size, (void *)limit_high )) return STATUS_CONFLICTING_ADDRESSES;
+         if (is_beyond_limit( base, size, host_addr_space_limit )) return STATUS_CONFLICTING_ADDRESSES;
++#ifdef __PROSPERO__
++        if (ps5_device_overlaps( base, size )) return STATUS_CONFLICTING_ADDRESSES;
++#endif
+         status = map_fixed_area( base, size, unix_prot );
+ #ifdef __PROSPERO__
+         /* Refused with nothing of Wine's in the way: a hold of the kernel's may be (ps5_claim_holds). The holds found are
+@@ -5210,6 +5227,22 @@ void virtual_init(void)
+     free_ranges[0].base = (void *)0;
+     free_ranges[0].end = (void *)~0;
+     free_ranges_end = free_ranges + 1;
++#if defined(__PROSPERO__) && defined(_WIN64)
++    {
++        const char *title_client = getenv( "WINE_PS5_TITLE_CLIENT" );
++        if (title_client && !strcmp( title_client, "1" ))
++        {
++            ps5_device_low = (char *)0x4000000000;
++            ps5_device_high = ps5_device_low + ((size_t)256 << 30);
++            free_ranges[0].end = ps5_device_low;
++            free_ranges[1].base = ps5_device_high;
++            free_ranges[1].end = (void *)~0;
++            free_ranges_end = free_ranges + 2;
++            fprintf( stderr, "wine-ps5: the GPU driver's device memory %p-%p is no Windows program's in the title\n",
++                     ps5_device_low, ps5_device_high );
++        }
++    }
++#endif
+ 
+     /* make the DOS area accessible (except the low 64K) to hide bugs in broken apps like Excel 2003 */
+     size = (char *)address_space_start - (char *)0x10000;
+-- 
+2.43.0

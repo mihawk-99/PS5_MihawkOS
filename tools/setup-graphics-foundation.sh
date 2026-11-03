@@ -21,7 +21,14 @@ fork=${PS5_VULKAN_GIT:-$root/../PS5_Vulkan}
 # 64e1050: 8bbd744 plus the panel's cost in the broker's log (gpu-overlay compose avg_us, max_us).
 # a62b05d: 64e1050 plus a panel change shown at once over a waiting game (the bubbles' re-shows do not hold it back).
 # 66dad9f: a62b05d plus the blur made every second frame (half the cost) and the rare glass sweep (the owner's picks).
-revision=66dad9f1670e031d29e244e08a8a930755a44253
+# 1717280: 66dad9f plus FIFO held to the display (a FIFO present waits until its frame is shown; MAILBOX and
+# IMMEDIATE offered and free), a fast-copy capture copied out whole, and a scaled frame scaled into rows then
+# line-copied (PS5_Vulkan display-pacing; vkp-*-base-2026-11-02-01, display-pacing-base-2026-11-02-01).
+# ebc931d: 1717280 plus the control overlay's statistics HUD (a second small panel, ps5_gpu_broker_set_hud, and the GPU's
+# busy time for it) and a panel's bubbles in its own margins (the overlay's panel down the right of the screen).
+# ace98a9: ebc931d plus the open panel kept to the 120 Hz budget: its blend cached and shown with the bubbles every frame,
+# its blur made a band a frame (4 at 120 Hz, 2 at 60), so frames keep to the refresh (run-battery panel-120-title).
+revision=ace98a99460c95a8d2821a9e33935c7b71070f7f
 out=$root/.deps/graphics-foundation
 shopt -s nullglob
 patches=("$root/platform/graphics/patches/"*.patch)

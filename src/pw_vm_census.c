@@ -96,6 +96,38 @@ static void count_window(PwVmCensus *census, uint32_t gib, uint64_t regions, uin
     census->windows[census->window_count++].regions = (uint32_t)regions;
 }
 
+/* The region the walk leaves: its accessible bytes into a fill class, apart when a reservation shares it */
+static void fill_close(PwVmCensus *census)
+{
+    if (!census->fill_open || !census->fill_accessible) { census->fill_open = 0; return; }
+    const uint64_t a = census->fill_accessible;
+    const unsigned c = a < (64u << 10) ? 0 : a < (256u << 10) ? 1 : a < (1u << 20) ? 2 : a < (2u << 20) ? 3 : 4;
+    census->fill[c]++;
+    if (census->fill_reserved_bytes) census->fill_reserved[c]++;
+    census->fill_open = 0;
+}
+
+/* [start, end) of one mapping, in address order, into the regions it lies in: whole regions in the middle at once */
+static void fill_span(PwVmCensus *census, uint64_t start, uint64_t end, int accessible)
+{
+    const uint64_t first = start >> 21, last = (end - 1) >> 21;
+    for (uint64_t r = first; r <= last; ++r) {
+        if (r > first && r < last) {   /* a whole region: full, or a reservation's only */
+            fill_close(census);
+            if (accessible) census->fill[PW_VM_FILLS - 1] += last - r, census->accessible += (last - r) << 21;
+            r = last - 1;
+            continue;
+        }
+        const uint64_t lo = start > (r << 21) ? start : r << 21, hi = end < ((r + 1) << 21) ? end : (r + 1) << 21;
+        if (!census->fill_open || census->fill_region != r) {
+            fill_close(census);
+            census->fill_open = 1, census->fill_region = r, census->fill_accessible = census->fill_reserved_bytes = 0;
+        }
+        if (accessible) census->fill_accessible += hi - lo, census->accessible += hi - lo;
+        else census->fill_reserved_bytes += hi - lo;
+    }
+}
+
 void pw_vm_census_walk(PwVmCensus *census, PwVmQuery query, PwVmResident resident, void *context)
 {
     uintptr_t address = 0;
@@ -134,6 +166,7 @@ void pw_vm_census_walk(PwVmCensus *census, PwVmQuery query, PwVmResident residen
             last_region = last;
             count_window(census, (uint32_t)(record.start >> 30), regions, bytes);
         }
+        fill_span(census, record.start, record.end, record.protection != 0);
         const uint64_t in = resident ? resident(context, record.start, record.end, klass) : 0;
         if (!record.protection) census->reserved_resident += in;
         else if (record.flags & PW_VM_DIRECT && !(record.flags & PW_VM_FLEXIBLE)) census->direct_resident += in;
@@ -159,6 +192,7 @@ void pw_vm_census_walk(PwVmCensus *census, PwVmQuery query, PwVmResident residen
         else census->unkept += bytes;
         address = record.end;
     }
+    fill_close(census);
     /* largest first */
     for (unsigned i = 1; i < census->count; i++)
         for (unsigned j = i; j > 0 && (census->groups[j].resident > census->groups[j - 1].resident ||
@@ -291,4 +325,19 @@ size_t pw_vm_census_format_windows(const PwVmCensus *census, unsigned n, char *o
         else out[used] = 0;
     }
     return used;
+}
+
+size_t pw_vm_census_format_fill(const PwVmCensus *census, char *out, size_t size)
+{
+    static const char *const names[PW_VM_FILLS] = {"<64K", "<256K", "<1M", "<2M", "full"};
+    uint64_t regions = 0;
+    for (unsigned c = 0; c < PW_VM_FILLS; ++c) regions += census->fill[c];
+    int at = snprintf(out, size, "regions=%llu fill", (unsigned long long)regions);
+    for (unsigned c = 0; c < PW_VM_FILLS && at > 0 && (size_t)at < size; ++c)
+        at += snprintf(out + at, size - (size_t)at, " %s=%llu/%llu", names[c], (unsigned long long)census->fill[c],
+                       (unsigned long long)census->fill_reserved[c]);
+    if (at > 0 && (size_t)at < size)
+        at += snprintf(out + at, size - (size_t)at, "; accessible %llu MiB packed ~%llu",
+                       (unsigned long long)(census->accessible >> 20), (unsigned long long)((census->accessible + (2u << 20) - 1) >> 21));
+    return at < 0 ? 0 : (size_t)at < size ? (size_t)at : size - 1;
 }

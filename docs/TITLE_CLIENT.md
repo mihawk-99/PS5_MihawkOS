@@ -81,6 +81,13 @@ when it is:
   bootstrap stub that only starts the game is no game, so the game it starts gets the title.
 - Or its entry picks it (`WINE_PS5_TITLE_GAME=<exe>` in `game.json` env, passed on as `WINE_PS5_TITLE_PICK`): the one
   program of a game that runs in the title whatever the rules say, for a game that loads its renderer only at run time.
+- Or a library program (or `steam.exe`) started it (Alpha 8, `pw_title_game_inherit`): each spawner passes its new
+  program `WINE_PS5_LIBRARY_ROOT`. A library program passes its own folder, and what it starts inside that tree is a
+  library program too, passing the same folder on; `steam.exe` passes `steam|` and its folder, so what it starts outside
+  its own folder (a Steam shortcut's game) counts and Steam's own programs do not. Only the status is inherited: the
+  tool, opt-out and import rules still decide, so a stub launcher with no graphics import stays in a helper and the
+  game it starts gets the title. Grounded 2 on a USB drive, a Steam shortcut (`Grounded2.exe`, then
+  `Augusta\Binaries\Win64\Grounded2Steam-Win64-Shipping.exe`), was routed "not in a library" before this (2026-11-01).
 
 A Chromium-based game (Electron, NW.js) is told by its folder: Chromium's `resources.pak`, `icudtl.dat` and a V8
 snapshot (`v8_context_snapshot.bin` or `snapshot_blob.bin`) beside the exe, and no `libcef.dll` (a CEF program is a
@@ -108,7 +115,8 @@ environment, the root's own command line) instead of in a helper; a start that f
 a helper. Before this, a library entry started from the launcher never ran in the title, wherever it lived (a big
 Direct3D 12 racing game on a USB drive, 2026-10-31). Logged as `the session's root <exe>: inside MihawkOS (…)`.
 
-Every library program's route is logged with its reason, for example `wine-ps5: game64.exe: inside MihawkOS (a 64-bit
+Every program's route is logged with its reason (Alpha 8: also "not in a library", "the setting is off" and an
+inherited status, which said nothing before), for example `wine-ps5: game64.exe: inside MihawkOS (a 64-bit
 library game; imports a graphics API)` or `wine-ps5: start.exe: a helper (not a game; no graphics imports)`; the title
 adds `the title's place is taken; a helper`. The title turns the default on beside the GPU broker (`WINE_PS5_TITLE_GAMES=1`
 unless the launch set it).

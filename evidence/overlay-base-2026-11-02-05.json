@@ -1,0 +1,92 @@
+{
+  "battery": "overlay-base-2026-11-02-05",
+  "expected_cases": [
+    "hud-d3d11-title",
+    "hud-d3d11-gpu-title"
+  ],
+  "revision": "9207da01692ff00723612333525c8590b57a91b9",
+  "dirty": true,
+  "cases": [
+    {
+      "case": "hud-d3d11-title",
+      "run": "overlay-base-2026-11-02-05-hud-d3d11-title",
+      "runner_status": 1,
+      "seconds": 96.7,
+      "result": "finished",
+      "probe_verdict": "PASS",
+      "returned_to_launcher": true,
+      "exit_stall": false,
+      "passed": false,
+      "run_seconds": 34.3,
+      "launch_readiness": {
+        "ready": true,
+        "seconds": 0.163,
+        "settle_seconds": 0.0,
+        "census_seconds": 0.151,
+        "previous_cleanup_verified": true
+      },
+      "stages": {
+        "launched": 0.99,
+        "title_started": 1.55,
+        "elevated": 1.55,
+        "wine_loaded": 1.81,
+        "wineboot_started": 4.32,
+        "wineboot_ended": 5.36,
+        "marker": 31.4,
+        "wine_ended": 31.78,
+        "launcher_started": 33.34,
+        "launcher_ended": 33.62,
+        "closed": 34.33
+      },
+      "runner_overhead_seconds": 62.4,
+      "layout": "launcher",
+      "fault_records": 0,
+      "helpers": 4,
+      "protocol_errors": 0,
+      "pipe_memory_exhausted": 0,
+      "search_errors": 0
+    },
+    {
+      "case": "hud-d3d11-gpu-title",
+      "run": "overlay-base-2026-11-02-05-hud-d3d11-gpu-title",
+      "runner_status": 0,
+      "seconds": 44.7,
+      "result": "finished",
+      "probe_verdict": "PASS",
+      "returned_to_launcher": true,
+      "exit_stall": false,
+      "passed": true,
+      "run_seconds": 34.3,
+      "launch_readiness": {
+        "ready": true,
+        "seconds": 8.122,
+        "settle_seconds": 7.908,
+        "census_seconds": 0.197,
+        "previous_cleanup_verified": false
+      },
+      "stages": {
+        "launched": 1.01,
+        "title_started": 1.51,
+        "elevated": 1.51,
+        "wine_loaded": 1.76,
+        "wineboot_started": 4.31,
+        "wineboot_ended": 5.32,
+        "marker": 31.37,
+        "wine_ended": 31.75,
+        "launcher_started": 33.29,
+        "launcher_ended": 33.6,
+        "closed": 34.33
+      },
+      "runner_overhead_seconds": 10.4,
+      "layout": "launcher",
+      "fault_records": 0,
+      "helpers": 4,
+      "protocol_errors": 0,
+      "pipe_memory_exhausted": 0,
+      "search_errors": 0
+    }
+  ],
+  "complete": true,
+  "seconds": 141.4,
+  "passed": false
+}

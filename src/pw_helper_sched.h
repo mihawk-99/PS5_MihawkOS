@@ -90,4 +90,26 @@ typedef struct PwHelperSchedGroup { unsigned type, priority; uint64_t cpus; unsi
 int pw_helper_sched_group(PwHelperSchedGroup *groups, unsigned cap, unsigned *count, unsigned type, unsigned priority,
                           uint64_t cpus);
 
+/* A Windows thread's native priority in the game the title runs itself (Alpha 8, WINE_PS5_SCHED_TITLE=P; Wine patch
+ * 2432). Every thread of that game runs SCHED_RR at P (767, the lowest: patch 2405), so no game thread can keep the
+ * title's own (SCHED_FIFO 700: its loop, the server, the broker, input) off a CPU, which froze a tester's console. On
+ * that floor alone Windows priorities did nothing: a time-critical thread woke as late as a normal one (p99 5.3 ms,
+ * intitle-priority-title-base-2026-11-01-01). Above-normal bands now go one native step up each, as patch 0896 maps them
+ * from 700, but from P and never above 701: still below every title thread. Normal and below stay at P, since the
+ * console has no boost for a starved thread. effective: Wine's effective priority (class base plus the thread's). */
+static inline int pw_helper_sched_windows_priority(int effective, int program)
+{
+    const int floor = PW_HELPER_SCHED_SERVICE_DEFAULT + 1;
+    int step;
+    if (program < floor || program > PW_HELPER_SCHED_LOWEST) program = PW_HELPER_SCHED_PROGRAM_DEFAULT;
+    if (effective <= 8) step = 0;           /* normal and below */
+    else if (effective == 9) step = 1;      /* above normal */
+    else if (effective == 10) step = 2;     /* highest */
+    else if (effective <= 12) step = 3;
+    else if (effective <= 14) step = 4;     /* the high priority class */
+    else if (effective == 15) step = 5;     /* time critical */
+    else step = 6;                          /* the realtime class */
+    return program - step < floor ? floor : program - step;
+}
+
 #endif

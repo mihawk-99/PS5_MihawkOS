@@ -30,7 +30,26 @@ typedef struct PwWineDlOps {
     /* Optional: a table handed to every module that exports pw_module_share,
      * as it loads (the open-file budget, which is one per process). */
     const void *share;
+    /* Optional: where the heap's memory comes from (ntdll's area, __wine_ps5_heap_backing): 0 with both set once it
+     * exists. Handed before module_start to a module with a heap copy of its own (it exports
+     * pw_wine_heap_set_backing: the in-process server), whose blocks would otherwise land wherever the kernel puts
+     * them, inside a Windows program's views too (pw_wine_dl_hand_heap). */
+    int (*heap_backing)(void *(**map)(size_t bytes),void (**unmap)(void *address,size_t bytes));
 } PwWineDlOps;
+
+/* Gives a module's own heap the process's backing: set, the module's pw_wine_heap_set_backing (NULL: it has no heap of
+ * its own); backing, PwWineDlOps.heap_backing. 1 when handed, 0 when there is nothing to hand or nobody to take it.
+ * The server's own copy without one put a span in a hole of the program's memory in the title, and the program's text
+ * overwrote the server's objects there (e1-webhelper-title-base-2026-11-02-02: "html" read as a list pointer). */
+static inline int pw_wine_dl_hand_heap(void (*set)(void *(*)(size_t),void (*)(void *,size_t)),
+                                       int (*backing)(void *(**)(size_t),void (**)(void *,size_t)))
+{
+    void *(*map)(size_t)=NULL;
+    void (*unmap)(void *,size_t)=NULL;
+    if(!set || !backing || backing(&map,&unmap) || !map || !unmap)return 0;
+    set(map,unmap);
+    return 1;
+}
 #define PW_WINE_DL_DEFAULT ((void *)0)
 typedef struct PwWineDlInfo {
     const char *path;          /* the path the module was opened or adopted as */

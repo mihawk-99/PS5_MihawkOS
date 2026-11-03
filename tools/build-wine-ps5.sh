@@ -470,12 +470,20 @@ for header in pw_wine_section.h pw_wine_section_ps5.h pw_wine_alias.h pw_wine_mm
     cp -p "$root/wine/ps5/$header" "$tree/dlls/ntdll/unix/$header"
 done
 cp -p "$root/wine/ps5/pw_wine_perf.h" "$tree/dlls/winedmo/pw_wine_perf.h"   # patch 2065's media counters
+cp -p "$root/wine/ps5/pw_wine_high_reserve.h" "$tree/dlls/ntdll/unix/pw_wine_high_reserve.h"   # patch 2430's decision
+for dir in dlls/ntdll dlls/kernelbase; do   # patches 2450 and 2451: a crash line's words and its first faults
+    cp -p "$root/wine/ps5/pw_wine_fault_words.h" "$tree/$dir/pw_wine_fault_words.h"
+done
 cp -p "$root/src/pw_umip.h" "$tree/dlls/ntdll/unix/pw_umip.h"   # patch 2102's UMIP emulation
 cp -p "$root/src/pw_user_folder.h" "$tree/dlls/ntdll/unix/pw_user_folder.h"   # patch 2417: where a user folder's parent ends
 cp -p "$root/src/pw_window_snapshot.h" "$tree/server/pw_window_snapshot.h"
 cp -p "$root/src/pw_dialog_keys.h" "$tree/server/pw_dialog_keys.h"   # patch 2418: the controller's keys for a dialog box
 cp -p "$root/wine/ps5/pw_wine_cursor.h" "$tree/server/pw_wine_cursor.h"
+for header in pw_wine_xusb.h pw_wine_sink.h; do   # patch 2480: the Xbox controller's HID gamepad
+    cp -p "$root/wine/ps5/$header" "$tree/dlls/winebus.sys/$header"
+done
 cp -p "$root/wine/ps5/pw_wine_xattr.h" "$tree/server/pw_wine_xattr.h"   # a reparse point's data (patch 2092)
+cp -p "$root/wine/ps5/pw_wine_copy_pipe.h" "$tree/server/pw_wine_copy_pipe.h"   # a title process's memory for a helper (patch 2453)
 # cp -p keeps the source's time but sets the copy's change time, so what this run did not copy is older than the mark:
 # removed, an include of it stops make ("No rule to make target") as a fresh configure would stop.
 copies=$(cd "$tree" && git ls-files --others -- '*pw_*') || fail "cannot list the copies in $tree"
@@ -580,7 +588,9 @@ for library in libm libpthread; do
 done
 # The heap (wine/ps5) serves the malloc family. ntdll.so links and exports
 # it, so win32u.so binds to the same instance through its ntdll.so import;
-# the in-process wineserver has its own copy.
+# the in-process wineserver has its own copy, which the loader gives ntdll's
+# heap area before it runs (pw_wine_dl_hand_heap: never a block the kernel
+# places, which can land inside a Windows program's memory in the title).
 mkdir -p "$work/heap"
 heap=""
 for unit in pw_wine_heap pw_wine_heap_libc; do
@@ -841,6 +851,7 @@ if [ "$prx_status" = 0 ]; then
         pw_wine_set_present_sink pw_wine_set_frame_allocator pw_wine_post_input pw_wine_sink_stats pw_wine_present_origin pw_ps5_set_frame_sink pw_ps5_set_window_sink pw_wine_window_present pw_wine_window_present_surface pw_wine_window_drop pw_ps5_set_resolver pw_wine_resolve pw_ps5_set_dns_config pw_wine_dns_config \
         pw_wine_present pw_wine_next_input pw_wine_input_fd \
         pw_wine_set_dualsense pw_wine_dualsense pw_wine_input_note pw_wine_input_stats pw_wine_set_pad pw_wine_rumble pw_wine_pad pw_wine_set_rumble pw_wine_set_suspend \
+        pw_wine_pad_changes pw_wine_set_pad_kind pw_wine_pad_kind \
         pw_wine_set_audio_sink pw_wine_audio_available pw_wine_audio_output \
         __wine_virtual_stats __wine_file_write_stats __wine_file_call_stats __wine_ps5_section_stats __wine_ps5_mmu4k_stats __wine_virtual_image_stats __wine_virtual_fault_top __wine_ps5_set_output_sink __wine_ps5_memory_stats __wine_ps5_image_read_stats __wine_ps5_load_timing pw_ps5_code_round_timing pw_wine_dl_timing __wine_ps5_dmem_holder __wine_ps5_exec_stats __wine_ps5_code_share_stats __wine_ps5_code_share_mapped_kib __wine_ps5_code_cache_stats __wine_ps5_foreign_stats __wine_ps5_exec_convert __wine_ps5_exec_convert_image __wine_ps5_host_allows __wine_ps5_exec_refused __wine_ps5_set_payload_memory __wine_ps5_set_payload_low_image __wine_ps5_set_payload_direct_memory __wine_ps5_set_payload_module __wine_ps5_set_payload_sigaction __wine_ps5_set_payload_thread_start pw_cwd_set \
         pw_wine_set_display_release pw_wine_release_display \
@@ -853,7 +864,7 @@ if [ "$prx_status" = 0 ]; then
     python3 "$root/tools/gen_prx_descriptor.py" "$prx/obj/wineserver_desc.c" \
         pw_wineserver_connect pw_wine_thread_register pw_wine_thread_unregister pw_wineserver_set_ntsync pw_wineserver_set_ntsync_region pw_wineserver_flush pw_wineserver_terminate \
         pw_wineserver_call_direct pw_wineserver_snapshot pw_wine_threads_set_remote_signal pw_wineserver_input pw_wineserver_cursor pw_wineserver_foreground pw_wineserver_windows pw_wineserver_set_shared_memory pw_wineserver_set_dsection_fd pw_wineserver_set_remote_memory \
-        pw_module_share pw_wineserver_user_processes pw_wineserver_dialog
+        pw_module_share pw_wineserver_user_processes pw_wineserver_dialog pw_wine_heap_set_backing
     python3 "$root/tools/gen_prx_descriptor.py" "$prx/obj/wineps5_desc.c" \
         __wine_unix_call_funcs __wine_unix_call_wow64_funcs
     python3 "$root/tools/gen_prx_descriptor.py" "$prx/obj/xinput_desc.c" \

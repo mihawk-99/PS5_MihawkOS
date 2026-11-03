@@ -1,0 +1,174 @@
+From 606516e44859caa1e2861c7b24be97cc65deeb53 Mon Sep 17 00:00:00 2001
+From: Mihawk <163614687+mihawk-99@users.noreply.github.com>
+Date: Mon, 2 Nov 2026 22:49:14 -0500
+Subject: [PATCH] gpu-broker: the game in the owning title may hold 2 GiB of
+ host-visible memory when the room allows
+
+Each client could hold the one host-visible limit the application set (1 GiB in PS5_Proton), which is where a Direct3D
+12 program's UPLOAD heaps stop: a load probe in PS5_Proton's title made 960 MiB of 64 MiB upload buffers at 1 GiB and
+1984 MiB at 2 GiB, while 3 GiB of device-local heaps and 1 GiB of textures were made either way. A game in the owning
+title maps its buffers in the owner, at the cost of the title's own page tables, not the system's.
+
+- protocol.h pw_gpu_client_host_limit: the in-owner client gets the owner limit when it is larger and the direct
+  memory left beside its device-local offer (local_room() - local_offer()) can hold the difference; every other
+  client, and an owner without that room, the host limit.
+- server.cpp: ps5_gpu_broker_set_owner_host_limit (before start, the host limit's bounds); each client's limit is
+  chosen at INIT and logged on its host_limit line with in_owner, unoffered and owner_limit; allocate() holds a client
+  to its own.
+- allocate(): no host buffer is made while either page-table pool is below kRangeTableFloor (the floor sparse ranges
+  keep), so a game is told E_OUTOFMEMORY before the owner runs out of tables.
+- test_host_limit.c (tools/check-gpu-broker.sh): room, no room, a helper client, no larger owner limit.
+
+Proven: the host test; server.cpp compiles with PS5_Proton's title command. Not yet run on a console; a side branch on
+the pinned ace98a99 for that run, not main.
+---
+ tooling/gpu-broker/protocol.h        |  8 +++++++
+ tooling/gpu-broker/server.cpp        | 32 ++++++++++++++++++++++------
+ tooling/gpu-broker/server.h          |  4 ++++
+ tooling/gpu-broker/test_host_limit.c | 23 ++++++++++++++++++++
+ 4 files changed, 61 insertions(+), 6 deletions(-)
+ create mode 100644 tooling/gpu-broker/test_host_limit.c
+
+diff --git a/tooling/gpu-broker/protocol.h b/tooling/gpu-broker/protocol.h
+index 1aa30ec..a9b855e 100644
+--- a/tooling/gpu-broker/protocol.h
++++ b/tooling/gpu-broker/protocol.h
+@@ -97,6 +97,14 @@ static inline void pw_gpu_display_shown(const PwGpuMessage *m,unsigned *width,un
+     *height=m->argument[1]>1080 ? 1080u : (unsigned)m->argument[1];
+ }
+ /* Reject wrapped resources; subtraction bounds the requested range. */
++/* The host-visible bytes a client is told at INIT: the in-owner client (a game in the owning title, whose mappings cost
++ * the title's own page tables, not the system's) gets owner_limit when that is larger and the direct memory the broker
++ * has not offered as device-local (unoffered) can hold the difference; every other client, and an owner without the
++ * room, gets base. */
++static inline uint64_t pw_gpu_client_host_limit(int in_owner,uint64_t base,uint64_t owner_limit,uint64_t unoffered)
++{
++    return in_owner && owner_limit>base && unoffered>=owner_limit-base ? owner_limit : base;
++}
+ static inline int pw_gpu_contains(uint64_t base,uint64_t length,uint64_t address,uint64_t bytes)
+ {
+     return length && length<=UINT64_MAX-base && bytes && address>=base && address-base<=length && bytes<=length-(address-base);
+diff --git a/tooling/gpu-broker/server.cpp b/tooling/gpu-broker/server.cpp
+index 6f4f0cf..694fe54 100644
+--- a/tooling/gpu-broker/server.cpp
++++ b/tooling/gpu-broker/server.cpp
+@@ -189,6 +189,8 @@ void host_ranges_release(FILE *log)
+ constexpr uint64_t kLocalOffer=UINT64_C(8)<<30,kLocalFloor=UINT64_C(1)<<30;
+ /* The host-visible bytes each client may hold: the application's choice (ps5_gpu_broker_set_host_limit). */
+ static uint64_t host_limit=PW_GPU_LIMIT;
++/* The in-owner client's, when larger and the room allows (ps5_gpu_broker_set_owner_host_limit); 0: host_limit. */
++static uint64_t owner_host_limit=0;
+ /* The console's model, told each client at INIT (ps5_gpu_broker_set_console_model): 0 says none. */
+ static unsigned console_model;
+ constexpr unsigned kClientBuffers=1024;
+@@ -211,7 +213,8 @@ struct Client {
+     Buffer buffers[kClientBuffers];unsigned submissions=0;
+     std::vector<Range> ranges;unsigned range_count=0,range_peak=0;
+     std::map<uint64_t,unsigned> range_index;   // a live range's address: its slot in ranges (a bind finds it in log n)
+-    uint64_t allocated=0,local=0,local_peak=0,tess=0;uint32_t tess_bytes=0,granularity=0,buffering=0;
++    // host_limit: the host-visible bytes it was told at INIT (0 before)
++    uint64_t allocated=0,host_limit=0,local=0,local_peak=0,tess=0;uint32_t tess_bytes=0,granularity=0,buffering=0;
+     // Where submission time goes, in nanoseconds: staging allocation and copy, the native submit, the completion wait
+     // and the staging release.
+     uint64_t time_stage=0,time_submit=0,time_wait=0,time_release=0,waits=0,time_recv=0,recv_samples=0,poll_missed=0;
+@@ -428,7 +431,8 @@ int allocate(Client &c,PwGpuMessage &m,uint64_t &next_window,uint64_t &next_high
+ {
+     c.allocation_stage="validation";
+     const bool local=m.argument[2]&PW_GPU_ALLOC_LOCAL;
+-    if(!m.bytes || m.bytes>(local ? kLocalOffer : host_limit) || m.argument[0]>PW_GPU_ALIGNMENT_MAX ||
++    const uint64_t limit=c.host_limit ? c.host_limit : host_limit;
++    if(!m.bytes || m.bytes>(local ? kLocalOffer : limit) || m.argument[0]>PW_GPU_ALIGNMENT_MAX ||
+        (m.argument[0] && (m.argument[0]&(m.argument[0]-1))) || m.argument[1]>1 ||
+        (m.argument[2]&~(PW_GPU_ALLOC_LOCAL|PW_GPU_ALLOC_ZERO)))return EINVAL;
+     const uint64_t bytes=(m.bytes+16383)&~16383ull,alignment=m.argument[0]>16384 ? m.argument[0] : 16384;
+@@ -436,7 +440,13 @@ int allocate(Client &c,PwGpuMessage &m,uint64_t &next_window,uint64_t &next_high
+     c.allocation_stage="slot";if(!b)return ENOSPC;
+     if(local)return allocate_local(c,m,*b,bytes,alignment);
+     c.allocation_stage="client_budget";
+-    if(bytes>host_limit-c.allocated)return ENOMEM;
++    if(bytes>limit-c.allocated)return ENOMEM;
++    // The owner maps every host buffer too, at about a page table per 2 MiB: none is made below the floor patch 0044
++    // keeps for sparse ranges, so a game is told E_OUTOFMEMORY before the title runs out of tables.
++    int cpu_total=0,cpu_free=0,gpu_total=0,gpu_free=0;
++    c.allocation_stage="tables";
++    if(!sceKernelGetPageTableStats(&cpu_total,&cpu_free,&gpu_total,&gpu_free) && cpu_total>0 && gpu_total>0 &&
++       (cpu_free<kRangeTableFloor || gpu_free<kRangeTableFloor))return ENOMEM;
+     HostRange &range=host_ranges[m.argument[1] ? 0 : 1];
+     if(range.reserved) {
+         c.allocation_stage="range";
+@@ -996,11 +1006,15 @@ static void *serve(Client &c,bool present)
+                 const uint64_t ranges_reserved_reported=m.argument[2];m.argument[2]=m.argument[3]=0;
+                 /* The host-visible budget always: a client keeps PW_GPU_LIMIT without it. */
+                 if(b.local_memory)m.argument[2]=local_offer();
+-                m.argument[3]=host_limit;
++                // The in-owner client's larger limit only with the room for it beside the offer (graphics patch 0002).
++                const bool in_owner=c.pid==getpid();
++                const uint64_t room=b.local_memory ? local_room() : 0,unoffered=room>m.argument[2] ? room-m.argument[2] : 0;
++                c.host_limit=pw_gpu_client_host_limit(in_owner,host_limit,owner_host_limit,unoffered);
++                m.argument[3]=c.host_limit;
+                 m.argument[1]=console_model;
+-                fprintf(b.log,"gpu-wine cookie=%d pid=%d local_offer=%llu host_limit=%llu flexible=%zu ranges_reserved=%llu model=%u\n",c.cookie,c.pid,
++                fprintf(b.log,"gpu-wine cookie=%d pid=%d local_offer=%llu host_limit=%llu flexible=%zu ranges_reserved=%llu model=%u in_owner=%d unoffered=%llu owner_limit=%llu\n",c.cookie,c.pid,
+                     (unsigned long long)m.argument[2],(unsigned long long)m.argument[3],flexible_now(),(unsigned long long)ranges_reserved_reported,
+-                    console_model);
++                    console_model,in_owner,(unsigned long long)unoffered,(unsigned long long)owner_host_limit);
+             } else if(c.pid>0) switch(m.operation) {
+             case PW_GPU_ALLOC:
+                 m.status=wedged ? EIO : allocate(c,m,b.window,b.high,fd);
+@@ -1569,6 +1583,12 @@ bool ps5_gpu_broker_set_host_limit(unsigned long long bytes)
+     host_limit=bytes;
+     return true;
+ }
++bool ps5_gpu_broker_set_owner_host_limit(unsigned long long bytes)
++{
++    if(!bytes || bytes>PW_GPU_HOST_LIMIT_MAX || (bytes&16383) || broker_state.started)return false;
++    owner_host_limit=bytes;
++    return true;
++}
+ void ps5_gpu_broker_set_local_refused(void (*hook)(int pid,unsigned long long bytes)) { local_refused=hook; }
+ bool ps5_gpu_broker_set_console_model(unsigned model)
+ {
+diff --git a/tooling/gpu-broker/server.h b/tooling/gpu-broker/server.h
+index 3c07922..73bb9c0 100644
+--- a/tooling/gpu-broker/server.h
++++ b/tooling/gpu-broker/server.h
+@@ -14,6 +14,10 @@ void ps5_gpu_broker_set_local_refused(void (*hook)(int pid,unsigned long long by
+ /* Before start: the host-visible bytes each client may hold, a multiple of 16 KiB up to PW_GPU_HOST_LIMIT_MAX;
+  * PW_GPU_LIMIT when not called. False, and nothing changed, for any other value or once the broker is running. */
+ bool ps5_gpu_broker_set_host_limit(unsigned long long bytes);
++/* Before start: the host-visible bytes the in-owner client (ps5_gpu_broker_open_in_owner) may hold, when the direct memory
++ * left after its device-local offer can hold more than the host limit (pw_gpu_client_host_limit); the host limit when
++ * not called. The same bounds and answer as ps5_gpu_broker_set_host_limit. */
++bool ps5_gpu_broker_set_owner_host_limit(unsigned long long bytes);
+ /* Before start: the console's model each client is told at INIT (PS5_Proton patch 0045, src/pw_gpu_identity.h: 1 the
+  * standard PS5, 2 the Pro), so its RADV gives games the GPU identity of that model. 0, the default, says none, and a
+  * client keeps RADV's own. False, and nothing changed, for a model not known or once the broker is running. */
+diff --git a/tooling/gpu-broker/test_host_limit.c b/tooling/gpu-broker/test_host_limit.c
+new file mode 100644
+index 0000000..fda6646
+--- /dev/null
++++ b/tooling/gpu-broker/test_host_limit.c
+@@ -0,0 +1,23 @@
++/* The host-visible limit a client is told at INIT (protocol.h pw_gpu_client_host_limit, graphics patch 0002). */
++#include "protocol.h"
++#include <assert.h>
++#include <stdio.h>
++
++int main(void)
++{
++    const uint64_t gib = UINT64_C(1) << 30;
++    /* the game in the title, with room beside its device-local offer: the larger limit */
++    assert(pw_gpu_client_host_limit(1, gib, 2 * gib, UINT64_C(3480) << 20) == 2 * gib);
++    assert(pw_gpu_client_host_limit(1, gib, 2 * gib, gib) == 2 * gib);
++    /* without the room for the difference: the base */
++    assert(pw_gpu_client_host_limit(1, gib, 2 * gib, gib - 16384) == gib);
++    assert(pw_gpu_client_host_limit(1, gib, 2 * gib, 0) == gib);
++    /* a client in a helper: the base, whatever the room */
++    assert(pw_gpu_client_host_limit(0, gib, 2 * gib, 8 * gib) == gib);
++    /* no larger owner limit (not set, equal, or smaller): the base */
++    assert(pw_gpu_client_host_limit(1, gib, 0, 8 * gib) == gib);
++    assert(pw_gpu_client_host_limit(1, 2 * gib, 2 * gib, 8 * gib) == 2 * gib);
++    assert(pw_gpu_client_host_limit(1, 2 * gib, gib, 8 * gib) == 2 * gib);
++    printf("host limit passed: the in-owner client's larger limit only with the room for it, helpers keep the base\n");
++    return 0;
++}

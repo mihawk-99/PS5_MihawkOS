@@ -33,7 +33,9 @@ int main(void)
  m.argument[0]=640ull|(0x10000000ull<<32);assert(!pw_gpu_window_image(&m));
  m.argument[0]=640ull|(360ull<<32);m.argument[2]=0;assert(!pw_gpu_window_image(&m));
  m.argument[2]=1;m.argument[1]=2560;assert(!pw_gpu_window_image(&m));
- m.argument[1]=2560ull|(2ull<<32);m.argument[3]=2;assert(!pw_gpu_window_image(&m));
+ m.argument[1]=2560ull|(2ull<<32);m.argument[3]=4;assert(!pw_gpu_window_image(&m));
+ /* PW_GPU_PRESENT_SHOWN beside BGRA: a FIFO present answered once shown (PS5_Vulkan display-pacing). */
+ m.argument[3]=PW_GPU_PRESENT_SHOWN|1;assert(pw_gpu_window_image(&m));m.argument[3]=PW_GPU_PRESENT_SHOWN|4;assert(!pw_gpu_window_image(&m));
  /* A window larger than the screen (Steam's restored 1922x1081, rows padded to 256 bytes), up to 2176x1408. */
  m.argument[3]=1;m.argument[0]=1922ull|(1081ull<<32);m.argument[1]=7936ull|(2ull<<32);m.bytes=7936ull*1081;
  assert(pw_gpu_window_image(&m));
@@ -57,7 +59,7 @@ int main(void)
  d.argument[2]=8700;d.bytes=8700ull*1080;assert(!pw_gpu_display_image(&d));   /* a row shorter than the image */
  d.argument[2]=8706;d.bytes=8706ull*1080;assert(!pw_gpu_display_image(&d));   /* a row not of whole pixels */
  d.argument[2]=8704;d.bytes=8704ull*1080+1;assert(!pw_gpu_display_image(&d));d.bytes--;
- d.argument[3]=2;assert(!pw_gpu_display_image(&d));d.argument[3]=0;
+ d.argument[3]=4;assert(!pw_gpu_display_image(&d));d.argument[3]=PW_GPU_PRESENT_SHOWN;assert(pw_gpu_display_image(&d));d.argument[3]=0;
  d.address=0;assert(!pw_gpu_display_image(&d));d.address=0x240000002ull;assert(!pw_gpu_display_image(&d));
  d.address=0x240000000ull;d.argument[0]=0;assert(!pw_gpu_display_image(&d));
 

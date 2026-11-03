@@ -14,7 +14,9 @@
  *            WINE_PS5_TITLE_GAME=<exe>, for the program the rules below would miss)
  *   listed   WINE_PS5_TITLE_LISTED: ';'-separated executable names of the library's entries: a game the player added
  *            counts as a library program wherever it lives (a USB drive, a folder of their own)
- *   image    the Windows path of the program being started */
+ *   image    the Windows path of the program being started
+ *   inherited a program a library program started (pw_title_game_inherit below): its library status comes from its
+ *            spawner, as a Steam shortcut's game does from steam.exe (Grounded 2 on a USB drive, 2026-11-01) */
 #include <stddef.h>
 #include <string.h>
 
@@ -53,6 +55,15 @@ static inline int pw_title_game_listed(const char *list, const char *name)
     return 0;
 }
 
+/* A library program by its own right: Steam's library, MihawkOS's Games folder (a store's install, e.g.
+ * C:\users\Mihawk\Games), or a program the library's entries name, wherever it lives (a game on a USB drive,
+ * 2026-10-31). */
+static inline int pw_title_game_library_path(const char *image, const char *listed)
+{
+    return pw_title_game_has(image, "\\steamapps\\common\\") || pw_title_game_has(image, "\\games\\") ||
+           pw_title_game_listed(listed, pw_title_game_name(image));
+}
+
 /* Where a program goes, and why (each decision is logged with its word, pw_title_route_word). */
 enum PwTitleRoute {
     PW_TITLE_ROUTE_GAME,        /* the title: a 64-bit library game that imports a graphics API */
@@ -71,18 +82,16 @@ enum PwTitleRoute {
 
 /* The first, cheap half: the setting, the CPU, the per-game lists and the path and name rules. picked wins over every
  * rule but the setting and the CPU: it names the one program of an entry that runs in the title. */
-static inline enum PwTitleRoute pw_title_game_route(const char *image, int x64, const char *setting, const char *optout,
-                                                    const char *picked, const char *listed)
+static inline enum PwTitleRoute pw_title_game_route_inherited(const char *image, int x64, const char *setting,
+                                                              const char *optout, const char *picked, const char *listed,
+                                                              int inherited)
 {
     if (!image || !*image || !setting || strcmp(setting, "1")) return PW_TITLE_ROUTE_OFF;
     if (!x64) return PW_TITLE_ROUTE_32BIT;
     const char *name = pw_title_game_name(image);
     if (pw_title_game_listed(picked, name)) return PW_TITLE_ROUTE_PICKED;
-    /* A library game: Steam's library, MihawkOS's Games folder (a store's install, e.g. C:\users\Mihawk\Games), or a
-     * program the library's entries name, wherever it lives (a game on a USB drive, 2026-10-31). */
-    if (!pw_title_game_has(image, "\\steamapps\\common\\") && !pw_title_game_has(image, "\\games\\") &&
-        !pw_title_game_listed(listed, name))
-        return PW_TITLE_ROUTE_NOT_LIBRARY;
+    /* A library game, or a program a library program started (pw_title_game_inherit). */
+    if (!pw_title_game_library_path(image, listed) && !inherited) return PW_TITLE_ROUTE_NOT_LIBRARY;
     /* What a store runs from a game's folder before or beside it would take the title's one place: redistributable
      * installers (Steam's first-launch "Steamworks Shared", a game's _CommonRedist), crash reporters, and a game's own
      * launcher, whose end would end the session under the game it started (that game, started from a helper, comes here). */
@@ -93,6 +102,78 @@ static inline enum PwTitleRoute pw_title_game_route(const char *image, int x64, 
     for (size_t i = 0; i < sizeof(tools) / sizeof(*tools); ++i) if (pw_title_game_has(name, tools[i])) return PW_TITLE_ROUTE_TOOL;
     if (pw_title_game_listed(optout, name)) return PW_TITLE_ROUTE_OPTOUT;
     return PW_TITLE_ROUTE_CANDIDATE;
+}
+
+static inline enum PwTitleRoute pw_title_game_route(const char *image, int x64, const char *setting, const char *optout,
+                                                    const char *picked, const char *listed)
+{
+    return pw_title_game_route_inherited(image, x64, setting, optout, picked, listed, 0);
+}
+
+/* The length of image's folder, through its last separator. */
+static inline size_t pw_title_game_folder_length(const char *image)
+{
+    return (size_t)(pw_title_game_name(image) - image);
+}
+
+/* 1 when image lies inside folder (a path ending in its separator), ignoring case. */
+static inline int pw_title_game_inside(const char *image, const char *folder, size_t length)
+{
+    if (!length || strlen(image) <= length) return 0;
+    for (size_t i = 0; i < length; ++i) if (pw_title_game_lower(image[i]) != pw_title_game_lower(folder[i])) return 0;
+    return 1;
+}
+
+/* Library status down a chain of programs (WINE_PS5_LIBRARY_ROOT, each spawner's word for the program it starts). A
+ * library program (by its path or the library's list) passes on its own folder: a program it starts inside that tree
+ * counts as a library program too (a game's stub starting its real executable from Augusta\Binaries\Win64 under the
+ * stub's folder) and passes the same folder on. steam.exe passes "steam|" and its own folder: what it starts outside
+ * its folder is a game it was asked to start (a Steam shortcut), inherited and passing its own folder on; what it
+ * starts inside is Steam's own (steamwebhelper, its error reporter), which inherits nothing. Anything else passes
+ * nothing. Only the status is inherited: the tool names, the opt-out and the import test still decide (the route),
+ * so a stub that draws nothing stays in a helper and never takes the title's one place.
+ *
+ * Writes what image passes on into root (empty for nothing) and returns 1 when image is a library program by
+ * inheritance alone. parent_root: the spawner's WINE_PS5_LIBRARY_ROOT (NULL or empty: none). */
+static inline int pw_title_game_inherit(const char *image, const char *parent_root, const char *listed, char *root,
+                                        size_t size)
+{
+    static const char steam_mark[] = "steam|";
+    const char *name = image ? pw_title_game_name(image) : "";
+    const char *from = NULL;
+    size_t length = 0;
+    int inherited = 0;
+    if (root && size) root[0] = 0;
+    if (!image || !*image || !root || !size) return 0;
+    if (!parent_root) parent_root = "";
+    if (pw_title_game_listed("steam.exe", name)) {
+        if (sizeof(steam_mark) - 1 + pw_title_game_folder_length(image) < size) {
+            memcpy(root, steam_mark, sizeof(steam_mark) - 1);
+            memcpy(root + sizeof(steam_mark) - 1, image, pw_title_game_folder_length(image));
+            root[sizeof(steam_mark) - 1 + pw_title_game_folder_length(image)] = 0;
+        }
+        return 0;
+    }
+    if (pw_title_game_library_path(image, listed)) {
+        from = image;   /* a library program by its own right */
+        length = pw_title_game_folder_length(image);
+    } else if (!strncmp(parent_root, steam_mark, sizeof(steam_mark) - 1)) {
+        const char *steam = parent_root + sizeof(steam_mark) - 1;
+        if (!pw_title_game_inside(image, steam, strlen(steam))) {
+            inherited = 1;   /* a game Steam was asked to start */
+            from = image;
+            length = pw_title_game_folder_length(image);
+        }
+    } else if (pw_title_game_inside(image, parent_root, strlen(parent_root))) {
+        inherited = 1;   /* inside its library program's tree: the same tree goes on */
+        from = parent_root;
+        length = strlen(parent_root);
+    }
+    if (from && length < size) {
+        memcpy(root, from, length);
+        root[length] = 0;
+    }
+    return inherited;
 }
 
 /* The second half, for a candidate only: a program that reaches a graphics API is a game (is_game: its imports said

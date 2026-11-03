@@ -1,0 +1,61 @@
+From 0000000000000000000000000000000000000000 Mon Sep 17 00:00:00 2001
+From: Mihawk <163614687+mihawk-99@users.noreply.github.com>
+Date: Mon, 02 Nov 2026 12:00:00 -0400
+Subject: [PATCH] kernelbase: PS5: An unhandled exception's line says the module, what was touched, and the thread.
+
+Patch 2422's line said only the code and the instruction ("unhandled exception 0xc0000005 at 000000014333AA32: no debugger
+starts in a PS5 title", a tester's game crash report, 2026-11-01): not which module, not whether it was a read, a write or a jump, not the
+address touched, not the thread. The line now has the module and the offset in it (LdrFindEntryForAddress), for an access
+violation or an in-page error the kind of access and the address (wine/ps5/pw_wine_fault_words.h), and the thread's id and
+name. Nothing is allocated: the crashing thread's neighbours may hold the heap lock (patch 2422). The line keeps its start and
+its end, so a search for either still finds it. Compiled for x86_64 and i386 PE with -Wall. Not run on a console.
+---
+diff --git a/dlls/kernelbase/debug.c b/dlls/kernelbase/debug.c
+index e9da375..0bb0d04 100644
+--- a/dlls/kernelbase/debug.c
++++ b/dlls/kernelbase/debug.c
+@@ -37,6 +37,7 @@
+ #include "wine/exception.h"
+ #include "wine/asm.h"
+ #include "kernelbase.h"
++#include "pw_wine_fault_words.h"
+ #include "wine/debug.h"
+ 
+ WINE_DEFAULT_DEBUG_CHANNEL(seh);
+@@ -809,7 +810,33 @@ LONG WINAPI UnhandledExceptionFilter( EXCEPTION_POINTERS *epointers )
+ 
+         if (ps5_no_debugger())
+         {
+-            ERR( "unhandled exception %#lx at %p: no debugger starts in a PS5 title\n", rec->ExceptionCode, rec->ExceptionAddress );
++            /* What a report needs (patch 2451): the module and offset, what was touched and how, and the thread. No heap:
++             * the crashing thread's neighbours may hold its lock. */
++            struct { THREAD_NAME_INFORMATION info; WCHAR text[32]; } name;
++            const WCHAR *module = L"?";
++            USHORT module_len = 1;
++            LDR_DATA_TABLE_ENTRY *mod;
++            ULONG_PTR rva = 0;
++            const BOOL fault = (rec->ExceptionCode == EXCEPTION_ACCESS_VIOLATION ||
++                                rec->ExceptionCode == EXCEPTION_IN_PAGE_ERROR) && rec->NumberParameters >= 2;
++
++            if (!LdrFindEntryForAddress( rec->ExceptionAddress, &mod ))
++            {
++                module = mod->BaseDllName.Buffer;
++                module_len = mod->BaseDllName.Length / sizeof(WCHAR);
++                rva = (ULONG_PTR)rec->ExceptionAddress - (ULONG_PTR)mod->DllBase;
++            }
++            if (NtQueryInformationThread( NtCurrentThread(), ThreadNameInformation, &name, sizeof(name), NULL ))
++                name.info.ThreadName.Length = 0, name.info.ThreadName.Buffer = name.text;
++            if (fault)
++                ERR( "unhandled exception %#lx at %p (%s+%#Ix): %s of %p, thread %04lx %s: no debugger starts in a PS5 title\n",
++                     rec->ExceptionCode, rec->ExceptionAddress, debugstr_wn(module, module_len), rva,
++                     pw_wine_fault_access_word( rec->ExceptionInformation[0] ), (void *)rec->ExceptionInformation[1],
++                     GetCurrentThreadId(), debugstr_wn( name.info.ThreadName.Buffer, name.info.ThreadName.Length / sizeof(WCHAR) ) );
++            else
++                ERR( "unhandled exception %#lx at %p (%s+%#Ix), thread %04lx %s: no debugger starts in a PS5 title\n",
++                     rec->ExceptionCode, rec->ExceptionAddress, debugstr_wn(module, module_len), rva, GetCurrentThreadId(),
++                     debugstr_wn( name.info.ThreadName.Buffer, name.info.ThreadName.Length / sizeof(WCHAR) ) );
+             return nested ? EXCEPTION_CONTINUE_SEARCH : EXCEPTION_EXECUTE_HANDLER;
+         }
+ 
+-- 
+2.56.0

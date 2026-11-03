@@ -40,7 +40,7 @@ int main(void)
     assert(pw_vkbd_key(&kbd, kbd.row, kbd.col, &key) && !strcmp(key.text, "q"));
     pw_vkbd_move(&kbd, 0, 1);                   /* a */
     for (int i = 0; i < 5; ++i) pw_vkbd_move(&kbd, 1, 0);   /* h */
-    assert(pw_vkbd_press(&kbd) == PW_VKBD_TYPED);
+    assert(pw_vkbd_press(&kbd) == PW_VKBD_TYPED && !strcmp(kbd.typed, "h"));   /* what the game is sent */
     pw_vkbd_move(&kbd, 0, -1);                  /* y, above h (the rows are not staggered) */
     pw_vkbd_move(&kbd, 2, 0);                   /* i */
     assert(pw_vkbd_press(&kbd) == PW_VKBD_TYPED && !strcmp(line(&kbd), "hi"));
@@ -60,9 +60,11 @@ int main(void)
     /* the last row: Space, Backspace, Done, the page key */
     pw_vkbd_open(&kbd, PW_VKBD_ABC);
     kbd.row = 4;
-    kbd.col = 2; assert(pw_vkbd_press(&kbd) == PW_VKBD_TYPED && !strcmp(line(&kbd), " "));
-    kbd.col = 3; assert(pw_vkbd_press(&kbd) == PW_VKBD_TYPED && !strcmp(line(&kbd), ""));
-    assert(pw_vkbd_press(&kbd) == PW_VKBD_NONE);     /* nothing left to take */
+    kbd.col = 2; assert(pw_vkbd_press(&kbd) == PW_VKBD_TYPED && !strcmp(line(&kbd), " ") && !strcmp(kbd.typed, " "));
+    kbd.col = 3; assert(pw_vkbd_press(&kbd) == PW_VKBD_ERASED && !strcmp(line(&kbd), ""));
+    /* the field empty, Backspace is still Backspace: the game's text typed before (a tester, 2026-11-02: "the backspace
+     * does nothing" after the line was sent) */
+    assert(pw_vkbd_press(&kbd) == PW_VKBD_ERASED && pw_vkbd_backspace(&kbd) == PW_VKBD_ERASED);
     kbd.col = 1; assert(pw_vkbd_key(&kbd, 4, 1, &key) && !strcmp(key.text, "123"));
     pw_vkbd_press(&kbd); assert(kbd.page == PW_VKBD_SYMBOLS);
     kbd.col = 4; assert(pw_vkbd_press(&kbd) == PW_VKBD_FINISHED);
@@ -84,12 +86,17 @@ int main(void)
     /* the test line (any character, a plane-2 one too) goes in and out whole; the limit holds */
     pw_vkbd_open(&kbd, PW_VKBD_ABC);
     assert(pw_vkbd_type(&kbd, "héllo Ж日\xf0\xa0\x80\x80") == PW_VKBD_TYPED && !strcmp(line(&kbd), "héllo Ж日\xf0\xa0\x80\x80"));
-    assert(pw_vkbd_backspace(&kbd) == PW_VKBD_TYPED && !strcmp(line(&kbd), "héllo Ж日"));   /* the pair as one */
+    assert(pw_vkbd_backspace(&kbd) == PW_VKBD_ERASED && !strcmp(line(&kbd), "héllo Ж日"));   /* the pair as one */
     pw_vkbd_open(&kbd, PW_VKBD_ABC);
     for (int i = 0; i < PW_VKBD_TEXT; ++i) assert(pw_vkbd_type(&kbd, "x") == PW_VKBD_TYPED);
-    assert(pw_vkbd_type(&kbd, "x") == PW_VKBD_NONE && kbd.length == PW_VKBD_TEXT);
+    /* full, typing goes on: the field scrolls, the oldest unit gone, a pair as one */
+    assert(pw_vkbd_type(&kbd, "y") == PW_VKBD_TYPED && kbd.length == PW_VKBD_TEXT && kbd.text[PW_VKBD_TEXT - 1] == 'y');
     char small[4];
     assert(pw_vkbd_utf8(&kbd, small, sizeof(small)) == 3 && !strcmp(small, "xxx"));
+    pw_vkbd_open(&kbd, PW_VKBD_ABC);
+    assert(pw_vkbd_type(&kbd, "\xf0\xa0\x80\x80") == PW_VKBD_TYPED && kbd.length == 2);
+    for (int i = 0; i < PW_VKBD_TEXT - 2; ++i) pw_vkbd_type(&kbd, "x");
+    assert(pw_vkbd_type(&kbd, "z") == PW_VKBD_TYPED && kbd.length == PW_VKBD_TEXT - 1 && kbd.text[0] == 'x');
     /* the stick: a move at once, then none until 400 ms, then one every 140 ms; back to the centre resets it */
     PwVkbdStick stick = {0};
     int dx = 0, dy = 0;

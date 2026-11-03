@@ -1,0 +1,151 @@
+From 0000000000000000000000000000000000000000 Mon Sep 17 00:00:00 2001
+From: Mihawk <163614687+mihawk-99@users.noreply.github.com>
+Date: Mon, 2 Nov 2026 12:00:00 -0400
+Subject: [PATCH] ntdll: PS5: a first-chance fault line says what the kernel maps at the touched page
+
+Patch 2450's first-chance line gives the touched page's region as Wine sees it.
+Steam's browser in the title faulted on read-write private pages that Wine
+counts committed and the hardware calls "not present" (E1 webhelper run,
+2026-11-02): Wine's view and the kernel's disagree there, and the line could
+not show the kernel's side.
+
+The line now ends with the kernel's own mapping around the touched address,
+from sceKernelQueryMemoryProtection: ", kernel <start>-<end> prot 0x<prot>",
+or ", kernel none" when the kernel maps nothing there ("unknown" off the PS5).
+A new ntdll Unix call (unix_ps5_kernel_range, 64-bit and WoW64) asks
+__wine_ps5_kernel_range in wine/ps5/pw_wine_dmem_ps5.c, the way debugstr_pc
+answers the backtrace line. Nothing else changes.
+---
+  dlls/ntdll/exception.c   | 13 ++++++++++---
+  dlls/ntdll/unix/loader.c | 38 ++++++++++++++++++++++++++++++++++++++
+  dlls/ntdll/unixlib.h     |  1 +
+  3 files changed, 49 insertions(+), 3 deletions(-)
+
+diff --git a/dlls/ntdll/exception.c b/dlls/ntdll/exception.c
+index 16921fd..d0dae38 100644
+--- a/dlls/ntdll/exception.c
++++ b/dlls/ntdll/exception.c
+@@ -197,7 +197,8 @@ static LONG call_vectored_handlers( EXCEPTION_RECORD *rec, CONTEXT *context )
+  *
+  * In a PS5 title or helper (the starter sets WINE_PS5_NTDLL_DIR for both), the first access violation or in-page error
+  * at each of the first 16 faulting instructions, in the Wine log: what was touched and how, where (module and offset),
+- * on which thread, and the touched page's region as NtQueryVirtualMemory gives it. A game whose own handler catches its crash and quits leaves no unhandled-exception line, and
++ * on which thread, the touched page's region as NtQueryVirtualMemory gives it, and the kernel's own mapping there (start,
++ * end and protection, or "none"): Wine can count a page committed that the kernel does not map. A game whose own handler catches its crash and quits leaves no unhandled-exception line, and
+  * this is what is left of it. Lock-free; the thread name is one server call, at most 16 times a session.
+  */
+ static void ps5_note_first_chance( const EXCEPTION_RECORD *rec )
+@@ -206,6 +207,8 @@ static void ps5_note_first_chance( const EXCEPTION_RECORD *rec )
+     static ULONGLONG seen[16];
+     struct { THREAD_NAME_INFORMATION info; WCHAR text[32]; } name;
+     MEMORY_BASIC_INFORMATION region;
++    struct debugstr_pc_args kernel_args;
++    char kernel[64];
+     const WCHAR *module = L"?";
+     USHORT module_len = 1;
+     LDR_DATA_TABLE_ENTRY *mod;
+@@ -235,14 +238,18 @@ static void ps5_note_first_chance( const EXCEPTION_RECORD *rec )
+     if (NtQueryVirtualMemory( NtCurrentProcess(), (void *)rec->ExceptionInformation[1], MemoryBasicInformation, &region,
+                               sizeof(region), NULL ))
+         memset( &region, 0, sizeof(region) );
++    kernel_args.pc = (void *)rec->ExceptionInformation[1];
++    kernel_args.buffer = kernel;
++    kernel_args.size = sizeof(kernel);
++    if (WINE_UNIX_CALL( unix_ps5_kernel_range, &kernel_args )) strcpy( kernel, "unknown" );
+     ERR( "first-chance %s %u: %s of %p at %p (%s+%#Ix), thread %04lx %s, region %p+%#Ix %s protect %#lx %s"
+-         " (allocation %p)\n",
++         " (allocation %p), kernel %s\n",
+          rec->ExceptionCode == EXCEPTION_ACCESS_VIOLATION ? "access violation" : "in-page error", slot,
+          pw_wine_fault_access_word( rec->ExceptionInformation[0] ), (void *)rec->ExceptionInformation[1],
+          rec->ExceptionAddress, debugstr_wn(module, module_len), rva, GetCurrentThreadId(),
+          debugstr_wn( name.info.ThreadName.Buffer, name.info.ThreadName.Length / sizeof(WCHAR) ),
+          region.BaseAddress, region.RegionSize, pw_wine_fault_state_word( region.State ), region.Protect,
+-         pw_wine_fault_type_word( region.Type ), region.AllocationBase );
++         pw_wine_fault_type_word( region.Type ), region.AllocationBase, kernel );
+ }
+ 
+ 
+diff --git a/dlls/ntdll/unix/loader.c b/dlls/ntdll/unix/loader.c
+index c18d41b..ded0154 100644
+--- a/dlls/ntdll/unix/loader.c
++++ b/dlls/ntdll/unix/loader.c
+@@ -1448,6 +1448,31 @@ static NTSTATUS debugstr_pc( void *args )
+     return debugstr_pc_impl( params->pc, params->buffer, params->size ) ? STATUS_SUCCESS : STATUS_UNSUCCESSFUL;
+ }
+ 
++/* The kernel's own mapping around address, for the first-chance fault line (exception.c ps5_note_first_chance):
++ * "<start>-<end> prot <protection>", or "none" when the kernel maps nothing there. Wine can count a page committed that
++ * the kernel does not map. */
++static NTSTATUS ps5_kernel_range_impl( void *address, char *buffer, unsigned int size )
++{
++#ifdef __PROSPERO__
++    extern int __wine_ps5_kernel_range( const void *address, void **start, void **end );
++    void *start = NULL, *end = NULL;
++    int prot = __wine_ps5_kernel_range( address, &start, &end );
++
++    if (prot < 0) snprintf( buffer, size, "none" );
++    else snprintf( buffer, size, "%p-%p prot %#x", start, end, prot );
++    return STATUS_SUCCESS;
++#else
++    return STATUS_NOT_SUPPORTED;
++#endif
++}
++
++static NTSTATUS ps5_kernel_range( void *args )
++{
++    struct debugstr_pc_args *params = args;
++
++    return ps5_kernel_range_impl( params->pc, params->buffer, params->size );
++}
++
+ const char * wine_debuginfostr_pc( void *pc )
+ {
+     char buffer[256];
+@@ -1472,6 +1497,7 @@ static const unixlib_entry_t unix_call_funcs[] =
+     steamclient_setup_trampolines,
+     debugstr_pc,
+     unixcall_compat_wine_nt_to_unix_file_name,
++    ps5_kernel_range,
+ };
+ 
+ 
+@@ -1548,6 +1574,17 @@ static NTSTATUS wow64_debugstr_pc( void *args )
+                ? STATUS_SUCCESS : STATUS_UNSUCCESSFUL;
+ }
+ 
++static NTSTATUS wow64_ps5_kernel_range( void *args )
++{
++    struct
++    {
++        ULONG        pc;
++        ULONG        buffer;
++        unsigned int size;
++    } const *params32 = args;
++    return ps5_kernel_range_impl( ULongToPtr( params32->pc ), ULongToPtr( params32->buffer ), params32->size );
++}
++
+ static NTSTATUS wow64_compat_wine_nt_to_unix_file_name( void *args )
+ {
+     FIXME( "Not supported.\n" );
+@@ -1571,6 +1608,7 @@ const unixlib_entry_t unix_call_wow64_funcs[] =
+     wow64_steamclient_setup_trampolines,
+     wow64_debugstr_pc,
+     wow64_compat_wine_nt_to_unix_file_name,
++    wow64_ps5_kernel_range,
+ };
+ 
+ #endif  /* _WIN64 */
+diff --git a/dlls/ntdll/unixlib.h b/dlls/ntdll/unixlib.h
+index 7621cef..7e79f9c 100644
+--- a/dlls/ntdll/unixlib.h
++++ b/dlls/ntdll/unixlib.h
+@@ -124,6 +124,7 @@ enum ntdll_unix_funcs
+     unix_steamclient_setup_trampolines,
+     unix_debugstr_pc,
+     unix_compat_wine_nt_to_unix_file_name,
++    unix_ps5_kernel_range,   /* struct debugstr_pc_args: pc is the address */
+ };
+ 
+ extern unixlib_handle_t __wine_unixlib_handle;
+-- 
+2.47.0

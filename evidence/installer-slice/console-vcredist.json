@@ -1,25 +1,25 @@
 {
  "where": "console",
  "kind": "vcredist",
- "run": "installer-vcredist-2026-10-29-174048",
- "seconds": 39.2,
+ "run": "installer-vcredist-2026-11-02-132138",
+ "seconds": 146.1,
  "console_result": "finished",
  "returned_to_launcher": true,
  "verdict": {
   "passed": false,
-  "summary": "vcredist, 22 checks, 1 failed, 27863 ms in all"
+  "summary": "vcredist, 22 checks, 1 failed, 27938 ms in all"
  },
  "checks": [
   {
    "step": "snapshot",
    "verdict": "N/A",
    "ms": 121,
-   "detail": "entries 1743"
+   "detail": "entries 1721"
   },
   {
    "step": "install",
    "verdict": "PASS",
-   "ms": 9832,
+   "ms": 9717,
    "detail": "exit codes 0 0"
   },
   {
@@ -31,7 +31,7 @@
   {
    "step": "install-registry",
    "verdict": "PASS",
-   "ms": 1,
+   "ms": 0,
    "detail": "HKLM (32-bit view) SOFTWARE\\Microsoft\\VisualStudio\\14.0\\VC\\Runtimes\\x86"
   },
   {
@@ -49,37 +49,37 @@
   {
    "step": "install-native",
    "verdict": "PASS",
-   "ms": 7,
+   "ms": 6,
    "detail": "not Wine's own: %SystemRoot%\\system32\\vcruntime140_1.dll"
   },
   {
    "step": "install-native",
    "verdict": "PASS",
-   "ms": 9,
+   "ms": 8,
    "detail": "not Wine's own: %SystemRoot%\\syswow64\\msvcp140.dll"
   },
   {
    "step": "install-native",
    "verdict": "PASS",
-   "ms": 11,
+   "ms": 10,
    "detail": "not Wine's own: %SystemRoot%\\syswow64\\vcruntime140.dll"
   },
   {
    "step": "install-app",
    "verdict": "PASS",
-   "ms": 181,
+   "ms": 189,
    "detail": "exit code 77 \"%FIX%\\steam-app\\pwapp32.exe\" /load msvcp140.dll _Query_perf_frequency"
   },
   {
    "step": "install-app",
    "verdict": "PASS",
-   "ms": 137,
+   "ms": 150,
    "detail": "exit code 77 \"%FIX%\\steam-app\\pwapp64.exe\" /load msvcp140.dll _Query_perf_frequency"
   },
   {
    "step": "reinstall",
    "verdict": "PASS",
-   "ms": 7211,
+   "ms": 7213,
    "detail": "exit codes 0 0"
   },
   {
@@ -91,13 +91,13 @@
   {
    "step": "reinstall-registry",
    "verdict": "PASS",
-   "ms": 1,
+   "ms": 2,
    "detail": "HKLM (32-bit view) SOFTWARE\\Microsoft\\VisualStudio\\14.0\\VC\\Runtimes\\x86"
   },
   {
    "step": "reinstall-native",
    "verdict": "PASS",
-   "ms": 2,
+   "ms": 3,
    "detail": "not Wine's own: %SystemRoot%\\system32\\msvcp140.dll"
   },
   {
@@ -115,31 +115,31 @@
   {
    "step": "reinstall-native",
    "verdict": "PASS",
-   "ms": 9,
+   "ms": 10,
    "detail": "not Wine's own: %SystemRoot%\\syswow64\\msvcp140.dll"
   },
   {
    "step": "reinstall-native",
    "verdict": "PASS",
-   "ms": 11,
+   "ms": 12,
    "detail": "not Wine's own: %SystemRoot%\\syswow64\\vcruntime140.dll"
   },
   {
    "step": "reinstall-app",
    "verdict": "PASS",
-   "ms": 180,
+   "ms": 206,
    "detail": "exit code 77 \"%FIX%\\steam-app\\pwapp32.exe\" /load msvcp140.dll _Query_perf_frequency"
   },
   {
    "step": "reinstall-app",
    "verdict": "PASS",
-   "ms": 154,
+   "ms": 159,
    "detail": "exit code 77 \"%FIX%\\steam-app\\pwapp64.exe\" /load msvcp140.dll _Query_perf_frequency"
   },
   {
    "step": "uninstall",
    "verdict": "PASS",
-   "ms": 7617,
+   "ms": 7910,
    "detail": "exit codes 0 0"
   },
   {
@@ -193,7 +193,7 @@
   {
    "step": "clean",
    "verdict": "FAIL",
-   "ms": 2389,
+   "ms": 2227,
    "detail": "added or changed 0, removed 24 (of the snapshot's entries)"
   },
   {
@@ -205,7 +205,7 @@
   {
    "step": "install-registry",
    "verdict": "PASS",
-   "ms": 1,
+   "ms": 0,
    "detail": "HKLM (32-bit view) SOFTWARE\\\\Microsoft\\\\VisualStudio\\\\14.0\\\\VC\\\\Runtimes\\\\x86"
   },
   {
@@ -223,31 +223,31 @@
   {
    "step": "install-native",
    "verdict": "PASS",
-   "ms": 7,
+   "ms": 6,
    "detail": "not Wine's own: %SystemRoot%\\\\system32\\\\vcruntime140_1.dll"
   },
   {
    "step": "install-native",
    "verdict": "PASS",
-   "ms": 9,
+   "ms": 8,
    "detail": "not Wine's own: %SystemRoot%\\\\syswow64\\\\msvcp140.dll"
   },
   {
    "step": "install-native",
    "verdict": "PASS",
-   "ms": 11,
+   "ms": 10,
    "detail": "not Wine's own: %SystemRoot%\\\\syswow64\\\\vcruntime140.dll"
   },
   {
    "step": "install-app",
    "verdict": "PASS",
-   "ms": 181,
+   "ms": 189,
    "detail": "exit code 77 \\\"%FIX%\\\\steam-app\\\\pwapp32.exe\\\" /load msvcp140.dll _Query_perf_frequency"
   },
   {
    "step": "install-app",
    "verdict": "PASS",
-   "ms": 137,
+   "ms": 150,
    "detail": "exit code 77 \\\"%FIX%\\\\steam-app\\\\pwapp64.exe\\\" /load msvcp140.dll _Query_perf_frequency"
   },
   {
@@ -259,13 +259,13 @@
   {
    "step": "reinstall-registry",
    "verdict": "PASS",
-   "ms": 1,
+   "ms": 2,
    "detail": "HKLM (32-bit view) SOFTWARE\\\\Microsoft\\\\VisualStudio\\\\14.0\\\\VC\\\\Runtimes\\\\x86"
   },
   {
    "step": "reinstall-native",
    "verdict": "PASS",
-   "ms": 2,
+   "ms": 3,
    "detail": "not Wine's own: %SystemRoot%\\\\system32\\\\msvcp140.dll"
   },
   {
@@ -283,25 +283,25 @@
   {
    "step": "reinstall-native",
    "verdict": "PASS",
-   "ms": 9,
+   "ms": 10,
    "detail": "not Wine's own: %SystemRoot%\\\\syswow64\\\\msvcp140.dll"
   },
   {
    "step": "reinstall-native",
    "verdict": "PASS",
-   "ms": 11,
+   "ms": 12,
    "detail": "not Wine's own: %SystemRoot%\\\\syswow64\\\\vcruntime140.dll"
   },
   {
    "step": "reinstall-app",
    "verdict": "PASS",
-   "ms": 180,
+   "ms": 206,
    "detail": "exit code 77 \\\"%FIX%\\\\steam-app\\\\pwapp32.exe\\\" /load msvcp140.dll _Query_perf_frequency"
   },
   {
    "step": "reinstall-app",
    "verdict": "PASS",
-   "ms": 154,
+   "ms": 159,
    "detail": "exit code 77 \\\"%FIX%\\\\steam-app\\\\pwapp64.exe\\\" /load msvcp140.dll _Query_perf_frequency"
   },
   {

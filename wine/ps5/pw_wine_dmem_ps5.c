@@ -19,11 +19,13 @@
 #include "pw_wine_dmem.h"
 #include "pw_wine_gpu_keep.h"
 #include "pw_wine_heap.h"
+#include "pw_wine_cwd.h"
 #include "pw_wine_pages.h"
 #include "pw_wine_perf.h"
 #include "pw_wine_spin.h"
 #include "pw_wine_vm.h"
 #include <errno.h>
+#include <pthread.h>
 #include <signal.h>
 #include <stdio.h>
 #include <ps5platform/memory.h>
@@ -705,6 +707,56 @@ static void heap_unmap(void *address, size_t bytes)
     if (first < heap_hint) heap_hint = first;
 }
 
+/* The area serves two heaps in the title: ntdll's and the in-process server's own copy, which the loader hands this
+ * backing before the server runs (pw_wine_dl_hand_heap). Each calls under its own heap's lock, so the area's page map
+ * takes one of its own, signals blocked across it as heap_mmap blocks them. Before, the server's heap mapped its blocks
+ * wherever the kernel put them, a hole of the program's memory among them, and the program's text overwrote the
+ * server's objects there (e1-webhelper-title-base-2026-11-02-02). */
+static pthread_mutex_t heap_area_lock = PTHREAD_MUTEX_INITIALIZER;
+
+static void heap_area_enter(sigset_t *old)
+{
+    sigset_t block;
+    sigemptyset(&block);
+    sigaddset(&block, SIGUSR1);
+    sigaddset(&block, SIGQUIT);
+    sigaddset(&block, SIGINT);
+    pthread_sigmask(SIG_BLOCK, &block, old);
+    pthread_mutex_lock(&heap_area_lock);
+}
+
+static void heap_area_leave(const sigset_t *old)
+{
+    pthread_mutex_unlock(&heap_area_lock);
+    pthread_sigmask(SIG_SETMASK, old, NULL);
+}
+
+static void *heap_backing_map(size_t bytes)
+{
+    sigset_t old;
+    heap_area_enter(&old);
+    void *const at = heap_map(bytes);
+    heap_area_leave(&old);
+    return at;
+}
+
+static void heap_backing_unmap(void *address, size_t bytes)
+{
+    sigset_t old;
+    heap_area_enter(&old);
+    heap_unmap(address, bytes);
+    heap_area_leave(&old);
+}
+
+/* For the loader (pw_wine_dl_libc.c): this heap's backing once its area exists, 0; -1 before. */
+int __wine_ps5_heap_backing(void *(**map)(size_t), void (**unmap)(void *, size_t))
+{
+    if (!heap_area || !map || !unmap) return -1;
+    *map = heap_backing_map;
+    *unmap = heap_backing_unmap;
+    return 0;
+}
+
 /* Where the kernel puts a reservation it is given no address for is the
  * first free range above 8 GiB, which is where RADV's 4 GiB address window
  * lives (0x200000000, mapped without replacing at its startup): a heap area
@@ -740,7 +792,7 @@ static void heap_area_init(void)
         return;
     }
     heap_area = (uintptr_t)at;
-    pw_wine_heap_set_backing(heap_map, heap_unmap);
+    pw_wine_heap_set_backing(heap_backing_map, heap_backing_unmap);
     fprintf(stderr, "wine-ps5: the heap takes its memory from direct memory (area %p, %zu MiB)\n", at,
             (size_t)(HEAP_AREA_BYTES >> 20));
 }
@@ -985,6 +1037,8 @@ failed:
     return -1;
 }
 
+extern void pw_ntsync_critical_enter(void) __attribute__((weak));   /* src/pw_ntsync.c, in ntdll */
+extern void pw_ntsync_critical_leave(void) __attribute__((weak));
 extern int pw_ps5_code_ask_file(const uint64_t file[3], uint64_t bytes, int *fd) __attribute__((weak));
 extern int pw_ps5_code_offer_file(const uint64_t file[3], uint64_t bytes, int fd) __attribute__((weak));
 /* An image's file cluster at `at`: the first helper's read is the only one. The bytes are the file's at offset, laid
@@ -1554,6 +1608,17 @@ int __wine_ps5_kernel_prot(const void *address)
     return (int)(protection & 7);
 }
 
+/* The kernel's mapping around address: its protection (all of its bits) with the range in *start and *end, or -1 when it
+ * holds none there. For the first-chance fault line (Wine patch 2456): Wine can count a page committed that the kernel
+ * does not map. */
+int __wine_ps5_kernel_range(const void *address, void **start, void **end)
+{
+    uint32_t protection = 0;
+
+    if (sceKernelQueryMemoryProtection((void *)page_down(address), start, end, &protection)) return -1;
+    return (int)protection;
+}
+
 /* An execute fault Wine allows that nothing can serve (a section or file view, or a failed conversion): counted, and
  * the first ones and then one in 1024 logged. */
 void __wine_ps5_exec_refused(const void *address)
@@ -1658,6 +1723,11 @@ int __wine_ps5_dmem_region(void *base, size_t size)
         return -1;
     }
     if (!state) {
+        /* the heap's mutex under the device's signal rule (pw_wine_heap_set_guard); both are in ntdll, not the server */
+        if (pw_ntsync_critical_enter && pw_ntsync_critical_leave) {
+            pw_wine_heap_set_guard(pw_ntsync_critical_enter, pw_ntsync_critical_leave);
+            pw_cwd_set_guard(pw_ntsync_critical_enter, pw_ntsync_critical_leave);   /* and the path lock's */
+        }
         measure_signature(page_down(base));
         state = (payload_mmap ? exec_self_check(&dmem, page_down(base)) : self_check((uintptr_t)base)) ? 1 : -1;
         if (state < 0 && !payload_mmap) {   /* direct memory did not execute: convert, as a payload does */

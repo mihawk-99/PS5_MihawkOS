@@ -66,6 +66,13 @@ void proton_guide_dialog(const char *title, const char *text);
 // MihawkOS's own on-screen keyboard over the game (PW_STEAM_SCREEN_KEYBOARD, src/pw_vkbd.h): its state, copied; drawn again
 // within 0.1 s of each call. NULL takes it off.
 void proton_guide_keyboard(const struct PwVkbd *keyboard);
+// MihawkOS's control overlay over the game (PW_STEAM_SCREEN_OVERLAY, src/pw_overlay.h), in the keyboard's panel: its state,
+// copied; drawn again at once. NULL takes it off.
+void proton_guide_overlay(const struct PwOverlay *overlay);
+// The statistics HUD (src/pw_overlay.h): its figures, copied, drawn within 0.1 s into the broker's second rectangle (hud,
+// proton_gpu_broker_set_hud); NULL takes it off. Shown whatever screen shows, while the guide runs.
+void proton_guide_hud(const struct PwHud *hud);
+void proton_guide_set_hud(bool (*hud)(const void *pixels, unsigned x, unsigned y, unsigned w, unsigned h));
 // Where the keyboard's panel goes: the GPU broker's overlay (proton_gpu_broker_set_overlay), drawn over every frame in its
 // rectangle so the game stays live above it. Set before the keyboard shows.
 void proton_guide_set_overlay(bool (*overlay)(const void *pixels, unsigned x, unsigned y, unsigned w, unsigned h),

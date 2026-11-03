@@ -162,6 +162,10 @@ void pw_ntsync_counters(PwNtsyncCounters *counters);
  * device (the server's), would never return. Signals 1 to 31. A SIGQUIT (Wine ending the thread) on a thread
  * outside the device also ends its blocked wait and any later one, with -ECANCELED. */
 int pw_ntsync_signal_deferred(int signal);
+/* A critical section of another lock of this process's Unix side (Wine's heap): pw_ntsync_signal_deferred defers
+ * a signal that lands between enter and leave, and the last leave raises it again. Calls nest. Never allocates. */
+void pw_ntsync_critical_enter(void);
+void pw_ntsync_critical_leave(void);
 /* What an object is (the server's object type and id or handle), shown by the
  * dump. The first note stays until the object goes. */
 int pw_ntsync_note(int object, const char *tag);

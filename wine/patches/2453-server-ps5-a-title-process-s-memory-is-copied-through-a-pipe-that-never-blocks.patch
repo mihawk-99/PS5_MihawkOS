@@ -1,0 +1,98 @@
+From 0000000000000000000000000000000000000000 Mon Sep 17 00:00:00 2001
+From: Mihawk <163614687+mihawk-99@users.noreply.github.com>
+Date: Mon, 02 Nov 2026 15:00:00 -0400
+Subject: [PATCH] server: PS5: A title process's memory is copied through a pipe that never blocks.
+
+A helper's ReadProcessMemory or WriteProcessMemory of a process in the title is served by the server thread, which copies
+the memory through a pipe it both writes and reads (so an unmapped address makes the kernel answer EFAULT instead of the
+server faulting). The pipe was blocking and a chunk was 16 KiB. A blocking write the pipe cannot take at once waits for a
+reader. On FreeBSD, which the console's kernel comes from, a blocking pipe write of 8 KiB or more is a direct write that
+waits for the reader to take it (not checked on the console's kernel itself), and any pipe with less room than the chunk
+does the same. The only reader is the waiting thread itself, so the server stopped
+for good.
+
+A tester's Risk of Rain 2 in the title froze at loading three sessions out of three (tester-freeze-loading-2026-11-01). Each
+time its Steam crash handler had started steamerrorreporter64.exe -pid=<game> in a helper, and within seconds Wine's tick
+count, which only the server's main loop advances, stopped (976.659 for ten minutes in session 2). Every later server
+call waited, and so did the title's 30 s registry save, 3000 ms each time. Before Alpha 7 almost nothing in a helper read
+a title process's memory; a minidump of a game in the title does it at its first stack.
+
+Both ends are now non-blocking, a short write copies what it took and goes on, and a short read into a target that is not
+writable drains what is left, as before. The copy lives in wine/ps5/pw_wine_copy_pipe.h, copied here by
+tools/build-wine-ps5.sh. Host test tests/test_pw_wine_copy_pipe.c covers whole copies of 1 B to 256 KiB both ways, a copy
+that stops at a no-access page, and a pipe shrunk to 4 KiB. With the old blocking pipe that last case hangs on Linux, and
+the test's alarm ends it. Console case dump-server64-title (tests/suspend-server-probe.c --mode=read). Not run on a console.
+---
+diff --git a/server/ptrace.c b/server/ptrace.c
+index 3852c54..43c43d1 100644
+--- a/server/ptrace.c
++++ b/server/ptrace.c
+@@ -30,6 +30,7 @@
+ #include <sys/wait.h>
+ #ifdef __PROSPERO__
+ #include <sys/ioctl.h>
++#include "pw_wine_copy_pipe.h"
+ #endif
+ #ifdef HAVE_SYS_PTRACE_H
+ # include <sys/ptrace.h>
+@@ -481,54 +482,12 @@ static int read_process_memory_ptrace( struct thread *thread, client_ptr_t ptr,
+  * not mapped makes the kernel answer EFAULT instead of the server taking the fault. */
+ static int ps5_copy_pipe[2] = { -1, -1 };
+ 
+-static int ps5_copy_pipe_open(void)
+-{
+-    if (ps5_copy_pipe[0] == -1 && pipe( ps5_copy_pipe ))
+-    {
+-        ps5_copy_pipe[0] = ps5_copy_pipe[1] = -1;
+-        return 0;
+-    }
+-    return 1;
+-}
+-
+-/* from this process's memory into dest (read), or from src into this process's memory (write) */
++/* Through a non-blocking pipe (patch 2453, wine/ps5/pw_wine_copy_pipe.h): this thread is its only writer and its only
++ * reader, and a blocking write it could not finish waited for itself. A crash reporter in a helper dumping a game in the
++ * title stopped the server for good. */
+ static data_size_t ps5_copy_memory( int writing, char *local, const char *target, data_size_t size )
+ {
+-    data_size_t done = 0;
+-    char scratch[4096];
+-
+-    if (!ps5_copy_pipe_open()) return 0;
+-    while (done < size)
+-    {
+-        data_size_t chunk = size - done < 16384 ? size - done : 16384;
+-        ssize_t count;
+-
+-        if (writing)
+-        {
+-            if (write( ps5_copy_pipe[1], local + done, chunk ) != (ssize_t)chunk) break;
+-            count = read( ps5_copy_pipe[0], (char *)target + done, chunk );
+-            if (count < (ssize_t)chunk)
+-            {
+-                /* the target was not writable all the way: what is left in the pipe is not wanted */
+-                for (;;)
+-                {
+-                    long left = 0;
+-                    if (ioctl( ps5_copy_pipe[0], FIONREAD, &left ) || left <= 0) break;
+-                    if (read( ps5_copy_pipe[0], scratch, left < (long)sizeof(scratch) ? left : (long)sizeof(scratch) ) <= 0) break;
+-                }
+-                if (count > 0) done += count;
+-                break;
+-            }
+-        }
+-        else
+-        {
+-            count = write( ps5_copy_pipe[1], target + done, chunk );
+-            if (count <= 0) break;
+-            if (read( ps5_copy_pipe[0], local + done, count ) != count) break;
+-        }
+-        done += count;
+-    }
+-    return done;
++    return pw_wine_copy_memory( ps5_copy_pipe, writing, local, target, size );
+ }
+ 
+ /* Another process's memory: a helper process runs each Windows program but the title's own, and its memory is
+-- 
+2.56.0

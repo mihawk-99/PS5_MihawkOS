@@ -39,6 +39,9 @@ int main(void)
     assert(pw_wine_inherited("WINE_PS5_TITLE_GAMES=1") && pw_wine_inherited("WINE_PS5_TITLE_OPTOUT=a.exe"));
     assert(pw_wine_inherited("WINE_PS5_TITLE_PICK=game.exe") && pw_wine_inherited("WINE_PS5_CHROMIUM_ARGS=--single-process") &&
            pw_wine_inherited("WINE_PS5_TITLE_LISTED=game.exe"));
+    /* A game's 2430 setting reaches the game its launcher starts; a library root is each spawner's own word, never inherited. */
+    assert(pw_wine_inherited("WINE_PS5_HIGH_RESERVE_ELSEWHERE=1"));
+    assert(!pw_wine_inherited("WINE_PS5_LIBRARY_ROOT=steam|C:\\Program Files (x86)\\Steam\\"));
     /* The game's Steam ids reach the programs it starts (Proton's Wine reads them on the Unix side too); a lookalike does not. */
     assert(pw_wine_inherited("SteamGameId=250900") && pw_wine_inherited("SteamAppId=250900"));
     assert(!pw_wine_inherited("SteamGameIdX=1") && !pw_wine_inherited("STEAMGAMEID=1") && !pw_wine_inherited("SteamPath=/x"));

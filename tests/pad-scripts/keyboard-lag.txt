@@ -1,9 +1,12 @@
 # The own keyboard's input lag (the owner, 2026-11-01: "insane input lag"; tools/run-battery.py osk-own-lag64): L3+R3 opens
-# it over the window probe, then single moves half a second apart, a typed key, a page change, and CIRCLE closes it. The
-# title logs each change's parts ("keyboard panel: change N seen … drawn … handed over …"), the broker its lock wait and
-# re-show ("gpu-overlay set N …").
+# the control overlay over the window probe and its Keyboard tile the keyboard (Alpha 8), then single moves half a second
+# apart, a typed key, a page change, and CIRCLE goes back to the overlay and closes it. The title logs each change's parts
+# ("keyboard panel: change N seen … drawn … handed over …"), the broker its lock wait and re-show ("gpu-overlay set N …").
 20 l3 0.3
 20 r3 0.3
+21 down
+21.5 down
+22 cross
 23 right
 23.5 right
 24 right
@@ -16,4 +19,5 @@
 27.5 right
 28 cross
 29 circle
+30 circle
 32 stop

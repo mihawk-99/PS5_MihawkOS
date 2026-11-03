@@ -99,7 +99,7 @@ int pw_app_environment_block(const PwAppEntry *entry, char *out, size_t capacity
     }
     if (controller && !hid) {
         if (count == PW_APP_ENVIRONMENT_MAX_WORDS) return E2BIG;
-        words[count++] = dualsense ? "WINE_PS5_HID=1" : "WINE_PS5_HID=0";
+        words[count++] = dualsense ? "WINE_PS5_HID=1" : "WINE_PS5_HID=live";   /* live: the Xbox HID gamepad, patch 2480 */
     }
     if (pw_environment_pack(out, capacity, words, count, &packed)) return errno ? errno : EINVAL;
     *bytes = (uint32_t)packed;

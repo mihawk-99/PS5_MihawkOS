@@ -1,0 +1,118 @@
+From 0000000000000000000000000000000000000000 Mon Sep 17 00:00:00 2001
+From: Mihawk <163614687+mihawk-99@users.noreply.github.com>
+Date: Mon, 02 Nov 2026 15:00:00 -0400
+Subject: [PATCH] ntdll, ntoskrnl, winebus: PS5: the DualSense comes and goes with the kind the overlay chooses.
+
+The DualSense's HID device existed only in processes started with WINE_PS5_HID=1 (the DualSense chosen), from the bus's
+start to its end (patches 0870, 0941). For the control overlay's live switch (PS5_Proton src/pw_overlay.h, Alpha 8):
+- the title sets WINE_PS5_HID=live when an Xbox controller is chosen. ntdll's loader then starts the PS5 bus only in the
+  title's own process (a game in the title: no WINE_PS5_INPUT_FD), never in a helper, so helpers cost nothing more;
+- ntoskrnl does not wait the second for a DualSense there is not;
+- the PS5 bus follows the title's kind (pw_wine_pad_kind): another kind removes the device (its readers see it go, raw
+  input's list follows within 2 s), the DualSense makes it again. Until the title sets a kind, as before.
+A program that only looks for HID devices at its start, or waits for device notifications (no plug-and-play service on the
+console), will not see a DualSense chosen later: the overlay's card says so, and the choice is saved for the next launch.
+Not run on a console.
+---
+ dlls/ntdll/loader.c          |  7 +++++--
+ dlls/ntoskrnl.exe/ntoskrnl.c |  9 +++++++++
+ dlls/winebus.sys/bus_ps5.c   | 20 +++++++++++++++++++-
+ 3 files changed, 33 insertions(+), 3 deletions(-)
+
+diff --git a/dlls/ntdll/loader.c b/dlls/ntdll/loader.c
+index 20e3b0b..1644029 100644
+--- a/dlls/ntdll/loader.c
++++ b/dlls/ntdll/loader.c
+@@ -4811,14 +4811,17 @@ void loader_init( CONTEXT *context, void **entry )
+     RtlLeaveCriticalSection( &loader_section );
+     if (ps5_hid_init)
+     {
+-        WCHAR enabled[4];
++        WCHAR enabled[4], input_fd[16];
+         const UNICODE_STRING *image = &NtCurrentTeb()->Peb->ProcessParameters->ImagePathName;
+         /* Not in Wine's own programs (wineboot, explorer and the rest, all in system32): they read no controller,
+          * and a DualSense one of them makes is one more the game's must take over (pnp.c). wineboot's also held
+          * every launch a second, waiting for a controller it never used. */
+         if (image->Length >= wcslen(system_dir) * sizeof(WCHAR) && !wcsnicmp(image->Buffer, system_dir, wcslen(system_dir)))
+             WARN("[PS5 Proton] in-process HID not started for %s\n", debugstr_us(image));
+-        else if (get_env(L"WINE_PS5_HID", enabled, sizeof(enabled)) && enabled[0] == L'1')
++        /* "live" (an Xbox controller chosen, which the control overlay may switch to the DualSense, patch 2472): only in the
++         * title's own process, a game in the title; a helper (it has the title's input page) keeps no bus for it */
++        else if (get_env(L"WINE_PS5_HID", enabled, sizeof(enabled)) &&
++                 (enabled[0] == L'1' || (enabled[0] == L'l' && !get_env(L"WINE_PS5_INPUT_FD", input_fd, sizeof(input_fd)))))
+         {
+             UNICODE_STRING name = RTL_CONSTANT_STRING(L"ntoskrnl.exe");
+             ANSI_STRING proc = RTL_CONSTANT_STRING("wine_ps5_hid_start");
+diff --git a/dlls/ntoskrnl.exe/ntoskrnl.c b/dlls/ntoskrnl.exe/ntoskrnl.c
+index 5b6658d..5e8ae00 100644
+--- a/dlls/ntoskrnl.exe/ntoskrnl.c
++++ b/dlls/ntoskrnl.exe/ntoskrnl.c
+@@ -4783,6 +4783,15 @@ NTSTATUS CDECL wine_ps5_hid_start(void)
+      * and a game may look for controllers only once, at its start; nothing tells it of one that comes later, since
+      * device notifications need the plug-and-play service, which the PS5 does not run. The PS5 bus makes the
+      * DualSense at its start, connected or not, and keeps it while the program runs. */
++    /* An Xbox controller chosen ("live", patch 2472): no DualSense until the control overlay switches to it, no wait */
++    {
++        WCHAR mode[8];
++        if (GetEnvironmentVariableW(L"WINE_PS5_HID", mode, ARRAY_SIZE(mode)) && mode[0] == 'l')
++        {
++            MESSAGE("[PS5 Proton] HID bus start status %#lx; no DualSense until the overlay chooses it\n", status);
++            return status;
++        }
++    }
+     if (!status) waited = ps5_wait_dualsense(1000);
+     MESSAGE("[PS5 Proton] HID bus start status %#lx; DualSense %s %ld ms\n", status,
+          waited >= 0 ? "ready after" : "not seen in", waited >= 0 ? waited : 1000L);
+diff --git a/dlls/winebus.sys/bus_ps5.c b/dlls/winebus.sys/bus_ps5.c
+index 85edaa2..34fe761 100644
+--- a/dlls/winebus.sys/bus_ps5.c
++++ b/dlls/winebus.sys/bus_ps5.c
+@@ -21,6 +21,7 @@ static int (*read_pad)(unsigned char *);
+ /* The helper's count of what became of each report (pw_wine_input_note, wine/ps5/pw_wine_sink.h in PS5_Proton):
+  * queued 0, held back while the device is not started 1, device created 2, removed 3. */
+ static void (*note)(int);
++static int (*pad_kind)(void);   /* the title's controller kind, switched live (patch 2472); -1: none set */
+ static struct list events = LIST_INIT(events);
+ 
+ /* USB report 1: six axes, counter, hat, 15 buttons and vendor payload.
+@@ -97,6 +98,7 @@ NTSTATUS ps5_bus_init(void *args)
+     fprintf(stderr, "wine-ps5: bus thread %s ps5_thread_is_terminating\n", thread_is_terminating ? "found" : "has no");
+     read_pad = dlsym(RTLD_DEFAULT, "pw_wine_dualsense");
+     note = dlsym(RTLD_DEFAULT, "pw_wine_input_note");
++    pad_kind = dlsym(RTLD_DEFAULT, "pw_wine_pad_kind");
+     return read_pad ? STATUS_SUCCESS : STATUS_NOT_SUPPORTED;
+ }
+ NTSTATUS ps5_bus_wait(void *args)
+@@ -105,7 +107,7 @@ NTSTATUS ps5_bus_wait(void *args)
+     static int was_connected;
+     static unsigned int waits;   /* bus loops (8 ms each) until the device is made again */
+     BYTE report[64];
+-    int connected;
++    int connected, kind;
+     bus_event_cleanup(event);
+     /* This loop stays in the Unix call until an event or the stop request. A
+      * thread the server killed ends only when it returns to user mode, so the
+@@ -114,7 +116,23 @@ NTSTATUS ps5_bus_wait(void *args)
+     {
+         usleep(8000);
+         connected = read_pad(report);
++        /* The DualSense is there while it is the kind the title set (none set: from the start, as WINE_PS5_HID=1 asked);
++         * the control overlay switching away removes it, and back makes it again (patch 2472) */
++        kind = pad_kind ? pad_kind() : -1;
+         pthread_mutex_lock(&device_lock);
++        if (kind >= 0 && kind != 2)
++        {
++            if (device)
++            {
++                bus_event_queue_device_removed(&events, &device->base);
++                device = NULL;
++                fprintf(stderr, "wine-ps5: the DualSense is removed: another controller is chosen\n");
++            }
++            waits = 0;
++            pthread_mutex_unlock(&device_lock);
++            if (bus_event_queue_pop(&events, event)) return STATUS_PENDING;
++            continue;
++        }
+         /* The DualSense is there from the bus's start, connected or not, and stays until the bus stops: a program
+          * looks for controllers at its start, and nothing would tell it of one that came or went later (device
+          * notifications need the plug-and-play service). A pad the title loses (the system menu takes it while

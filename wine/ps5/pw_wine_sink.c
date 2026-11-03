@@ -38,11 +38,12 @@ static int pad_seen=-1;           /* a helper: whether it saw the pad connected 
 _Static_assert(PW_WINE_INPUT_PAGE_BYTES == 16384, "an input page is one console page");
 /* The page also carries the DualSense's USB report, which winebus's PS5 bus reads (pw_wine_dualsense): a game in a
  * helper that finds the pad through raw HID, not XInput (a .NET (MonoGame) game's SDL with SDL_XINPUT_ENABLED=0), sees it. */
-typedef struct PwWineInputPage { uint32_t sequence, reserved; PwWinePad pad; uint32_t dualsense_connected;
+typedef struct PwWineInputPage { uint32_t sequence, pad_kind; PwWinePad pad; uint32_t dualsense_connected;
                                  uint8_t dualsense[64]; } PwWineInputPage;
 _Static_assert(sizeof(PwWineInputPage) <= PW_SUSPEND_PAGE_OFFSET, "the title's suspend word is clear of the pad");
 static PwWineInputPage *input_page;   /* a child's own page, read here */
 static int input_page_tried,pad_set;
+static uint32_t pad_kind;   /* the title's controller kind + 1; 0: none set (pw_wine_set_pad_kind) */
 /* The title: the pages its helpers gave it, written whenever the pad or the DualSense report changes. */
 #define PW_WINE_CHILD_PAGES 32
 static PwWineInputPage *child_pages[PW_WINE_CHILD_PAGES];
@@ -204,6 +205,7 @@ static int valid(const PwWineInput *e)
     case PW_WINE_INPUT_CLOSE:case PW_WINE_INPUT_TERMINATE:return 1;
     case PW_WINE_INPUT_END_PROCESS:return e->code>0 && e->down<=1;
     case PW_WINE_INPUT_CHAR:return e->code>0 && e->code<=0xffff && e->down<=1;
+    case PW_WINE_INPUT_MOUSE_PRESENT:return e->down<=1;
     default:return 0;
     }
 }
@@ -408,6 +410,7 @@ static void input_page_write_locked(PwWineInputPage *page)
     __atomic_store_n(&page->sequence,sequence+1,__ATOMIC_RELAXED);
     __atomic_thread_fence(__ATOMIC_RELEASE);
     page->pad=pad_state;
+    page->pad_kind=pad_kind;
     page->dualsense_connected=(uint32_t)dualsense_connected;
     memcpy(page->dualsense,dualsense_report,sizeof(page->dualsense));
     __atomic_store_n(&page->sequence,sequence+2,__ATOMIC_RELEASE);
@@ -501,6 +504,25 @@ uint32_t pw_wine_pad_changes(void)
     changes=pad_changes;
     pthread_mutex_unlock(&lock);
     return changes;
+}
+void pw_wine_set_pad_kind(int kind)
+{
+    pthread_mutex_lock(&lock);
+    pad_kind=kind>=0 && kind<3 ? (uint32_t)kind+1 : 0;
+    input_page_publish_locked();
+    pthread_mutex_unlock(&lock);
+}
+int pw_wine_pad_kind(void)
+{
+    uint32_t kind;
+    pthread_mutex_lock(&lock);
+    kind=pad_kind;
+    if(!pad_set && !kind) {   /* a helper: the title's, from the page (one word, read whole) */
+        input_page_attach_locked();
+        if(input_page)kind=__atomic_load_n(&input_page->pad_kind,__ATOMIC_ACQUIRE);
+    }
+    pthread_mutex_unlock(&lock);
+    return kind>=1 && kind<=3 ? (int)kind-1 : -1;
 }
 int pw_wine_pad(PwWinePad *pad)
 {

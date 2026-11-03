@@ -10,6 +10,7 @@
 #include "../src/pw_loading_art.h"
 #include "../src/pw_steam_screen.h"
 #include "../src/pw_vkbd.h"
+#include "../src/pw_overlay.h"
 #include <assert.h>
 #include <stdio.h>
 #include <stdlib.h>
@@ -108,7 +109,7 @@ int main(int argc, char **argv)
         const PwSteamFaces faces = {own ? own : regular, own ? own : semibold, regular};
         for (size_t s = 0; s < sizeof(screens) / sizeof(screens[0]); ++s) {
             const PwSteamScreenState state = {screens[s].screen, language, screens[s].seconds, screens[s].bytes,
-                                              screens[s].persona, screens[s].dialog_title, screens[s].dialog_text, NULL};
+                                              screens[s].persona, screens[s].dialog_title, screens[s].dialog_text, NULL, NULL};
             PwSteamScreenReport report;
             pw_steam_screen_draw(still, backdrop, &state, &faces, &report);
             if (report.cut || report.missing || report.bottom > PW_STEAM_CARD_Y1 - 12 || report.bottom < PW_STEAM_CARD_Y0) {
@@ -143,7 +144,7 @@ int main(int argc, char **argv)
             snprintf(line, sizeof(line), "\ngame.exe!0x140000000 + 0x%07x a long frame name that wraps on its own line", i * 4099);
             strcat(text, line);
         }
-        const PwSteamScreenState state = {PW_STEAM_SCREEN_DIALOG, NULL, 0, 0, NULL, "A Game - Aborted", text, NULL};
+        const PwSteamScreenState state = {PW_STEAM_SCREEN_DIALOG, NULL, 0, 0, NULL, "A Game - Aborted", text, NULL, NULL};
         PwSteamScreenReport report;
         pw_steam_screen_draw(still, backdrop, &state, &latin, &report);
         assert(!report.missing && report.bottom <= PW_STEAM_CARD_Y1 - 12 && report.bottom > PW_STEAM_CARD_Y0);
@@ -165,7 +166,7 @@ int main(int argc, char **argv)
                     kbd.row = (page + shift) % PW_VKBD_ROWS;
                     kbd.col = 1;
                     pw_vkbd_type(&kbd, "héllo Жюль ł");
-                    PwSteamScreenState state = {PW_STEAM_SCREEN_KEYBOARD, &langs[l], 0, 0, NULL, NULL, NULL, &kbd};
+                    PwSteamScreenState state = {PW_STEAM_SCREEN_KEYBOARD, &langs[l], 0, 0, NULL, NULL, NULL, &kbd, NULL};
                     PwSteamScreenReport report;
                     pw_steam_screen_draw(still, backdrop, &state, &faces, &report);
                     if (report.missing || report.cut || report.bottom >= PW_LOADING_HEIGHT) {
@@ -190,7 +191,7 @@ int main(int argc, char **argv)
         assert(whole);
         PwVkbd kbd, before;
         pw_vkbd_open(&kbd, PW_VKBD_ABC);
-        PwSteamScreenState state = {PW_STEAM_SCREEN_KEYBOARD, pw_setup_default_language(), 0, 0, NULL, NULL, NULL, &kbd};
+        PwSteamScreenState state = {PW_STEAM_SCREEN_KEYBOARD, pw_setup_default_language(), 0, 0, NULL, NULL, NULL, &kbd, NULL};
         pw_steam_screen_draw(still, backdrop, &state, &faces, NULL);
         const char *steps = "rrrdllluuuxxrdddxbbsrxpdlx";   /* moves, x types, b backspace, s Shift, p the page key */
         size_t panel = (size_t)PW_VKBD_PANEL_Y * PW_LOADING_WIDTH, rows = (size_t)PW_VKBD_PANEL_H * PW_LOADING_WIDTH * 4;
@@ -215,8 +216,61 @@ int main(int argc, char **argv)
         }
         free(whole);
     }
+    /* The control overlay (src/pw_overlay.h): every language, its focus on each tile, Exit armed and the toggles both ways:
+     * no character without a face, no word cut, nothing drawn left of the panel */
+    {
+        size_t ocount = 0;
+        const PwSetupLanguage *langs = pw_setup_languages(&ocount);
+        for (size_t l = 0; l < ocount; ++l) {
+            const PwSteamFace *own = !langs[l].font ? NULL : !strcmp(langs[l].font, "noto-sans-sc") ? sc : jp;
+            if (langs[l].font && !own) continue;
+            const PwSteamFaces faces = {own ? own : regular, own ? own : semibold, regular};
+            for (int focus = 0; focus < PW_OVERLAY_TILES; ++focus) {
+                PwOverlay overlay = {.focus = focus, .stats = focus & 1, .mouse_off = focus >> 1,
+                                     .armed_ms = focus == PW_OVERLAY_EXIT ? 1000 : 0};
+                overlay.figures.cpu = 12, overlay.figures.gpu = -1, overlay.figures.small_total = 8192;
+                overlay.figures.small_free = 900, overlay.figures.big_total = 16384, overlay.figures.big_free = 15000;
+                pw_hud_frames(&overlay.figures, 58, 21);
+                PwSteamScreenState state = {PW_STEAM_SCREEN_OVERLAY, &langs[l], 0, 0, NULL, NULL, NULL, NULL, &overlay};
+                PwSteamScreenReport report;
+                pw_steam_screen_draw(still, backdrop, &state, &faces, &report);
+                if (report.missing || report.cut || report.bottom >= PW_LOADING_HEIGHT) {
+                    fprintf(stderr, "%s overlay focus %d: %d without a face, %d cut, down to row %d\n", langs[l].tag, focus,
+                            report.missing, report.cut, report.bottom);
+                    assert(0);
+                }
+                /* nothing left of the panel */
+                for (int y = 0; y < PW_LOADING_HEIGHT; ++y)
+                    assert(!memcmp(still + (size_t)y * PW_LOADING_WIDTH, backdrop + (size_t)y * PW_LOADING_WIDTH,
+                                   PW_OVERLAY_PANEL_X * 4));
+                if (pictures && focus == PW_OVERLAY_EXIT) write_ppm(pictures, langs[l].tag, "overlay", still);
+            }
+        }
+    }
+    /* The statistics HUD: inside its rectangle only, see-through glass (premultiplied: no channel above alpha) */
+    {
+        const PwSteamFaces faces = {regular, semibold, regular};
+        PwHud hud = {0};
+        hud.cpu = 37, hud.gpu = -1, hud.memory_used = 5ull << 30, hud.memory_total = 12ull << 30;
+        hud.small_free = 700, hud.small_total = 8192, hud.big_free = 15000, hud.big_total = 16384;
+        for (int i = 0; i < 70; ++i) pw_hud_frames(&hud, i % 9 ? 60 : 24, 25);
+        memcpy(still, backdrop, (size_t)PW_LOADING_WIDTH * PW_LOADING_HEIGHT * 4);
+        pw_steam_screen_hud(still, &faces, &hud);
+        for (int y = 0; y < PW_LOADING_HEIGHT; ++y)
+            for (int x = 0; x < PW_LOADING_WIDTH; ++x) {
+                const size_t at = (size_t)y * PW_LOADING_WIDTH + x;
+                const int inside = x >= PW_HUD_X && x < PW_HUD_X + PW_HUD_W && y >= PW_HUD_Y && y < PW_HUD_Y + PW_HUD_H;
+                if (!inside) { assert(still[at] == backdrop[at]); continue; }
+                const uint32_t p = still[at], a = p >> 24;
+                assert(((p >> 16) & 0xff) <= a && ((p >> 8) & 0xff) <= a && (p & 0xff) <= a);
+            }
+        /* the middle of the card is glass, its corner clear */
+        assert((still[(size_t)(PW_HUD_Y + 120) * PW_LOADING_WIDTH + PW_HUD_X + 300] >> 24) > 100);
+        assert(still[(size_t)PW_HUD_Y * PW_LOADING_WIDTH + PW_HUD_X] == 0);
+        if (pictures) write_ppm(pictures, "en", "hud", still);
+    }
     /* Nothing over the client: the backdrop alone (the cover is taken off then, but a draw must not fail) */
-    const PwSteamScreenState none = {PW_STEAM_SCREEN_NONE, NULL, 0, 0, NULL, NULL, NULL, NULL};
+    const PwSteamScreenState none = {PW_STEAM_SCREEN_NONE, NULL, 0, 0, NULL, NULL, NULL, NULL, NULL};
     pw_steam_screen_draw(still, backdrop, &none, &latin, NULL);
     assert(!memcmp(still, backdrop, (size_t)PW_LOADING_WIDTH * PW_LOADING_HEIGHT * 4));
 

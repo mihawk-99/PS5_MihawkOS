@@ -1,0 +1,13 @@
+# The statistics HUD over a drawing probe (tools/run-battery.py hud-d3d11-title, hud-d3d11-gpu-title, vk-present-hud64-title):
+# the first 5 s of frames without it (perf's baseline), then L3+R3, DOWN to Statistics, CROSS turns it on, CIRCLE closes
+# the overlay and the HUD stays over the frames. The title logs what it shows 2 s after and every 10 s ("hud: fps= ..."),
+# the broker what it costs ("gpu-hud compose"); run-console --expect-hud compares them with perf's frame lines. A capture holds
+# a present ~95 ms (overlay-base-2026-11-02-05), so the pictures come between the HUD's logged samples (~8.5 and ~18.5 s).
+anchor frame
+5 l3 0.3
+5 r3 0.3
+6 down
+6.5 cross
+7.5 circle
+12 capture
+15 capture

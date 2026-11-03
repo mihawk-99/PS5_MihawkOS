@@ -1,0 +1,66 @@
+{
+  "raise": null,
+  "brake": null,
+  "kernel_series_rss_swap_pt": [],
+  "real_signin": false,
+  "signin_saved_at_s": null,
+  "logon_line_at_s": null,
+  "census_peak_mib": 714,
+  "census_series_mib": [
+    714,
+    714
+  ],
+  "leg": "install",
+  "launch_readiness": {
+    "ready": true,
+    "seconds": 0.675,
+    "settle_seconds": 0.0,
+    "census_seconds": 0.639,
+    "previous_cleanup_verified": false
+  },
+  "identity_seen": true,
+  "steps": {
+    "pressed": true,
+    "downloaded": true,
+    "install_queued": true,
+    "restart_to_installer": true,
+    "back_to_launcher": true
+  },
+  "installed_after": true,
+  "downloads_folder": [
+    "SteamSetup.exe"
+  ],
+  "pictures": [],
+  "press_flag_left": false,
+  "shell_idle_after_run": true,
+  "seconds": 23.7,
+  "lines": [
+    "[MihawkOS] launcher: 2 game(s); searched: /data/ps5proton/games (1 entry); /data/homebrew/PPSA99170/games (not there)",
+    "[MihawkOS] launcher: library shows 2 of 2 (every entry but those with \"launcher\": false; /data/ps5proton/library-show-all shows them all)",
+    "[MihawkOS] launcher: the client-press flag pressed CROSS on the option",
+    "[MihawkOS] steam guide: page 1",
+    "[MihawkOS] steam guide: starts at page 1 (failure 0), language en-US",
+    "[MihawkOS] steam: installer downloaded",
+    "[MihawkOS] steam guide: downloaded; the install is next",
+    "[MihawkOS] launcher: installing from the downloaded installer",
+    "[MihawkOS] restart: to=steam-setup cycle=0 reason=install eboot=/app0/eboot.bin",
+    "[MihawkOS] launch: mode=game profile=steam-setup path= cycle=0 argc=4 env=0",
+    "[MihawkOS] Wine: shader cache namespace /data/ps5proton/caches/steam-setup/2828b77d9f6139a1165dcb83a62d8a719c94ec2f67db7397f63c28b97c521f9c/gl",
+    "[MihawkOS] steam guide: its screens are drawn over the client's windows, in en-US",
+    "[MihawkOS] steam guide: screen 1, 0 s in",
+    "[MihawkOS] Wine: the session's root SteamSetup.exe: a helper (32-bit)",
+    "[MihawkOS] wine-ps5: Z:\\data\\ps5proton\\downloads\\SteamSetup.exe is fixed at 0x400000: its helper gives the carrier's image back",
+    "[MihawkOS] steam guide: screen 1 at 0 s (0 package bytes, 0 processes, browser 0)",
+    "[MihawkOS] Wine: process winemenubuilder.exe command line 1/1: C:\\windows\\system32\\winemenubuilder.exe -w \"C:\\users\\Public\\Desktop\\Steam.lnk\"",
+    "[MihawkOS] Wine: process winemenubuilder.exe command line 1/1: C:\\windows\\system32\\winemenubuilder.exe -w \"C:\\ProgramData\\Microsoft\\Windows\\Start Menu\\Programs\\Steam\\Steam.lnk\"",
+    "[MihawkOS] Wine: process steamservice.exe command line 1/1: \"C:\\Program Files (x86)\\Steam\\bin\\steamservice.exe\" /Install",
+    "[MihawkOS] steam guide: its screens closed after 5.3 s (the session ended): 49 frames shown, 0 refused, 5 drawn, taken off",
+    "[MihawkOS] restart: to=launcher cycle=1 reason=wine-ended eboot=/app0/eboot.bin",
+    "[MihawkOS] launcher: 3 game(s); searched: /data/ps5proton/games (2 entries); /data/homebrew/PPSA99170/games (not there)",
+    "[MihawkOS] launcher: library shows 3 of 3 (every entry but those with \"launcher\": false; /data/ps5proton/library-show-all shows them all)",
+    "[MihawkOS] ends: status 0"
+  ],
+  "storage_errors": 0,
+  "capture": "klog/a8-steam-install-base-2026-11-02-01",
+  "passed": true
+}

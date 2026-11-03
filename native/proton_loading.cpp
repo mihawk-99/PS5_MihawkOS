@@ -7,6 +7,7 @@
 #include "../src/pw_setup.h"
 #include "../src/pw_steam_screen.h"
 #include "../src/pw_vkbd.h"
+#include "../src/pw_overlay.h"
 // The declarations only: Dear ImGui's imgui.cpp defines STB_IMAGE_IMPLEMENTATION in this title already, so the session
 // screen owns no second decoder (the poster art is decoded here, on the drawing thread).
 #include "../external/tinygltf/stb_image.h"
@@ -1538,6 +1539,16 @@ struct Guide {
     bool (*overlay)(const void *, unsigned, unsigned, unsigned, unsigned) = nullptr;
     void (*overlay_refresh)() = nullptr;   // the panel's animation (its bubbles) shown again while the game waits
     bool overlaid = false;
+    PwOverlay control{};                   // under state_lock: the control overlay, its changes counted with the keyboard's
+    // The statistics HUD: its figures under state_lock (hud_on 0: off), drawn into hud_canvas's top rows and handed over
+    // packed as the broker's second rectangle
+    PwHud hud{};
+    bool hud_on = false;
+    unsigned hud_changes = 0;
+    bool (*hud_show)(const void *, unsigned, unsigned, unsigned, unsigned) = nullptr;
+    bool hud_shown = false;
+    std::vector<uint32_t> hud_canvas, hud_pixels;
+    std::vector<uint32_t> panel_pixels;    // the control overlay's panel, packed for the broker (its rows are not the screen's)
     std::vector<uint32_t> backdrop, still, frames[2];
     uint64_t started = 0;
     unsigned shown = 0, refused = 0, drawn = 0;
@@ -1562,6 +1573,37 @@ void guide_release()
     for (auto &bytes : guide.bytes) std::vector<unsigned char>().swap(bytes);
 }
 
+// The HUD drawn again and handed over when its figures changed (twice a second), or taken off; on the guide's thread
+void guide_hud()
+{
+    PwHud hud;
+    bool on;
+    unsigned changes;
+    static unsigned drawn_changes;
+    {
+        std::lock_guard<std::mutex> hold(guide.state_lock);
+        hud = guide.hud, on = guide.hud_on, changes = guide.hud_changes;
+    }
+    if (!guide.hud_show) return;
+    if (!on) {
+        if (guide.hud_shown && guide.hud_show(nullptr, 0, 0, 0, 0)) guide.hud_shown = false;
+        return;
+    }
+    if (guide.hud_shown && changes == drawn_changes) return;
+    if (guide.hud_canvas.empty()) {
+        guide.hud_canvas.assign(size_t(PW_LOADING_WIDTH) * (PW_HUD_Y + PW_HUD_H), 0);
+        guide.hud_pixels.assign(size_t(PW_HUD_W) * PW_HUD_H, 0);
+    }
+    pw_steam_screen_hud(guide.hud_canvas.data(), &guide.set, &hud);
+    for (unsigned y = 0; y < PW_HUD_H; ++y)
+        memcpy(guide.hud_pixels.data() + size_t(y) * PW_HUD_W,
+               guide.hud_canvas.data() + size_t(PW_HUD_Y + y) * PW_LOADING_WIDTH + PW_HUD_X, PW_HUD_W * sizeof(uint32_t));
+    if (guide.hud_show(guide.hud_pixels.data(), PW_HUD_X, PW_HUD_Y, PW_HUD_W, PW_HUD_H)) {
+        if (!guide.hud_shown) say("steam guide: the statistics HUD shows");
+        guide.hud_shown = true, drawn_changes = changes;
+    }
+}
+
 void *guide_run(void *)
 {
     // As the loading screen: above the game's threads, and asleep nearly all the time.
@@ -1577,8 +1619,10 @@ void *guide_run(void *)
         PwSteamScreenState now;
         std::string persona, dialog_title, dialog_text;
         PwVkbd keyboard;
+        PwOverlay control;
         unsigned keyboard_changes;
         uint64_t keyboard_changed_ns;
+        guide_hud();
         {
             std::lock_guard<std::mutex> hold(guide.state_lock);
             now = guide.wanted;
@@ -1586,30 +1630,51 @@ void *guide_run(void *)
             dialog_title = guide.dialog_title;
             dialog_text = guide.dialog_text;
             keyboard = guide.keyboard;
+            control = guide.control;
             keyboard_changes = guide.keyboard_changes;
             keyboard_changed_ns = guide.keyboard_changed_ns;
         }
         now.keyboard = &keyboard;
+        now.overlay = &control;
         now.language = guide.language;
         now.persona = persona.empty() ? nullptr : persona.c_str();
         now.dialog_title = dialog_title.c_str();
         now.dialog_text = dialog_text.c_str();
-        if (now.screen == PW_STEAM_SCREEN_KEYBOARD) {
+        const bool panel = now.screen == PW_STEAM_SCREEN_KEYBOARD || now.screen == PW_STEAM_SCREEN_OVERLAY;
+        if (panel) {
             if (guide.covering && guide.show(nullptr)) guide.covering = false;
             if (!any || now.screen != drawn.screen || keyboard_changes != drawn_keyboard) {
-                if (!any || now.screen != drawn.screen) say("steam guide: the keyboard's panel, %u s in", now.seconds);
+                if (!any || now.screen != drawn.screen)
+                    say("steam guide: the %s's panel, %u s in", now.screen == PW_STEAM_SCREEN_OVERLAY ? "control overlay" : "keyboard",
+                        now.seconds);
                 const uint64_t seen_ns = now_ns();
-                // only what changed, over the panel as it was (pw_steam_screen_keyboard_changed)
-                pw_steam_screen_keyboard_changed(guide.still.data(), guide.backdrop.data(), &now, &guide.set,
-                                                 keyboard_on_canvas ? &keyboard_shown : nullptr);
-                keyboard_shown = keyboard, keyboard_on_canvas = true;
+                // the keyboard: only what changed, over the panel as it was (pw_steam_screen_keyboard_changed); the overlay whole
+                if (now.screen == PW_STEAM_SCREEN_OVERLAY) {
+                    pw_steam_screen_draw(guide.still.data(), guide.backdrop.data(), &now, &guide.set, nullptr);
+                    keyboard_on_canvas = false;
+                } else {
+                    pw_steam_screen_keyboard_changed(guide.still.data(), guide.backdrop.data(), &now, &guide.set,
+                                                     keyboard_on_canvas && drawn.screen == PW_STEAM_SCREEN_KEYBOARD ?
+                                                     &keyboard_shown : nullptr);
+                    keyboard_shown = keyboard, keyboard_on_canvas = true;
+                }
                 const uint64_t drawn_ns = now_ns();
                 ++guide.drawn;
                 drawn = now;
                 drawn_keyboard = keyboard_changes;
                 any = true;
-                if (guide.overlay && guide.overlay(guide.still.data() + size_t(PW_VKBD_PANEL_Y) * PW_LOADING_WIDTH, 0,
-                                                   PW_VKBD_PANEL_Y, PW_LOADING_WIDTH, PW_VKBD_PANEL_H))
+                bool handed = false;
+                if (guide.overlay && now.screen == PW_STEAM_SCREEN_OVERLAY) {   // the right-hand panel, packed
+                    guide.panel_pixels.resize(size_t(PW_OVERLAY_PANEL_W) * PW_LOADING_HEIGHT);
+                    for (unsigned y = 0; y < PW_LOADING_HEIGHT; ++y)
+                        memcpy(guide.panel_pixels.data() + size_t(y) * PW_OVERLAY_PANEL_W,
+                               guide.still.data() + size_t(y) * PW_LOADING_WIDTH + PW_OVERLAY_PANEL_X, PW_OVERLAY_PANEL_W * 4);
+                    handed = guide.overlay(guide.panel_pixels.data(), PW_OVERLAY_PANEL_X, 0, PW_OVERLAY_PANEL_W, PW_LOADING_HEIGHT);
+                } else if (guide.overlay) {
+                    handed = guide.overlay(guide.still.data() + size_t(PW_VKBD_PANEL_Y) * PW_LOADING_WIDTH, 0, PW_VKBD_PANEL_Y,
+                                           PW_LOADING_WIDTH, PW_VKBD_PANEL_H);
+                }
+                if (handed)
                     guide.overlaid = true, ++guide.shown;
                 else
                     ++guide.refused;
@@ -1623,8 +1688,7 @@ void *guide_run(void *)
             // or 33 ms on, the bubbles' next step over a waiting game
             std::unique_lock<std::mutex> hold(guide.state_lock);
             const bool woken = guide.wake.wait_for(hold, std::chrono::milliseconds(33), [&] {
-                return guide.stop.load() || guide.keyboard_changes != keyboard_changes ||
-                       guide.wanted.screen != PW_STEAM_SCREEN_KEYBOARD;
+                return guide.stop.load() || guide.keyboard_changes != keyboard_changes || guide.wanted.screen != now.screen;
             });
             hold.unlock();
             if (!woken && guide.overlaid && guide.overlay_refresh) guide.overlay_refresh();
@@ -1735,6 +1799,30 @@ void proton_guide_keyboard(const PwVkbd *keyboard)
     guide.wake.notify_one();
 }
 
+void proton_guide_overlay(const PwOverlay *overlay)
+{
+    std::lock_guard<std::mutex> hold(guide.state_lock);
+    if (overlay) guide.control = *overlay;
+    guide.wanted.screen = overlay ? PW_STEAM_SCREEN_OVERLAY : PW_STEAM_SCREEN_NONE;
+    ++guide.keyboard_changes;
+    guide.keyboard_changed_ns = now_ns();
+    guide.wake.notify_one();
+}
+
+void proton_guide_hud(const PwHud *hud)
+{
+    std::lock_guard<std::mutex> hold(guide.state_lock);
+    if (hud) guide.hud = *hud;
+    guide.hud_on = hud != nullptr;
+    ++guide.hud_changes;
+}
+
+void proton_guide_set_hud(bool (*hud)(const void *, unsigned, unsigned, unsigned, unsigned))
+{
+    std::lock_guard<std::mutex> hold(guide.state_lock);
+    guide.hud_show = hud;
+}
+
 std::string proton_guide_stop(const char *why)
 {
     std::lock_guard<std::mutex> hold(guide.lock);
@@ -1742,11 +1830,13 @@ std::string proton_guide_stop(const char *why)
     guide.stop = true;
     pthread_join(guide.thread, nullptr);
     if (guide.overlaid && guide.overlay && guide.overlay(nullptr, 0, 0, 0, 0)) guide.overlaid = false;
+    if (guide.hud_shown && guide.hud_show && guide.hud_show(nullptr, 0, 0, 0, 0)) guide.hud_shown = false;
     bool cleared = !guide.covering;
     for (int i = 0; i < 10 && !cleared; ++i) cleared = guide.show(nullptr);
     // A broker that never let the cover go may still read the frames: they are kept.
     if (cleared)
         for (auto *canvas : {&guide.backdrop, &guide.still, &guide.frames[0], &guide.frames[1]}) std::vector<uint32_t>().swap(*canvas);
+    for (auto *canvas : {&guide.hud_canvas, &guide.hud_pixels, &guide.panel_pixels}) std::vector<uint32_t>().swap(*canvas);   // copied
     guide_release();
     guide.running = false;
     char line[256];

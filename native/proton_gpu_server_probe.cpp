@@ -13,6 +13,7 @@
 #include <unistd.h>
 #endif
 #include "../src/pw_gpu_identity.h"
+#include "../src/pw_gpu_host_limit.h"
 #include "../src/pw_memory_guard.h"
 #include <cstdio>
 #include <cstdlib>
@@ -28,24 +29,22 @@ bool proton_native_absent(int token)
     return true;
 }
 }
-/* The host-visible GPU memory each program may hold: the title's choice, PROTON_GPU_HOST_MIB (a game.json can set it),
- * 1 GiB by default. The broker's own default, 128 MiB, stopped a 32-bit game whose 64 MiB textures upload through
- * Zink's host-visible staging (2026-10-07; record removed from the tree, in git history); the memory comes from the application pool. */
-static unsigned long long proton_gpu_host_limit()
-{
-    const char *text=getenv("PROTON_GPU_HOST_MIB");
-    const unsigned long long mib=text && *text ? strtoull(text,nullptr,10) : 1024;
-    return mib<<20;
-}
+/* The host-visible GPU memory each program may hold (src/pw_gpu_host_limit.h): 1 GiB in a helper, 2 GiB for the game in
+ * the title when the broker has the room, PROTON_GPU_HOST_MIB for both. */
 void proton_gpu_broker_set_local_refused(void (*hook)(int pid,unsigned long long bytes))
 {
     ps5_gpu_broker_set_local_refused(hook);
 }
 bool proton_gpu_broker_start(bool capture,bool local)
 {
-    const unsigned long long host=proton_gpu_host_limit();
+    uint64_t host=0,title=0;
+    pw_gpu_host_limits(getenv("PROTON_GPU_HOST_MIB"),&host,&title);
     if(!ps5_gpu_broker_set_host_limit(host))
-        fprintf(stderr,"[PS5 Proton] GPU broker: host-visible limit of %llu MiB refused; the broker's default stays\n",host>>20);
+        fprintf(stderr,"[PS5 Proton] GPU broker: host-visible limit of %llu MiB refused; the broker's default stays\n",
+                (unsigned long long)(host>>20));
+    if(title>host && !ps5_gpu_broker_set_owner_host_limit(title))
+        fprintf(stderr,"[PS5 Proton] GPU broker: the title game's host-visible limit of %llu MiB refused; it keeps the "
+                "helpers'\n",(unsigned long long)(title>>20));
     // The console's model, which every GPU client is told at INIT and gives games as its GPU's identity
     // (src/pw_gpu_identity.h): the generation from the application's direct pool (src/pw_memory_guard.h), none when its
     // size is not known.
@@ -80,6 +79,11 @@ void proton_gpu_broker_overlay_refresh()
 {
     ps5_gpu_broker_overlay_refresh();
 }
+bool proton_gpu_broker_set_hud(const void *pixels, unsigned x, unsigned y, unsigned w, unsigned h)
+{
+    return ps5_gpu_broker_set_hud(pixels, x, y, w, h);
+}
+double proton_gpu_broker_gpu_seconds() { return ps5_gpu_broker_gpu_seconds(); }
 void proton_gpu_broker_health(ProtonGpuHealth *health)
 {
     Ps5GpuBrokerHealth now{};

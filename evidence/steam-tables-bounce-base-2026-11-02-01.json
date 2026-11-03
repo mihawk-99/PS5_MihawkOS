@@ -1,0 +1,339 @@
+{
+ "telemetry_hold": null,
+ "launch_readiness": {
+  "ready": true,
+  "seconds": 0.199,
+  "settle_seconds": 0.0,
+  "census_seconds": 0.187,
+  "previous_cleanup_verified": false
+ },
+ "native_close_failures": [],
+ "run": "steam-tables-bounce-base-2026-11-02-01",
+ "what": "profile steam",
+ "env": [
+  "PROTON_STEAM_TABLES_TEST=8000",
+  "PROTON_STOP_TERMINATE=0"
+ ],
+ "result": "finished",
+ "seconds": 9.0,
+ "probe_verdict": null,
+ "stages": {
+  "launched": 1.06,
+  "title_started": 1.58,
+  "elevated": 1.59,
+  "wine_loaded": 1.89,
+  "wine_ended": 6.58,
+  "launcher_started": 8.16,
+  "launcher_ended": 8.44,
+  "closed": 8.96
+ },
+ "clean_owner_restart": false,
+ "launcher_end_status": 0,
+ "initial_status": 1,
+ "closed_on_request": false,
+ "child_logs": [
+  "klog/steam-tables-bounce-base-2026-11-02-01-wine-child-2098.log",
+  "klog/steam-tables-bounce-base-2026-11-02-01-wine-child-2099.log",
+  "klog/steam-tables-bounce-base-2026-11-02-01-wine-child-2100.log"
+ ],
+ "child_logs_missing": [],
+ "session_logs_status": 0,
+ "storage_errors": 0,
+ "stop_terminate": "0",
+ "injected_fault": null,
+ "exec_protection": {
+  "refused": 0,
+  "conversions": 0,
+  "converted_kib": 0,
+  "convert_failed": 0,
+  "exec_refused": 0,
+  "grant_retries": 0,
+  "modules": 0,
+  "sdk_refused": 0
+ },
+ "code_share": null,
+ "helpers": [
+  {
+   "program": null,
+   "libcef": false,
+   "resident_peak_mib": null,
+   "resident_last_mib": null,
+   "images_held_mib": null,
+   "vm_last": null,
+   "exec": null
+  },
+  {
+   "program": null,
+   "libcef": false,
+   "resident_peak_mib": null,
+   "resident_last_mib": null,
+   "images_held_mib": null,
+   "vm_last": null,
+   "exec": null
+  },
+  {
+   "program": null,
+   "libcef": false,
+   "resident_peak_mib": null,
+   "resident_last_mib": null,
+   "images_held_mib": null,
+   "vm_last": null,
+   "exec": {
+    "refused": 0,
+    "conversions": 0,
+    "converted_kib": 0,
+    "convert_failed": 0,
+    "exec_refused": 0,
+    "grant_retries": 0,
+    "modules": 0,
+    "sdk_refused": 0
+   }
+  }
+ ],
+ "start_stages": {
+  "starts": 1,
+  "warm_starts": 0,
+  "median": {
+   "points": {
+    "answered": 57,
+    "bootstrap": 92,
+    "connected": 72,
+    "control": 73,
+    "entry": 86,
+    "held": 73,
+    "lock": 73,
+    "main": 70,
+    "ntdll-loaded": 118,
+    "ntdll-loading": 107,
+    "payload-entry": 103,
+    "read": 1,
+    "ready": 125,
+    "sent": 73,
+    "wine-main": 128
+   },
+   "steps": {
+    "answered": 56,
+    "bootstrap": 6,
+    "connected": 2,
+    "control": 0,
+    "entry": 13,
+    "held": 0,
+    "lock": 1,
+    "main": 13,
+    "ntdll-loaded": 11,
+    "ntdll-loading": 4,
+    "payload-entry": 11,
+    "read": 1,
+    "ready": 7,
+    "sent": 0,
+    "wine-main": 3
+   },
+   "life": {}
+  },
+  "median_warm": null,
+  "chain": [],
+  "median_chain": {},
+  "helpers": {
+   "2099": {
+    "warm": false,
+    "attempts": 5,
+    "points": {
+     "read": 1,
+     "answered": 57,
+     "main": 70,
+     "connected": 72,
+     "lock": 73,
+     "held": 73,
+     "sent": 73,
+     "control": 73,
+     "entry": 86,
+     "bootstrap": 92,
+     "payload-entry": 103,
+     "ntdll-loading": 107,
+     "ntdll-loaded": 118,
+     "ready": 125,
+     "wine-main": 128
+    },
+    "steps": {
+     "read": 1,
+     "answered": 56,
+     "main": 13,
+     "connected": 2,
+     "lock": 1,
+     "held": 0,
+     "sent": 0,
+     "control": 0,
+     "entry": 13,
+     "bootstrap": 6,
+     "payload-entry": 11,
+     "ntdll-loading": 4,
+     "ntdll-loaded": 11,
+     "ready": 7,
+     "wine-main": 3
+    },
+    "life": null
+   }
+  }
+ },
+ "foreign_mappings": null,
+ "helper_sched": {
+  "helpers": [
+   {
+    "kind": "memory",
+    "mode": "rr",
+    "main_tid": "102121",
+    "entry": "1/700",
+    "entry_kernel": "10/700",
+    "entry_cpus": "0xea00",
+    "plain": "1/700",
+    "plain_kernel": "10/700",
+    "plain_cpus": "0xea00",
+    "service": "700",
+    "program": "767",
+    "program_cpus": "0",
+    "census": "0",
+    "error": "0",
+    "service_status": "0",
+    "now": "3/700",
+    "now_kernel": "2/700"
+   },
+   {
+    "kind": "program",
+    "mode": "rr",
+    "main_tid": "101640",
+    "entry": "1/700",
+    "entry_kernel": "10/700",
+    "entry_cpus": "0xffff",
+    "plain": "1/700",
+    "plain_kernel": "10/700",
+    "plain_cpus": "0xffff",
+    "service": "700",
+    "program": "767",
+    "program_cpus": "0",
+    "census": "0",
+    "error": "0",
+    "service_status": "0",
+    "now": "3/700",
+    "now_kernel": "2/700"
+   }
+  ],
+  "workers": [
+   {
+    "worker": "3/767",
+    "worker_kernel": "2/767",
+    "worker_cpus": "0xffff",
+    "status": "0",
+    "inherit": "3/767",
+    "inherit_kernel": "2/767",
+    "inherit_cpus": "0xffff"
+   }
+  ],
+  "program_threads": {
+   "set": 0,
+   "failed": 0
+  },
+  "census": null,
+  "census_processes": 0,
+  "row": null,
+  "scheduled": {
+   "ok": true,
+   "reasons": []
+  }
+ },
+ "helpers_ended": {
+  "why": "too few page tables for Steam",
+  "count": 1,
+  "signals": {
+   "2099": {
+    "outcome": "sent",
+    "errno": 0
+   }
+  },
+  "gone_ms": {
+   "2099": 2267
+  },
+  "still_there": [],
+  "after_kill": {
+   "census_ms": 88,
+   "frames": 1,
+   "ms": 2268
+  },
+  "stalled": null,
+  "wedge_s": null,
+  "recorder_rows": "process rows from kern.proc (the title's own: state=3 pri=10/0 cpu=15 threads=12)"
+ },
+ "helper_doom": null,
+ "broker_phases": null,
+ "memory_helper_slowest": {
+  "census": 2,
+  "alloc": 0,
+  "shared": 0,
+  "touch": 3,
+  "dmem": 0,
+  "grant": 0,
+  "free": 0,
+  "stall": 0
+ },
+ "memory_helper": {
+  "dead": [],
+  "stall_tests": 0,
+  "sections_mib": [],
+  "given_back": 0,
+  "lost": 0,
+  "gave_back_lines": 0
+ },
+ "assertion": false,
+ "chunk_maps": null,
+ "mapped_mib": null,
+ "ask_failures_max": null,
+ "misplaced_max": null,
+ "rep_step_us": null,
+ "exec_rewrites_us": null,
+ "exit_stall": false,
+ "stop_requested": null,
+ "returned_to_launcher": true,
+ "touchpad_touched_at_start": 0,
+ "passed": false,
+ "bench": {},
+ "steady": {},
+ "intervals": {
+  "frames": [],
+  "server": [],
+  "top": []
+ },
+ "shown": {
+  "frames": 0,
+  "per_10s": [],
+  "longest_gap_ms": 0
+ },
+ "broker": {
+  "local_offer": 7436451840,
+  "host_limit": 1073741824,
+  "windows": {
+   "presents": 2,
+   "effect_bytes": 0,
+   "mica_builds": 0,
+   "thumbnail_builds": 0,
+   "compositions": 2,
+   "compose_avg_us": 225,
+   "compose_max_us": 226
+  },
+  "refused": [],
+  "refused_count": 0,
+  "clients": [
+   {
+    "pid": -1,
+    "frames": 0,
+    "submissions": 0
+   }
+  ],
+  "wedged": false,
+  "failure_reasons": [],
+  "host_peak": 0,
+  "local_peak": 0
+ },
+ "pacing": null,
+ "captures": [],
+ "cleanup_verified": false,
+ "hooks_removed": true
+}

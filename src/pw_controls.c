@@ -25,7 +25,7 @@ const char *pw_controls_button_id(unsigned index)
 const char *pw_controls_button_label(unsigned index)
 { return index < PW_CONTROLS_BUTTONS ? buttons[index].label : NULL; }
 void pw_controls_defaults(pw_controls *controls)
-{ *controls = (pw_controls){{1, 0, 0}, PW_OSK_OFF}; }
+{ *controls = (pw_controls){{1, 0, 0}, PW_OSK_L3_R3}; }
 
 int pw_controls_assign(pw_controls *controls, unsigned mouse, unsigned button)
 {
@@ -45,7 +45,7 @@ int pw_controls_set_keyboard(pw_controls *controls, unsigned trigger)
 
 int pw_controls_load(pw_controls *controls, const char *path)
 {
-    pw_controls parsed = {{0}, PW_OSK_OFF};
+    pw_controls parsed = {{0}, PW_OSK_L3_R3};
     char action[32], id[32];
     pw_controls_defaults(controls);
     FILE *file = fopen(path, "r");
@@ -61,7 +61,8 @@ int pw_controls_load(pw_controls *controls, const char *path)
             if (index && parsed.button[j] == index) error = EINVAL;
         parsed.button[i] = index;
     }
-    /* an optional fourth line, "keyboard <trigger>": files from before the on-screen keyboard end after three */
+    /* an optional fourth line, "keyboard <trigger>": files from before the on-screen keyboard end after three, and files
+     * from before the control overlay (Alpha 8) have none for Off: both get its L3 + R3 */
     if (!error) {
         const int words = fscanf(file, "%31s %31s", action, id);
         const int trigger = words == 2 && !strcmp(action, "keyboard") ? pw_osk_trigger_parse(id) : -1;
@@ -90,8 +91,8 @@ int pw_controls_save(const pw_controls *controls, const char *path)
     int error = 0;
     for (unsigned i = 0; i < 3; ++i)
         if (fprintf(file, "%s %s\n", actions[i], buttons[controls->button[i]].id) < 0) error = EIO;
-    /* only a chosen gesture is written: a file with the keyboard Off stays what an earlier version wrote and reads */
-    if (controls->keyboard && fprintf(file, "keyboard %s\n", pw_osk_trigger_id(controls->keyboard)) < 0) error = EIO;
+    /* always written since the control overlay (Alpha 8), Off as "keyboard off", which every earlier version reads too */
+    if (fprintf(file, "keyboard %s\n", pw_osk_trigger_id(controls->keyboard)) < 0) error = EIO;
     if (fflush(file) || fsync(fileno(file))) error = errno;
     if (fclose(file)) error = errno;
     if (!error && rename(temporary, path)) error = errno;

@@ -10,9 +10,14 @@
  * flight). So a tick records whether the system says the app is away (pw_suspend_tick's away), and a jump of the clock
  * between two ticks of PW_SUSPEND_GAP_MS or more is a suspend nobody announced. Rules then count only from the resume
  * (pw_suspend_since) and act on nothing while the app is away or in the PW_SUSPEND_GRACE_MS after (pw_suspend_hold).
+ * An unannounced gap shorter than PW_SUSPEND_LONG_GAP_MS is the ticking thread's own stall, not a suspend: it moves
+ * nothing, so a game that stalls the title for 3 s every 30 s is still ended by the 180 s title watchdog. Every
+ * unannounced gap in klog/ up to 2026-11-02 was one (1.0 to 8.5 s, none with the flight recorder's thread frozen too):
+ * the 3018 ms ones are the 30 s registry save waiting its 3000 ms on a wineserver that does not answer (a tester's Risk
+ * of Rain 2 frozen at loading, rc4, 2026-11-01: ten in one session, and the watchdog never fired).
  * Pure: the caller ticks it from one thread; others read its fields with relaxed loads, a stale value only delaying. */
-enum { PW_SUSPEND_GAP_MS = 1000, PW_SUSPEND_GRACE_MS = 10000 };
-enum { PW_SUSPEND_NONE, PW_SUSPEND_LEFT, PW_SUSPEND_BACK, PW_SUSPEND_GAP };
+enum { PW_SUSPEND_GAP_MS = 1000, PW_SUSPEND_LONG_GAP_MS = 10000, PW_SUSPEND_GRACE_MS = 10000 };
+enum { PW_SUSPEND_NONE, PW_SUSPEND_LEFT, PW_SUSPEND_BACK, PW_SUSPEND_GAP, PW_SUSPEND_STALL };
 typedef struct PwSuspendClock {
     uint64_t last_ms;       /* the previous tick, 0 before the first */
     uint64_t resumed_ms;    /* the last return (announced, or found by a gap), 0 never */
@@ -20,17 +25,22 @@ typedef struct PwSuspendClock {
     uint64_t away_total_ms; /* every absence so far, announced or not */
     uint32_t away;          /* 1 while the system says the app is not in the foreground */
     uint32_t suspends, unannounced;
+    uint32_t stalls;        /* short unannounced gaps: the ticking thread was held, the app was not frozen */
 } PwSuspendClock;
 /* One tick at now_ms. away: 1 when the system says the app is not in the foreground, 0 when it is, -1 unknown (the
  * status could not be read: the last known state stands). A gap is reported even while away is announced, and ends it:
  * a tick that ran after one is a tick of an app the system let run again. PW_SUSPEND_LEFT once on going away,
- * PW_SUSPEND_BACK on an announced return, PW_SUSPEND_GAP for a gap, else PW_SUSPEND_NONE. */
+ * PW_SUSPEND_BACK on an announced return, PW_SUSPEND_GAP for a suspend's gap, PW_SUSPEND_STALL for a short unannounced
+ * one (counted in stalls; a status read on the same tick still says LEFT or BACK), else PW_SUSPEND_NONE. */
 static inline int pw_suspend_tick(PwSuspendClock *c, uint64_t now_ms, int away)
 {
     const uint64_t last = c->last_ms;
     c->last_ms = now_ms;
-    if (last && now_ms > last && now_ms - last >= PW_SUSPEND_GAP_MS) {
-        c->away_total_ms += now_ms - last;
+    const uint64_t gap = last && now_ms > last ? now_ms - last : 0;
+    const int stall = gap >= PW_SUSPEND_GAP_MS && !c->away && gap < PW_SUSPEND_LONG_GAP_MS;
+    if (stall) ++c->stalls;
+    else if (gap >= PW_SUSPEND_GAP_MS) {
+        c->away_total_ms += gap;
         c->resumed_ms = now_ms;
         ++c->suspends;
         if (!c->away) ++c->unannounced;
@@ -45,7 +55,7 @@ static inline int pw_suspend_tick(PwSuspendClock *c, uint64_t now_ms, int away)
         ++c->suspends;
         return PW_SUSPEND_BACK;
     }
-    return PW_SUSPEND_NONE;
+    return stall ? PW_SUSPEND_STALL : PW_SUSPEND_NONE;
 }
 /* The start a rule measuring since since_ms may count from: never before the last return. */
 static inline uint64_t pw_suspend_since(const PwSuspendClock *c, uint64_t since_ms)

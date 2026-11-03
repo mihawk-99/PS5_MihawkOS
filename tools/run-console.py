@@ -115,11 +115,11 @@ MARKERS = {'wine-probe.exe': 'PS5_PROTON_PE64_PROBE', 'gate-sequence.exe': 'PS5_
            'cross32-probe.exe': 'PS5_PROTON_CROSS_PROBE', 'cross64-probe.exe': 'PS5_PROTON_CROSS_PROBE',
            'wow64-probe.exe': 'PS5_PROTON_WOW64_PROBE', 'd3d11-probe.exe': 'PS5_PROTON_D3D11_PROBE', 'gpu-host-memory-probe.exe': 'PS5_PROTON_GPU_HOST_MEMORY', 'section-memory-probe.exe': 'PS5_PROTON_SECTION_MEMORY',
            'xinput-probe.exe': 'PS5_PROTON_XINPUT_PROBE', 'hid-probe.exe': 'PS5_PROTON_HID_PROBE', 'hid32-probe.exe': 'PS5_PROTON_HID_PROBE',
-           'vk32-probe.exe': 'PS5_PROTON_VK_PROBE', 'vk64-probe.exe': 'PS5_PROTON_VK_PROBE',
+           'vk32-probe.exe': 'PS5_PROTON_VK_PROBE', 'vk64-probe.exe': 'PS5_PROTON_VK_PROBE', 'vk-present-probe.exe': 'PS5_PROTON_VK_PRESENT',
            'gl-vertex32-probe.exe': 'PS5_PROTON_GL_VERTEX_PROBE', 'd3d11-32-probe.exe': 'PS5_PROTON_D3D11_PROBE',
-           'd3d12-levels-probe.exe': 'PS5_PROTON_D3D12_LEVELS', 'd3d12-sparse-probe.exe': 'PS5_PROTON_D3D12_SPARSE', 'many-files-probe.exe': 'PS5_PROTON_MANY_FILES', 'log-flood-probe.exe': 'PS5_PROTON_LOG_FLOOD', 'd3d12-shared-probe.exe': 'PS5_PROTON_D3D12_SHARED', 'd3d12-existing-heap-probe.exe': 'PS5_PROTON_D3D12_EXISTING_HEAP',
-           'd3d9ex-d3d11-share-probe.exe': 'PS5_PROTON_D3D9_D3D11_SHARE', 'osk-typed-probe.exe': 'PS5_PROTON_OSK_TYPED',
-           'sync-probe.exe': 'PS5_PROTON_SYNC_PROBE', 'intitle-stall-probe.exe': 'PS5_PROTON_INTITLE_STALL', 'exit-probe.exe': 'PS5_PROTON_EXIT_PROBE',
+           'd3d12-levels-probe.exe': 'PS5_PROTON_D3D12_LEVELS', 'd3d12-sparse-probe.exe': 'PS5_PROTON_D3D12_SPARSE', 'd3d12-clock-probe.exe': 'PS5_PROTON_D3D12_CLOCK', 'd3d12-load-probe.exe': 'PS5_PROTON_D3D12_LOAD', 'cpu-count-probe.exe': 'PS5_PROTON_CPU_COUNT', 'tls-slots-probe.exe': 'PS5_PROTON_TLS_SLOTS', 'tls-late-probe.exe': 'PS5_PROTON_TLS_LATE', 'many-files-probe.exe': 'PS5_PROTON_MANY_FILES', 'log-flood-probe.exe': 'PS5_PROTON_LOG_FLOOD', 'd3d12-shared-probe.exe': 'PS5_PROTON_D3D12_SHARED', 'd3d12-existing-heap-probe.exe': 'PS5_PROTON_D3D12_EXISTING_HEAP',
+           'd3d9ex-d3d11-share-probe.exe': 'PS5_PROTON_D3D9_D3D11_SHARE', 'osk-typed-probe.exe': 'PS5_PROTON_OSK_TYPED', 'pad-identity-probe.exe': 'PS5_PROTON_PAD_IDENTITY', 'pad-api32-probe.exe': 'PS5_PROTON_PAD_API', 'pad-api64-probe.exe': 'PS5_PROTON_PAD_API',
+           'sync-probe.exe': 'PS5_PROTON_SYNC_PROBE', 'intitle-stall-probe.exe': 'PS5_PROTON_INTITLE_STALL', 'named-section64-probe.exe': 'PS5_PROTON_NAMED_SECTION', 'named-section32-probe.exe': 'PS5_PROTON_NAMED_SECTION', 'high-reserve-probe.exe': 'PS5_PROTON_HIGH_RESERVE', 'suspend-server-probe.exe': 'PS5_PROTON_SUSPEND_SERVER', 'vcredist-check-probe.exe': 'PS5_PROTON_VCREDIST', 'exit-probe.exe': 'PS5_PROTON_EXIT_PROBE',
            'priority-probe.exe': 'PS5_PROTON_PRIORITY_PROBE', 'hang-probe.exe': 'PS5_PROTON_HANG_PROBE', 'window-probe.exe': 'PS5_PROTON_WINDOW_PROBE', 'fs-probe.exe': 'PS5_PROTON_FS_PROBE', 'stack-probe.exe': 'PS5_PROTON_STACK_PROBE', 'gl-exit-probe.exe': 'PS5_PROTON_GL_EXIT_PROBE', 'mem-probe.exe': 'PS5_PROTON_MEM_PROBE', 'gl-vertex-probe.exe': 'PS5_PROTON_GL_VERTEX_PROBE', 'gl-present-probe.exe': 'PS5_PROTON_GL_PRESENT_PROBE', 'gl-sprite-probe.exe': 'PS5_PROTON_GL_SPRITE_PROBE', 'vm-protect-probe.exe': 'PS5_PROTON_VM_PROTECT_PROBE', 'vm-protect32-probe.exe': 'PS5_PROTON_VM_PROTECT_PROBE', 'remote-memory-probe.exe': 'PS5_PROTON_REMOTE_MEMORY_PROBE', 'stdout-probe.exe': 'PS5_PROTON_STDOUT_PROBE', 'crash-probe.exe': 'PS5_PROTON_CRASH_PROBE', 'nt-file-probe.exe': 'PS5_PROTON_NT_FILE_PROBE', 'registry-flush64-probe.exe': 'PS5_PROTON_REGISTRY_FLUSH', 'file-write32-probe.exe': 'PS5_PROTON_FILE_WRITE', 'file-write64-probe.exe': 'PS5_PROTON_FILE_WRITE', 'relative-dir32-probe.exe': 'PS5_PROTON_NT_RELDIR_PROBE', 'relative-dir64-probe.exe': 'PS5_PROTON_NT_RELDIR_PROBE', 'file-cost32-probe.exe': 'PS5_PROTON_FILE_COST', 'file-cost64-probe.exe': 'PS5_PROTON_FILE_COST', 'handles-paths32-probe.exe': 'PS5_PROTON_HANDLES_PATHS', 'handles-paths64-probe.exe': 'PS5_PROTON_HANDLES_PATHS', 'pipe-cancel32-probe.exe': 'PS5_PROTON_PIPE_CANCEL', 'pipe-cancel64-probe.exe': 'PS5_PROTON_PIPE_CANCEL', 'lock32-probe.exe': 'PS5_PROTON_LOCK', 'lock64-probe.exe': 'PS5_PROTON_LOCK', 'continue64-probe.exe': 'PS5_PROTON_CONTINUE', 'stack-limit64-probe.exe': 'PS5_PROTON_STACK_LIMIT', 'syscall-cost32-probe.exe': 'PS5_PROTON_SYSCALL_COST', 'syscall-cost64-probe.exe': 'PS5_PROTON_SYSCALL_COST', 'net-throughput32-probe.exe': 'PS5_PROTON_NET_THROUGHPUT', 'net-throughput64-probe.exe': 'PS5_PROTON_NET_THROUGHPUT', 'thread-leak-probe.exe': 'PS5_PROTON_THREAD_LEAK_PROBE'}
 PERF = {
     'frames': re.compile(r'perf: (\w+) frames=(\d+) fps=([\d.]+) p50=([\d.]+) p95=([\d.]+) p99=([\d.]+) '
@@ -780,6 +780,68 @@ def bright(pixel, floor=190):
     return min(pixel) >= floor
 
 
+HUD_LINE = re.compile(r'hud: fps=([\d.]+) low=([\d.]+) frame_ms=([\d.]+) cpu=(-?[\d.]+) gpu=(-?[\d.]+) '
+                      r'small=(-?\d+)/(\d+) big=(-?\d+)/(\d+)')
+HUD_COMPOSE = re.compile(r'gpu-hud compose n=\d+ avg_us=(\d+) max_us=(\d+)')
+
+
+def hud_check(lines, broker_text, gpu):
+    """The control overlay's statistics HUD over a drawing probe (src/pw_overlay.h): what it showed (its 'hud:' lines, every
+    10 s) against perf's own frame lines from after it came on, and what it cost the broker (its 'gpu-hud compose' lines).
+    perf's earlier lines hold the start and the seconds the overlay's panel was open, which the HUD never shows. Its
+    median fps within 5% of those lines' median fps, its frame time within 1.5 ms of their p50, the big pool's total read and
+    neither pool's use negative (the small pool's is 0/0 where the census cannot be trusted, as on the base), the
+    broker's compose at most 300 us on average and 1 ms at worst; with gpu, the GPU load a number."""
+    huds, perf = [], []
+    for line in lines:
+        hud, frames = HUD_LINE.search(line), PERF['frames'].search(line)
+        if hud:
+            huds.append(hud)
+        elif frames and huds and float(frames.group(3)) > 0:
+            perf.append(frames)
+    composes = [(int(m.group(1)), int(m.group(2))) for m in HUD_COMPOSE.finditer(broker_text or '')]
+    median = lambda values: sorted(values)[len(values) // 2] if values else None
+    hud_fps, perf_fps = median([float(m.group(1)) for m in huds]), median([float(m.group(3)) for m in perf])
+    hud_ms, perf_p50 = median([float(m.group(3)) for m in huds]), median([float(m.group(4)) for m in perf])
+    record = {'hud_lines': len(huds), 'hud_fps': hud_fps, 'perf_fps': perf_fps, 'hud_frame_ms': hud_ms, 'perf_p50_ms': perf_p50,
+              'compose_avg_us': max((a for a, _ in composes), default=None),
+              'compose_max_us': max((w for _, w in composes), default=None),
+              'pools': bool(huds) and all(int(m.group(9)) > 0 for m in huds),
+              'gpu': [float(m.group(5)) for m in huds]}
+    record['passed'] = bool(huds and perf and composes) and abs(hud_fps - perf_fps) <= 0.05 * perf_fps and \
+        abs(hud_ms - perf_p50) <= 1.5 and record['pools'] and all(int(m.group(6)) >= 0 and int(m.group(8)) >= 0 for m in huds) and record['compose_avg_us'] <= 300 and \
+        record['compose_max_us'] <= 1000 and (not gpu or any(value >= 0 for value in record['gpu']))
+    print('hud: ' + ' '.join(f'{key}={value}' for key, value in record.items() if key != 'gpu'))
+    return record
+
+
+OVERLAY_COMPOSE = re.compile(r'gpu-overlay compose n=\d+ avg_us=(\d+) max_us=(\d+)')
+
+
+def panel_check(lines, broker_text, limit_ms):
+    """The control overlay's panel held open over a drawing probe (tests/pad-scripts/panel-open.txt): every perf frame
+    window wholly inside the open time (its line and the one before it between "control overlay opened" and "closed")
+    has p95 at most LIMIT_MS, so frames keep to the refresh with the panel's glass composed (8.3 ms a frame at 120 Hz).
+    At least two such windows; the broker's 'gpu-overlay compose' cost is printed beside it."""
+    windows, opened, previous_open = [], False, False
+    for line in lines:
+        if 'control overlay opened' in line:
+            opened, previous_open = True, False
+        elif 'control overlay closed' in line:
+            opened = False
+        elif (frames := PERF['frames'].search(line)) and float(frames.group(3)) > 0:
+            if opened and previous_open:
+                windows.append((float(frames.group(3)), float(frames.group(5))))
+            previous_open = opened
+    composes = [(int(m.group(1)), int(m.group(2))) for m in OVERLAY_COMPOSE.finditer(broker_text or '')]
+    record = {'windows': len(windows), 'fps': [fps for fps, _ in windows], 'p95_worst_ms': max((p for _, p in windows), default=None),
+              'compose_avg_us': max((a for a, _ in composes), default=None),
+              'compose_max_us': max((w for _, w in composes), default=None)}
+    record['passed'] = len(windows) >= 2 and record['p95_worst_ms'] <= limit_ms
+    print('panel: ' + ' '.join(f'{key}={value}' for key, value in record.items()))
+    return record
+
+
 def captures_split(pictures, split):
     """The own keyboard over a live game (src/pw_steam_screen.c, the Frosted Meadow look): in every capture the rows above
     SPLIT are the game's frame (at least 75% lit, since the window probe's own window is black inside, 18% of them on the
@@ -915,6 +977,12 @@ def main():
                              "keyboard really opened and showed, not only the probe's own verdict)")
     parser.add_argument('--expect-capture-split', type=int, metavar='ROW',
                         help='every capture shows the game above ROW and the own keyboard\'s panel from ROW')
+    parser.add_argument('--expect-hud', choices=('frames', 'gpu'),
+                        help="the statistics HUD's 'hud:' lines match perf's frame lines and its broker compose stays cheap "
+                             '(hud_check); gpu: its GPU load is a number too (PROTON_GPU_TIMESTAMPS=1)')
+    parser.add_argument('--expect-panel-p95', type=float, metavar='MS',
+                        help="with the control overlay's panel held open, every perf window inside the open time has p95 "
+                             'at most MS (panel_check)')
     parser.add_argument('--expect-captures-lit', type=float, metavar='PERCENT',
                         help='every capture the run fetched has at least PERCENT of its pixels not black (a frame shown, '
                              'not an empty copy)')
@@ -1193,7 +1261,9 @@ def main():
                  'assertion' if 'WINE_PS5_ASSERT_PROBE=1' in args.env else
                  'doom' if any(item.startswith('WINETEST_DOOM_AFTER_MS=') for item in args.env) else
                  'gpu-loss' if any(item.startswith('PROTON_GPU_TEST_FAIL_SUBMIT=') for item in args.env) else
-                 'broker-wedge' if any(item.startswith('PROTON_TEST_BROKER_HOLD_S=') for item in args.env) else None)
+                 'broker-wedge' if any(item.startswith('PROTON_TEST_BROKER_HOLD_S=') for item in args.env) else
+                 'title-stall' if any(item.startswith('PROTON_TEST_TITLE_LOOP_STALL_MS=') for item in args.env) else
+                 'crash' if any(item.startswith('PS5_PROTON_PROBE_FAULT_FRAME=') for item in args.env) else None)
         verdict_run = not fault and not args.expect_ended
         passed = (result == 'finished' or (result == 'exited' and
                   (clean_owner_restart or launcher_end_status == 0))) and \
@@ -1299,13 +1369,24 @@ def main():
         if args.expect_log_ends:
             passed = passed and log_ends_kept(wine_log.read_bytes(), title_lines)
         if args.expect_title_line:
-            missing = [text for text in args.expect_title_line if not any(text in line for line in title_lines + lines)]
+            # The Wine log too: a game in the title writes its err lines there (crash-lines64-title, Wine 2450/2451).
+            wine_lines = wine_log.read_text(errors='replace').splitlines() if wine_log.is_file() else []
+            missing = [text for text in args.expect_title_line
+                       if not any(text in line for line in title_lines + lines + wine_lines)]
             print('title lines: ' + ('all found' if not missing else 'MISSING ' + '; '.join(missing)))
             passed = passed and not missing
         if args.expect_captures_lit is not None:
             passed = passed and captures_lit(pictures, args.expect_captures_lit / 100)
         if args.expect_capture_split is not None:
             passed = passed and captures_split(pictures, args.expect_capture_split)
+        hud_record = None
+        if args.expect_hud:
+            hud_record = hud_check(title_lines + lines, broker_log, args.expect_hud == 'gpu')
+            passed = passed and hud_record['passed']
+        panel_record = None
+        if args.expect_panel_p95 is not None:
+            panel_record = panel_check(title_lines + lines, broker_log, args.expect_panel_p95)
+            passed = passed and panel_record['passed']
         if args.expect_direct_section:
             passed = passed and bool(memory['sections_mib']) and memory['gave_back_lines'] > 0 and memory['given_back'] > 0 \
                 and not memory['lost'] and bool(robustness['chunk_maps']) and robustness['ask_failures_max'] == 0
@@ -1328,6 +1409,8 @@ def main():
                                 'absence_elapsed_seconds': round(absence_elapsed, 3), 'passed': hold_passed}
             passed = passed and hold_passed
         summary = {
+            'hud': hud_record,
+            'panel': panel_record,
             'telemetry_hold': telemetry_record,
             'launch_readiness': launch_readiness,
             'native_close_failures': failed_closes,

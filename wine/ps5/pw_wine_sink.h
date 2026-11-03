@@ -30,7 +30,9 @@ typedef int (*PwWinePresentSink)(void *context,const void *bgra,uint32_t width,u
  * process ends through Wine's own exit path. */
 enum { PW_WINE_INPUT_KEY=1,PW_WINE_INPUT_MOUSE_MOVE,PW_WINE_INPUT_MOUSE_BUTTON,
        PW_WINE_INPUT_CLOSE,PW_WINE_INPUT_TERMINATE,PW_WINE_INPUT_MOUSE_WHEEL,PW_WINE_INPUT_END_PROCESS,
-       PW_WINE_INPUT_LOG_OFF,PW_WINE_INPUT_DIALOG_KEY,PW_WINE_INPUT_CHAR,PW_WINE_INPUT_QUEUE=256 };
+       PW_WINE_INPUT_LOG_OFF,PW_WINE_INPUT_DIALOG_KEY,PW_WINE_INPUT_CHAR,PW_WINE_INPUT_MOUSE_PRESENT,PW_WINE_INPUT_QUEUE=256 };
+/* MOUSE_PRESENT (the in-title driver only, patch 2470): down 0 the mouse is gone, as if unplugged (no pointer drawn,
+ * SM_MOUSEPRESENT 0), down 1 it is back. The title's control overlay sends it (src/pw_overlay.h). */
 /* CHAR (the in-process server and the driver, patch 2424): one UTF-16 unit in code, typed as a KEYEVENTF_UNICODE key; down 1
  * presses it, 0 releases it. The on-screen keyboard's line arrives this way (src/pw_osk.h). */
 /* END_PROCESS (the in-process server only, patch 1002): one process, by its native helper's pid in code; down 1 asks
@@ -97,6 +99,11 @@ void pw_wine_set_pad(const PwWinePad *pad);
  * pad, and wakes the input fd; a helper counts the differences between its looks at the input page. The driver tells the
  * game's windows (WM_DEVICECHANGE, patch 2423) when the count moved. */
 uint32_t pw_wine_pad_changes(void);
+/* The controller kind programs see (PS5_Proton src/pw_controller.h: 0 Xbox 360, 1 Xbox One, 2 DualSense), switched live by
+ * the title's control overlay: xinput (patch 2471) and the PS5 bus (patch 2472) follow it. -1 until the title sets one:
+ * each process then keeps its WINE_PS5_CONTROLLER. A helper reads the title's from the input page. */
+void pw_wine_set_pad_kind(int kind);
+int pw_wine_pad_kind(void);
 /* 1 and the newest motor speeds (0..65535) when they changed since the
  * last call, else 0. */
 int pw_wine_rumble(uint32_t *left,uint32_t *right);

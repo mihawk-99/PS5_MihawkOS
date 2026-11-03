@@ -257,6 +257,7 @@ static uint64_t ring_count;
  * (a suspend's server call, say) can wait for a lock its own thread holds. */
 typedef struct ThreadSlot {
     uint32_t thread, owner, inside, signals, deferrals;
+    uint32_t critical;          /* depth of other critical sections (pw_ntsync_critical_enter): signals wait for them too */
     uint32_t ending;            /* a SIGQUIT reached it: Wine is ending it, and its waits end (pw_ntsync_wait) */
     uint32_t *asleep_on;        /* its blocked wait's word, while it has one */
     uint32_t exit_hook;         /* its thread's exit resets the slot (slot_reset) */
@@ -311,6 +312,7 @@ static void slot_reset(void *value)
     __atomic_store_n(&slot->ending, 0, __ATOMIC_SEQ_CST);
     __atomic_store_n(&slot->asleep_on, NULL, __ATOMIC_SEQ_CST);
     __atomic_store_n(&slot->exit_hook, 0, __ATOMIC_SEQ_CST);
+    __atomic_store_n(&slot->critical, 0, __ATOMIC_SEQ_CST);
 }
 
 static void slot_key_make(void)
@@ -940,7 +942,29 @@ static void leave_waking(ThreadSlot *me, const Wakes *wakes)
     if (wakes) wake_now(wakes);
     if (!me) return;
     __atomic_store_n(&me->inside, 0, __ATOMIC_SEQ_CST);
-    if (__atomic_load_n(&me->deferrals, __ATOMIC_SEQ_CST)) raise_deferred(me);
+    if (!__atomic_load_n(&me->critical, __ATOMIC_SEQ_CST) && __atomic_load_n(&me->deferrals, __ATOMIC_SEQ_CST))
+        raise_deferred(me);
+}
+
+/* Another lock of this process's Unix side that a suspend must not land inside (Wine's heap, wine/ps5/pw_wine_heap.c):
+ * the same rule as the device's. A minidump suspends every thread of a process (dbghelp's SuspendThread); a thread
+ * suspended holding the heap's one mutex stopped every other thread's next malloc, the dumping thread's among them
+ * (suspend-server64-helper and -title, a8-rel-base-2026-11-02: the main thread stuck after create_event, the device's
+ * lock and the virtual mutex free). Nested calls count; the last leave raises what landed meanwhile. A thread the
+ * table has no slot for is not guarded. Only atomics and the slot table: never malloc, the heap calls this. */
+void pw_ntsync_critical_enter(void)
+{
+    ThreadSlot *me = thread_slot(thread_number(), 1);
+    if (me) __atomic_fetch_add(&me->critical, 1, __ATOMIC_SEQ_CST);
+}
+
+void pw_ntsync_critical_leave(void)
+{
+    ThreadSlot *me = thread_slot(thread_number(), 0);
+    if (!me || !__atomic_load_n(&me->critical, __ATOMIC_SEQ_CST)) return;
+    if (__atomic_sub_fetch(&me->critical, 1, __ATOMIC_SEQ_CST) == 0 && !__atomic_load_n(&me->inside, __ATOMIC_SEQ_CST) &&
+        __atomic_load_n(&me->deferrals, __ATOMIC_SEQ_CST))
+        raise_deferred(me);
 }
 
 static void leave(ThreadSlot *me)
@@ -954,7 +978,7 @@ int pw_ntsync_signal_deferred(int signal)
     ThreadSlot *me = thread_slot(self, 0);
     uint64_t state;
     if (!me || signal <= 0 || signal >= 32) return 0;
-    if (!__atomic_load_n(&me->inside, __ATOMIC_SEQ_CST)) {
+    if (!__atomic_load_n(&me->inside, __ATOMIC_SEQ_CST) && !__atomic_load_n(&me->critical, __ATOMIC_SEQ_CST)) {
         /* Wine ends a thread with SIGQUIT. On the console its handler only marks the thread, which ends at the
          * user-mode boundary (Wine 0885), and SA_RESTART put a blocked wait straight back to sleep: the thread kept
          * its place in the queues, took the next set meant for a live waiter, and on a wait without a timeout never

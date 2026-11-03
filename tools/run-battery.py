@@ -26,6 +26,8 @@ Cases, in the order they run:
     launcher-render       process-probe.exe --graphics-broker: DXVK in two children and their descendants
     launcher-file-budget  process-probe.exe --file-budget
     launcher-tls          tls-probe.exe in a helper against owned trusted/untrusted LAN endpoints
+    winhttp64             winhttp-probe.exe in a helper: Xbox Live's HTTP client's WinHTTP calls, the trusted endpoint
+    winhttp64-title       the same inside MihawkOS
     launcher-desktop      desktop-probe.exe: a GDI window shown by the title's compositor, the touchpad's pointer and
                           clicks reaching it
     memory-guard          memory-guard-probe.exe --hold=300: asked to close by the title's guard over the console's
@@ -102,10 +104,11 @@ CASES = [
     ('host-dmem64', ['--arch','64','--graphics','--backend','dxvk','--dmem']),
     # The helper refuses every range after the first 20: the broker makes the rest as shared memory, and the program still passes.
     ('host-dmem-fallback64', ['--arch','64','--graphics','--backend','dxvk','--dmem','--fallback','--env','PROTON_GPU_TEST_DMEM_REFUSE=20']),
-    # Judged with the fast copy off: their layered-window blends read wrong in the after-flip capture while the screen showed
-    # them right (the owner, every gate; alpha7-gate-pro-2026-11-01 failed, wc64-fastcopy0-pro-2026-11-01 passed).
-    ('window-compose32', ['--arch','32', '--env', 'PROTON_GPU_FAST_COPY=0']),
-    ('window-compose64', ['--arch','64', '--env', 'PROTON_GPU_FAST_COPY=0']),
+    # With the fast copy on, as players have it: its after-flip capture read the display's buffer pixel by pixel in the
+    # present, about 3 s a picture, and the probe's other process lost its window meanwhile (alpha7-gate-pro-2026-11-01;
+    # PS5_Vulkan gpu-broker display.cpp read_shown now copies the shown buffer out whole).
+    ('window-compose32', ['--arch','32']),
+    ('window-compose64', ['--arch','64']),
     # DWM corners, borders, shadows, acrylic/Mica glass and live thumbnails on the displayed frame.
     ('window-effects32', ['--arch','32']),
     ('window-effects64', ['--arch','64']),
@@ -240,6 +243,9 @@ CASES = [
     # GDI/DirectWrite glyphs on the very first launch in a new prefix.
     ('prefix-fresh64', ['--arch', '64']),
     ('prefix-fresh32', ['--arch', '32']),
+    # The controller in the first session of a new prefix, 32-bit as Ys Origin (Wine 1115, 2480; tests/pad-api-probe.c).
+    ('prefix-fresh-pad32', ['--arch', '32', '--probe', 'pad-api', '--marker', 'PS5_PROTON_PAD_API',
+                            '--env', 'WINE_PS5_CONTROLLER=xbox-360']),
     ('pe64', ['--exe', 'wine-probe.exe', '--marker', 'PS5_PROTON_PE64_PROBE']),
     # Windows synchronization through the session's sync device, on by default: semantics, then a thread terminated
     # while it waits, whose wait must not take the next set (src/pw_ntsync.c).
@@ -283,13 +289,65 @@ CASES = [
     ('d3d12-levels64', ['--exe', 'd3d12-levels-probe.exe', '--marker', 'PS5_PROTON_D3D12_LEVELS'] + LAUNCHER),
     ('d3d12-levels64-title', ['--exe', 'd3d12-levels-probe.exe', '--marker', 'PS5_PROTON_D3D12_LEVELS',
                               '--env', 'WINE_PS5_TITLE_PROCESS=d3d12-levels-probe.exe'] + LAUNCHER),
+    # A present loop in FIFO, MAILBOX and IMMEDIATE (tests/vk-present-probe.c, src/pw_present_pacing.h): FIFO held to the
+    # display's refresh with each present wait ended when its frame is shown, the others free. In a helper and in the
+    # title. Before, present waits ended when the GPU finished and DXVK engaged its own limiter (Fable, 2026-11-01).
+    # Window surfaces, as games have them: a plain display surface is not shown while the launcher holds the screen.
+    ('vk-present64', ['--exe', 'vk-present-probe.exe', '--marker', 'PS5_PROTON_VK_PRESENT',
+                      '--env', 'WINE_PS5_WINDOW_SURFACES=1'] + LAUNCHER),
+    ('vk-present64-title', ['--exe', 'vk-present-probe.exe', '--marker', 'PS5_PROTON_VK_PRESENT',
+                            '--env', 'WINE_PS5_WINDOW_SURFACES=1', '--env', 'WINE_PS5_TITLE_PICK=vk-present-probe.exe'] + LAUNCHER),
     # A game's waits in the title with no input (tests/intitle-stall-probe.c, Wine patch 2428): a 16 ms MsgWait must time
     # out while its threads spin; before 2428 the first one never returned (intitle-stall-title-base-2026-11-01-01).
     ('intitle-stall64-title', ['--exe', 'intitle-stall-probe.exe', '--marker', 'PS5_PROTON_INTITLE_STALL',
                                '--env', 'WINE_PS5_TITLE_PICK=intitle-stall-probe.exe'] + LAUNCHER),
+    # A named 25 MiB section shared by two processes, Steam's browser IPC (tests/named-section-probe.c, Alpha 8): both in
+    # helpers; the maker in the title and the opener a helper; Steam's shape, a 32-bit maker in a helper and the 64-bit
+    # opener in the title (steamwebhelper in the title saw Steam's stream as 0 bytes, e1-webhelper-title-base-2026-11-02-01).
+    ('named-section64', ['--exe', 'named-section64-probe.exe', '--marker', 'PS5_PROTON_NAMED_SECTION'] + LAUNCHER),
+    ('named-section64-title-maker', ['--exe', 'named-section64-probe.exe', '--marker', 'PS5_PROTON_NAMED_SECTION',
+                                     '--env', 'WINE_PS5_TITLE_PICK=named-section64-probe.exe'] + LAUNCHER),
+    ('named-section-title-opener', ['--exe', 'named-section32-probe.exe', '--marker', 'PS5_PROTON_NAMED_SECTION',
+                                    '--args=--child=named-section64-probe.exe',
+                                    '--env', 'WINE_PS5_TITLE_PICK=named-section64-probe.exe'] + LAUNCHER),
+    # A fixed, committed reservation above the console's address space (tests/high-reserve-probe.c, Wine patch 2430):
+    # placed elsewhere in a helper and in the title (PASS), refused with WINE_PS5_HIGH_RESERVE_ELSEWHERE=0 (FAIL). Not
+    # gate cases.
+    ('high-reserve64', ['--exe', 'high-reserve-probe.exe', '--marker', 'PS5_PROTON_HIGH_RESERVE'] + LAUNCHER),
+    ('high-reserve64-title', ['--exe', 'high-reserve-probe.exe', '--marker', 'PS5_PROTON_HIGH_RESERVE',
+                              '--env', 'WINE_PS5_TITLE_PICK=high-reserve-probe.exe'] + LAUNCHER),
+    ('high-reserve64-title-off', ['--exe', 'high-reserve-probe.exe', '--marker', 'PS5_PROTON_HIGH_RESERVE',
+                                  '--env', 'WINE_PS5_TITLE_PICK=high-reserve-probe.exe',
+                                  '--env', 'WINE_PS5_HIGH_RESERVE_ELSEWHERE=0'] + LAUNCHER),
     # 10,000 files open for writing at once from a helper (tests/many-files-probe.c): the title's descriptor table keeps
     # room for them (wine/ps5/pw_wine_codeshare.h's cap and release).
     ('many-files64', ['--exe', 'many-files-probe.exe', '--marker', 'PS5_PROTON_MANY_FILES', '--watchdog', '600'] + LAUNCHER),
+    # The GPU's clock as a game reads it (tests/d3d12-clock-probe.c): non-zero and rising, in a helper and in the title.
+    ('d3d12-clock64', ['--exe', 'd3d12-clock-probe.exe', '--marker', 'PS5_PROTON_D3D12_CLOCK'] + LAUNCHER),
+    ('d3d12-clock64-title', ['--exe', 'd3d12-clock-probe.exe', '--marker', 'PS5_PROTON_D3D12_CLOCK',
+                             '--env', 'WINE_PS5_TITLE_PROCESS=d3d12-clock-probe.exe'] + LAUNCHER),
+    # Every processor count a game can ask for agrees, and GetCurrentProcessorNumber spreads threads within it
+    # (tests/cpu-count-probe.c, Wine 2457): a helper's threads run on all 16 CPUs, the title's on its 13.
+    ('cpu-count64', ['--exe', 'cpu-count-probe.exe', '--marker', 'PS5_PROTON_CPU_COUNT'] + LAUNCHER),
+    ('cpu-count64-title', ['--exe', 'cpu-count-probe.exe', '--marker', 'PS5_PROTON_CPU_COUNT',
+                           '--env', 'WINE_PS5_TITLE_PROCESS=cpu-count-probe.exe'] + LAUNCHER),
+    # A program still has most of the TEB's 64 TLS slots after loading Direct3D 12 (tests/tls-slots-probe.c), and
+    # threads started before a DLL with static TLS loaded get its block (tests/tls-late-probe.c): a game's workers read
+    # through NULL tables in both shapes (2026-11-03). In a helper and in the title.
+    ('tls-slots64', ['--exe', 'tls-slots-probe.exe', '--marker', 'PS5_PROTON_TLS_SLOTS'] + LAUNCHER),
+    ('tls-slots64-title', ['--exe', 'tls-slots-probe.exe', '--marker', 'PS5_PROTON_TLS_SLOTS',
+                           '--env', 'WINE_PS5_TITLE_PROCESS=tls-slots-probe.exe'] + LAUNCHER),
+    ('tls-late64', ['--exe', 'tls-late-probe.exe', '--marker', 'PS5_PROTON_TLS_LATE'] + LAUNCHER),
+    ('tls-late64-title', ['--exe', 'tls-late-probe.exe', '--marker', 'PS5_PROTON_TLS_LATE',
+                          '--env', 'WINE_PS5_TITLE_PROCESS=tls-late-probe.exe'] + LAUNCHER),
+    # How much a game may load through Direct3D 12 before E_OUTOFMEMORY (tests/d3d12-load-probe.c), with vkd3d-proton's
+    # allocation log: on request, it takes gigabytes. Upload stops near 2 GiB in the title and 1 GiB in a helper
+    # (src/pw_gpu_host_limit.h, graphics patch 0002).
+    ('d3d12-load64-title', ['--exe', 'd3d12-load-probe.exe', '--marker', 'PS5_PROTON_D3D12_LOAD',
+                            '--env', 'WINE_PS5_TITLE_PROCESS=d3d12-load-probe.exe', '--env', 'VKD3D_CONFIG=log_memory_budget']
+     + LAUNCHER),
+    ('d3d12-load64', ['--exe', 'd3d12-load-probe.exe', '--marker', 'PS5_PROTON_D3D12_LOAD',
+                      '--env', 'VKD3D_CONFIG=log_memory_budget'] + LAUNCHER),
     # Direct3D 12 reserved resources past the old 4096-range cap (tests/d3d12-sparse-probe.c, graphics patch 0044):
     # in a helper, as the racing game that hit it ran, and in the title.
     # 20 MB of a game's Wine output in the title (tests/log-flood-probe.c): the session's logs keep their start and their
@@ -328,6 +386,64 @@ CASES = [
     ('osk-own-open64', ['--exe', 'window-probe.exe', '--marker', 'PS5_PROTON_WINDOW_PROBE', '--env', 'WINE_PS5_OSK_TEST=open',
                         '--env', 'WINE_PS5_OSK=own', '--expect-title-line', 'keyboard shown=1 own=1',
                         '--expect-title-line', 'keyboard ended by=title', '--expect-capture-split', '600'] + LAUNCHER),
+    # The control overlay (Alpha 8, src/pw_overlay.h), driven by tests/pad-scripts/control-overlay.txt: it opens on L3+R3 in
+    # the keyboard's panel (pictured, the probe's frame above row 600), the statistics HUD comes on and stays once it closes,
+    # the mouse goes off and on (Wine patch 2470), and Exit pressed twice ends the game through stop-game.
+    ('control-overlay64', ['--exe', 'window-probe.exe', '--marker', 'PS5_PROTON_WINDOW_PROBE', '--env', 'WINE_PS5_OSK=own',
+                           '--pad-script', 'tests/pad-scripts/control-overlay.txt',
+                           '--expect-title-line', 'control overlay opened', '--expect-title-line', 'statistics on',
+                           '--expect-title-line', 'mouse off, as if unplugged', '--expect-title-line', 'the statistics HUD shows',
+                           '--expect-title-line', 'control overlay: exit to the menu',
+                           '--expect-title-line', 'stop requested'] + LAUNCHER),
+    # The control overlay's Controller button (Wine 2471, 2472), driven by tests/pad-scripts/controller-swap.txt: a game in
+    # the title started with an Xbox 360 controller sees it, then an Xbox One controller, then the DualSense alone
+    # (tests/pad-identity-probe.c). A test launch does not save the choice to the probe's library entry.
+    ('controller-swap64-title', ['--exe', 'pad-identity-probe.exe', '--marker', 'PS5_PROTON_PAD_IDENTITY',
+                                 '--env', 'WINE_PS5_TITLE_PROCESS=pad-identity-probe.exe', '--env', 'WINE_PS5_CONTROLLER=xbox-360',
+                                 '--pad-script', 'tests/pad-scripts/controller-swap.txt',
+                                 '--expect-title-line', 'control overlay: controller xbox-one',
+                                 '--expect-title-line', 'control overlay: controller dualsense'] + LAUNCHER),
+    # The controller through every API a game finds it with (XInput, DirectInput 8, raw input, winmm), and each reading
+    # centred at rest (tests/pad-api-probe.c, Wine 2480): with an Xbox controller DirectInput and raw input found none
+    # before 2480. Every layout (Xbox 360, Xbox One, DualSense) in a helper at both widths and in the title; the gate takes
+    # one of each. Needs the DualSense awake.
+    ('pad-api32', ['--exe', 'pad-api32-probe.exe', '--marker', 'PS5_PROTON_PAD_API', '--pad-script', 'tests/pad-scripts/pad-api.txt',
+              '--env', 'WINE_PS5_CONTROLLER=xbox-360']),
+    ('pad-api32-one', ['--exe', 'pad-api32-probe.exe', '--marker', 'PS5_PROTON_PAD_API', '--pad-script', 'tests/pad-scripts/pad-api.txt',
+                  '--env', 'WINE_PS5_CONTROLLER=xbox-one']),
+    ('pad-api32-dualsense', ['--exe', 'pad-api32-probe.exe', '--marker', 'PS5_PROTON_PAD_API', '--pad-script', 'tests/pad-scripts/pad-api.txt',
+                        '--env', 'WINE_PS5_CONTROLLER=dualsense']),
+    ('pad-api64', ['--exe', 'pad-api64-probe.exe', '--marker', 'PS5_PROTON_PAD_API', '--pad-script', 'tests/pad-scripts/pad-api.txt',
+              '--env', 'WINE_PS5_CONTROLLER=xbox-360']),
+    ('pad-api64-one', ['--exe', 'pad-api64-probe.exe', '--marker', 'PS5_PROTON_PAD_API', '--pad-script', 'tests/pad-scripts/pad-api.txt',
+                  '--env', 'WINE_PS5_CONTROLLER=xbox-one']),
+    ('pad-api64-dualsense', ['--exe', 'pad-api64-probe.exe', '--marker', 'PS5_PROTON_PAD_API', '--pad-script', 'tests/pad-scripts/pad-api.txt',
+                        '--env', 'WINE_PS5_CONTROLLER=dualsense']),
+    ('pad-api64-title', ['--exe', 'pad-api64-probe.exe', '--marker', 'PS5_PROTON_PAD_API', '--pad-script', 'tests/pad-scripts/pad-api.txt',
+                    '--env', 'WINE_PS5_CONTROLLER=xbox-360', '--env', 'WINE_PS5_TITLE_PROCESS=pad-api64-probe.exe'] + LAUNCHER),
+    ('pad-api64-title-one', ['--exe', 'pad-api64-probe.exe', '--marker', 'PS5_PROTON_PAD_API', '--pad-script', 'tests/pad-scripts/pad-api.txt',
+                        '--env', 'WINE_PS5_CONTROLLER=xbox-one', '--env', 'WINE_PS5_TITLE_PROCESS=pad-api64-probe.exe'] + LAUNCHER),
+    ('pad-api64-title-dualsense', ['--exe', 'pad-api64-probe.exe', '--marker', 'PS5_PROTON_PAD_API', '--pad-script', 'tests/pad-scripts/pad-api.txt',
+                              '--env', 'WINE_PS5_CONTROLLER=dualsense', '--env', 'WINE_PS5_TITLE_PROCESS=pad-api64-probe.exe'] + LAUNCHER),
+    # The statistics HUD over frames (tests/pad-scripts/hud-d3d11.txt): what it shows matches perf's own frame lines and
+    # its broker compose stays under 300 us on average, 1 ms at worst (run-console --expect-hud). With GPU timestamps its
+    # GPU load is a number; over the present loop, FIFO still holds the refresh with the HUD on.
+    ('hud-d3d11-title', ['--exe', 'd3d11-probe.exe', '--marker', 'PS5_PROTON_D3D11_PROBE',
+                         '--env', 'WINE_PS5_TITLE_PROCESS=d3d11-probe.exe', '--env', 'PS5_PROTON_PROBE_FRAMES=3000',
+                         '--pad-script', 'tests/pad-scripts/hud-d3d11.txt', '--expect-hud', 'frames'] + LAUNCHER),
+    ('hud-d3d11-gpu-title', ['--exe', 'd3d11-probe.exe', '--marker', 'PS5_PROTON_D3D11_PROBE',
+                             '--env', 'WINE_PS5_TITLE_PROCESS=d3d11-probe.exe', '--env', 'PS5_PROTON_PROBE_FRAMES=3000',
+                             '--env', 'PROTON_GPU_TIMESTAMPS=1',
+                             '--pad-script', 'tests/pad-scripts/hud-d3d11.txt', '--expect-hud', 'gpu'] + LAUNCHER),
+    ('vk-present-hud64-title', ['--exe', 'vk-present-probe.exe', '--marker', 'PS5_PROTON_VK_PRESENT',
+                                '--env', 'WINE_PS5_WINDOW_SURFACES=1', '--env', 'WINE_PS5_TITLE_PICK=vk-present-probe.exe',
+                                '--env', 'PS5_PROTON_PROBE_FRAMES=1999', '--pad-script', 'tests/pad-scripts/hud-d3d11.txt',
+                                '--expect-title-line', 'statistics HUD shows'] + LAUNCHER),
+    # The overlay's panel held open 25 s over frames at 120 Hz (tests/pad-scripts/panel-open.txt): its glass is composed a band
+    # a frame from a cached blend, so frames keep to the refresh, p95 at most 9 ms (run-console --expect-panel-p95).
+    ('panel-120-title', ['--exe', 'd3d11-probe.exe', '--marker', 'PS5_PROTON_D3D11_PROBE',
+                         '--env', 'WINE_PS5_TITLE_PROCESS=d3d11-probe.exe', '--env', 'PS5_PROTON_PROBE_FRAMES=5000',
+                         '--pad-script', 'tests/pad-scripts/panel-open.txt', '--expect-panel-p95', '9'] + LAUNCHER),
     ('osk-own-typed64-title', ['--exe', 'osk-typed-probe.exe', '--marker', 'PS5_PROTON_OSK_TYPED', '--env', 'WINE_PS5_OSK=own',
                                '--env', 'WINE_PS5_TITLE_PROCESS=osk-typed-probe.exe', '--env', 'WINE_PS5_OSK_TEST=type',
                                '--expect-title-line', 'keyboard shown=1 own=1'] + LAUNCHER),
@@ -368,6 +484,8 @@ CASES = [
     ('launcher-file-budget', ['--exe', 'process-probe.exe', '--marker', 'PS5_PROTON_OWNER_BOOTSTRAP',
                               '--args=--file-budget', '--watchdog', '300'] + LAUNCHER),
     ('launcher-tls', []),
+    ('winhttp64', ['--winhttp'] + LAUNCHER),
+    ('winhttp64-title', ['--winhttp', '--env', 'WINE_PS5_TITLE_PICK=winhttp-probe.exe'] + LAUNCHER),
     # The installer slice's fast kinds (Inno Setup, a Steam install script) in an owned throwaway prefix, each check against
     # the PC's Wine (evidence/installer-slice/host-*.json); fixtures: tools/build-installer-fixtures.sh.
     ('installers-fast', ['console', 'inno', 'steam']),
@@ -429,6 +547,45 @@ CASES = [
                    # No stop request before the breaker's verdict: the stop path would end the game first.
                    '--exit-stall', '100',
                    '--env', 'PROTON_HANG_STALL_MS=10000', '--env', 'PROTON_HANG_BREAKER_TEST_CENSUS_FREEZE_S=20'] + LAUNCHER),
+    # A game's threads suspended from outside while they work, as a crash reporter's minidump does
+    # (tests/suspend-server-probe.c): in the title the server shares the game's process, and a tester's game froze with
+    # the server stopped each time its Steam crash reporter started (tester-freeze-loading-2026-11-01). The helper is the
+    # control: there the server is in another process.
+    ('suspend-server64-title', ['--exe', 'suspend-server-probe.exe', '--marker', 'PS5_PROTON_SUSPEND_SERVER',
+                                '--env', 'WINE_PS5_TITLE_PICK=suspend-server-probe.exe', '--watchdog', '180'] + LAUNCHER),
+    ('suspend-server64-helper', ['--exe', 'suspend-server-probe.exe', '--marker', 'PS5_PROTON_SUSPEND_SERVER',
+                                 '--watchdog', '180'] + LAUNCHER),
+    # A crash's lines (Wine 2450, 2451): the in-title renderer writes through a null pointer after frame 4. The first-chance
+    # line and the unhandled-exception line must name the access, the address, the module and offset, and the thread.
+    ('crash-lines64-title', ['--exe', 'process-probe.exe', '--args=--graphics-broker', '--seconds', '150',
+                             '--env', 'WINE_PS5_TITLE_PROCESS=graphics-render-probe.exe',
+                             '--env', 'PS5_PROTON_PROBE_FAULT_FRAME=4',
+                             '--expect-title-line', 'first-chance access violation 1: write of 0000000000000000 at',
+                             '--expect-title-line', 'graphics-render-probe.exe"+0x',
+                             '--expect-title-line', ': write of 0000000000000000, thread',
+                             '--watchdog', '420'] + LAUNCHER),
+    # The dump's memory reads (--mode=read): a copy in a helper reads and writes a 256 KiB block of the title's copy, 4 KiB
+    # to 256 KiB at a time. In the title the server copies it through its own pipe (Wine patch 2453); before 2453 a
+    # blocking pipe made that copy wait for itself.
+    ('dump-server64-title', ['--exe', 'suspend-server-probe.exe', '--marker', 'PS5_PROTON_SUSPEND_SERVER',
+                             '--args=--mode=read', '--env', 'WINE_PS5_TITLE_PICK=suspend-server-probe.exe',
+                             '--watchdog', '180'] + LAUNCHER),
+    ('dump-server64-helper', ['--exe', 'suspend-server-probe.exe', '--marker', 'PS5_PROTON_SUSPEND_SERVER',
+                              '--args=--mode=read', '--watchdog', '180'] + LAUNCHER),
+    # The Visual C++ runtimes as a launcher finds them (tests/vcredist-check-probe.c, Wine 2455): the 2010 to 2022 records
+    # in both registry views, and the runtimes they stand for load. The real redistributable's own run is the installer
+    # slice's vcredist kind (tools/run-installer-slice.py), in a throwaway prefix of its own.
+    ('vcredist64', ['--exe', 'vcredist-check-probe.exe', '--marker', 'PS5_PROTON_VCREDIST'] + LAUNCHER),
+    # The title watchdog through the title loop's own stalls (src/pw_suspend.h): the in-title renderer spins after frame
+    # 4 while the loop is held 3 s every 5 s (a tester's Risk of Rain 2 on a server that did not answer, 2026-11-01). Each
+    # stall restarted the watchdog's clock before, and it never fired; now it must end the game at the test's 15 s.
+    # Rung 2's wiring (process-probe --graphics-broker starts two renderers; the title takes one).
+    ('title-stall64', ['--exe', 'process-probe.exe', '--args=--graphics-broker', '--seconds', '150',
+                       '--env', 'WINE_PS5_TITLE_PROCESS=graphics-render-probe.exe',
+                       '--env', 'PROTON_HANG_STALL_MS=15000', '--env', 'PS5_PROTON_PROBE_HANG_FRAME=4',
+                       '--env', 'PROTON_STOP_TERMINATE=0', '--env', 'PROTON_TEST_TITLE_LOOP_STALL_MS=3000',
+                       '--expect-title-line', 'title loop stalled', '--expect-title-line',
+                       'title watchdog: the game in the title showed no new frame', '--watchdog', '420'] + LAUNCHER),
     # The broker wedge (src/pw_hang_breaker.h): the GPU broker holds its client lock 40 s once, 10 s into the probe's
     # presents (graphics patch 0017's test hook); at 20 samples held the flight recorder ends the game, the call named.
     # By design the probe's held submit gets no answer, so its GPU client gives the broker up at 15 s and stamps the
@@ -446,13 +603,14 @@ CASES = [
                   '--env', 'PROTON_GPU_TEST_FAIL_SUBMIT=100', '--watchdog', '120'] + LAUNCHER),
 ]
 # Run only when named in --only, one per run (docs/CONSOLE_QUEUE.md: one risky run per boot, each on request).
-ON_REQUEST = {'section-dmem', 'memory-stall', 'payload-vm-contention', 'vm-speed64', 'vm-rearm64', 'assert-probe',
-              'end-hang64', 'end-present64', 'breaker64', 'gpu-loss'}
+ON_REQUEST = {'vcredist64', 'd3d12-load64-title', 'd3d12-load64', 'section-dmem', 'memory-stall', 'payload-vm-contention', 'vm-speed64', 'vm-rearm64', 'assert-probe',
+              'end-hang64', 'end-present64', 'breaker64', 'gpu-loss', 'hud-d3d11-title', 'hud-d3d11-gpu-title',
+              'vk-present-hud64-title'}
 
 
 # The gate (tools/gate.py): what every commit of code needs the console to pass first. A new required check is added
 # here, and from then on no code is committed without it.
-GATE_CASES = ['shell32', 'shell64', 'work-area32', 'work-area64', 'wallpaper32', 'wallpaper64', 'cursor-scheme32', 'cursor-scheme64', 'theme-parts32', 'theme-parts64', 'monospace32', 'monospace64', 'gpu-window32', 'gpu-window64', 'dxvk-window32', 'dxvk-window64', 'host-dmem64', 'host-dmem-fallback64', 'window-compose32', 'window-compose64', 'window-effects32', 'window-effects64', 'window-snapshot32', 'window-snapshot64', 'initial-env32', 'initial-env64', 'locale64', 'appearance32', 'appearance64', 'theme-notify32', 'theme-notify64', 'proton-ui32', 'proton-ui64', 'memory-classes', 'graphics-teardown', 'title-games', 'launcher-pair', 'chromium-game', 'dnsapi32', 'dnsapi64', 'mf-video32', 'mf-video64', 'network-adapters32', 'network-adapters64', 'socket-options32', 'socket-options64', 'late-library', 'large-shared-section', 'virtual-query32', 'virtual-query64', 'image-protect32', 'image-protect64', 'shared-section32', 'shared-section64', 'suspend-context64', 'kill-convert', 'stack-limit64', 'remote-memory64', 'system-memory32', 'system-memory64', 'file-write32', 'file-write64', 'relative-dir32', 'relative-dir64', 'umip32', 'umip64', 'manual-stdout', 'redirected-stdout', 'prefix-fresh64', 'prefix-fresh32',
+GATE_CASES = ['shell32', 'shell64', 'work-area32', 'work-area64', 'wallpaper32', 'wallpaper64', 'cursor-scheme32', 'cursor-scheme64', 'theme-parts32', 'theme-parts64', 'monospace32', 'monospace64', 'gpu-window32', 'gpu-window64', 'dxvk-window32', 'dxvk-window64', 'host-dmem64', 'host-dmem-fallback64', 'window-compose32', 'window-compose64', 'window-effects32', 'window-effects64', 'window-snapshot32', 'window-snapshot64', 'initial-env32', 'initial-env64', 'locale64', 'appearance32', 'appearance64', 'theme-notify32', 'theme-notify64', 'proton-ui32', 'proton-ui64', 'memory-classes', 'graphics-teardown', 'title-games', 'launcher-pair', 'chromium-game', 'dnsapi32', 'dnsapi64', 'mf-video32', 'mf-video64', 'network-adapters32', 'network-adapters64', 'socket-options32', 'socket-options64', 'late-library', 'large-shared-section', 'virtual-query32', 'virtual-query64', 'image-protect32', 'image-protect64', 'shared-section32', 'shared-section64', 'suspend-context64', 'kill-convert', 'stack-limit64', 'remote-memory64', 'system-memory32', 'system-memory64', 'file-write32', 'file-write64', 'relative-dir32', 'relative-dir64', 'umip32', 'umip64', 'manual-stdout', 'redirected-stdout', 'prefix-fresh64', 'prefix-fresh32', 'prefix-fresh-pad32', 'pad-api32', 'pad-api64-one', 'pad-api64-title', 'pad-api64-title-dualsense', 'pad-api32-dualsense',
               'pe64', 'payload-eight', 'payload-memory', 'payload-vm', 'descendants', 'launcher-render', 'launcher-tls',
               'sync64', 'intitle-stall64-title', 'shell-open64',
               # A write tracker's truth on 16 KiB host pages (patch 1134): no write reported that did not happen,
@@ -477,7 +635,9 @@ GATE_CASES = ['shell32', 'shell64', 'work-area32', 'work-area64', 'wallpaper32',
               'broker-wedge64',
               # HID's nested INPUT32 must be widened too (0955); otherwise device reports become message zero
               # and a normal PeekMessage loop stalls even when texture uploads and SwapBuffers succeed.
-              'input32', 'gl-upload32', 'osk-typed64-title', 'osk-typed64-helper', 'osk-open64', 'many-files64', 'log-flood64-title', 'd3d12-existing-heap64-title', 'parent-query64-title', 'missing-import64-title', 'fast-copy-capture', 'osk-own-open64', 'osk-own-typed64-title']
+              'input32', 'gl-upload32', 'osk-typed64-title', 'osk-typed64-helper', 'osk-open64', 'many-files64', 'log-flood64-title', 'd3d12-existing-heap64-title', 'parent-query64-title', 'missing-import64-title', 'fast-copy-capture', 'osk-own-open64', 'osk-own-typed64-title',
+              'dump-server64-helper', 'dump-server64-title', 'title-stall64', 'crash-lines64-title', 'suspend-server64-helper', 'suspend-server64-title',
+              'vk-present64', 'vk-present64-title', 'control-overlay64', 'controller-swap64-title']
 
 
 # Grouped launches (--grouped). A short probe spends about 1 s of its 14 s launch on its own checks
@@ -748,7 +908,7 @@ def runner_of(name):
             'run-browser.py' if name == 'mihawk-browser' else
             'run-game-mode.py' if name.startswith('game-mode') else
             'run-desktop-input.py' if name == 'launcher-desktop' else
-            'run-tls-fixture.py' if name == 'launcher-tls' else
+            'run-tls-fixture.py' if name in ('launcher-tls', 'winhttp64', 'winhttp64-title') else
             'run-installer-slice.py' if name == 'installers-fast' else
             'run-wine-slice.py' if name.startswith('wine-') else 'run-console.py')
 

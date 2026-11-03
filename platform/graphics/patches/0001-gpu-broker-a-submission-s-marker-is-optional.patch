@@ -1,0 +1,40 @@
+From 224d320e3ff73bdfe73cf48e8eacfb40c259eff8 Mon Sep 17 00:00:00 2001
+From: Mihawk <163614687+mihawk-99@users.noreply.github.com>
+Date: Mon, 2 Nov 2026 22:12:58 -0500
+Subject: [PATCH] gpu-broker: a submission's marker is optional, so RADV's
+ GPU-clock read goes through
+
+The broker refused every submission without a client marker (argument[0]), though it never uses the marker: it
+fences with its own page, and the client's own words write its marker. RADV's GPU-clock read
+(radv_ps5_read_gpu_clock) submits its timestamp packet with none, so in every broker client each timestamp and clock
+calibration read 0 (RADEON_TIMESTAMP, vkGetCalibratedTimestampsKHR, D3D12 GetClockCalibration), and the broker's log
+showed operation=4 status=0x16 for each read.
+
+- server.cpp submit(): a marker that is given must still be the client's and 4-byte aligned; none is no longer
+  EINVAL.
+
+Proven: server.cpp compiles with the title's own command. PS5_Proton's tests/d3d12-clock-probe.c (non-zero, rising
+GPU readings at the CPU's rate) is the console check. Not yet run on a console; a side branch on the pinned
+ace98a99 for that run, not main.
+---
+ tooling/gpu-broker/server.cpp | 6 +++++-
+ 1 file changed, 5 insertions(+), 1 deletion(-)
+
+diff --git a/tooling/gpu-broker/server.cpp b/tooling/gpu-broker/server.cpp
+index 468bb18..6f4f0cf 100644
+--- a/tooling/gpu-broker/server.cpp
++++ b/tooling/gpu-broker/server.cpp
+@@ -689,8 +689,12 @@ void free_buffer(Client &c,Buffer &b,FILE *out)
+ }
+ int submit(Client &c,const PwGpuMessage &m,FILE *out,unsigned client)
+ {
++    // The client's marker is optional: the broker fences with its own page (Fences), and the client's words write
++    // its marker themselves. RADV's GPU-clock read (radv_ps5_read_gpu_clock) sends none and was refused, so every
++    // timestamp and clock calibration a broker client asked for read 0. A marker that is given must still be the
++    // client's.
+     if(!m.bytes || m.bytes%4 || m.bytes>16*1024*1024 || m.address%4 || !owned(c,m.address,m.bytes) ||
+-       !m.argument[0] || m.argument[0]%4 || !owned(c,m.argument[0],4))return EINVAL;
++       (m.argument[0] && (m.argument[0]%4 || !owned(c,m.argument[0],4))))return EINVAL;
+     if(wedged)return EIO;
+     if(!fences_ready(out))return ENOMEM;
+     const uint64_t t0=radv_ps5_now_ns();

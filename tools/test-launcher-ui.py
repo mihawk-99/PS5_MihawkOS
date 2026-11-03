@@ -4,6 +4,7 @@ Copyright (C) 2026 Mihawk
 SPDX-License-Identifier: GPL-3.0-or-later
 """
 import argparse
+import json
 import os
 from pathlib import Path
 import re
@@ -122,7 +123,8 @@ def footer_margins(picture):
 def steam_warning(render):
     """The Steam memory warning (src/pw_steam_memory.h): before Steam installs or starts, a census whose room under the
     1,800 MiB swap point is less than Steam's measured need shows what to do first; CIRCLE goes back, TRIANGLE held 5 s
-    goes on. The PC has no such census: PROTON_MEMORY_TEST="system MiB,payloads MiB,payloads" makes one up."""
+    goes on; so does a page-table reading under Steam's need. The PC has no such census: PROTON_MEMORY_TEST="system MiB,
+    payloads MiB,payloads[,page tables free,page tables total]" makes one up."""
     tile = [(10, 'right'), (14, 'cross')]   # Steam's tile, from Mihawk OS
     def says(log, *lines):
         return [line for line in lines if line not in log]
@@ -151,8 +153,19 @@ def steam_warning(render):
         os.environ['PROTON_MEMORY_TEST'] = '1300,54,6'
         log = render('steam-warning-fits', 30, tile)
         assert 'steam memory: 1300 MiB' in log and 'it fits under 1800' in log and 'warned' not in log, log[-2000:]
-        # No census (no /data, or no figure): never warn
+        # Memory fits but the system's page tables do not (a fw 11.60 tester's 2,642 free, Alpha 8): it warns, naming them
+        os.environ['PROTON_MEMORY_TEST'] = '900,54,6,2642,8192'
+        log = render('steam-warning-tables', 40, tile)
+        assert not says(log, "steam memory: warned before Steam's tile: 900 MiB", 'system page tables 2642 free of 8192 (Steam needs 2800)'), log[-2000:]
+        os.environ['PROTON_MEMORY_TEST'] = '900,54,6,5900,8192'
+        log = render('steam-warning-tables-fit', 30, tile)
+        assert 'it fits under 1800' in log and 'warned' not in log, log[-2000:]
+        os.environ.update(PROTON_MEMORY_TEST='900,54,6,2642,8192', PROTON_SETUP_LANGUAGE='zh-CN')
+        log = render('steam-warning-tables-zh', 40, tile)
+        assert "steam memory: warned before Steam's tile" in log and re.search(r'home: language zh-CN, .* 0 characters missing', log), log[-2000:]
+        os.environ.pop('PROTON_SETUP_LANGUAGE')
         os.environ.pop('PROTON_MEMORY_TEST')
+        # No census (no /data, or no figure): never warn
         log = render('steam-warning-none', 30, tile)
         assert "steam memory: no census before Steam's tile: no warning" in log and 'warned' not in log
         # A payload counted as extra adds its step: through the checklist first (held 5 s), then Steam's tile
@@ -168,7 +181,7 @@ def steam_warning(render):
             os.environ.pop(name, None)
         shutil.rmtree(APP / 'data', ignore_errors=True)
     print(f'Steam memory warning: warns at 1400 MiB (back, a let-go, a 5 s hold that goes on), from the tile, Files\' '
-          f'steam.exe and the setup\'s Install Steam; none at 1300 or without a census; the extra-payloads step; en and ja. '
+          f'steam.exe and the setup\'s Install Steam; none at 1300 or without a census; the extra-payloads step; at 2,642 free page tables (not at 5,900); en, ja and zh. '
           f'Pictures: {ROOT / "klog/ui-host"}')
 
 
@@ -247,6 +260,34 @@ def home_grid(render):
             'A Quiet Garden preview WINE_PS5_CONTROLLER=xbox-one', 'A Quiet Garden preview WINE_PS5_CONTROLLER=dualsense',
             'A Quiet Garden preview WINE_PS5_TITLE_GAMES=0'], log[-3000:]
         assert before == {path: path.read_bytes() for path in catalog.glob('*/game.json')}, 'a scripted run saved Options'
+        # The save itself (PROTON_OPTIONS_SAVE_TEST=1): Game Mode on, the controller to the Xbox 360's, then off the
+        # title; each change is written to the game's game.json, which keeps its other fields, and read back here.
+        garden = catalog / 'a-quiet-garden/game.json'
+        os.environ['PROTON_OPTIONS_SAVE_TEST'] = '1'
+        try:
+            log = render('home-options-save', 50, [(6, 'right'), (8, 'right'), (10, 'triangle'), (14, 'cross'), (18, 'down'),
+                                                   (22, 'cross'), (26, 'down'), (30, 'cross')])
+        finally:
+            del os.environ['PROTON_OPTIONS_SAVE_TEST']
+        assert re.findall(r'options: (.*)', log) == [
+            'A Quiet Garden', 'A Quiet Garden saved WINE_PS5_GAME_MODE=1', 'A Quiet Garden saved WINE_PS5_CONTROLLER=xbox-360',
+            'A Quiet Garden saved WINE_PS5_TITLE_GAMES=0'], log[-3000:]
+        saved = json.loads(garden.read_text())
+        assert saved == {'name': 'A Quiet Garden', 'detail': 'Windows', 'env': [
+            'WINE_PS5_GAME_MODE=1', 'WINE_PS5_CONTROLLER=xbox-360', 'WINE_PS5_TITLE_GAMES=0']}, saved
+        assert not garden.with_name('game.json.tmp').exists()
+        others = {path: path.read_bytes() for path in catalog.glob('*/game.json') if path != garden}
+        assert others == {path: data for path, data in before.items() if path != garden}, 'Options saved another game'
+        # Back to Settings' value: the env word goes, and an empty env list with it
+        os.environ['PROTON_OPTIONS_SAVE_TEST'] = '1'
+        try:
+            log = render('home-options-unsave', 60, [(6, 'right'), (8, 'right'), (10, 'triangle'), (14, 'cross'), (18, 'cross'),
+                                                     (22, 'down'), (26, 'cross'), (30, 'cross'), (34, 'cross'), (38, 'down'),
+                                                     (42, 'cross')])
+        finally:
+            del os.environ['PROTON_OPTIONS_SAVE_TEST']
+        assert json.loads(garden.read_text()) == {'name': 'A Quiet Garden', 'detail': 'Windows'}, garden.read_text()
+        garden.write_bytes(before[garden])
         render('home-options-back', 30, [(6, 'right'), (8, 'right'), (10, 'triangle'), (14, 'circle')])
         # Files from the dock: the root (folders first, the link out and notes.txt left out), Games, an empty folder and
         # back, Tide Harbor, a program's launch request (refused on the PC, which has no /data; a scripted run starts

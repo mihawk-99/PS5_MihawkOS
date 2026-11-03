@@ -55,6 +55,8 @@ int pw_cwd_fold(const char *absolute, char *out, size_t size);
  * resolve against it; fchdir() checks it still names the descriptor. */
 void pw_cwd_track(int fd, const char *absolute);
 void pw_cwd_forget(int fd);
+/* ntdll's suspend guard around the lock (pw_ntsync_critical_enter/leave), set once; the server's copy has none. */
+void pw_cwd_set_guard(void (*enter)(void), void (*leave)(void));
 /* Copy the recorded path of fd; 0, or -1 when none is recorded. */
 int pw_cwd_fd_path(int fd, char *out, size_t size);
 /* Resolve path for an *at() call: AT_FDCWD (at_fdcwd) and absolute paths as

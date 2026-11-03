@@ -151,8 +151,29 @@ static void census_cases(void)
     assert(count == 2 && groups[0].threads == 2 && groups[1].type == 2 && groups[1].threads == 2);
 }
 
+/* The title's game: Windows priorities above normal step up from P, never to the title's own 700. */
+static void windows_priority_cases(void)
+{
+    assert(pw_helper_sched_windows_priority(8, 767) == 767);    /* normal */
+    assert(pw_helper_sched_windows_priority(1, 767) == 767);    /* idle stays at the floor, not lower */
+    assert(pw_helper_sched_windows_priority(6, 767) == 767);    /* lowest */
+    assert(pw_helper_sched_windows_priority(9, 767) == 766);    /* above normal */
+    assert(pw_helper_sched_windows_priority(10, 767) == 765);   /* highest */
+    assert(pw_helper_sched_windows_priority(15, 767) == 762);   /* time critical */
+    assert(pw_helper_sched_windows_priority(31, 767) == 761);   /* realtime class */
+    for (int e = 0; e <= 31; ++e) {
+        const int p = pw_helper_sched_windows_priority(e, 767);
+        assert(p > PW_HELPER_SCHED_SERVICE_DEFAULT && p <= 767);
+        assert(e == 0 || p <= pw_helper_sched_windows_priority(e - 1, 767));   /* never lower for a higher priority */
+        assert(pw_helper_sched_windows_priority(e, 703) >= 701);               /* a raised P still stays below 700 */
+    }
+    assert(pw_helper_sched_windows_priority(15, 0) == 762);     /* an unset or wild P is the default */
+    assert(pw_helper_sched_windows_priority(15, 700) == 762 && pw_helper_sched_windows_priority(15, 900) == 762);
+}
+
 int main(void)
 {
+    windows_priority_cases();
     read_cases();
     plan_cases();
     census_cases();

@@ -198,6 +198,23 @@ int main(void)
     unit.code = 'a';
     unit.down = 2;
     assert(pw_wine_post_input(&unit) == -1);
+    /* The controller kind the overlay switches live (patches 2471, 2472): none until set, then as set, out of range none */
+    assert(pw_wine_pad_kind() == -1);
+    pw_wine_set_pad_kind(1);
+    assert(pw_wine_pad_kind() == 1);
+    pw_wine_set_pad_kind(2);
+    assert(pw_wine_pad_kind() == 2);
+    pw_wine_set_pad_kind(7);
+    assert(pw_wine_pad_kind() == -1);
+    /* The control overlay's mouse off and on (patch 2470): down 0 and 1 pass, any other state is refused */
+    PwWineInput mouse = {PW_WINE_INPUT_MOUSE_PRESENT, 0, 0, 0, 0};
+    assert(!pw_wine_post_input(&mouse));
+    mouse.down = 1;
+    assert(!pw_wine_post_input(&mouse));
+    assert(pw_wine_next_input(&out) && out.type == PW_WINE_INPUT_MOUSE_PRESENT && out.down == 0);
+    assert(pw_wine_next_input(&out) && out.type == PW_WINE_INPUT_MOUSE_PRESENT && out.down == 1);
+    mouse.down = 2;
+    assert(pw_wine_post_input(&mouse) == -1);
     /* Keys carry a scan code and the extended flag (a USB keyboard's Right arrow); a key without a virtual key, a
      * button past X2 and a code past the flag are refused. */
     PwWineInput key = {PW_WINE_INPUT_KEY, 0x27 | 0x4d << PW_WINE_KEY_SCAN_SHIFT | PW_WINE_KEY_EXTENDED, 0, 0, 1};

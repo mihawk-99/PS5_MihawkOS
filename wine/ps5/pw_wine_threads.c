@@ -3,10 +3,12 @@
 #define _GNU_SOURCE /* REG_RIP in the host test */
 #endif
 #include "pw_wine_threads.h"
+#include "../../src/pw_helper_sched.h"
 #include <errno.h>
 #include <sched.h>
 #include <signal.h>
 #include <stdio.h>
+#include <stdlib.h>
 #include <string.h>
 #include <time.h>
 #include <ucontext.h>
@@ -108,6 +110,14 @@ int pw_wine_thread_set_priority(long tid,int policy,int priority)
     status=entry?pthread_setschedparam(entry->thread,policy,&param):ESRCH;
     pthread_mutex_unlock(&lock);
     return status;
+}
+
+int pw_wine_thread_set_windows_priority(long tid,int effective)
+{
+    const char *setting=getenv("WINE_PS5_SCHED_TITLE");
+    const int program=setting?atoi(setting):0;
+    if(program<=0)return ENOTSUP;
+    return pw_wine_thread_set_priority(tid,PW_HELPER_SCHED_RR,pw_helper_sched_windows_priority(effective,program));
 }
 
 /* The sampler. A slot belongs to a registry entry; the handler finds its own slot by thread, so no lock is taken in it. */

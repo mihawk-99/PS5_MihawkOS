@@ -89,15 +89,18 @@ int main(void)
     fputs("left no-such-button\n", file);
     fclose(file);
     assert(pw_controls_load(&loaded, path) == EINVAL && loaded.button[0] == 1);
-    /* The on-screen keyboard's gesture: Off by default, saved only when chosen, and a file from before it still reads. */
+    /* The control overlay's gesture (Alpha 8): L3 + R3 by default, always saved, Off as "keyboard off"; a file from before
+     * it (no line: the keyboard Off or older) gets L3 + R3, a gesture chosen before stays. */
     pw_controls_defaults(&controls);
-    assert(controls.keyboard == PW_OSK_OFF);
+    assert(controls.keyboard == PW_OSK_L3_R3);
+    pw_controls_set_keyboard(&controls, PW_OSK_OFF);
     assert(!pw_controls_save(&controls, path));
     char text[256] = {0};
     file = fopen(path, "r");
     assert(file && fread(text, 1, sizeof(text) - 1, file) > 0);
     fclose(file);
-    assert(!strcmp(text, "left touchpad\nright none\nmiddle none\n"));   /* byte for byte what an earlier version wrote */
+    assert(!strcmp(text, "left touchpad\nright none\nmiddle none\nkeyboard off\n"));
+    assert(!pw_controls_load(&loaded, path) && loaded.keyboard == PW_OSK_OFF);
     assert(!pw_controls_set_keyboard(&controls, PW_OSK_L3_R3) && pw_controls_set_keyboard(&controls, PW_OSK_TRIGGERS) == EINVAL);
     assert(controls.keyboard == PW_OSK_L3_R3);
     assert(!pw_controls_save(&controls, path));
@@ -111,10 +114,15 @@ int main(void)
     assert(pw_controls_save(&controls, path) == EINVAL);
     file = fopen(path, "w");
     assert(file);
-    fputs("left touchpad\nright none\nmiddle none\n", file);   /* a file from before the keyboard */
+    fputs("left touchpad\nright none\nmiddle none\n", file);   /* a file from before the overlay, the keyboard Off */
     fclose(file);
-    loaded.keyboard = PW_OSK_L3_R3;
-    assert(!pw_controls_load(&loaded, path) && loaded.keyboard == PW_OSK_OFF);
+    loaded.keyboard = PW_OSK_OFF;
+    assert(!pw_controls_load(&loaded, path) && loaded.keyboard == PW_OSK_L3_R3);
+    file = fopen(path, "w");
+    assert(file);
+    fputs("left touchpad\nright none\nmiddle none\nkeyboard touchpad\n", file);   /* a gesture chosen before stays */
+    fclose(file);
+    assert(!pw_controls_load(&loaded, path) && loaded.keyboard == PW_OSK_TOUCHPAD_TWO);
     const char *bad[] = {"left touchpad\nright none\nmiddle none\nkeyboard nonsense\n",
                          "left touchpad\nright none\nmiddle none\nkeyboard\n",
                          "left touchpad\nright none\nmiddle none\nmouse l3-r3\n",
@@ -125,7 +133,7 @@ int main(void)
         fputs(bad[i], file);
         fclose(file);
         loaded.keyboard = PW_OSK_OPTIONS_TOUCHPAD;
-        assert(pw_controls_load(&loaded, path) == EINVAL && loaded.keyboard == PW_OSK_OFF && loaded.button[0] == 1);
+        assert(pw_controls_load(&loaded, path) == EINVAL && loaded.keyboard == PW_OSK_L3_R3 && loaded.button[0] == 1);
     }
     unlink(path);
     rmdir(folder);

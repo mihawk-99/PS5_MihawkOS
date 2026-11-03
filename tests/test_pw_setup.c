@@ -220,6 +220,10 @@ int main(int argc, char **argv)
     const int made[] = {1, 1, 1, 0, 0, 0, 0};
     for (size_t i = 0; i < sizeof(made) / sizeof(made[0]); ++i) assert(pw_setup_prefix_made(stamps[i]) == made[i]);
     assert(!strcmp(stamps[0], "1734871457 wow64"));
+    /* A prefix whose stamp names another wine.inf time updates in this session; the same time, or no stamp, does not. */
+    assert(pw_setup_prefix_outdated("1734871457 wow64\r\n", 1643688050) && !pw_setup_prefix_outdated("1643688050 wow64\r\n", 1643688050));
+    assert(!pw_setup_prefix_outdated("1643688050", 1643688050) && !pw_setup_prefix_outdated("", 1) &&
+           !pw_setup_prefix_outdated(NULL, 1) && !pw_setup_prefix_outdated("wow64", 1));
     /* The cover's stages, from first-install-unattended-2026-10-19-04's processes in their order. */
     static const struct { const char *command_line; PwSetupBuild stage; } processes[] = {
         {"\"C:\\windows\\system32\\wineboot.exe\" --init", PW_SETUP_BUILD_SETTINGS},

@@ -484,3 +484,38 @@ evidence/re9-rc7-run6-seh-pro-2026-11-01.json
 evidence/re9-rc7-run7-name-pro-2026-11-01.json
 evidence/re9-rc7-run8-vkd3dwarn-pro-2026-11-01.json
 evidence/re9-rc7-run9-nosl-pro-2026-11-01.json
+
+[steam] Alpha 8's Steam fit (the owner asked on 2026-11-02 for Steam on 10.xx-11.xx consoles and for its browser inside MihawkOS in 8.1): the page-table census and warning, the shared-section probe of Steam's browser IPC, the GPU driver's region kept out of the title (V8's cage, Steam's browser), and the patches whose notes cite those runs
+tests/named-section-probe.c
+src/pw_overlay.h
+native/proton_wine_child.c
+src/pw_vm_census.h
+ps5/CMakeLists.txt
+wine/patches/README.md
+wine/patches/2456-ntdll-ps5-a-first-chance-fault-line-says-what-the-kernel-maps-at-the-touched-page.patch
+wine/patches/2460-ntdll-ps5-the-log-says-where-a-large-reservation-landed.patch
+wine/patches/2461-ntdll-ps5-the-gpu-driver-s-device-memory-is-no-windows-program-s-in-the-title.patch
+
+[steam] Alpha 8's reliability fixes (2026-11-02): a game's Steam crash reporter dumping it froze the game (2453, the copy pipe, the suspend probe), and the Visual C++ markers Steam writes after a run (2455's probe)
+tests/suspend-server-probe.c
+tests/vcredist-check-probe.c
+wine/patches/2453-server-ps5-a-title-process-s-memory-is-copied-through-a-pipe-that-never-blocks.patch
+wine/ps5/pw_wine_copy_pipe.h
+
+[records] Alpha 8's Steam runs on the standard PS5 (2026-11-02), kept as measured: the page-table measurement, the warning's bounce and the browser-in-the-title experiments (E1)
+evidence/a8-steam-first-base-2026-11-02-01.json
+evidence/a8-steam-second-base-2026-11-02-01.json
+evidence/a8-steam-third-base-2026-11-02-01.json
+evidence/a8-steam-install-base-2026-11-02-01.json
+evidence/a8-steamfit-base-2026-11-02-01.json
+evidence/steam-tables-bounce-base-2026-11-02-01.json
+evidence/e1-webhelper-title-base-2026-11-02-01.json
+evidence/e1-webhelper-title-base-2026-11-02-02.json
+evidence/e1-webhelper-title-base-2026-11-02-03.json
+evidence/e1-webhelper-title-base-2026-11-02-04.json
+evidence/e1-webhelper-title-base-2026-11-02-05.json
+evidence/a8rel81-base-2026-11-02-e1.json
+evidence/a8rel82-base-2026-11-02-e1.json
+
+[steam] bundle G, 2430 on by default (the owner's ask on 2026-11-03, no per-game setting): a game's copy from Steam hit the same refusals, and no game's own setting reaches a Steam launch
+wine/patches/2430-ntdll-ps5-a-reservation-above-the-console-s-address-space-may-be-placed-elsewhere.patch

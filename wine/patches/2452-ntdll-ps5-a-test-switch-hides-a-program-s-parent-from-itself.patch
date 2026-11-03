@@ -1,0 +1,38 @@
+From 0000000000000000000000000000000000000000 Mon Sep 17 00:00:00 2001
+From: Mihawk <163614687+mihawk-99@users.noreply.github.com>
+Date: Mon, 02 Nov 2026 13:00:00 -0400
+Subject: [PATCH] ntdll: PS5: A test switch hides a program's parent from itself.
+
+The Witcher 3 (DirectX 12) ends itself with exit code 0 about 1 s after its device whenever a parent is alive in a helper (the
+desktop's explorer.exe, or cmd.exe: w3-parent-final-pro-2026-11-01, on a build with patches 2426 and 2427) and plays when it is
+the session's root (witcher3-dx12-repro-pro-2026-11-01, 130 s). Its +process trace differs only there: as a child it opens its
+parent (ProcessImageFileNameWin32: cmd.exe), and its walk of the process list (EnumProcesses; per process WoW64, basic, the
+module's base name, memory counters) begins with that parent; as the root it opens no parent and walks itself, services.exe
+and winedevice.exe. Every answer about the parent is a Windows one (basic, image, memory floor of patch 2426; the gate's
+parent-query64-title checks them), so which one ends it cannot be read from the log.
+
+WINE_PS5_HIDE_PARENT=1, off by default, makes ProcessBasicInformation of the caller's own process report no parent
+(InheritedFromUniqueProcessId 0, as a session's root reads it). One console run of that game started through cmd.exe with
+the switch says whether a live parent is the cause: if it plays, the fix is to start a desktop-launched game that the title
+runs with its parent hidden (about 10 lines in kernelbase); if it still ends, the parent is not the cause. No other change.
+---
+diff --git a/dlls/ntdll/unix/process.c b/dlls/ntdll/unix/process.c
+index 39c5aea..ac1f868 100644
+--- a/dlls/ntdll/unix/process.c
++++ b/dlls/ntdll/unix/process.c
+@@ -1452,6 +1452,13 @@ NTSTATUS WINAPI NtQueryInformationProcess( HANDLE handle, PROCESSINFOCLASS class
+                             pbi.BasePriority = reply->base_priority;
+                             pbi.UniqueProcessId = reply->pid;
+                             pbi.InheritedFromUniqueProcessId = reply->ppid;
++#ifdef __PROSPERO__
++                            /* Test switch (patch 2452): a program asking of itself is told it has no parent, as a game
++                             * started at the session's root is, to see whether a live parent is what ends it. */
++                            if (reply->pid == HandleToULong( NtCurrentTeb()->ClientId.UniqueProcess ) &&
++                                getenv( "WINE_PS5_HIDE_PARENT" ) && !strcmp( getenv( "WINE_PS5_HIDE_PARENT" ), "1" ))
++                                pbi.InheritedFromUniqueProcessId = 0;
++#endif
+                             if (is_old_wow64())
+                             {
+                                 if (!is_machine_64bit( reply->machine ))
+-- 
+2.56.0

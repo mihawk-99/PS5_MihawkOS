@@ -23,7 +23,7 @@ declare -A sources=(
     [test_pw_aurelia]="src/pw_aurelia.c"
     [test_pw_steam]="src/pw_steam.c"
     [test_pw_steam_guide]="src/pw_steam_guide.c"
-    [test_pw_steam_screen]="src/pw_steam_screen.c src/pw_loading_art.c src/pw_setup.c src/pw_vkbd.c"
+    [test_pw_steam_screen]="src/pw_steam_screen.c src/pw_loading_art.c src/pw_setup.c src/pw_vkbd.c src/pw_overlay.c src/pw_controller.c"
     [test_pw_path_nocase]="src/pw_path_nocase.c"
     [test_pw_steamcmd]="src/pw_steamcmd.c"
     [test_pw_steamcmd_setup]="src/pw_steamcmd_setup.c src/pw_steamcmd.c"
@@ -38,8 +38,9 @@ declare -A sources=(
     [test_forwarder_worker]=""
     [test_pw_speed_defaults]=""
     [test_pw_display_rate]=""
+    [test_pw_present_pacing]=""
     [test_pw_present_retry]=""
-    [test_pw_suspend]=""
+    [test_pw_suspend]="src/pw_hang_breaker.c"
     [test_pw_window_direct]="src/pw_window_direct.c src/pw_window_compose.c src/pw_window_effects.c"
     [test_pw_desktop_session]="src/pw_desktop_session.c"
     [test_pw_app_environment]="src/pw_app_environment.c src/pw_environment.c"
@@ -49,7 +50,7 @@ declare -A sources=(
     [test_proton_dualsense]=""
     [test_proton_touchpad]=""
     [test_pw_controls]="src/pw_controls.c"
-    [test_pw_osk]="src/pw_osk.c native/pw_osk_ps5.c"
+    [test_pw_osk]="src/pw_osk.c src/pw_vkbd.c native/pw_osk_ps5.c"
     [test_pw_usb_input]="src/pw_usb_input.c"
     [test_pw_game_mode]="src/pw_game_mode.c"
     [test_pw_high_refresh]="src/pw_high_refresh.c"
@@ -72,7 +73,7 @@ declare -A sources=(
     [test_pw_audio_ring]="src/pw_audio_ring.c" [test_pw_memory_helper]="src/pw_memory_helper.c" [test_pw_memory_service]="src/pw_memory_service.c"
     [test_pw_wine_dmem_regions]="wine/ps5/pw_wine_dmem.c"
     [test_pw_wine_heap]="wine/ps5/pw_wine_heap.c"
-    [test_pw_wine_dmem_ps5]="wine/ps5/pw_wine_dmem_ps5.c wine/ps5/pw_wine_dmem.c wine/ps5/pw_wine_heap.c wine/ps5/pw_wine_pages.c wine/ps5/pw_wine_vm.c wine/ps5/pw_wine_alias.c
+    [test_pw_wine_dmem_ps5]="wine/ps5/pw_wine_dmem_ps5.c wine/ps5/pw_wine_dmem.c wine/ps5/pw_wine_heap.c wine/ps5/pw_wine_cwd.c wine/ps5/pw_wine_pages.c wine/ps5/pw_wine_vm.c wine/ps5/pw_wine_alias.c
         wine/ps5/pw_wine_perf.c wine/ps5/pw_wine_codeshare.c wine/ps5/pw_wine_code_budget.c"
     [test_pw_wine_alias]="wine/ps5/pw_wine_alias.c"
     [test_pw_wine_mmu4k]="wine/ps5/pw_wine_mmu4k.c wine/ps5/pw_wine_mmu4k_slot.S wine/ps5/pw_wine_alias.c src/pw_ia32_isa.c
@@ -102,6 +103,9 @@ declare -A sources=(
     [test_pw_wine_section_cluster]="wine/ps5/pw_wine_section.c"
     [test_pw_wine_section]="wine/ps5/pw_wine_section.c"
     [test_pw_wine_section_stage]=""
+    [test_pw_wine_fault_words]=""
+    [test_pw_wine_copy_pipe]=""
+    [test_pw_wine_high_reserve]=""
     [test_pw_wine_dsection]="wine/ps5/pw_wine_dsection.c"
     [test_pw_wine_codeshare]="wine/ps5/pw_wine_codeshare.c"
     [test_pw_wine_code_budget]="wine/ps5/pw_wine_code_budget.c"
@@ -121,9 +125,12 @@ declare -A sources=(
     [test_pw_pipe_memory]="src/pw_pipe_memory.c"
     [test_pw_memory_guard]="src/pw_memory_guard.c"
     [test_pw_hang_breaker]="src/pw_hang_breaker.c"
+    [test_pw_freeze_watch]="src/pw_freeze_watch.c"
+    [test_pw_gpu_host_limit]=""
     [test_pw_log_sessions]="src/pw_log_sessions.c"
     [test_pw_parked]=""
     [test_pw_vkbd]="src/pw_vkbd.c"
+    [test_pw_overlay]="src/pw_overlay.c"
     [test_pw_missing_dll]=""
     [test_pw_spawn_wait]=""
     [test_pw_capped_log]="src/pw_capped_log.c"
@@ -151,6 +158,7 @@ declare -A sources=(
     [test_pw_ntsync]="src/pw_ntsync.c"
     [test_pw_wine_sink]="wine/ps5/pw_wine_sink.c wine/ps5/pw_wine_window.c wine/ps5/pw_wine_pages.c src/pw_window_page.c src/pw_audio_ring.c"
     [test_pw_wine_pages]="wine/ps5/pw_wine_pages.c"
+    [test_pw_wine_xusb]=""
     [test_pw_wine_process_io]="wine/ps5/pw_wine_process_io.c"
     [test_pw_wine_threads]="wine/ps5/pw_wine_threads.c"
     [test_pw_ws2_32_libc]="wine/ps5/pw_ws2_32_libc.c"
@@ -163,7 +171,7 @@ declare -A sources=(
     [test_wine_virtual_guard]=""
     [test_process_rules]="src/pw_steam.c"
     [test_process_hid_link]=""
-    [test_crash_replays]="tests/fake_ps5_kernel.c wine/ps5/pw_wine_dmem_ps5.c wine/ps5/pw_wine_dmem.c wine/ps5/pw_wine_heap.c
+    [test_crash_replays]="tests/fake_ps5_kernel.c wine/ps5/pw_wine_dmem_ps5.c wine/ps5/pw_wine_dmem.c wine/ps5/pw_wine_heap.c wine/ps5/pw_wine_cwd.c
         wine/ps5/pw_wine_pages.c wine/ps5/pw_wine_pages_ps5.c wine/ps5/pw_wine_vm.c wine/ps5/pw_wine_prx.c wine/ps5/pw_wine_alias.c
         wine/ps5/pw_wine_mmu4k_ps5.c wine/ps5/pw_wine_mmu4k.c wine/ps5/pw_wine_mmu4k_slot.S src/pw_ia32_isa.c src/pw_ia32_decode.c
         wine/ps5/pw_wine_perf.c wine/ps5/pw_wine_codeshare.c wine/ps5/pw_wine_code_budget.c .deps/graphics-foundation/tooling/gpu-broker/client.c"
@@ -246,7 +254,7 @@ for test in "$root"/tests/test_*.c; do
             "$root"/wine/patches/2104-*.patch
     fi
     if [[ $name == test_process_hid_link ]]; then
-        python3 "$root/tests/extract_process_rules.py" "$root"/wine/patches/2401-*.patch "$out/process_hid_link.inc"
+        python3 "$root/tests/extract_process_rules.py" "$root"/wine/patches/2480-*.patch "$out/process_hid_link.inc"
     fi
     if [[ $name == test_wine_virtual_guard ]]; then
         # shortcut: reads the tree the last build-wine-ps5.sh applied, not the patch series; build after editing 1128.
@@ -306,7 +314,7 @@ if (( $# == 0 )) || [[ "$*" == *console_guard* ]]; then
     for test in console_guard battery_runner gate_quick shell_capture window_compose_runner appearance_runner profile_report \
             desktop_session_runner desktop_input_runner tls_fixture telemetry_teardown \
             window_material_tokens window_effects_runner frame_pacing_runner deploy_folder console_setup sched_watch run_console_verdicts \
-            placed_unmap_order module_wiring helper_opengl privacy_check dll_overrides prx_exports taskbar_logo stage_licences publication_check title_icon pack_runtime pw_https mihawk_wallpaper aero_wallpapers mihawk_music browser_lines sign_release update_rehearsal package_install check_title_imports carrier_image_probe payload_firmware lapy_patches memory_breakdown run_shared_charge webui_http webui_i18n deploy_wine_retire start_stages wineboot_install_sentinel build_stamp pw_foreign_process pw_command_line; do
+            placed_unmap_order module_wiring helper_opengl privacy_check dll_overrides prx_exports taskbar_logo stage_licences publication_check title_icon pack_runtime pw_https mihawk_wallpaper aero_wallpapers mihawk_music browser_lines sign_release update_rehearsal package_install check_title_imports carrier_image_probe payload_firmware lapy_patches memory_breakdown run_shared_charge webui_http webui_i18n deploy_wine_retire stage_wine_inf vcruntime_records start_stages wineboot_install_sentinel build_stamp pw_foreign_process pw_command_line; do
         python3 "$root/tests/test_$test.py"
         ran=$((ran + 1))
     done

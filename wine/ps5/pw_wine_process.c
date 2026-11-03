@@ -1074,6 +1074,21 @@ static void inherit_environment(char *out,size_t size)
     extern char **environ;
     pw_wine_inherit_environment(environ,out,size);
 }
+/* What a new program passes on of its library status (WINE_PS5_LIBRARY_ROOT, pw_title_game_inherit), after what it
+ * inherits: never the spawner's own value, which no helper inherits. 0, or -1 when it does not fit (left out). */
+static int give_library_root(char *environment, size_t size, const char *image)
+{
+    char root[1024];
+    pw_title_game_inherit(image, getenv("WINE_PS5_LIBRARY_ROOT"), getenv("WINE_PS5_TITLE_LISTED"), root, sizeof(root));
+    if (!root[0]) return 0;
+    char *end = environment;
+    while (*end) end += strlen(end) + 1;
+    const size_t available = size - (size_t)(end - environment);
+    const int length = snprintf(end, available, "WINE_PS5_LIBRARY_ROOT=%s", root);
+    if (length < 0 || (size_t)length + 2 > available) { *end = 0; return -1; }
+    end[length + 1] = 0;  /* the environment is a double-NUL-terminated list */
+    return 0;
+}
 static int prepare_boot(struct pw_child_bootstrap *boot,const char *runtime,const char *prefix,const char *cwd,const char *debug)
 {
     memset(boot,0,sizeof(*boot));boot->protocol=PW_CHILD_PROTOCOL;boot->size=sizeof(*boot);
@@ -1093,6 +1108,8 @@ int pw_ps5_spawn(int server_fd, const char *runtime, const char *prefix, const c
     /* Names that do not fit stay empty: the process then simply gets no catalog settings. */
     if(image && strlen(image)<sizeof(boot.image))strcpy(boot.image,image);
     if(command_line && strlen(command_line)<sizeof(boot.command_line))strcpy(boot.command_line,command_line);
+    if(image && give_library_root(boot.environment,sizeof(boot.environment),image))
+        fprintf(stderr,"wine-ps5: %s: no room to pass its library status on\n",image);
     /* The one program the title runs itself, its code and memory in the title's partition (WINE_PS5_TITLE_PROCESS=<image
      * name>, docs/FLEXIBLE_MEMORY.md): the owner-graphics child (patch 0927), named rather than marked by the program. */
     const char *title_process=getenv("WINE_PS5_TITLE_PROCESS");
@@ -1147,9 +1164,19 @@ static int folder_has(const char *dir, const char *name)
 unsigned int pw_ps5_title_route(const char *unix_name, unsigned short machine, const char *image, const char *command_line)
 {
     const char *setting = getenv("WINE_PS5_TITLE_GAMES");
-    if (!setting || strcmp(setting, "1") || !image || !*image || (child_control < 0 && !gpu_open)) return 0;
-    enum PwTitleRoute route = pw_title_game_route(image, machine == 0x8664, setting, getenv("WINE_PS5_TITLE_OPTOUT"),
-                                                  getenv("WINE_PS5_TITLE_PICK"), getenv("WINE_PS5_TITLE_LISTED"));
+    if (!image || !*image) return 0;
+    if (!setting || strcmp(setting, "1") || (child_control < 0 && !gpu_open)) {
+        fprintf(stderr, "wine-ps5: %s: a helper (%s)\n", pw_title_game_name(image),
+                !setting || strcmp(setting, "1") ? "the setting is off" : "no GPU broker in the title");
+        return 0;
+    }
+    /* A program a library program (or steam.exe) started is one too (pw_title_game_inherit): a Steam shortcut's game. */
+    char root[1024];
+    const char *parent_root = getenv("WINE_PS5_LIBRARY_ROOT");
+    const int inherited = pw_title_game_inherit(image, parent_root, getenv("WINE_PS5_TITLE_LISTED"), root, sizeof(root));
+    enum PwTitleRoute route = pw_title_game_route_inherited(image, machine == 0x8664, setting,
+                                                            getenv("WINE_PS5_TITLE_OPTOUT"), getenv("WINE_PS5_TITLE_PICK"),
+                                                            getenv("WINE_PS5_TITLE_LISTED"), inherited);
     enum PwPeKind kind = PW_PE_KIND_UNREAD;
     char deepest[PW_PE_IMPORT_NAME] = "";
     if (route == PW_TITLE_ROUTE_CANDIDATE && unix_name) {
@@ -1166,11 +1193,13 @@ unsigned int pw_ps5_title_route(const char *unix_name, unsigned short machine, c
         if (folder.fd >= 0) close(folder.fd);
     }
     route = pw_title_game_decide(route, kind == PW_PE_KIND_GAME);
-    if (route != PW_TITLE_ROUTE_OFF && route != PW_TITLE_ROUTE_NOT_LIBRARY)
-        fprintf(stderr, "wine-ps5: %s: %s (%s%s%s%s%s)\n", pw_title_game_name(image),
-                pw_title_route_in_title(route) ? "inside MihawkOS" : "a helper", pw_title_route_word(route),
-                kind != PW_PE_KIND_UNREAD ? "; " : "", kind != PW_PE_KIND_UNREAD ? pw_pe_kind_word(kind) : "",
-                deepest[0] ? " through " : "", deepest);
+    /* Every program's place, with why: the routes that keep a program in a helper are the ones to read when a game did
+     * not run inside MihawkOS (Grounded 2, NOT_LIBRARY, said nothing). */
+    fprintf(stderr, "wine-ps5: %s: %s (%s%s%s%s%s%s%s)\n", pw_title_game_name(image),
+            pw_title_route_in_title(route) ? "inside MihawkOS" : "a helper", pw_title_route_word(route),
+            kind != PW_PE_KIND_UNREAD ? "; " : "", kind != PW_PE_KIND_UNREAD ? pw_pe_kind_word(kind) : "",
+            deepest[0] ? " through " : "", deepest, inherited ? "; a library program by its spawner, " : "",
+            inherited ? (parent_root && !strncmp(parent_root, "steam|", 6) ? "steam.exe" : parent_root) : "");
     return pw_title_route_in_title(route) ? PW_CHILD_GRAPHICS : 0;
 }
 int pw_ps5_start_root(int server_fd,const char *runtime,const char *prefix,const char *cwd,int argc,const char *const *argv)
@@ -1193,6 +1222,7 @@ int pw_ps5_start_root(int server_fd,const char *runtime,const char *prefix,const
         if(length<0 || (size_t)length+2>available) { errno=E2BIG;return -1; }
         end[length+1]=0;  /* the environment is a double-NUL-terminated list */
     }
+    give_library_root(boot.environment,sizeof(boot.environment),argv[1]);
     size_t used=0;
     for(int i=0;i<argc;++i) {
         size_t size=strlen(argv[i])+1;
@@ -1413,6 +1443,11 @@ static int dsection_asking;
 int pw_ps5_dsection_page(uint64_t dev, uint64_t ino, uint64_t offset, int64_t *dmem, uint64_t *chunk_offset,
                          uint64_t *chunk_bytes)
 {
+    /* The program in the title asks its own table, which the title's monitor answers helpers from: before, it asked no
+     * one, so its views of a shared section stayed on the file while a helper's were in direct memory, and the two never
+     * met (Steam's browser in the title read steam.exe's 25 MiB stream as zeros, r1-named-section-base-2026-11-02-01). */
+    if(child_control<0 && in_title_client())
+        return pw_wine_dsection_page(dev,ino,offset,getpid(),dmem,chunk_offset,chunk_bytes) ? -1 : 0;
     if(child_control<0) { errno=ENOTCONN;return -1; }
     if(__atomic_exchange_n(&dsection_asking,1,__ATOMIC_ACQUIRE)) { errno=EBUSY;return -1; }
     struct pw_child_dsection request={{PW_CHILD_PROTOCOL,PW_CHILD_DSECTION,getpid(),0,0},dev,ino,offset};

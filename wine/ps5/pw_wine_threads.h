@@ -34,6 +34,10 @@ int pw_wine_thread_kill(pid_t pid,long tid,int signal);
 /* pthread_setschedparam on a registered thread: 0, or an errno value (ESRCH
  * for an unknown id, or what the system refused). */
 int pw_wine_thread_set_priority(long tid,int policy,int priority);
+/* The game the title runs itself (WINE_PS5_SCHED_TITLE=P, set by the title; Wine patch 2432, server/thread.c): the
+ * thread's Windows priority, Wine's effective one, as SCHED_RR from P (pw_helper_sched_windows_priority). 0, ENOTSUP
+ * when the setting is unset or 0 (nothing changes), or what pw_wine_thread_set_priority says. */
+int pw_wine_thread_set_windows_priority(long tid,int effective);
 
 /* What each registered thread is running right now, for a profile built from many samples (the helper's telemetry takes
  * ten a second). Each thread is signalled with SIGPROF and its handler stores the interrupted instruction and stack

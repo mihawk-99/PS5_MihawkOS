@@ -1,0 +1,185 @@
+From 0000000000000000000000000000000000000000 Mon Sep 17 00:00:00 2001
+From: Mihawk <163614687+mihawk-99@users.noreply.github.com>
+Date: Mon, 02 Nov 2026 18:00:00 -0400
+Subject: [PATCH] ntdll: PS5: A suspend waits until the thread lets go of the Unix side's open-signal locks.
+
+A thread suspended (SuspendThread: a runtime's garbage collector, a minidump) while it held a lock of Wine's Unix side
+that is taken with signals open kept it, and the next thread to ask for it stopped for good. On the base PS5 a probe whose
+four workers write files and make events while its main thread suspends them hung in a helper and in the title alike
+(suspend-server64-helper, -title; a8-rel3-base-2026-11-02): the workers suspend=1, the main thread stuck between
+create_event and close_handle with the synchronization device's lock and the virtual mutex free. NtClose first flushes the
+merged writes of the handle (patch 1007, wb_flush_closed_handle) under wb_mutex, which a worker in WriteFile holds while it
+copies into the buffer or writes it out.
+
+These locks now take patch 0923's rule through pw_ntsync_critical_enter/leave (src/pw_ntsync.c): a suspend that lands
+while a thread asks for or holds the lock is deferred and raised again when it lets go. That covers the write buffer's
+mutex on every program thread (its writer thread blocks every signal and keeps the plain mutex), the thread-alert lock
+NtAlertThreadByThreadId takes (SRW locks and critical sections wake through it), and the free direct memory query's lock,
+which programs reach every frame. The heap's mutex already has the rule (wine/ps5/pw_wine_heap.c). Not run on a console.
+---
+diff --git a/dlls/ntdll/unix/file.c b/dlls/ntdll/unix/file.c
+index a9a09b5..d1c92a8 100644
+--- a/dlls/ntdll/unix/file.c
++++ b/dlls/ntdll/unix/file.c
+@@ -7591,6 +7591,20 @@ static struct { dev_t dev; ino_t ino; } wb_denied[WB_DENIED];
+ static unsigned int wb_denied_count;
+ static pthread_mutex_t wb_mutex = PTHREAD_MUTEX_INITIALIZER;
+ static pthread_cond_t wb_cond = PTHREAD_COND_INITIALIZER;
++#ifdef __PROSPERO__
++/* A program's threads take the buffer's mutex with signals open: a thread suspended holding it (SuspendThread, as a
++ * runtime's garbage collector or a minidump does) stopped every other thread's next close of any handle, the
++ * suspending thread's own (suspend-server64, a8-rel3-base-2026-11-02: its main thread stuck between create_event and
++ * close_handle). The synchronization device's rule (patch 2454, src/pw_ntsync.c): a suspend that lands while a
++ * thread asks for or holds the mutex waits until it has let go. The writer thread blocks every signal and needs none. */
++extern void pw_ntsync_critical_enter(void);
++extern void pw_ntsync_critical_leave(void);
++static void wb_lock( void ) { pw_ntsync_critical_enter(); pthread_mutex_lock( &wb_mutex ); }
++static void wb_unlock( void ) { pthread_mutex_unlock( &wb_mutex ); pw_ntsync_critical_leave(); }
++#else
++static void wb_lock( void ) { pthread_mutex_lock( &wb_mutex ); }
++static void wb_unlock( void ) { pthread_mutex_unlock( &wb_mutex ); }
++#endif
+ static int wb_pending;                 /* entries holding bytes: read without the mutex as a hint */
+ static int wb_thread_state;            /* 0 not started, 1 running, -1 could not start */
+ 
+@@ -7695,9 +7709,9 @@ void wb_flush_all( void )
+     unsigned int i;
+ 
+     if (!__atomic_load_n( &wb_pending, __ATOMIC_RELAXED )) return;
+-    pthread_mutex_lock( &wb_mutex );
++    wb_lock();
+     for (i = 0; i < WB_ENTRIES; i++) wb_flush_entry( &wb_entries[i] );
+-    pthread_mutex_unlock( &wb_mutex );
++    wb_unlock();
+ }
+ 
+ static void wb_flush_fd( int fd )
+@@ -7705,9 +7719,9 @@ static void wb_flush_fd( int fd )
+     struct stat st;
+ 
+     if (!__atomic_load_n( &wb_pending, __ATOMIC_RELAXED ) || fstat( fd, &st )) return;
+-    pthread_mutex_lock( &wb_mutex );
++    wb_lock();
+     wb_flush_file_locked( st.st_dev, st.st_ino );
+-    pthread_mutex_unlock( &wb_mutex );
++    wb_unlock();
+ }
+ 
+ /* A handle was closed or duplicated: the entries it wrote through go. */
+@@ -7716,11 +7730,11 @@ void wb_flush_closed_handle( HANDLE handle )
+     unsigned int i, j;
+ 
+     if (!__atomic_load_n( &wb_pending, __ATOMIC_RELAXED )) return;
+-    pthread_mutex_lock( &wb_mutex );
++    wb_lock();
+     for (i = 0; i < WB_ENTRIES; i++)
+         for (j = 0; j < wb_entries[i].handle_count && wb_entries[i].length; j++)
+             if (wb_entries[i].handles[j] == handle) { wb_flush_entry( &wb_entries[i] ); break; }
+-    pthread_mutex_unlock( &wb_mutex );
++    wb_unlock();
+ }
+ 
+ /* A handle on a file is used for something that shows the file: the file's bytes go first, whichever handle wrote them. */
+@@ -7747,10 +7761,10 @@ void wb_note_section( HANDLE file )
+     if (!file || server_get_unix_fd( file, 0, &fd, &needs_close, &type, NULL )) return;
+     if (type == FD_TYPE_FILE && !fstat( fd, &st ))
+     {
+-        pthread_mutex_lock( &wb_mutex );
++        wb_lock();
+         wb_flush_file_locked( st.st_dev, st.st_ino );
+         if (wb_denied_count < WB_DENIED) { wb_denied[wb_denied_count].dev = st.st_dev; wb_denied[wb_denied_count++].ino = st.st_ino; }
+-        pthread_mutex_unlock( &wb_mutex );
++        wb_unlock();
+     }
+     if (needs_close) close( fd );
+ }
+@@ -7765,7 +7779,7 @@ static BOOL wb_write( HANDLE handle, int fd, const void *buffer, ULONG length, o
+     unsigned int i;
+ 
+     if (offset < 0 || fstat( fd, &st ) || !S_ISREG( st.st_mode )) return FALSE;
+-    pthread_mutex_lock( &wb_mutex );
++    wb_lock();
+     for (i = 0; i < wb_denied_count; i++)
+         if (wb_denied[i].dev == st.st_dev && wb_denied[i].ino == st.st_ino) denied = TRUE;
+     for (i = 0; i < WB_ENTRIES; i++)
+@@ -7778,7 +7792,7 @@ static BOOL wb_write( HANDLE handle, int fd, const void *buffer, ULONG length, o
+     if (denied || !length || length > WB_MAX_WRITE || (options & FILE_WRITE_THROUGH) || !wb_start_thread())
+     {
+         if (match) wb_flush_entry( match );
+-        pthread_mutex_unlock( &wb_mutex );
++        wb_unlock();
+         return FALSE;
+     }
+     if (match && match->start + (off_t)match->length == offset && match->length + length <= WB_CAPACITY)
+@@ -7815,7 +7829,7 @@ static BOOL wb_write( HANDLE handle, int fd, const void *buffer, ULONG length, o
+         __atomic_add_fetch( &file_write_stats[FILE_WRITE_MERGED_CALLS], 1, __ATOMIC_RELAXED );
+         __atomic_add_fetch( &file_write_stats[FILE_WRITE_MERGED_BYTES], length, __ATOMIC_RELAXED );
+     }
+-    pthread_mutex_unlock( &wb_mutex );
++    wb_unlock();
+     return absorbed;
+ }
+ 
+diff --git a/dlls/ntdll/unix/sync.c b/dlls/ntdll/unix/sync.c
+index 64ea458..15320ae 100644
+--- a/dlls/ntdll/unix/sync.c
++++ b/dlls/ntdll/unix/sync.c
+@@ -3625,10 +3625,17 @@ NTSTATUS WINAPI NtAlertThreadByThreadId( HANDLE tid )
+     if (!entry) return STATUS_INVALID_CID;
+ 
+ #ifdef __PROSPERO__
+-    pthread_mutex_lock( &entry->p.lock );
+-    entry->p.alerted = 1;
+-    pthread_cond_signal( &entry->p.cond );
+-    pthread_mutex_unlock( &entry->p.lock );
++    {
++        /* held with signals open: a suspend that lands inside waits until it is let go (patch 2454) */
++        extern void pw_ntsync_critical_enter(void);
++        extern void pw_ntsync_critical_leave(void);
++        pw_ntsync_critical_enter();
++        pthread_mutex_lock( &entry->p.lock );
++        entry->p.alerted = 1;
++        pthread_cond_signal( &entry->p.cond );
++        pthread_mutex_unlock( &entry->p.lock );
++        pw_ntsync_critical_leave();
++    }
+     return STATUS_SUCCESS;
+ #elif defined(USE_FUTEX)
+     {
+diff --git a/dlls/ntdll/unix/system.c b/dlls/ntdll/unix/system.c
+index 4a6882e..1942e09 100644
+--- a/dlls/ntdll/unix/system.c
++++ b/dlls/ntdll/unix/system.c
+@@ -2821,6 +2821,8 @@ ULONGLONG ps5_total_memory(void)
+  * range in the part before it and the part after, and both are asked in turn. The figure is a lower bound: a
+  * run that cannot be asked about (the number of questions is capped, and so is the number of ranges waiting) is
+  * not counted. The answer is kept for a quarter of a second, since programs ask for it every frame. */
++extern void pw_ntsync_critical_enter(void);
++extern void pw_ntsync_critical_leave(void);
+ static ULONGLONG ps5_free_direct_memory(void)
+ {
+     static pthread_mutex_t lock = PTHREAD_MUTEX_INITIALIZER;
+@@ -2835,11 +2837,13 @@ static ULONGLONG ps5_free_direct_memory(void)
+ 
+     NtQuerySystemTime( &time );
+     when = time.QuadPart;
++    pw_ntsync_critical_enter();   /* signals open: a suspend waits until the lock is let go (patch 2454) */
+     pthread_mutex_lock( &lock );
+     if (cached_at && when - cached_at < 2500000)
+     {
+         free_bytes = cached;
+         pthread_mutex_unlock( &lock );
++        pw_ntsync_critical_leave();
+         return free_bytes;
+     }
+     now.low = 0;
+@@ -2881,6 +2885,7 @@ static ULONGLONG ps5_free_direct_memory(void)
+     cached = free_bytes;
+     cached_at = when;
+     pthread_mutex_unlock( &lock );
++    pw_ntsync_critical_leave();
+     return free_bytes;
+ }
+ #endif
+-- 
+2.56.0

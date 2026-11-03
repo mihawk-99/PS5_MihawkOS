@@ -1,0 +1,357 @@
+From 0000000000000000000000000000000000000000 Mon Sep 17 00:00:00 2001
+From: Mihawk <163614687+mihawk-99@users.noreply.github.com>
+Date: Mon, 02 Nov 2026 18:00:00 -0400
+Subject: [PATCH] winebus, ntoskrnl, ntdll: PS5: an Xbox controller is also Windows' HID gamepad, so every API finds it.
+
+With an Xbox controller chosen (the default), a game got the controller only through XInput (patch 0470): the PS5 bus made
+no HID device, so DirectInput, raw input, SDL (its RAWINPUT and HIDAPI drivers), Rewired and Windows.Gaming.Input's HID
+path found no controller at all, only the keyboard and mouse (players' reports: ONE PIECE Grand Gourmet, Nine Sols, MOUSE:
+P.I. For Hire, Super Lone Survivor; the owner's Ys Origin, a 32-bit DirectInput 8 game, 2026-11-02). On Windows an Xbox
+controller is both: XInput, and the HID gamepad its driver makes, "HID\VID_045E&PID_028E&IG_00", which DirectInput lists
+as "Controller (XBOX 360 For Windows)" with X/Y, Rx/Ry, the triggers on one Z axis, ten buttons and a hat, and which SDL
+and other programs that also use XInput recognise by "IG_" and do not count twice.
+
+- winebus bus_ps5: while an Xbox kind is the title's (pw_wine_pad_kind; until it sets one, WINE_PS5_CONTROLLER), the bus
+  makes that gamepad, 045e:028e or 045e:02ea, from the title's pad slot (pw_wine_pad), in Windows' layout
+  (PS5_Proton wine/ps5/pw_wine_xusb.h, the layout of Wine's winexinput.sys with a 32-bit logical maximum): a report each
+  time the slot's packet moves, released and centred while no controller is connected. Switching kinds removes it and
+  makes the other (the control overlay, patch 2472); the DualSense, when chosen, as before.
+- winebus main.c: such a device's id ends in "&IG_00", told from its ids while the PS5 bus runs (WINE_PS5_HID), not from a
+  new device_desc field: that struct crosses to winebus's Unix half, and on a console whose two halves came from
+  different builds the shifted layout faulted a stock mouse's start in winedevice (a8rel81-base-2026-11-02-e1).
+- ntoskrnl pnp.c: the bus's Xbox gamepad is installed as its DualSense is (no inf), and its interface gets the same
+  per-program link (patch 2401); wine_ps5_hid_start waits up to a second for it, as for the DualSense, so a game that
+  looks for controllers once, at its start, finds it.
+- ntdll loader.c: WINE_PS5_HID=live starts the bus in every game's process, a helper's too (patch 2472 started it only in
+  the title's), since the Xbox gamepad is needed wherever a game runs. Wine's own programs still start none.
+- ntdll file.c: a program opens its own link to the Xbox gamepad, as to the DualSense (patch 2401).
+XInput is unchanged: it reads the title's slot and never this device, so a game that uses both sees one controller.
+Windows.Gaming.Input still finds no Xbox controller (Wine's takes Xbox pads only from winexinput's "&XI_" device).
+Base PS5 13.60, input-base-2026-11-02-01 (tests/pad-api-probe.c): Xbox 360 and Xbox One, 32 and 64 bits, in a helper and in the
+title, and a new prefix's first session: XInput, DirectInput 8 ("Controller (XBOX 360 For Windows)" 045e:028e, or the Xbox
+One's 02ea), raw input (IG_) and winmm all have the controller, every reading centred at rest; a Cross reaches DirectInput
+and winmm 6-21 ms after XInput. The device is there 60-142 ms after the bus starts. Ys Origin, a DirectInput 8 game, takes the
+controller and moves through its title menu with either Xbox kind.
+---
+ dlls/ntdll/loader.c          | 10 ++++----
+ dlls/ntdll/unix/file.c       |  6 +++--
+ dlls/ntoskrnl.exe/ntoskrnl.c | 18 +++++++--------
+ dlls/ntoskrnl.exe/pnp.c      | 16 ++++++++-----
+ dlls/winebus.sys/bus_ps5.c   | 79 +++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++---
+ dlls/winebus.sys/main.c      | 10 +++++++-
+ 6 files changed, 112 insertions(+), 27 deletions(-)
+
+diff --git a/dlls/ntdll/loader.c b/dlls/ntdll/loader.c
+index 1644029..79c1967 100644
+--- a/dlls/ntdll/loader.c
++++ b/dlls/ntdll/loader.c
+@@ -4811,17 +4811,17 @@ void loader_init( CONTEXT *context, void **entry )
+     RtlLeaveCriticalSection( &loader_section );
+     if (ps5_hid_init)
+     {
+-        WCHAR enabled[4], input_fd[16];
++        WCHAR enabled[4];
+         const UNICODE_STRING *image = &NtCurrentTeb()->Peb->ProcessParameters->ImagePathName;
+         /* Not in Wine's own programs (wineboot, explorer and the rest, all in system32): they read no controller,
+          * and a DualSense one of them makes is one more the game's must take over (pnp.c). wineboot's also held
+          * every launch a second, waiting for a controller it never used. */
+         if (image->Length >= wcslen(system_dir) * sizeof(WCHAR) && !wcsnicmp(image->Buffer, system_dir, wcslen(system_dir)))
+             WARN("[PS5 Proton] in-process HID not started for %s\n", debugstr_us(image));
+-        /* "live" (an Xbox controller chosen, which the control overlay may switch to the DualSense, patch 2472): only in the
+-         * title's own process, a game in the title; a helper (it has the title's input page) keeps no bus for it */
+-        else if (get_env(L"WINE_PS5_HID", enabled, sizeof(enabled)) &&
+-                 (enabled[0] == L'1' || (enabled[0] == L'l' && !get_env(L"WINE_PS5_INPUT_FD", input_fd, sizeof(input_fd)))))
++        /* "live" (an Xbox controller chosen, which the control overlay may switch to the DualSense, patch 2472): in every
++         * game's process, a helper's too, since the bus makes Windows' HID gamepad for the Xbox controller (patch 2480),
++         * without which DirectInput, raw input and SDL found no controller */
++        else if (get_env(L"WINE_PS5_HID", enabled, sizeof(enabled)) && (enabled[0] == L'1' || enabled[0] == L'l'))
+         {
+             UNICODE_STRING name = RTL_CONSTANT_STRING(L"ntoskrnl.exe");
+             ANSI_STRING proc = RTL_CONSTANT_STRING("wine_ps5_hid_start");
+diff --git a/dlls/ntdll/unix/file.c b/dlls/ntdll/unix/file.c
+index a9a09b5..47e387b 100644
+--- a/dlls/ntdll/unix/file.c
++++ b/dlls/ntdll/unix/file.c
+@@ -2390,29 +2390,31 @@
+ 
+ #ifdef __PROSPERO__
+-/* PW_PROCESS_HID_LINK_BEGIN */
+-/* This program's own name for the DualSense's HID interface link: the name and "#<process id in hex>", which this
+- * program's HID stack makes beside the shared one (ntoskrnl pnp.c). Every program on the PS5 runs its own (patch 0870),
+- * all on one server, and the shared name leads to the program that enabled the interface last: a store client's
+- * DualSense was its browser helper's, and the client lost it ("hid_read failure", "Controller 0 disconnected") when
+- * the helper ended as a library game started (2026-10-29). Its length, or 0 for another name or one too long for out. */
+-static size_t ps5_own_hid_link( const WCHAR *name, size_t length, unsigned int pid, WCHAR *out, size_t capacity )
+-{
+-    static const char prefix[] = "\\??\\HID#VID_054C&PID_0CE6#";
+-    size_t i, n = sizeof(prefix) - 1, digits;
+-
+-    if (length <= n || length + 1 + 8 > capacity) return 0;
+-    for (i = 0; i < length; i++)
+-    {
+-        WCHAR c = name[i] >= 'a' && name[i] <= 'z' ? name[i] - 'a' + 'A' : name[i];
+-        if (i < n ? c != (WCHAR)prefix[i] : c == '\\') return 0;   /* a path below the device is not the link */
+-        out[i] = name[i];
+-    }
+-    out[length] = '#';
+-    for (digits = 1; digits < 8 && pid >> (4 * digits); digits++) ;
+-    for (i = 0; i < digits; i++) out[length + digits - i] = "0123456789abcdef"[(pid >> (4 * i)) & 15];
+-    return length + 1 + digits;
+-}
+-/* PW_PROCESS_HID_LINK_END */
++/* PW_PROCESS_HID_LINK_BEGIN */
++/* This program's own name for the DualSense's HID interface link: the name and "#<process id in hex>", which this
++ * program's HID stack makes beside the shared one (ntoskrnl pnp.c). Every program on the PS5 runs its own (patch 0870),
++ * all on one server, and the shared name leads to the program that enabled the interface last: a store client's
++ * DualSense was its browser helper's, and the client lost it ("hid_read failure", "Controller 0 disconnected") when
++ * the helper ended as a library game started (2026-10-29). Its length, or 0 for another name or one too long for out. */
++static size_t ps5_own_hid_link( const WCHAR *name, size_t length, unsigned int pid, WCHAR *out, size_t capacity )
++{
++    /* the DualSense's, or Windows' HID gamepad for an Xbox controller (patch 2480): "VID_045E&PID_02.." */
++    static const char dualsense[] = "\\??\\HID#VID_054C&PID_0CE6#", xbox[] = "\\??\\HID#VID_045E&PID_02";
++    const char *prefix = length > 13 && name[13] == '4' ? xbox : dualsense;
++    size_t i, n = prefix == xbox ? sizeof(xbox) - 1 : sizeof(dualsense) - 1, digits;
++
++    if (length <= n || length + 1 + 8 > capacity) return 0;
++    for (i = 0; i < length; i++)
++    {
++        WCHAR c = name[i] >= 'a' && name[i] <= 'z' ? name[i] - 'a' + 'A' : name[i];
++        if (i < n ? c != (WCHAR)prefix[i] : c == '\\') return 0;   /* a path below the device is not the link */
++        out[i] = name[i];
++    }
++    out[length] = '#';
++    for (digits = 1; digits < 8 && pid >> (4 * digits); digits++) ;
++    for (i = 0; i < digits; i++) out[length + digits - i] = "0123456789abcdef"[(pid >> (4 * i)) & 15];
++    return length + 1 + digits;
++}
++/* PW_PROCESS_HID_LINK_END */
+ 
+ /* Open the DualSense through this program's own link; STATUS_OBJECT_NAME_NOT_FOUND for another name, or in a program
+  * without a HID stack of its own (Wine's system programs), which then open the shared one. */
+diff --git a/dlls/ntoskrnl.exe/ntoskrnl.c b/dlls/ntoskrnl.exe/ntoskrnl.c
+index 5e8ae00..027f43e 100644
+--- a/dlls/ntoskrnl.exe/ntoskrnl.c
++++ b/dlls/ntoskrnl.exe/ntoskrnl.c
+@@ -4783,17 +4783,15 @@ NTSTATUS CDECL wine_ps5_hid_start(void)
+      * and a game may look for controllers only once, at its start; nothing tells it of one that comes later, since
+      * device notifications need the plug-and-play service, which the PS5 does not run. The PS5 bus makes the
+      * DualSense at its start, connected or not, and keeps it while the program runs. */
+-    /* An Xbox controller chosen ("live", patch 2472): no DualSense until the control overlay switches to it, no wait */
++    /* An Xbox controller chosen ("live", patch 2472): the bus makes Windows' HID gamepad for it instead (patch 2480),
++     * waited for alike */
++    if (!status) waited = ps5_wait_dualsense(1000);
+     {
+-        WCHAR mode[8];
+-        if (GetEnvironmentVariableW(L"WINE_PS5_HID", mode, ARRAY_SIZE(mode)) && mode[0] == 'l')
+-        {
+-            MESSAGE("[PS5 Proton] HID bus start status %#lx; no DualSense until the overlay chooses it\n", status);
+-            return status;
+-        }
++        WCHAR mode[8] = {0};
++        GetEnvironmentVariableW(L"WINE_PS5_HID", mode, ARRAY_SIZE(mode));
++        MESSAGE("[PS5 Proton] HID bus start status %#lx; controller (%s) %s %ld ms\n", status,
++             mode[0] == 'l' ? "Xbox or DualSense, as chosen" : "DualSense",
++             waited >= 0 ? "ready after" : "not seen in", waited >= 0 ? waited : 1000L);
+     }
+-    if (!status) waited = ps5_wait_dualsense(1000);
+-    MESSAGE("[PS5 Proton] HID bus start status %#lx; DualSense %s %ld ms\n", status,
+-         waited >= 0 ? "ready after" : "not seen in", waited >= 0 ? waited : 1000L);
+     return status;
+ }
+diff --git a/dlls/ntoskrnl.exe/pnp.c b/dlls/ntoskrnl.exe/pnp.c
+index e2eb902..ed308ad 100644
+--- a/dlls/ntoskrnl.exe/pnp.c
++++ b/dlls/ntoskrnl.exe/pnp.c
+@@ -294,8 +294,10 @@ static BOOL install_device_driver( DEVICE_OBJECT *device, HDEVINFO set, SP_DEVIN
+ 
+     SetupDiSetDeviceRegistryPropertyW( set, sp_device, SPDRP_HARDWAREID, (BYTE *)ids,
+             sizeof_multiszW( ids ) * sizeof(WCHAR) );
++    /* the PS5 bus's devices: the DualSense, or Windows' HID gamepad for an Xbox controller (patch 2480) */
+     if (GetEnvironmentVariableW(L"WINE_PS5_HID", NULL, 0) &&
+-        (!wcsnicmp(ids, L"WINEBUS\\VID_054C&PID_0CE6", 25) || !wcsnicmp(ids, L"HID\\VID_054C&PID_0CE6", 21)))
++        (!wcsnicmp(ids, L"WINEBUS\\VID_054C&PID_0CE6", 25) || !wcsnicmp(ids, L"HID\\VID_054C&PID_0CE6", 21) ||
++         !wcsnicmp(ids, L"WINEBUS\\VID_045E&PID_02", 23) || !wcsnicmp(ids, L"HID\\VID_045E&PID_02", 19)))
+     {
+         BOOL bus = !wcsnicmp(ids, L"WINEBUS", 7);
+         ExFreePool(ids);
+@@ -899,18 +901,20 @@ static NTSTATUS create_device_symlink( DEVICE_OBJECT *device, UNICODE_STRING *sy
+     return ret;
+ }
+ 
+-/* PS5: the DualSense's HID interface, which the in-process bus makes (patch 0870). */
++/* PS5: the DualSense's HID interface, which the in-process bus makes (patch 0870), or the HID gamepad it makes for an
++ * Xbox controller (patch 2480), which every program also has its own of. */
+ LONG ps5_dualsense_enabled;
+ 
+ static BOOL ps5_dualsense_interface( const struct device_interface *iface, const UNICODE_STRING *name )
+ {
+     static const GUID hid = {0x4d1e55b2, 0xf16f, 0x11cf, {0x88, 0xcb, 0x00, 0x11, 0x11, 0x00, 0x00, 0x30}};
+-    static const WCHAR id[] = L"VID_054C&PID_0CE6";
+-    size_t i, length = name->Length / sizeof(WCHAR), id_length = ARRAY_SIZE(id) - 1;
++    static const WCHAR id[] = L"VID_054C&PID_0CE6", xbox[] = L"VID_045E&PID_02";
++    size_t i, length = name->Length / sizeof(WCHAR), id_length = ARRAY_SIZE(id) - 1, xbox_length = ARRAY_SIZE(xbox) - 1;
+ 
+     if (!IsEqualGUID( &iface->interface_class, &hid )) return FALSE;
+-    for (i = 0; i + id_length <= length; i++)
+-        if (!wcsnicmp( name->Buffer + i, id, id_length )) return TRUE;
++    for (i = 0; i + xbox_length <= length; i++)
++        if ((i + id_length <= length && !wcsnicmp( name->Buffer + i, id, id_length )) ||
++            !wcsnicmp( name->Buffer + i, xbox, xbox_length )) return TRUE;
+     return FALSE;
+ }
+ 
+diff --git a/dlls/winebus.sys/bus_ps5.c b/dlls/winebus.sys/bus_ps5.c
+index 34fe761..b197796 100644
+--- a/dlls/winebus.sys/bus_ps5.c
++++ b/dlls/winebus.sys/bus_ps5.c
+@@ -6,12 +6,14 @@
+ #include "config.h"
+ #include <dlfcn.h>
+ #include <stdio.h>
++#include <stdlib.h>
+ #include <unistd.h>
+ #include <pthread.h>
+ #include <string.h>
+ #include "ntstatus.h"
+ #define WIN32_NO_STATUS
+ #include "unix_private.h"
++#include "pw_wine_xusb.h"
+ 
+ struct ps5_device { struct unix_device base; int started; };
+ static struct ps5_device *device;
+@@ -22,6 +24,11 @@ static int (*read_pad)(unsigned char *);
+  * queued 0, held back while the device is not started 1, device created 2, removed 3. */
+ static void (*note)(int);
+ static int (*pad_kind)(void);   /* the title's controller kind, switched live (patch 2472); -1: none set */
++static int start_kind;           /* the kind until the title sets one: WINE_PS5_HID=1 the DualSense, else the env's Xbox */
++/* An Xbox controller chosen: Windows' HID gamepad for it (pw_wine_xusb.h, patch 2480), from the title's pad slot */
++static int (*read_xbox)(PwWinePad *);
++static struct ps5_device *xbox;
++static int xbox_kind;
+ static struct list events = LIST_INIT(events);
+ 
+ /* USB report 1: six axes, counter, hat, 15 buttons and vendor payload.
+@@ -91,6 +98,66 @@ static void feature(struct unix_device *iface, HID_XFER_PACKET *packet, IO_STATU
+ }
+ static const struct raw_device_vtbl vtbl = {destroy, start, stop, get_descriptor, unsupported, feature, unsupported};
+ 
++static void xbox_stop(struct unix_device *iface)
++{
++    pthread_mutex_lock(&device_lock);
++    if (xbox == (struct ps5_device *)iface) xbox = NULL;
++    __atomic_store_n(&((struct ps5_device *)iface)->started, 0, __ATOMIC_RELEASE);
++    pthread_mutex_unlock(&device_lock);
++}
++static NTSTATUS xbox_descriptor(struct unix_device *iface, BYTE *buffer, UINT length, UINT *out)
++{
++    *out = sizeof(pw_wine_xusb_descriptor);
++    if (length < sizeof(pw_wine_xusb_descriptor)) return STATUS_BUFFER_TOO_SMALL;
++    memcpy(buffer, pw_wine_xusb_descriptor, sizeof(pw_wine_xusb_descriptor));
++    return STATUS_SUCCESS;
++}
++static const struct raw_device_vtbl xbox_vtbl = {destroy, start, xbox_stop, xbox_descriptor, unsupported, unsupported, unsupported};
++
++/* The Xbox controller's HID gamepad while kind (0 Xbox 360, 1 Xbox One) is chosen, made at once and kept, connected or
++ * not, as the DualSense is; a report goes out whenever the slot's packet moves. device_lock must be held. */
++static void xbox_update(int kind)
++{
++    static UINT32 sent_packet, sent_connected = 2;
++    static unsigned int waits;   /* as the DualSense's: a device stopped without the bus is made again after a second */
++    PwWinePad pad;
++    BYTE report[PW_WINE_XUSB_REPORT];
++    int connected;
++
++    if (xbox && xbox_kind != kind)
++    {
++        bus_event_queue_device_removed(&events, &xbox->base);
++        xbox = NULL;
++        waits = 0;   /* the other kind's at once */
++    }
++    if (kind < 0) return;
++    if (!xbox && waits) --waits;
++    else if (!xbox)
++    {
++        struct device_desc desc = {.vid=0x045e, .pid=kind == 1 ? 0x02ea : 0x028e, .version=kind == 1 ? 0x0408 : 0x0114,
++            .input=-1, .bus_type=BUS_TYPE_USB,
++            .manufacturer={'M','i','c','r','o','s','o','f','t'},
++            .serialnumber={'P','S','5','-','L','O','C','A','L','-','1'}};
++        /* the names DirectInput shows on Windows, which hidclass also gives (device.c) */
++        static const WCHAR x360[] = {'C','o','n','t','r','o','l','l','e','r',' ','(','X','B','O','X',' ','3','6','0',' ','F','o','r',' ','W','i','n','d','o','w','s',')',0};
++        static const WCHAR xone[] = {'C','o','n','t','r','o','l','l','e','r',' ','(','X','b','o','x',' ','O','n','e',' ','F','o','r',' ','W','i','n','d','o','w','s',')',0};
++        memcpy(desc.product, kind == 1 ? xone : x360, kind == 1 ? sizeof(xone) : sizeof(x360));
++        waits = 125;
++        if (!(xbox = raw_device_create(&xbox_vtbl, sizeof(*xbox)))) return;
++        xbox_kind = kind;
++        sent_connected = 2;
++        bus_event_queue_device_created(&events, &xbox->base, &desc);
++        fprintf(stderr, "wine-ps5: the Xbox controller's HID gamepad %04x:%04x is made\n", desc.vid, desc.pid);
++    }
++    if (!xbox || !__atomic_load_n(&xbox->started, __ATOMIC_ACQUIRE)) return;
++    connected = read_xbox(&pad);   /* all zero when not connected: released and centred */
++    if (connected == sent_connected && (!connected || pad.packet == sent_packet)) return;
++    sent_connected = connected;
++    sent_packet = pad.packet;
++    pw_wine_xusb_report(&pad, report);
++    bus_event_queue_input_report(&events, &xbox->base, report, sizeof(report));
++}
++
+ static int (*thread_is_terminating)(void);
+ NTSTATUS ps5_bus_init(void *args)
+ {
+@@ -99,7 +166,12 @@ NTSTATUS ps5_bus_init(void *args)
+     read_pad = dlsym(RTLD_DEFAULT, "pw_wine_dualsense");
+     note = dlsym(RTLD_DEFAULT, "pw_wine_input_note");
+     pad_kind = dlsym(RTLD_DEFAULT, "pw_wine_pad_kind");
+-    return read_pad ? STATUS_SUCCESS : STATUS_NOT_SUPPORTED;
++    read_xbox = dlsym(RTLD_DEFAULT, "pw_wine_pad");
++    {
++        const char *hid = getenv("WINE_PS5_HID"), *controller = getenv("WINE_PS5_CONTROLLER");
++        start_kind = hid && hid[0] == '1' ? 2 : controller && !strcmp(controller, "xbox-one") ? 1 : 0;
++    }
++    return read_pad && read_xbox ? STATUS_SUCCESS : STATUS_NOT_SUPPORTED;
+ }
+ NTSTATUS ps5_bus_wait(void *args)
+ {
+@@ -118,9 +190,10 @@ NTSTATUS ps5_bus_wait(void *args)
+         connected = read_pad(report);
+         /* The DualSense is there while it is the kind the title set (none set: from the start, as WINE_PS5_HID=1 asked);
+          * the control overlay switching away removes it, and back makes it again (patch 2472) */
+-        kind = pad_kind ? pad_kind() : -1;
++        if ((kind = pad_kind ? pad_kind() : -1) < 0) kind = start_kind;
+         pthread_mutex_lock(&device_lock);
+-        if (kind >= 0 && kind != 2)
++        xbox_update(kind != 2 ? kind : -1);
++        if (kind != 2)
+         {
+             if (device)
+             {
+diff --git a/dlls/winebus.sys/main.c b/dlls/winebus.sys/main.c
+index 2adc338..a69918d 100644
+--- a/dlls/winebus.sys/main.c
++++ b/dlls/winebus.sys/main.c
+@@ -225,14 +225,22 @@ static WCHAR *get_device_id(DEVICE_OBJECT *device)
+ 
+     assert(ext->desc.bus_type < BUS_TYPE_COUNT);
+     bus_str = bus_type_str[ext->desc.bus_type];
++    /* PS5 (patch 2480): only the PS5 bus runs (WINE_PS5_HID), and the Xbox controller it makes is Windows' HID gamepad
++     * for one, "...&IG_00", by which DirectInput, SDL and raw input readers know an XInput controller. Told from its ids,
++     * not a new device_desc field: that struct crosses to winebus's Unix half, and a runtime whose two halves came from
++     * different builds read a shifted layout (a stock mouse's start faulted, a8rel81-base-2026-11-02-e1). */
++    const BOOL xinput_hid = ext->desc.input == -1 && is_xbox_gamepad(ext->desc.vid, ext->desc.pid) &&
++                            GetEnvironmentVariableW(L"WINE_PS5_HID", NULL, 0);
+     if (ext->desc.input != -1) input_len = 14;
++    if (xinput_hid) input_len = 6;
+ 
+     len += winebus_len + input_len + wcslen(bus_str) + 1;
+ 
+     if ((dst = ExAllocatePool(PagedPool, len * sizeof(WCHAR))))
+     {
+         pos += swprintf(dst + pos, len - pos, winebus_format, bus_str, ext->desc.vid, ext->desc.pid);
+-        if (input_len) pos += swprintf(dst + pos, len - pos, input_format, ext->desc.input);
++        if (xinput_hid) pos += swprintf(dst + pos, len - pos, L"&IG_00");
++        else if (input_len) pos += swprintf(dst + pos, len - pos, input_format, ext->desc.input);
+     }
+ 
+     return dst;
+-- 
+2.56.0

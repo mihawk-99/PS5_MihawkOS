@@ -1,0 +1,49 @@
+From 0000000000000000000000000000000000000000 Mon Sep 17 00:00:00 2001
+From: Mihawk <163614687+mihawk-99@users.noreply.github.com>
+Date: Tue, 3 Nov 2026 06:00:00 -0400
+Subject: [PATCH] ntdll: PS5: GetCurrentProcessorNumber says the CPU the thread runs on, within the count Wine reports
+
+The console's libc has no sched_getcpu, so NtGetCurrentProcessorNumber took Wine's last fallback: the first processor
+in the thread's affinity mask, 0 for every thread (tests/cpu-count-probe.c on the base PS5, 2026-11-03: 32 busy
+threads, number_seen=1). A program that keeps per-processor data (allocators, job systems) put every thread on the
+same slot.
+
+It now reads RDTSCP's processor id, the CPU the thread runs on, as Windows' own GetCurrentProcessorNumber does, and
+numbers it within the CPUs Wine reports (WINE_CPU_TOPOLOGY's list): a thread can run on a CPU outside the list (a
+helper's threads are widened to the console's 16 while the title lists 13), and a number not below the count reads
+past a per-processor table sized by it. The same CPU always gives the same number.
+---
+  dlls/ntdll/unix/thread.c | 20 ++++++++++++++++++++
+  1 file changed, 20 insertions(+)
+
+diff --git a/dlls/ntdll/unix/thread.c b/dlls/ntdll/unix/thread.c
+index 2282575..4a19afc 100644
+--- a/dlls/ntdll/unix/thread.c
++++ b/dlls/ntdll/unix/thread.c
+@@ -2848,6 +2848,26 @@ ULONG WINAPI NtGetCurrentProcessorNumber(void)
+         return cpu_id;
+     }
+ #endif
++#if defined(__PROSPERO__) && defined(__x86_64__)
++    /* PS5: no sched_getcpu, and the fallback below gave every thread processor 0. RDTSCP's processor id is the CPU the
++     * thread runs on (Windows' own GetCurrentProcessorNumber reads it too). It is numbered within the CPUs Wine reports:
++     * a thread may run on one outside them (a helper's threads are widened to the console's 16), and a number not below
++     * the count reads past a game's per-processor table. The same CPU always gives the same number. */
++    {
++        struct cpu_topology_override *override = get_cpu_topology_override();
++        unsigned int aux, cpu, i;
++
++        __asm__ __volatile__( "rdtscp" : "=c"(aux) : : "eax", "edx" );
++        cpu = aux & 0xfff;
++        if (override && override->cpu_count)
++        {
++            for (i = 0; i < override->cpu_count; ++i)
++                if (override->host_cpu_id[i] == cpu) return i;
++            return cpu % override->cpu_count;
++        }
++        if (peb->NumberOfProcessors) return cpu % peb->NumberOfProcessors;
++    }
++#endif
+ #if defined(__APPLE__) && (defined(__x86_64__) || defined(__i386__))
+     {
+         struct {

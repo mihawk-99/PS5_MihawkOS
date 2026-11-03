@@ -82,6 +82,58 @@ int main(void)
     /* Not in the title for now (it did not draw there, 2026-10-31), and never through the import rule either. */
     assert(!pw_title_route_in_title(PW_TITLE_ROUTE_CHROMIUM) && !pw_title_route_in_title(PW_TITLE_ROUTE_CHROMIUM_CHILD));
     assert(pw_title_game_decide(pw_title_game_chromium(PW_TITLE_ROUTE_CANDIDATE, 1, 0, 0), 1) == PW_TITLE_ROUTE_CHROMIUM);
+    /* Library status down a chain (pw_title_game_inherit): a Steam shortcut to a game on a USB drive, as Grounded 2 ran
+     * (steam.exe, then its stub, then the stub's real executable), 2026-11-01. */
+    char steam_root[300], stub_root[300], ship_root[300], other[300];
+    const char *steam = "C:\\Program Files (x86)\\Steam\\steam.exe";
+    const char *stub = "Z:\\mnt\\usb0\\Grounded 2\\Grounded2.exe";
+    const char *ship = "Z:\\mnt\\usb0\\Grounded 2\\Augusta\\Binaries\\Win64\\Grounded2Steam-Win64-Shipping.exe";
+    assert(!pw_title_game_inherit(steam, NULL, NULL, steam_root, sizeof(steam_root)));
+    assert(!strcmp(steam_root, "steam|C:\\Program Files (x86)\\Steam\\"));
+    assert(pw_title_game_inherit(stub, steam_root, NULL, stub_root, sizeof(stub_root)));
+    assert(!strcmp(stub_root, "Z:\\mnt\\usb0\\Grounded 2\\"));
+    assert(pw_title_game_inherit(ship, stub_root, NULL, ship_root, sizeof(ship_root)));
+    assert(!strcmp(ship_root, stub_root));
+    /* Both are library programs now; their imports decide, so a stub that draws nothing stays a helper's. */
+    assert(pw_title_game_route_inherited(stub, 1, "1", NULL, NULL, NULL, 1) == PW_TITLE_ROUTE_CANDIDATE);
+    assert(pw_title_game_route_inherited(ship, 1, "1", NULL, NULL, NULL, 1) == PW_TITLE_ROUTE_CANDIDATE);
+    assert(pw_title_game_route_inherited(ship, 1, "1", NULL, NULL, NULL, 0) == PW_TITLE_ROUTE_NOT_LIBRARY);
+    /* Inheriting changes nothing else: a crash reporter in the tree, the opt-out, 32-bit, the setting off. */
+    const char *reporter = "Z:\\mnt\\usb0\\Grounded 2\\Engine\\Binaries\\Win64\\CrashReportClient.exe";
+    assert(pw_title_game_inherit(reporter, stub_root, NULL, other, sizeof(other)));
+    assert(pw_title_game_route_inherited(reporter, 1, "1", NULL, NULL, NULL, 1) == PW_TITLE_ROUTE_TOOL);
+    assert(pw_title_game_route_inherited(ship, 1, "1", "grounded2steam-win64-shipping.exe", NULL, NULL, 1) ==
+           PW_TITLE_ROUTE_OPTOUT);
+    assert(pw_title_game_route_inherited(ship, 0, "1", NULL, NULL, NULL, 1) == PW_TITLE_ROUTE_32BIT);
+    assert(pw_title_game_route_inherited(ship, 1, "0", NULL, NULL, NULL, 1) == PW_TITLE_ROUTE_OFF);
+    /* Steam's own programs inherit nothing, nor does a program outside the tree or one with no library spawner. */
+    assert(!pw_title_game_inherit("C:\\Program Files (x86)\\Steam\\bin\\cef\\cef.win64\\steamwebhelper.exe", steam_root,
+                                  NULL, other, sizeof(other)) && !other[0]);
+    assert(!pw_title_game_inherit("C:\\PROGRAM FILES (X86)\\STEAM\\steamerrorreporter64.exe", steam_root, NULL, other,
+                                  sizeof(other)) && !other[0]);
+    assert(!pw_title_game_inherit("Z:\\mnt\\usb0\\Other Game\\other.exe", stub_root, NULL, other, sizeof(other)) &&
+           !other[0]);
+    assert(!pw_title_game_inherit("Z:\\mnt\\usb0\\Grounded 2 Mods\\tool.exe", stub_root, NULL, other, sizeof(other)));
+    assert(!pw_title_game_inherit(ship, NULL, NULL, other, sizeof(other)) && !other[0]);
+    assert(!pw_title_game_inherit(ship, "", NULL, other, sizeof(other)) && !other[0]);
+    /* The tree's case does not matter, as on Windows. */
+    assert(pw_title_game_inherit("z:\\MNT\\USB0\\grounded 2\\augusta\\x.exe", stub_root, NULL, other, sizeof(other)));
+    /* A library program by its own right passes its own folder, and what it starts inside inherits from it. */
+    assert(!pw_title_game_inherit(lib, NULL, NULL, other, sizeof(other)));
+    assert(!strcmp(other, "C:\\Program Files (x86)\\Steam\\steamapps\\common\\Some 3D Game  Deluxe\\"));
+    /* (one there is a library program by its own path already, not by inheritance) */
+    assert(!pw_title_game_inherit("C:\\Program Files (x86)\\Steam\\steamapps\\common\\Some 3D Game  Deluxe\\bin\\real.exe",
+                                  other, NULL, ship_root, sizeof(ship_root)));
+    assert(!strcmp(ship_root, "C:\\Program Files (x86)\\Steam\\steamapps\\common\\Some 3D Game  Deluxe\\bin\\"));
+    assert(!pw_title_game_inherit(usb, NULL, "RacingGame.exe", other, sizeof(other)) &&
+           !strcmp(other, "Z:\\mnt\\usb0\\Some Racing Game\\"));
+    assert(pw_title_game_inherit("Z:\\mnt\\usb0\\Some Racing Game\\bin\\x64\\RacingGame-Win64.exe", other, "RacingGame.exe",
+                                 ship_root, sizeof(ship_root)) && !strcmp(ship_root, other));
+    /* A root that does not fit is left empty, never cut short. */
+    char tiny[8] = "x";
+    assert(pw_title_game_inherit(ship, stub_root, NULL, tiny, sizeof(tiny)) && !tiny[0]);
+    assert(!pw_title_game_inherit(steam, NULL, NULL, tiny, sizeof(tiny)) && !tiny[0]);
+    assert(!pw_title_game_inherit(NULL, stub_root, NULL, other, sizeof(other)) && !other[0]);
     /* Each reason has its word for the log. */
     for (int r = PW_TITLE_ROUTE_GAME; r <= PW_TITLE_ROUTE_CHROMIUM_CHILD; ++r) assert(strcmp(pw_title_route_word(r), "unknown"));
     assert(pw_title_game_listed("a.exe;;b.exe;", "b.exe") && !pw_title_game_listed("a.exe", "") && !pw_title_game_listed(NULL, "a.exe"));

@@ -1,0 +1,54 @@
+{
+  "battery": "cf-base-2026-11-02-01-suspend-server64-helper",
+  "expected_cases": [
+    "suspend-server64-helper"
+  ],
+  "revision": "9207da01692ff00723612333525c8590b57a91b9",
+  "dirty": true,
+  "cases": [
+    {
+      "case": "suspend-server64-helper",
+      "run": "cf-base-2026-11-02-01-suspend-server64-helper-suspend-server64-helper",
+      "runner_status": 0,
+      "seconds": 17.7,
+      "result": "finished",
+      "probe_verdict": "PASS",
+      "returned_to_launcher": true,
+      "exit_stall": false,
+      "passed": true,
+      "run_seconds": 16.7,
+      "launch_readiness": {
+        "ready": true,
+        "seconds": 0.294,
+        "settle_seconds": 0.0,
+        "census_seconds": 0.28,
+        "previous_cleanup_verified": false
+      },
+      "stages": {
+        "launched": 1.01,
+        "title_started": 1.51,
+        "elevated": 1.51,
+        "wine_loaded": 1.83,
+        "wineboot_started": 4.32,
+        "wineboot_ended": 5.71,
+        "program_started": 5.74,
+        "marker": 11.97,
+        "program_ended": 12.01,
+        "wine_ended": 14.36,
+        "launcher_started": 15.86,
+        "launcher_ended": 16.14,
+        "closed": 16.66
+      },
+      "runner_overhead_seconds": 1.0,
+      "layout": "launcher",
+      "fault_records": 0,
+      "helpers": 5,
+      "protocol_errors": 0,
+      "pipe_memory_exhausted": 0,
+      "search_errors": 0
+    }
+  ],
+  "complete": true,
+  "seconds": 17.8,
+  "passed": true
+}

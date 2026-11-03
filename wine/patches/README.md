@@ -688,3 +688,87 @@ never finished its first 16 ms `MsgWaitForMultipleObjects` in the title in 180 s
 Patch 2429 writes the first eight shared-view faults the section cache cannot serve (raised as `STATUS_IN_PAGE_ERROR`) to the Wine log as an err line: the address
 and instruction, the failed stage in words (`pw_wine_section_stage_word`, `tests/test_pw_wine_section_stage.c`), the view and whether it lies in the shared-section
 arena. The cache said it only on standard error, which a title's session keeps only with klogsrv (a tester's NFS Heat in the title, 2026-11-01).
+
+Patches 2450 and 2451 make a game's crash say where it was. 2450: in a title or helper, `dispatch_exception` writes the first access violation or in-page error
+at each of the first 16 faulting instructions as an err line (`first-chance access violation N: write of <address> at <pc> (<module>+<offset>), thread <id>
+<name>`), because a game with its own crash handler (a recompiled PC game, NFS Heat, 2026-11-01) never reaches the unhandled-exception filter.
+2451: patch 2422's unhandled-exception line gains the same module, offset, access, address and thread. The words and the per-instruction table are
+`wine/ps5/pw_wine_fault_words.h` (`tests/test_pw_wine_fault_words.c`), copied into `dlls/ntdll` and `dlls/kernelbase` by `tools/build-wine-ps5.sh`.
+
+Patch 2432 gives a game in the title its Windows priorities back without lifting any of its threads to the title's own:
+with `WINE_PS5_SCHED_TITLE` (the title sets it to 2405's floor, 767, when it runs a game itself) the server maps each of
+the title's Windows threads through `pw_wine_thread_set_windows_priority` (`src/pw_helper_sched.h`,
+`tests/test_pw_helper_sched.c`): normal and below at the floor, above normal one step up per band, time critical 762,
+the realtime class 761, never above 701. On the floor alone a time-critical thread woke as late as a normal one
+(`intitle-priority-title-base-2026-11-01-01`, p99 5.3 ms). `WINE_PS5_SCHED_TITLE=0` in a launch keeps every thread at the floor.
+
+Patch 2430 places a fixed reservation that lies above the console's address space (its app area ends near 1 TiB; a
+Windows program's reaches 128 TiB) wherever there is room when it also commits and starts more than 4 GiB above the limit:
+such a request is refused before the kernel is asked otherwise, in the title and in a helper alike, and can never succeed.
+A game that asked only for 32 MiB at `0x7XX7f800000` looped on the refusals (Spelunky 2, 2026-11-01; Steam's copy too,
+which no game's own setting reaches). A reserve-only request (V8's cage, which falls back by itself) and one within 4 GiB
+of the limit (a hook looking for room within a jump of its own code) are still refused. `WINE_PS5_HIGH_RESERVE_ELSEWHERE=0`
+or `=1` forces it either way; the decision is `wine/ps5/pw_wine_high_reserve.h` (`tests/test_pw_wine_high_reserve.c`), and
+`tests/high-reserve-probe.c` asks for three of the game's addresses.
+
+Patch 2433 routes the title's Wine signal handlers through `pw_signal_dispatch` as a helper's are, through libc's
+`sigaction` there: a fault on a thread that is not Wine's (the in-process server's, the title's own; no GS base) goes to
+the title's previous handler or repeats under the default action, so the kernel reports the fault itself. Before, the
+server's fault as it ended a program in the title ran Wine's `segv_handler`, which faulted again at 0x420 on the thread's
+missing Wine data and hid the first (`e1-webhelper-title-base-2026-11-02-01`).
+
+Patch 2460 logs where a reservation of 4 GiB or more landed (`wine-ps5: reserved … at … (asked …)`), beside 0891's
+refused and failed lines: Steam's browser in the title faulted on a page of what looked like V8's pointer cage at
+0x4000000000 after its hinted requests were refused (`e1-webhelper-title-base-2026-11-02-03`), and nothing said where
+the fallback went.
+
+Patch 2456 ends 2450's line with the kernel's own mapping at the touched address (`, kernel <start>-<end> prot 0x…` or `, kernel none`), from
+`__wine_ps5_kernel_range` through a new ntdll Unix call: Steam's browser in the title faulted on pages Wine counts committed and the hardware
+calls not present (e1-webhelper-title-base-2026-11-02-04).
+
+Patch 2457 makes `GetCurrentProcessorNumber` say the CPU the thread runs on (RDTSCP's processor id) instead of 0 for every thread: the console's
+libc has no `sched_getcpu`. The number stays below the count Wine reports, through `WINE_CPU_TOPOLOGY`'s list, since a helper's threads run on all 16
+CPUs while the title lists 13 (`tests/cpu-count-probe.c`, cases cpu-count64 and cpu-count64-title).
+
+Patch 2458 applies WINEDEBUG's options for one program (`game.exe:+seh`) once a helper or the title learns its program from the server:
+both start as a placeholder (`child.exe`, `title-client.exe`) and Wine matched the options against that, so none ever applied on the console.
+The options are parsed again for the image's name before the PE side reads them; a Unix-side channel already looked up keeps its flags.
+
+Patch 2453 copies a title process's memory for a helper through a non-blocking pipe (`wine/ps5/pw_wine_copy_pipe.h`): the server thread wrote and read its
+own blocking pipe, and a crash reporter dumping a game in the title stopped the server for good (dump-server64-title). Patch 2454 gives the Unix side's locks
+taken with signals open the synchronization device's deferral (`pw_ntsync_critical_enter/leave`): a thread suspended in WriteFile held the merged-write
+mutex and the suspending thread's next CloseHandle never returned (suspend-server64-helper/-title).
+`wine/ps5/pw_wine_fdv.c` puts the open-file budget's calls under the same rule: its one mutex is taken on every descriptor
+call, and a thread suspended holding it stopped a thread inside the merged-write lock, whose suspend then never landed
+(suspend-server64-title, cf-base-2026-11-02-01).
+`wine/ps5/pw_wine_cwd.c` does the same for the path lock (`pw_cwd_set_guard`, set by ntdll): every path call reads under it
+and close() writes under it, and a thread suspended holding it stopped a close inside the merged-write lock
+(suspend-server64-title and -helper, a8final-base-2026-11-02).
+
+Patch 2455 records the 2010, 2012 and 2013 C++ runtimes as their redistributables do (`VisualStudio\{10,11,12}.0`), at the versions Wine's builtins report,
+beside Wine's own 14.0 records, so a launcher that checks before starting a game finds them (`tests/vcredist-check-probe.c`, `tests/test_vcruntime_records.py`).
+
+Patch 2470 lets the title's control overlay (`src/pw_overlay.h`, Alpha 8) turn the mouse off as if it were unplugged: a new input type, 11 (`PW_WINE_INPUT_MOUSE_PRESENT`),
+down 0 gone and down 1 back. The PS5 driver then draws no pointer (the GDI picture and the Vulkan hardware cursor) and `GetSystemMetrics(SM_MOUSEPRESENT)` is 0; the
+title itself stops sending mouse input and hides the pointer the broker draws for programs in helpers. The in-process server ignores the type. Not run on a console.
+
+Patches 2471 and 2472 let the control overlay switch the controller a game sees while it runs (Xbox 360, Xbox One, the DualSense), mostly for its button
+prompts. The title's sink carries the kind (`pw_wine_pad_kind`, also on the helpers' input page); 2471 makes xinput follow it on each look at controller 0
+(hidden for the DualSense, the product id per Xbox kind), and 2472 runs the PS5 bus in the title's own process when an Xbox controller is chosen
+(`WINE_PS5_HID=live`, no start-up wait) and makes or removes the DualSense's HID device as the kind changes. The overlay disconnects the controller for half
+a second around a switch (2423 tells the windows). A program that looks for controllers only at its start keeps the old one until it is started again,
+with the choice saved. Not run on a console.
+
+Patch 2480 makes an Xbox controller (the default choice) also the HID gamepad Windows makes for one, `HID\VID_045E&PID_028E&IG_00` (`02EA` for the Xbox One), so
+programs that find controllers without XInput find it: DirectInput ("Controller (XBOX 360 For Windows)"), raw input, winmm, SDL and Rewired. Before it, with an
+Xbox controller chosen, they found none, only the keyboard and mouse (players' reports; the owner's Ys Origin, 32-bit DirectInput 8, 2026-11-02). The PS5 bus
+makes it from the title's pad slot in Windows' layout (`wine/ps5/pw_wine_xusb.h`, `tests/test_pw_wine_xusb.c`): X/Y and Rx/Ry, the triggers on one Z axis,
+buttons 1-10 and a hat; its id ends in `&IG_00`, by which SDL and others that also read XInput count it once. `WINE_PS5_HID=live` now starts the bus in every game's
+process, helpers too, and `wine_ps5_hid_start` waits up to a second for the gamepad as for the DualSense. A program opens its own link to it (patch 2401's rule,
+`tests/test_process_hid_link.c`, which extracts the code from 2480). XInput still reads the slot directly. Windows.Gaming.Input still finds no Xbox controller:
+Wine's takes those only from winexinput's `&XI_` device. `tests/pad-api-probe.c` reads every API (gate cases `pad-api*`, `prefix-fresh-pad32`); every kind, width and process passed on the base (`input-base-2026-11-02-01`).
+
+Patch 2461 keeps the program in the title out of the GPU driver's device-memory region (256 GiB at 0x4000000000, where
+the broker's driver maps VkDeviceMemory on demand): out of Wine's free ranges at start, and a fixed request over it
+refused. Steam's browser in the title had its V8 cage granted there and faulted on pages the driver's memory had taken
+(`e1-webhelper-title-base-2026-11-02-04/-05`: "kernel none" under MEM_COMMIT).

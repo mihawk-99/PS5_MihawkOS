@@ -174,6 +174,8 @@ static void *open_locked(const char *path)
     {
         void (*share)(const void *)=(void (*)(const void *))(uintptr_t)pw_prx_lookup(module->descriptor,"pw_module_share");
         if(share && ops.share)share(ops.share);
+        pw_wine_dl_hand_heap((void (*)(void *(*)(size_t),void (*)(void *,size_t)))(uintptr_t)
+                             pw_prx_lookup(module->descriptor,"pw_wine_heap_set_backing"),ops.heap_backing);
         /* It may only keep it: this lock is held, and pw_wine_dl_sym takes it. */
         void (*lookup)(void *(*)(void *,const char *))=(void (*)(void *(*)(void *,const char *)))(uintptr_t)
             pw_prx_lookup(module->descriptor,"pw_module_lookup");

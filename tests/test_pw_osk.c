@@ -1,6 +1,7 @@
 /* SPDX-License-Identifier: GPL-3.0-or-later */
 #include "../native/pw_osk_ps5.h"
 #include "../src/pw_osk.h"
+#include "../src/pw_vkbd.h"
 #include <assert.h>
 #include <stdio.h>
 #include <string.h>
@@ -124,6 +125,116 @@ static void typing(void)
     assert(typed(long_line, 1, e, 600) == (PW_OSK_MAX_UNITS - 1) * 2 + 2);   /* 254 units, then Enter */
     /* every event the typer makes is one the title's input sink accepts */
     for (unsigned i = 0; i < 6; i++) assert(e[i].down <= 1);
+}
+
+/* Every event the typer has now, as the title's loop sends them (8 a tick) */
+static unsigned drain(PwOskTyper *typer, PwWineInput *events, unsigned capacity)
+{
+    unsigned count = 0;
+    while (count < capacity && pw_osk_typer_next(typer, &events[count])) count++;
+    return count;
+}
+
+static int is_key(const PwWineInput *e, uint32_t code, unsigned down)
+{
+    return e->type == PW_WINE_INPUT_KEY && e->code == code && e->down == down;
+}
+
+/* MihawkOS's own keyboard as the title drives it (native/proton_wine.cpp): the pad's presses, less those held when it
+ * opened (pw_osk_pad_pressed), pressed on the keyboard (src/pw_vkbd.h), sent to the game at once (pw_osk_own_typed). */
+static int own_press(PwOskPad *state, PwVkbd *kbd, PwOskTyper *typer, struct pad *now)
+{
+    const uint32_t pressed = pw_osk_pad_pressed(state, now);
+    int result = PW_VKBD_NONE;
+    if (pressed & PAD_SQUARE) result = pw_vkbd_backspace(kbd);
+    if (pressed & PAD_CROSS) result = pw_vkbd_press(kbd);
+    if (pressed & PAD_OPTIONS) result = PW_VKBD_FINISHED;
+    pw_osk_own_typed(typer, result, kbd->typed);
+    if (pressed & PAD_CIRCLE) result = PW_VKBD_CANCELLED;
+    pw_osk_pad_filter(state, now);
+    return result;
+}
+
+static void own_keyboard_live(void)
+{
+    PwOskPad state = {0};
+    PwVkbd kbd;
+    PwOskTyper typer;
+    PwWineInput e[64];
+    struct pad pad;
+    pw_osk_typer_start(&typer, "", 0);
+
+    /* No stray first key: the Cross that chose the overlay's Keyboard tile opens the keyboard on the same poll (the
+     * focus is on q), and whatever opened it (the tile's Cross, L3+R3, two fingers on the touchpad, Options+touchpad) is
+     * not a press of the keyboard's own until let go */
+    const uint32_t openers[] = {PAD_CROSS, PAD_L3 | PAD_R3, PAD_TOUCH_PAD, PAD_OPTIONS | PAD_TOUCH_PAD};
+    for (unsigned i = 0; i < sizeof(openers) / sizeof(openers[0]); i++) {
+        pw_vkbd_open(&kbd, PW_VKBD_ABC);
+        pad = pad_with(openers[i], openers[i] & PAD_TOUCH_PAD ? 2 : 0);
+        pad.pressed = openers[i];
+        pw_osk_pad_open(&state, &pad);
+        assert(own_press(&state, &kbd, &typer, &pad) == PW_VKBD_NONE);
+        pad.pressed = 0;
+        assert(own_press(&state, &kbd, &typer, &pad) == PW_VKBD_NONE);   /* still held */
+        assert(drain(&typer, e, 64) == 0 && kbd.length == 0);
+        pad = pad_with(0, 0);
+        own_press(&state, &kbd, &typer, &pad);                             /* let go */
+    }
+
+    /* Real time: each press is the game's before the next, as a keyboard's; nothing waits for Done */
+    pad = pad_with(PAD_CROSS, 0);
+    pad.pressed = PAD_CROSS;
+    assert(own_press(&state, &kbd, &typer, &pad) == PW_VKBD_TYPED);        /* q, the key in focus */
+    assert(drain(&typer, e, 64) == 2 && e[0].type == PW_WINE_INPUT_CHAR && e[0].code == 'q' && e[0].down == 1 &&
+           e[1].code == 'q' && e[1].down == 0);
+    pad = pad_with(0, 0);
+    own_press(&state, &kbd, &typer, &pad);
+    pw_vkbd_move(&kbd, 1, 0);                                               /* w */
+    pad = pad_with(PAD_CROSS, 0);
+    pad.pressed = PAD_CROSS;
+    own_press(&state, &kbd, &typer, &pad);
+    assert(drain(&typer, e, 64) == 2 && e[0].code == 'w');
+
+    /* Backspace is the game's Backspace key every time: one for the w, and more for text the field never had */
+    for (int i = 0; i < 3; i++) {
+        pad = pad_with(PAD_SQUARE, 0);
+        pad.pressed = PAD_SQUARE;
+        assert(own_press(&state, &kbd, &typer, &pad) == PW_VKBD_ERASED);
+        assert(drain(&typer, e, 64) == 2 && is_key(&e[0], PW_OSK_KEY_BACK, 1) && is_key(&e[1], PW_OSK_KEY_BACK, 0));
+        assert((e[0].code & 0xff) == 0x08 && (e[0].code >> PW_WINE_KEY_SCAN_SHIFT) == 0x0e);   /* VK_BACK, scan 0x0e */
+        pad = pad_with(0, 0);
+        own_press(&state, &kbd, &typer, &pad);
+    }
+    /* the keyboard's own Backspace key, pressed on an empty field, too */
+    kbd.row = 4, kbd.col = 3;
+    pad = pad_with(PAD_CROSS, 0);
+    pad.pressed = PAD_CROSS;
+    assert(own_press(&state, &kbd, &typer, &pad) == PW_VKBD_ERASED && drain(&typer, e, 64) == 2 &&
+           is_key(&e[0], PW_OSK_KEY_BACK, 1));
+
+    /* Done (and Options) is Return, nothing else; CIRCLE closes with nothing more */
+    pad = pad_with(PAD_OPTIONS, 0);
+    pad.pressed = PAD_OPTIONS;
+    assert(own_press(&state, &kbd, &typer, &pad) == PW_VKBD_FINISHED);
+    assert(drain(&typer, e, 64) == 2 && is_key(&e[0], PW_OSK_KEY_RETURN, 1) && is_key(&e[1], PW_OSK_KEY_RETURN, 0));
+    pad = pad_with(PAD_CIRCLE, 0);
+    pad.pressed = PAD_CIRCLE;
+    assert(own_press(&state, &kbd, &typer, &pad) == PW_VKBD_CANCELLED && drain(&typer, e, 64) == 0);
+
+    /* typing faster than the loop sends: the queue keeps order, and room comes back as it is sent */
+    pw_osk_typer_start(&typer, "", 0);
+    for (int i = 0; i < 200; i++) assert(pw_osk_typer_text(&typer, "a"));
+    assert(pw_osk_typer_key(&typer, PW_OSK_KEY_BACK));
+    assert(drain(&typer, e, 7) == 7);                    /* mid-key: a press out, its release still to send */
+    for (int i = 0; i < 50; i++) assert(pw_osk_typer_text(&typer, "b"));
+    unsigned sent = 0, chars = 0, backs = 0;
+    PwWineInput one;
+    while (pw_osk_typer_next(&typer, &one)) {
+        if (sent++ == 0) assert(one.code == 'a' && one.down == 0);          /* the release left over */
+        if (one.down && one.type == PW_WINE_INPUT_CHAR) chars++;
+        if (one.down && one.type == PW_WINE_INPUT_KEY) backs++, assert(chars == 196);   /* after every a */
+    }
+    assert(chars == 196 + 50 && backs == 1);
 }
 
 /* the console's dialog, faked */
@@ -293,6 +404,7 @@ int main(void)
     detection();
     pad_hand_over();
     typing();
+    own_keyboard_live();
     system_dialog();
     puts("pw_osk: ok");
     return 0;

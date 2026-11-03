@@ -1,0 +1,76 @@
+From 0000000000000000000000000000000000000000 Mon Sep 17 00:00:00 2001
+From: Mihawk <163614687+mihawk-99@users.noreply.github.com>
+Date: Mon, 02 Nov 2026 16:00:00 -0400
+Subject: [PATCH] ntdll: PS5: A fault on a title thread that is not Wine's keeps its own report.
+
+A helper's Wine handlers are entered through pw_signal_dispatch, which gives a signal on a thread with no Wine TEB (GS
+base zero: the SDK's service threads) to the handler that was there before, or to the system's default, so that a
+fault there is reported as itself. The title had no such routing: without the payload loader's raw sigaction
+pw_sigaction set Wine's handlers directly, for every thread. The in-process server's thread is not Wine's, nor are the
+title's own. When the server faulted while it ended a program in the title (cancel_terminating_process_asyncs, the
+program's pending I/O), segv_handler ran on it, and its first read of the thread's Wine data (ps5_mmu4k_signal, NULL
+data) faulted again at 0x420: the title ended, and the kernel reported that second fault, not the server's
+(e1-webhelper-title-base-2026-11-02-01).
+
+The title now routes them the same way, through libc's sigaction (it runs no 32-bit code, so no WoW64 %fs stands in
+the way). Wine's threads, whose GS base is their TEB (set_thread_teb), still go to Wine's handlers; another thread's
+fault goes to what the title had, or repeats at its own instruction under the default action, where the kernel's
+report names it.
+---
+--- a/dlls/ntdll/unix/signal_x86_64.c
++++ b/dlls/ntdll/unix/signal_x86_64.c
+@@ -3797,9 +3797,20 @@
+ /* A payload also has SDK service threads with no Wine TEB (GS base zero).
+  * Process-wide Wine handlers must preserve their native handlers. In particular,
+  * init_handler's GS:0x30 read used to replace their original fault with a second
+- * SIGSEGV at address 0x30, hiding the useful kernel crash context. */
++ * SIGSEGV at address 0x30, hiding the useful kernel crash context. So has the
++ * title (patch 2433): the in-process server's thread and the title's own. A
++ * fault in the server as it ended a program in the title went to segv_handler,
++ * whose first read of the thread's Wine data (NULL there) faulted again at 0x420
++ * and was all the kernel reported (e1-webhelper-title-base-2026-11-02-01). */
+ static struct sigaction pw_wine_actions[NSIG], pw_native_actions[NSIG];
+ 
++/* The kernel's sigaction in a helper (the payload loader's); libc's in the title,
++ * which runs no 32-bit code (pw_title_game_route) and so no WoW64 %fs to fear. */
++static int pw_route_sigaction( int sig, const struct sigaction *act, struct sigaction *old )
++{
++    return pw_raw_sigaction ? pw_raw_sigaction( sig, act, old ) : sigaction( sig, act, old );
++}
++
+ static void pw_signal_dispatch( int sig, siginfo_t *info, void *context )
+ {
+     void *gs_base = NULL;
+@@ -3814,7 +3825,7 @@
+     if (native->sa_handler == SIG_IGN) return;
+     if (native->sa_handler == SIG_DFL)
+     {
+-        pw_raw_sigaction( sig, native, NULL );
++        pw_route_sigaction( sig, native, NULL );
+         /* A synchronous fault repeats at its original instruction after return,
+          * so the kernel records that context instead of a fault in our handler. */
+         if (info && info->si_code < SI_USER &&
+@@ -3826,7 +3837,7 @@
+     {
+         struct sigaction reset = *native;
+         reset.sa_handler = SIG_DFL;
+-        pw_raw_sigaction( sig, &reset, NULL );
++        pw_route_sigaction( sig, &reset, NULL );
+     }
+     if (native->sa_flags & SA_SIGINFO) native->sa_sigaction( sig, info, context );
+     else native->sa_handler( sig );
+@@ -3837,11 +3848,10 @@
+     struct sigaction routed;
+     int status;
+ 
+-    if (!pw_raw_sigaction) return sigaction( sig, act, old );
+     pw_wine_actions[sig] = *act;
+     routed = *act;
+     routed.sa_sigaction = pw_signal_dispatch;
+-    status = pw_raw_sigaction( sig, &routed, &pw_native_actions[sig] );
++    status = pw_route_sigaction( sig, &routed, &pw_native_actions[sig] );
+     if (!status && old) *old = pw_native_actions[sig];
+     return status;
+ }
+-- 
+2.56.0

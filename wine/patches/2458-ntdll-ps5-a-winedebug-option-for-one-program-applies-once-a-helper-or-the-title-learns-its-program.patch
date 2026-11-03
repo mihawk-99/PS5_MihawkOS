@@ -1,0 +1,111 @@
+From 0000000000000000000000000000000000000000 Mon Sep 17 00:00:00 2001
+From: Mihawk <163614687+mihawk-99@users.noreply.github.com>
+Date: Tue, 3 Nov 2026 06:30:00 -0400
+Subject: [PATCH] ntdll: PS5: a WINEDEBUG option for one program applies once a helper or the title learns its program
+
+Wine matches WINEDEBUG's per-program options ("game.exe:+seh") against argv[1], read before the server is reached. A
+helper starts as "child.exe" and the title as "title-client.exe", and both learn the program from the server
+afterward, so no per-program option ever applied on the console: a game in the title started by a store client, or in a helper,
+could only be traced with the channel on for every program, and the store client stalled under that (2026-11-03).
+
+Once the startup info names the image, the options are parsed again for it, as Wine would have with that name, and
+written to the PEB's page before the PE side reads them. A Unix-side channel already looked up keeps its flags. The
+name first matched is kept from that parse: a created helper's argv[1] is gone by then, and reading it crashed every
+helper a store client started under a per-program option (a per-program trace run, 2026-11-03).
+---
+  dlls/ntdll/unix/debug.c        | 44 ++++++++++++++++++++++++++++++++++++++++++
+  dlls/ntdll/unix/loader.c       |  3 +++
+  dlls/ntdll/unix/unix_private.h |  3 +++
+  3 files changed, 50 insertions(+)
+
+diff --git a/dlls/ntdll/unix/debug.c b/dlls/ntdll/unix/debug.c
+index 4c54ca8..6ccd706 100644
+--- a/dlls/ntdll/unix/debug.c
++++ b/dlls/ntdll/unix/debug.c
+@@ -65,6 +65,9 @@ static unsigned char default_flags = (1 << __WINE_DBCL_ERR) | (1 << __WINE_DBCL_
+ static int nb_debug_options = -1;
+ static int options_size;
+ static struct __wine_debug_channel *debug_options;
++#ifdef __PROSPERO__
++static char parsed_app_name[MAX_PATH];  /* the name WINEDEBUG was parsed for; empty when it was not parsed */
++#endif
+ 
+ static const char * const debug_classes[] = { "fixme", "err", "warn", "trace" };
+ 
+@@ -224,7 +227,48 @@ static void init_options(void)
+     while ((p = strpbrk( app_name, "/\\" ))) app_name = p + 1;
+ 
+     parse_options( wine_debug, app_name );
++#ifdef __PROSPERO__
++    snprintf( parsed_app_name, sizeof(parsed_app_name), "%s", app_name );  /* a created helper's argv[1] is gone later */
++#endif
++}
++
++#ifdef __PROSPERO__
++/***********************************************************************
++ *		dbg_set_app_name
++ *
++ * PS5: a helper and the title start as a placeholder ("child.exe", "title-client.exe") and learn their program from the
++ * server, so WINEDEBUG's options for one program ("game.exe:+seh") never matched. Once the image is known, the options
++ * are parsed again for it, before the PE side reads them; a Unix-side channel already looked up keeps its flags.
++ */
++void dbg_set_app_name( const WCHAR *image )
++{
++    struct __wine_debug_channel *page = debug_options, default_option;
++    char *wine_debug = getenv( "WINEDEBUG" ), name[MAX_PATH];
++    const WCHAR *base = image;
++    int len;
++
++    if (!parsed_app_name[0] || !wine_debug || !strchr( wine_debug, ':' ) || !init_done || !image) return;
++    for (; *image; image++) if (*image == '/' || *image == '\\') base = image + 1;
++    len = ntdll_wcstoumbs( base, wcslen( base ), name, sizeof(name) - 1, FALSE );
++    if (len <= 0) return;
++    name[len] = 0;
++    if (!strcasecmp( name, parsed_app_name )) return;
++
++    /* the same parse init_options would have done with this name; add_option grows a heap list, not the PEB's page */
++    /* shortcut: no lock, as in init_options; a thread reading channel flags during the parse would see a moving list.
++     * Only the starting thread runs Wine code this early; take a lock if that changes. */
++    debug_options = NULL;
++    nb_debug_options = options_size = 0;
++    default_flags = (1 << __WINE_DBCL_ERR) | (1 << __WINE_DBCL_FIXME);
++    parse_options( wine_debug, name );
++    memcpy( page, debug_options, nb_debug_options * sizeof(*page) );
++    free( debug_options );
++    debug_options = page;
++    default_option.flags = default_flags;
++    default_option.name[0] = 0;
++    page[nb_debug_options] = default_option;
+ }
++#endif
+ 
+ /***********************************************************************
+  *		__wine_dbg_get_channel_flags  (NTDLL.@)
+diff --git a/dlls/ntdll/unix/loader.c b/dlls/ntdll/unix/loader.c
+index ded0154..003e552 100644
+--- a/dlls/ntdll/unix/loader.c
++++ b/dlls/ntdll/unix/loader.c
+@@ -2645,6 +2645,9 @@ static void start_main_thread(void)
+     mallopt( M_PERTURB, 0xff );
+ #endif
+     init_startup_info();
++#ifdef __PROSPERO__
++    dbg_set_app_name( main_wargv[0] );
++#endif
+     *(ULONG_PTR *)&peb->CloudFileFlags = get_image_address();
+     set_load_order_app_name( main_wargv[0] );
+     init_thread_stack( teb, 0, 0, 0 );
+diff --git a/dlls/ntdll/unix/unix_private.h b/dlls/ntdll/unix/unix_private.h
+index 3f12b72..66ee063 100644
+--- a/dlls/ntdll/unix/unix_private.h
++++ b/dlls/ntdll/unix/unix_private.h
+@@ -451,6 +451,9 @@ extern NTSTATUS wow64_wine_spawnvp( void *args );
+ #endif
+ 
+ extern void dbg_init(void);
++#ifdef __PROSPERO__
++extern void dbg_set_app_name( const WCHAR *image );
++#endif
+ 
+ extern void close_inproc_sync( HANDLE handle );
+ 

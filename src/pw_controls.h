@@ -16,7 +16,7 @@ extern "C" {
  * File functions return errno values; failed reads leave the defaults and
  * failed saves leave the previous file. The caller owns the parent folder. */
 enum { PW_CONTROLS_BUTTONS = 17, PW_CONTROLS_MOUSE_BUTTONS = 3 };
-typedef struct pw_controls { unsigned button[3]; unsigned keyboard; /* PwOskTrigger: the on-screen keyboard's gesture, Off by default */ } pw_controls;
+typedef struct pw_controls { unsigned button[3]; unsigned keyboard; /* PwOskTrigger: the control overlay's gesture (src/pw_overlay.h), L3 + R3 by default */ } pw_controls;
 typedef struct pw_controls_mouse {
     ProtonTouchpad pointer;
     int right, middle;

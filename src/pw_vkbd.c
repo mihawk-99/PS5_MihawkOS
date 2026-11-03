@@ -118,9 +118,16 @@ int pw_vkbd_type(PwVkbd *kbd, const char *utf8)
         uint16_t pair[2];
         size_t used = 0;
         const size_t n = to_utf16(at, pair, &used);
-        if (kbd->length + count + n > PW_VKBD_TEXT) return PW_VKBD_NONE;
+        if (count + n > PW_VKBD_TEXT) break;
         for (size_t i = 0; i < n; ++i) units[count++] = pair[i];
         at += used;
+    }
+    if (kbd->length + count > PW_VKBD_TEXT) {   /* the field scrolls: the oldest units go, a pair as one */
+        size_t drop = kbd->length + count - PW_VKBD_TEXT;
+        if (drop < kbd->length && (kbd->text[drop] & 0xfc00) == 0xdc00) ++drop;
+        if (drop > kbd->length) drop = kbd->length;
+        memmove(kbd->text, kbd->text + drop, (kbd->length - drop) * sizeof(kbd->text[0]));
+        kbd->length -= drop;
     }
     memcpy(kbd->text + kbd->length, units, count * sizeof(units[0]));
     kbd->length += count;
@@ -130,12 +137,13 @@ int pw_vkbd_type(PwVkbd *kbd, const char *utf8)
 
 int pw_vkbd_backspace(PwVkbd *kbd)
 {
-    if (!kbd->length) return PW_VKBD_NONE;
-    --kbd->length;
-    if (kbd->length && (kbd->text[kbd->length] & 0xfc00) == 0xdc00 && (kbd->text[kbd->length - 1] & 0xfc00) == 0xd800)
-        --kbd->length;   /* a surrogate pair goes as one */
-    kbd->text[kbd->length] = 0;
-    return PW_VKBD_TYPED;
+    if (kbd->length) {
+        --kbd->length;
+        if (kbd->length && (kbd->text[kbd->length] & 0xfc00) == 0xdc00 && (kbd->text[kbd->length - 1] & 0xfc00) == 0xd800)
+            --kbd->length;   /* a surrogate pair goes as one */
+        kbd->text[kbd->length] = 0;
+    }
+    return PW_VKBD_ERASED;
 }
 
 void pw_vkbd_page(PwVkbd *kbd, int step)
@@ -149,12 +157,13 @@ static int press_key(PwVkbd *kbd, const PwVkbdKey *key)
     switch (key->kind) {
     case PW_VKBD_CHAR: {
         const int typed = pw_vkbd_type(kbd, key->text);
+        memcpy(kbd->typed, key->text, sizeof(kbd->typed));
         if (typed == PW_VKBD_TYPED && kbd->shift == 1) kbd->shift = 0;   /* one capital, as a phone's Shift */
         return typed;
     }
     case PW_VKBD_SHIFT: kbd->shift = !kbd->shift; return PW_VKBD_NONE;
     case PW_VKBD_PAGE: pw_vkbd_page(kbd, 1); return PW_VKBD_NONE;
-    case PW_VKBD_SPACE: return pw_vkbd_type(kbd, " ");
+    case PW_VKBD_SPACE: memcpy(kbd->typed, " ", 2); return pw_vkbd_type(kbd, " ");
     case PW_VKBD_BACK: return pw_vkbd_backspace(kbd);
     case PW_VKBD_DONE: return PW_VKBD_FINISHED;
     }

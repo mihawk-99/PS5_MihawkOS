@@ -535,5 +535,68 @@ class CaptureSplit(unittest.TestCase):
         self.assertFalse(runner.captures_split([], 600))
 
 
+
+class Hud(unittest.TestCase):
+    """The statistics HUD's check (hud_check): its lines against perf's, and the broker's compose cost."""
+    HUD = 'hud: fps={} low=55.0 frame_ms={} cpu=12 gpu={} small=4100/8192 big=900/16384'
+    PERF = ('perf: vulkan frames=600 fps={} p50={} p95=17.10 p99=18.20 max=19.00 ms present_avg=0.300 '
+            'present_max_all=1.200 ms')
+
+    def lines(self, hud_fps=59.8, hud_ms=16.72, perf_fps=60.0, p50=16.70, gpu=-1):
+        # perf's line before the HUD came on (the start, the open panel) does not count
+        return [self.PERF.format(82.5, 8.5), self.HUD.format(hud_fps, hud_ms, gpu)] + \
+            [self.PERF.format(perf_fps, p50), self.HUD.format(hud_fps, hud_ms, gpu), self.PERF.format(perf_fps, p50)]
+
+    def test_sources_print_the_lines(self):
+        printed('native/proton_wine.cpp', 'hud: fps=%.1f low=%.1f frame_ms=%.2f cpu=%.0f gpu=%.0f small=%d/%d big=%d/%d')
+        broker = ROOT / '.deps/graphics-foundation/tooling/gpu-broker/display.cpp'   # the pinned broker, once set up
+        if broker.exists():
+            printed(broker.relative_to(ROOT), 'gpu-hud compose n=%u avg_us=%.0f max_us=%.0f')
+
+    def test_matching_and_cheap(self):
+        record = runner.hud_check(self.lines(), 'gpu-hud compose n=120 avg_us=180 max_us=640\n', False)
+        self.assertTrue(record['passed'])
+        self.assertEqual((record['compose_avg_us'], record['compose_max_us']), (180, 640))
+
+    def test_what_fails(self):
+        cheap = 'gpu-hud compose n=120 avg_us=180 max_us=640\n'
+        self.assertFalse(runner.hud_check(self.lines(hud_fps=50.0), cheap, False)['passed'])        # fps 17% off
+        self.assertFalse(runner.hud_check(self.lines(hud_ms=19.0), cheap, False)['passed'])         # frame time 2.3 ms off
+        self.assertFalse(runner.hud_check(self.lines(), 'gpu-hud compose n=120 avg_us=420 max_us=640\n', False)['passed'])
+        self.assertFalse(runner.hud_check(self.lines(), 'gpu-hud compose n=120 avg_us=180 max_us=1400\n', False)['passed'])
+        self.assertFalse(runner.hud_check(self.lines(), '', False)['passed'])                         # no compose line
+        self.assertFalse(runner.hud_check([], cheap, False)['passed'])                                # no HUD line
+        self.assertFalse(runner.hud_check(self.lines(), cheap, True)['passed'])                       # GPU load unknown
+        unread = [line.replace('small=4100/8192', 'small=0/0') for line in self.lines()]
+        self.assertTrue(runner.hud_check(unread, cheap, False)['passed'])                                # small pool unread
+        negative = [line.replace('small=4100/8192', 'small=-211/8192') for line in self.lines()]
+        self.assertFalse(runner.hud_check(negative, cheap, False)['passed'])                             # 2026-11-02-04
+        self.assertTrue(runner.hud_check(self.lines(gpu=42), cheap, True)['passed'])
+
+
+
+class Panel(unittest.TestCase):
+    """The open panel at 120 Hz (panel_check): perf's windows wholly inside the open time, their worst p95."""
+    PERF = 'perf: vulkan frames=600 fps=119.9 p50=8.33 p95={} p99=9.10 max=12.00 ms present_avg=0.300 present_max_all=1.200 ms'
+
+    def lines(self, p95s, before=16.5, after=16.5):
+        # the window the panel opened in and the one it closed in do not count
+        return [self.PERF.format(8.4), 'Wine: control overlay opened (l3+r3)', self.PERF.format(before)] + \
+            [self.PERF.format(p95) for p95 in p95s] + ['Wine: control overlay closed', self.PERF.format(after)]
+
+    def test_sources_print_the_lines(self):
+        printed('native/proton_wine.cpp', 'Wine: control overlay opened (%s)', 'Wine: control overlay closed')
+
+    def test_inside_the_open_time(self):
+        record = runner.panel_check(self.lines([8.40, 8.90, 8.60]), 'gpu-overlay compose n=600 avg_us=2600 max_us=4100\n', 9)
+        self.assertTrue(record['passed'])
+        self.assertEqual((record['windows'], record['p95_worst_ms'], record['compose_max_us']), (3, 8.9, 4100))
+
+    def test_what_fails(self):
+        self.assertFalse(runner.panel_check(self.lines([8.40, 16.50, 8.60]), '', 9)['passed'])   # a window misses
+        self.assertFalse(runner.panel_check(self.lines([8.40]), '', 9)['passed'])                # one window only
+        self.assertFalse(runner.panel_check([self.PERF.format(8.4)] * 4, '', 9)['passed'])       # never opened
+
+
 if __name__ == '__main__':
     unittest.main()

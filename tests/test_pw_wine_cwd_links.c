@@ -45,6 +45,10 @@ static const char *read_all(const char *path)
     return text;
 }
 
+static int guard_entered, guard_left, guard_depth;
+static void guard_in(void) { guard_entered++; guard_depth++; }
+static void guard_out(void) { guard_left++; guard_depth--; errno = EINTR; }   /* a suspend's handler may change errno */
+
 int main(void)
 {
     struct stat state;
@@ -74,6 +78,19 @@ int main(void)
         assert(pw_cwd_resolve_at(8269, -100, "users", joined, sizeof(joined)) == 0 && !strcmp(joined, at("drive_c/users")));
         pw_cwd_forget(8269);
         assert(pw_cwd_resolve_at(8269, -100, "users", joined, sizeof(joined)) == -1);
+    }
+
+    /* The suspend guard brackets every hold of the path lock, and errno comes through it. */
+    {
+        char joined[PW_CWD_PATH_MAX];
+        pw_cwd_set_guard(guard_in, guard_out);
+        pw_cwd_track(5, at("drive_c"));
+        assert(pw_cwd_resolve_at(5, -100, "users", joined, sizeof(joined)) == 0);
+        pw_cwd_forget(5);
+        assert(pw_cwd_resolve_at(5, -100, "users", joined, sizeof(joined)) == -1);
+        assert(stat(at("dosdevices/c:/users/nobody/Documents"), &state) == -1 && errno == ENOENT);
+        assert(guard_entered >= 4 && guard_entered == guard_left && !guard_depth);
+        pw_cwd_set_guard(NULL, NULL);
     }
 
     char cleanup[600];

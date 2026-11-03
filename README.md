@@ -44,6 +44,15 @@ taskbar, Start, File Explorer and a web browser of its own.
 **Releases** are on the [Releases](https://github.com/mihawk-99/PS5_MihawkOS/releases) page. Each one says what
 changed and which consoles it was tested on.
 
+**Coming in Alpha 8** (not yet run on a console):
+- **A control overlay over the game**, in the same see-through glass as the keyboard: press **L3 + R3** in a game.
+  It has Exit game (press Cross twice), Statistics (FPS, frame time, CPU, GPU, memory and both page-table pools; it
+  stays on screen after the overlay closes), the on-screen keyboard, and Mouse off/on (as if the mouse were unplugged,
+  for games whose pointer sticks in the middle), and Controller (Xbox 360, Xbox One or DualSense, switched while the game
+  runs and saved for it; a game that picks its controller only at start shows the new buttons after a restart). L3 + R3 is
+  now on by default: if the keyboard's gesture was off, it is
+  L3 + R3; a gesture you chose stays. Change it in Settings, Controls.
+
 **New in 7.1:**
 - **MihawkOS's own on-screen keyboard**, at the bottom of the screen with the game visible above it: see-through
   frosted glass with rising bubbles, and a key press on screen in 2 to 5 ms. It works on firmware 13.60, where the PS5's
@@ -265,7 +274,7 @@ arguments or settings needs a `game.json`. The WebUI writes it for you; by hand,
 | `arguments` | One string, split at spaces; double quotes keep words together. |
 | `directory` | The *Start in* folder, an absolute Windows path. |
 | `prefix` | Prefix folder id, up to 64 letters, digits, `_` or `-`. Defaults to `mihawk`. |
-| `env` | A list of `"NAME=VALUE"` strings. A game's own choices: `WINE_PS5_GAME_MODE=1` or `=0` (Game Mode) and `WINE_PS5_CONTROLLER=xbox-360`, `xbox-one` or `dualsense` (the controller); they also reach the programs the game starts. `WINE_PS5_TITLE_PROCESS=<program>.exe` runs that one 64-bit program inside MihawkOS's own process, where its memory is not drawn from the console's shared pool. `WINE_PS5_OPENGL=1` marks an OpenGL program. Words starting `PROTON_` or `MIHAWK_` belong to the title and are not applied from the desktop. |
+| `env` | A list of `"NAME=VALUE"` strings. A game's own choices: `WINE_PS5_GAME_MODE=1` or `=0` (Game Mode) and `WINE_PS5_CONTROLLER=xbox-360`, `xbox-one` or `dualsense` (the controller); they also reach the programs the game starts. `WINE_PS5_TITLE_PROCESS=<program>.exe` runs that one 64-bit program inside MihawkOS's own process, where its memory is not drawn from the console's shared pool. `WINE_PS5_OPENGL=1` marks an OpenGL program. A game that asks for memory to use at once at fixed addresses far above what the console can map (about 1 TiB) is given it lower down without any setting; `WINE_PS5_HIGH_RESERVE_ELSEWHERE=0` turns that off for one game, and `=1` also moves the requests that only reserve or lie just above the limit. Words starting `PROTON_` or `MIHAWK_` belong to the title and are not applied from the desktop. |
 | `desktop` | `false` leaves the program off the desktop. |
 | `launcher` | `false` keeps the program out of the launcher's list (the WebUI's "In MihawkOS's game list" unticked). It still opens from the desktop or a home-screen tile. |
 

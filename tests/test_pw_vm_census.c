@@ -185,6 +185,35 @@ int main(void)
     space.fail_at = 2;
     pw_vm_census_walk(&census, query, resident, &space);
     assert(census.failed && census.mappings == 2);
-    puts("vm census: record layout, walk, groups by name and flags, residency, order, log line, flexible kinds, failure");
+    /* How full each touched 2 MiB region is (PwVmCensus.fill): one 4 KiB page alone; 16 KiB committed inside a 1 MiB
+     * reservation in the same region; 6 MiB filling three regions; 3 MiB from the middle of one (its last 1 MiB, then a
+     * whole region);
+     * a 64 MiB reservation alone touches nothing. The classes add up to regions_2m. */
+    {
+        const uint64_t R = 2ull * MIB, B = 0x200000000ull;
+        const Fake fills[] = {
+            {B, B + 4096, 3, PW_VM_FLEXIBLE, "a", 0},
+            {B + 4 * R, B + 4 * R + MIB, 0, 0, "r", 0},
+            {B + 4 * R + MIB, B + 4 * R + MIB + 16384, 3, PW_VM_FLEXIBLE, "b", 0},
+            {B + 8 * R, B + 11 * R, 3, PW_VM_FLEXIBLE, "c", 0},
+            {B + 16 * R + MIB, B + 16 * R + 4 * MIB, 3, PW_VM_FLEXIBLE, "d", 0},
+            {B + 32 * R, B + 64 * R, 0, 0, "big", 0},
+        };
+        Space s = {fills, sizeof(fills) / sizeof(fills[0]), -1, 0};
+        pw_vm_census_walk(&census, query, NULL, &s);
+        assert(census.fill[0] == 2 && census.fill_reserved[0] == 1);   /* the lone page; the page inside a reservation */
+        assert(census.fill[1] == 0 && census.fill[2] == 0);
+        assert(census.fill[3] == 1);                                  /* d's first region, half full */
+        assert(census.fill[4] == 3 + 1);                              /* c's three whole regions, d's second */
+        uint64_t sum = 0;
+        for (unsigned c = 0; c < PW_VM_FILLS; c++) sum += census.fill[c];
+        assert(sum == census.regions_2m);
+        assert(census.accessible == 4096 + 16384 + 6 * MIB + 3 * MIB);
+        char line[256];
+        pw_vm_census_format_fill(&census, line, sizeof(line));
+        assert(!strcmp(line, "regions=7 fill <64K=2/1 <256K=0/0 <1M=0/0 <2M=1/0 full=4/0; accessible 9 MiB packed ~5"));
+    }
+    puts("vm census: record layout, walk, groups by name and flags, residency, order, log line, flexible kinds, failure, "
+         "region fill");
     return 0;
 }

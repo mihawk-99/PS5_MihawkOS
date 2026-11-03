@@ -1,0 +1,110 @@
+From 0000000000000000000000000000000000000000 Mon Sep 17 00:00:00 2001
+From: Mihawk <163614687+mihawk-99@users.noreply.github.com>
+Date: Mon, 02 Nov 2026 12:00:00 -0400
+Subject: [PATCH] win32u: PS5: The mouse the control overlay turns off is gone, as if unplugged.
+
+The title's control overlay (src/pw_overlay.h, Alpha 8) has a Mouse tile for games whose pointer stays in the middle of
+the screen or whose prompts stay on keyboard and mouse: off, it should be as if the USB mouse were unplugged. The title
+stops sending mouse input itself (USB and the controller's touchpad mouse) and hides the pointer the broker draws for
+programs in helpers; a game in the title draws its pointer through this driver, so a new input type, 11, tells it: down 0
+the mouse is gone, down 1 it is back. While gone the driver draws no pointer (the GDI picture and the Vulkan hardware
+cursor) and GetSystemMetrics(SM_MOUSEPRESENT) is 0, as Windows says with no mouse. The raw input device list is
+unchanged: the console's Wine lists no mouse device to remove. The in-process server ignores the type (no default case).
+Not run on a console.
+---
+ dlls/win32u/ps5drv.c         | 24 +++++++++++++++++++++---
+ dlls/win32u/sysparams.c      |  4 ++++
+ dlls/win32u/win32u_private.h |  1 +
+ 3 files changed, 26 insertions(+), 3 deletions(-)
+
+diff --git a/dlls/win32u/ps5drv.c b/dlls/win32u/ps5drv.c
+index 158319b..a36e647 100644
+--- a/dlls/win32u/ps5drv.c
++++ b/dlls/win32u/ps5drv.c
+@@ -99,6 +99,14 @@ static int (*present_frame)( const void *bgra, UINT width, UINT height, UINT str
+  * draws no cursor of its own, which would stay where this process last saw it. */
+ static void (*present_origin)( INT x, INT y );
+ static BOOL helper_process;
++/* The title's control overlay turned the mouse off (input type 11, down 0): as if it were unplugged, no pointer is
++ * drawn and GetSystemMetrics(SM_MOUSEPRESENT) says none; the title sends no mouse input meanwhile. */
++static BOOL mouse_gone;
++
++BOOL ps5_mouse_present(void)
++{
++    return !mouse_gone;
++}
+ static BOOL window_surfaces;
+ 
+ /* Native GPU drawables have no GDI drawable. Keep the ordinary parent
+@@ -200,7 +208,7 @@ static void present_screen(void)
+     width = view.right - view.left;
+     height = view.bottom - view.top;
+     if (present_origin) present_origin( view.left, view.top );
+-    if ((!cursor_image || !frame || helper_process) && width == (INT)screen_width && height == (INT)screen_height &&
++    if ((!cursor_image || mouse_gone || !frame || helper_process) && width == (INT)screen_width && height == (INT)screen_height &&
+         !view.left && !view.top)
+     {
+         present_frame( screen, screen_width, screen_height, screen_width * 4 );
+@@ -209,7 +217,7 @@ static void present_screen(void)
+     if (!frame) return;
+     for (y = 0; y < height; y++)
+         memcpy( frame + y * width, screen + (view.top + y) * screen_width + view.left, width * 4 );
+-    if (cursor_image && !helper_process) draw_cursor( frame, (POINT){view.left, view.top}, width, height );
++    if (cursor_image && !mouse_gone && !helper_process) draw_cursor( frame, (POINT){view.left, view.top}, width, height );
+     present_frame( frame, width, height, width * 4 );
+ }
+ 
+@@ -834,6 +842,16 @@ static BOOL ps5_ProcessEvents( DWORD mask )
+             fprintf( stderr, "wine-ps5: close requested: WM_CLOSE to window %p\n", hwnd );
+             if (hwnd) NtUserPostMessage( hwnd, WM_CLOSE, 0, 0 );
+             break;
++        case 11:
++            /* the mouse unplugged (down 0) or plugged in again (down 1) by the title's control overlay */
++            pthread_mutex_lock( &screen_lock );
++            if (mouse_gone != !event.down)
++            {
++                mouse_gone = !event.down;
++                if (cursor_image) present_screen();
++            }
++            pthread_mutex_unlock( &screen_lock );
++            break;
+         case 5:
+             /* the game did not close: end the process through Wine's exit,
+              * which stops its threads and closes the presenter first */
+@@ -1012,7 +1030,7 @@ void ps5drv_vulkan_cursor( void *vulkan_handle )
+     height = cursor_height;
+     top_left.x = cursor.x - cursor_hotspot.x;
+     top_left.y = cursor.y - cursor_hotspot.y;
+-    show( width && height ? image : NULL, width, height, top_left.x, top_left.y, screen_width, screen_height );
++    show( width && height && !mouse_gone ? image : NULL, width, height, top_left.x, top_left.y, screen_width, screen_height );
+     pthread_mutex_unlock( &screen_lock );
+ }
+ #endif
+diff --git a/dlls/win32u/sysparams.c b/dlls/win32u/sysparams.c
+index 1e475f5..8b9b479 100644
+--- a/dlls/win32u/sysparams.c
++++ b/dlls/win32u/sysparams.c
+@@ -7313,7 +7313,11 @@ int get_system_metrics( int index )
+     case SM_CYKANJIWINDOW:
+         return 0;
+     case SM_MOUSEPRESENT:
++#ifdef WINE_PS5_USER_DRIVER
++        return ps5_mouse_present();
++#else
+         return 1;
++#endif
+     case SM_DEBUG:
+         return 0;
+     case SM_SWAPBUTTON:
+diff --git a/dlls/win32u/win32u_private.h b/dlls/win32u/win32u_private.h
+index d240d4b..f299911 100644
+--- a/dlls/win32u/win32u_private.h
++++ b/dlls/win32u/win32u_private.h
+@@ -65,6 +65,7 @@ extern void *window_surface_get_color( struct window_surface *surface, BITMAPINF
+ extern int force_present_to_surface( const RECT *win_rect );
+ #ifdef WINE_PS5_USER_DRIVER
+ extern BOOL ps5_retains_gdi_surface(void);
++extern BOOL ps5_mouse_present(void);
+ #endif
+ 
+ /* defwnd.c */

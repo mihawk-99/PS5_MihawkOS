@@ -37,6 +37,16 @@ class PrxExports(unittest.TestCase):
         self.assertIn('pw_wineserver_set_ntsync_region', looked)
         self.assertEqual(sorted(looked - exports('wineserver_desc.c')), [])
 
+    def test_wine_modules_find_what_they_look_up_in_ntdll(self):
+        # pw_wine_pad_changes was left out from patch 2423 (2026-11-01) to the control overlay: the driver's dlsym gave
+        # NULL and no window was ever told the controller came or went
+        looked = set()
+        for patch in (ROOT / 'wine/patches').glob('*.patch'):
+            looked |= set(re.findall(r'^\+.*dlsym\( *RTLD_DEFAULT, *"((?:pw_|ps5_)[A-Za-z_0-9]+)"',
+                                     patch.read_text(errors='replace'), re.M))
+        self.assertIn('pw_wine_pad_changes', looked)
+        self.assertEqual(sorted(looked - exports('ntdll_desc.c')), [])
+
 
 if __name__ == '__main__':
     unittest.main()

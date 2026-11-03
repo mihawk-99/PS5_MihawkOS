@@ -67,10 +67,12 @@ static void report(const char *line)
     int length=snprintf(text,sizeof(text),"%s\n",line);
     if(length>0)wine_write_stderr(text,(size_t)length<sizeof(text)?(size_t)length:sizeof(text)-1);
 }
+/* ntdll's heap area (wine/ps5/pw_wine_dmem_ps5.c): the in-process server's own heap takes its blocks from it. */
+extern int __wine_ps5_heap_backing(void *(**map)(size_t),void (**unmap)(void *,size_t));
 static void configure(void)
 {
     const PwWineDlOps ops={load_module,sceKernelGetModuleInfo,
-                           stop_unload,report,pw_wine_fdv_table()};
+                           stop_unload,report,pw_wine_fdv_table(),__wine_ps5_heap_backing};
     const char *dir=getenv("WINE_PRX_DIR");
     pw_wine_dl_configure(&ops,dir && *dir?dir:"/app0/sce_module");
 }

@@ -1,0 +1,63 @@
+From 0000000000000000000000000000000000000000 Mon Sep 17 00:00:00 2001
+From: Mihawk <163614687+mihawk-99@users.noreply.github.com>
+Date: Mon, 02 Nov 2026 20:00:00 -0400
+Subject: [PATCH] wine.inf: PS5: The 2010, 2012 and 2013 C++ runtimes are recorded as installed, at the builtins' versions.
+
+Launchers and game installers ask whether a Visual C++ redistributable is installed before they start a game, and offer
+to install it when the answer is no, although Wine's builtins already provide the runtime. Wine records the 2015-2022
+runtime (VisualStudio\14.0\VC\Runtimes, 14.42.34433, the version its msvcp140 reports) for x64 and x86 in both registry
+views. The 2013, 2012 and 2010 runtimes are now recorded the way their redistributables record them, in the same
+sections and so in the same views (the 64-bit view gets x64, the 32-bit view x64 and x86, as on 64-bit Windows):
+- 2013: VisualStudio\12.0\VC\Runtimes\{x64,x86}, Installed 1, version 12.0.40664 (msvcr120's own version);
+- 2012: VisualStudio\11.0\VC\Runtimes\{x64,x86}, Installed 1, major 11 minor 0 (msvcr110 carries no build number, so
+  none is claimed);
+- 2010: VisualStudio\10.0\VC\VCRedist\{x64,x86}, Installed 1, version v10.0.30319 (msvcr100's own version).
+Only the C and C++ runtimes are claimed: Wine has no MFC builtins for these years. 2005 and 2008 are Wine's WinSxS
+assemblies already. An existing prefix gets the records when it next updates (wine.inf changed). Not run on a console.
+---
+diff --git a/loader/wine.inf.in b/loader/wine.inf.in
+index 575d120..28a7ef1 100644
+--- a/loader/wine.inf.in
++++ b/loader/wine.inf.in
+@@ -720,6 +720,19 @@ HKLM,SOFTWARE\Microsoft\VisualStudio\14.0\VC\Runtimes\x64,"Major",0x10003,0x0000
+ HKLM,SOFTWARE\Microsoft\VisualStudio\14.0\VC\Runtimes\x64,"Minor",0x10003,0x0000002a
+ HKLM,SOFTWARE\Microsoft\VisualStudio\14.0\VC\Runtimes\x64,"Rbld",0x10003,0x00000000
+ HKLM,SOFTWARE\Microsoft\VisualStudio\14.0\VC\Runtimes\x64,"Version",2,"14.42.34433.0"
++; PS5: the 2010, 2012 and 2013 runtimes as their redistributables record them, at the builtins' own versions
++; (msvcr100 10.0.30319, msvcr120 12.0.40664; msvcr110 carries no build), so a program that checks finds them.
++HKLM,SOFTWARE\Microsoft\VisualStudio\12.0\VC\Runtimes\x64,"Bld",0x10003,0x00009ed8
++HKLM,SOFTWARE\Microsoft\VisualStudio\12.0\VC\Runtimes\x64,"Installed",0x10003,0x00000001
++HKLM,SOFTWARE\Microsoft\VisualStudio\12.0\VC\Runtimes\x64,"Major",0x10003,0x0000000c
++HKLM,SOFTWARE\Microsoft\VisualStudio\12.0\VC\Runtimes\x64,"Minor",0x10003,0x00000000
++HKLM,SOFTWARE\Microsoft\VisualStudio\12.0\VC\Runtimes\x64,"Rbld",0x10003,0x00000000
++HKLM,SOFTWARE\Microsoft\VisualStudio\12.0\VC\Runtimes\x64,"Version",2,"v12.0.40664.00"
++HKLM,SOFTWARE\Microsoft\VisualStudio\11.0\VC\Runtimes\x64,"Installed",0x10003,0x00000001
++HKLM,SOFTWARE\Microsoft\VisualStudio\11.0\VC\Runtimes\x64,"Major",0x10003,0x0000000b
++HKLM,SOFTWARE\Microsoft\VisualStudio\11.0\VC\Runtimes\x64,"Minor",0x10003,0x00000000
++HKLM,SOFTWARE\Microsoft\VisualStudio\10.0\VC\VCRedist\x64,"Installed",0x10003,0x00000001
++HKLM,SOFTWARE\Microsoft\VisualStudio\10.0\VC\VCRedist\x64,"Version",2,"v10.0.30319"
+ 
+ [VCRuntime.ntarm64]
+ HKLM,SOFTWARE\Microsoft\VisualStudio\14.0\VC\Runtimes\arm64,"Bld",0x10003,0x00008681
+@@ -736,6 +749,19 @@ HKLM,SOFTWARE\Microsoft\VisualStudio\14.0\VC\Runtimes\x86,"Major",0x10003,0x0000
+ HKLM,SOFTWARE\Microsoft\VisualStudio\14.0\VC\Runtimes\x86,"Minor",0x10003,0x0000002a
+ HKLM,SOFTWARE\Microsoft\VisualStudio\14.0\VC\Runtimes\x86,"Rbld",0x10003,0x00000000
+ HKLM,SOFTWARE\Microsoft\VisualStudio\14.0\VC\Runtimes\x86,"Version",2,"14.42.34433.0"
++; PS5: the 2010, 2012 and 2013 runtimes as their redistributables record them, at the builtins' own versions
++; (msvcr100 10.0.30319, msvcr120 12.0.40664; msvcr110 carries no build), so a program that checks finds them.
++HKLM,SOFTWARE\Microsoft\VisualStudio\12.0\VC\Runtimes\x86,"Bld",0x10003,0x00009ed8
++HKLM,SOFTWARE\Microsoft\VisualStudio\12.0\VC\Runtimes\x86,"Installed",0x10003,0x00000001
++HKLM,SOFTWARE\Microsoft\VisualStudio\12.0\VC\Runtimes\x86,"Major",0x10003,0x0000000c
++HKLM,SOFTWARE\Microsoft\VisualStudio\12.0\VC\Runtimes\x86,"Minor",0x10003,0x00000000
++HKLM,SOFTWARE\Microsoft\VisualStudio\12.0\VC\Runtimes\x86,"Rbld",0x10003,0x00000000
++HKLM,SOFTWARE\Microsoft\VisualStudio\12.0\VC\Runtimes\x86,"Version",2,"v12.0.40664.00"
++HKLM,SOFTWARE\Microsoft\VisualStudio\11.0\VC\Runtimes\x86,"Installed",0x10003,0x00000001
++HKLM,SOFTWARE\Microsoft\VisualStudio\11.0\VC\Runtimes\x86,"Major",0x10003,0x0000000b
++HKLM,SOFTWARE\Microsoft\VisualStudio\11.0\VC\Runtimes\x86,"Minor",0x10003,0x00000000
++HKLM,SOFTWARE\Microsoft\VisualStudio\10.0\VC\VCRedist\x86,"Installed",0x10003,0x00000001
++HKLM,SOFTWARE\Microsoft\VisualStudio\10.0\VC\VCRedist\x86,"Version",2,"v10.0.30319"
+ 
+ [RegisterDllsSection]
+ ;;some dlls have to be registered first
+-- 
+2.56.0

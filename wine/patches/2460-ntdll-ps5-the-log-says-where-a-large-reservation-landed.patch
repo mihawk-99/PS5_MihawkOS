@@ -1,0 +1,29 @@
+From 0000000000000000000000000000000000000000 Mon Sep 17 00:00:00 2001
+From: Mihawk <163614687+mihawk-99@users.noreply.github.com>
+Date: Mon, 02 Nov 2026 18:00:00 -0400
+Subject: [PATCH] ntdll: PS5: The log says where a large reservation landed.
+
+Patch 0891 logs a reservation that failed or was refused. One of 4 GiB or more that succeeds now says where it landed
+and where it was asked for. Steam's browser in the title (e1-webhelper-title-base-2026-11-02-03) had its V8 cage and
+sandbox requests refused above the console's address space, and then faulted reading 0x400015F1F8 on a page that was
+not there: a cage base of 0x4000000000 plus a 32-bit offset, by its shape, but no line said where V8's fallback
+reservation went.
+---
+diff --git a/dlls/ntdll/unix/virtual.c b/dlls/ntdll/unix/virtual.c
+index 1026e50..8fb7619 100644
+--- a/dlls/ntdll/unix/virtual.c
++++ b/dlls/ntdll/unix/virtual.c
+@@ -7229,6 +7229,11 @@ static NTSTATUS allocate_virtual_memory( void **ret, SIZE_T *size_ptr, ULONG typ
+             else if (status)
+                 fprintf( stderr, "wine-ps5: reserving %#lx bytes at %p refused: %#x (type %#x, protect %#x, align %#lx)\n",
+                          (unsigned long)size, base, status, type, protect, (unsigned long)align );
++            /* Where a large reservation landed (a V8 pointer cage is 4 GiB at a 4 GiB boundary): the refusals above
++             * say only where it did not. */
++            else if (size >= ((SIZE_T)4 << 30))
++                fprintf( stderr, "wine-ps5: reserved %#lx bytes at %p (asked %p, type %#x, protect %#x, align %#lx)\n",
++                         (unsigned long)size, view->base, base, type, protect, (unsigned long)align );
+ #endif
+ 
+             if (status == STATUS_SUCCESS)
+-- 
+2.43.0

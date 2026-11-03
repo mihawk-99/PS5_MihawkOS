@@ -1,0 +1,70 @@
+From 0000000000000000000000000000000000000000 Mon Sep 17 00:00:00 2001
+From: Mihawk <163614687+mihawk-99@users.noreply.github.com>
+Date: Mon, 02 Nov 2026 11:00:00 -0400
+Subject: [PATCH] ntdll: PS5: A reservation above the console's address space that must be committed is placed elsewhere.
+
+The console's app address space ends near 1 TiB (the kernel answers EINVAL from 0xfc00000000 up; Wine measures its limit
+as 0xffffff0000), where a 64-bit Windows program's reaches 128 TiB. A fixed reservation above it is refused before the
+kernel is asked (map_view, STATUS_CONFLICTING_ADDRESSES), in the title and in a helper alike. A game that asked only for
+32 MiB at one of 128 addresses from 0x7017f800000 to 0x7ff7f800000, MEM_RESERVE | MEM_COMMIT, looped on the refusals and
+never drew (Spelunky 2 in the title, 47,275 refusals, 2026-11-01; Steam's copy the same, 2026-11-02, where no game's own
+setting reaches a Steam launch).
+
+Such a request (a fixed MEM_RESERVE with no address limits, refused only for lying above the console's limit) that also
+commits and starts more than 4 GiB above the limit is now placed wherever there is room and that base is returned, said
+once: memory a program will use at once can never be served up there. Windows never moves a fixed request, so a program
+that compares what it got with what it asked for still fails as before; one that uses what it got runs. Left refused:
+a reserve-only request (V8's cage and other allocators fall back by themselves) and one within 4 GiB of the limit (a
+hook looking for room within a jump of its own code tries lower). WINE_PS5_HIGH_RESERVE_ELSEWHERE=1 or =0 forces it
+either way. The decision is wine/ps5/pw_wine_high_reserve.h (tests/test_pw_wine_high_reserve.c);
+tests/high-reserve-probe.c asks for three of the game's addresses and says what it got.
+---
+--- a/dlls/ntdll/unix/virtual.c
++++ b/dlls/ntdll/unix/virtual.c
+@@ -6326,6 +6326,19 @@
+ #endif
+ 
+ 
++#ifdef __PROSPERO__
++#include "pw_wine_high_reserve.h"
++
++/* WINE_PS5_HIGH_RESERVE_ELSEWHERE as 1, 0 or -1 (the default), read once (NtAllocateVirtualMemory, patch 2430). */
++static int ps5_high_reserve_forced(void)
++{
++    static int setting = -2;
++    if (setting == -2) setting = pw_wine_high_reserve_forced( getenv( "WINE_PS5_HIGH_RESERVE_ELSEWHERE" ) );
++    return setting;
++}
++#endif
++
++
+ /***********************************************************************
+  *           virtual_handle_fault
+  */
+@@ -7191,6 +7204,24 @@
+             else status = map_view( &view, base, size, type, vprot, limit_low, limit_high,
+                                     align ? align - 1 : granularity_mask );
+ #ifdef __PROSPERO__
++            /* A fixed reservation above the console's address space (its app area ends near 1 TiB, a Windows program's
++             * reaches 128 TiB) can never be served there: one that commits, far above, is placed wherever there is room
++             * and that base returned, which a program that uses what it got runs on (a game that asked only for 32 MiB
++             * at 7 TiB and on, and looped on the refusals: Spelunky 2, 2026-11-01). pw_wine_high_reserve.h decides. */
++            if (status == STATUS_CONFLICTING_ADDRESSES && base && (type & MEM_RESERVE) && !limit_low && !limit_high &&
++                is_beyond_limit( base, size, host_addr_space_limit ) &&
++                pw_wine_high_reserve_elsewhere( ps5_high_reserve_forced(), type, (ULONG_PTR)base,
++                                                (ULONG_PTR)host_addr_space_limit ))
++            {
++                void *asked = base;
++                static LONG said;
++
++                status = map_view( &view, NULL, size, type, vprot, 0, 0, align ? align - 1 : granularity_mask );
++                if (!status && !__atomic_exchange_n( &said, 1, __ATOMIC_RELAXED ))
++                    fprintf( stderr, "wine-ps5: a reservation of %#lx bytes asked at %p, above the console's %p, placed at %p "
++                             "(WINE_PS5_HIGH_RESERVE_ELSEWHERE; only the first is said)\n", (unsigned long)size, asked,
++                             host_addr_space_limit, view->base );
++            }
+             if (status && status != STATUS_CONFLICTING_ADDRESSES)
+                 fprintf( stderr, "wine-ps5: reserving %#lx bytes at %p failed: %#x (type %#x, protect %#x, limits %#lx-%#lx, align %#lx)\n",
+                          (unsigned long)size, base, status, type, protect, (unsigned long)limit_low,
+-- 
+2.56.0

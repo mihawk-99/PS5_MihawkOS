@@ -274,6 +274,17 @@ def copy_prefix(source, dest):
         (dest / '.pw-symlinks').write_text('\n'.join(links) + '\n')
 
 
+def builtins_digest(runtime):
+    """What the prefixes' copies of Wine's builtin DLLs come from: every file under lib/wine/*-windows, by name and
+    content. wineboot copies them into a prefix's system32 and syswow64 only when it updates the prefix, and Wine loads
+    the prefix's copy: a changed kernelbase.dll never reached an existing prefix (crash-lines64-title,
+    a8-rel2-base-2026-11-02: patch 2422's line from the prefix's old copy, the runtime's own carrying 2451)."""
+    digest = hashlib.sha256()
+    for path in sorted(p for p in (runtime / 'lib/wine').glob('*-windows/**/*') if p.is_file()):
+        digest.update(path.relative_to(runtime).as_posix().encode() + b'\0' + hashlib.sha256(path.read_bytes()).digest())
+    return digest.hexdigest()
+
+
 def pe_image(path):
     """A PE image, which llvm-strip reads. A fresh host wineboot writes 16-bit placeholders that are MZ alone (the probe
     prefix's 255-byte windows/rundll.exe), and llvm-strip refuses those."""
@@ -311,9 +322,12 @@ def main():
     shutil.copytree(host / 'share/wine', runtime / 'share/wine')
     # wine.inf from the patched tree (tools/build-wine-ps5.sh): it names what wineboot registers (winedmo's classes,
     # patch 2006). A prefix updates when wine.inf's time differs from the one it recorded (patch 0952), so the time is
-    # made from the content: a changed wine.inf updates every prefix once, a rebuilt identical one none.
+    # made from the content: a changed wine.inf updates every prefix once, a rebuilt identical one none. Its last line
+    # names the builtins (builtins_digest), so a changed builtin DLL updates every prefix once too, and the deploy,
+    # which goes by content, sends wine.inf again.
     inf = runtime / 'share/wine/wine.inf'
     patched_inf = (DEPS / 'wine-ps5/pe/wine.inf').read_bytes()
+    patched_inf += b'; PS5 builtins ' + builtins_digest(runtime).encode() + (b'\r\n' if b'\r\n' in patched_inf else b'\n')
     inf.write_bytes(patched_inf)
     inf_time = 1_600_000_000 + int(hashlib.sha256(patched_inf).hexdigest()[:7], 16)
     os.utime(inf, (inf_time, inf_time))
@@ -491,13 +505,13 @@ def main():
     # Keep user folders local instead of host-home symlinks.
     for path in ('windows/temp', 'users/Mihawk/AppData/Local/Temp'):
         (prefix / 'drive_c' / path).mkdir(parents=True, exist_ok=True)
-    for name in ('wine-probe.exe', 'xinput-probe.exe', 'hid-probe.exe', 'sync-probe.exe', 'intitle-stall-probe.exe', 'shell-open-probe.exe', 'exit-probe.exe', 'priority-probe.exe',
+    for name in ('wine-probe.exe', 'xinput-probe.exe', 'hid-probe.exe', 'sync-probe.exe', 'intitle-stall-probe.exe', 'named-section64-probe.exe', 'named-section32-probe.exe', 'high-reserve-probe.exe', 'suspend-server-probe.exe', 'vcredist-check-probe.exe', 'shell-open-probe.exe', 'exit-probe.exe', 'priority-probe.exe',
                  'hang-probe.exe', 'window-probe.exe', 'fs-probe.exe', 'stack-probe.exe', 'gl-exit-probe.exe', 'gl-present-probe.exe', 'gl-sprite-probe.exe', 'vm-protect-probe.exe', 'vm-protect32-probe.exe', 'remote-memory-probe.exe', 'mem-probe.exe', 'gl-vertex-probe.exe', 'stdout-probe.exe', 'crash-probe.exe', 'nt-file-probe.exe', 'thread-leak-probe.exe', 'd3d11-probe.exe', 'gpu-host-memory-probe.exe', 'section-memory-probe.exe',
                  'process-probe.exe', 'graphics-render-probe.exe', 'memory-class-probe.exe', 'desktop-probe.exe', 'desktop-overlap-probe.exe', 'mouse-controls32-probe.exe', 'virtual-query32-probe.exe', 'virtual-query64-probe.exe', 'registry-flush64-probe.exe', 'file-write32-probe.exe', 'file-write64-probe.exe', 'relative-dir32-probe.exe', 'relative-dir64-probe.exe', 'file-cost32-probe.exe', 'file-cost64-probe.exe', 'handles-paths32-probe.exe', 'handles-paths64-probe.exe', 'pipe-cancel32-probe.exe', 'pipe-cancel64-probe.exe', 'lock32-probe.exe', 'lock64-probe.exe', 'wt-session.exe', 'path-limit64-probe.exe', 'continue64-probe.exe', 'stack-limit64-probe.exe', 'aurelia_windows-fixture.exe', 'steamcmd-fixture.exe', 'syscall-cost32-probe.exe', 'syscall-cost64-probe.exe', 'net-throughput32-probe.exe', 'net-throughput64-probe.exe', 'system-memory32-probe.exe', 'system-memory64-probe.exe', 'image-protect32-probe.exe', 'image-protect64-probe.exe', 'shared-section32-probe.exe', 'shared-section64-probe.exe', 'kill-convert-probe.exe', 'guest-address-space-probe.exe', 'section-view-probe.exe', 'late-library-probe.exe', 'dnsapi32-probe.exe', 'dnsapi64-probe.exe', 'mf-video32-probe.exe', 'mf-video64-probe.exe', 'mf-video.mp4', 'mf-video.txt', 'network-adapters32-probe.exe', 'network-adapters64-probe.exe', 'socket-options32-probe.exe', 'socket-options64-probe.exe', 'memory-guard-probe.exe',
-                 'dns-probe.exe', 'tls-probe.exe', 'pe32-probe.exe', 'fixed-base32-probe.exe', 'games-autodetect-probe.exe',
+                 'dns-probe.exe', 'tls-probe.exe', 'winhttp-probe.exe', 'pe32-probe.exe', 'fixed-base32-probe.exe', 'games-autodetect-probe.exe',
                  'cross32-probe.exe', 'cross64-probe.exe', 'wow64-probe.exe',
-                 'hid32-probe.exe', 'vk32-probe.exe', 'vk64-probe.exe', 'gl-vertex32-probe.exe',
-                 'd3d11-32-probe.exe', 'gl-upload32-probe.exe', 'gl-upload64-probe.exe', 'd3d12-levels-probe.exe', 'd3d12-sparse-probe.exe', 'many-files-probe.exe', 'log-flood-probe.exe', 'missing-import-probe.exe', 'parent-query-probe.exe', 'd3d12-shared-probe.exe', 'd3d12-existing-heap-probe.exe', 'osk-typed-probe.exe', 'd3d9ex-d3d11-share-probe.exe',
+                 'hid32-probe.exe', 'vk32-probe.exe', 'vk64-probe.exe', 'vk-present-probe.exe', 'pad-api32-probe.exe', 'pad-api64-probe.exe', 'gl-vertex32-probe.exe',
+                 'd3d11-32-probe.exe', 'gl-upload32-probe.exe', 'gl-upload64-probe.exe', 'd3d12-levels-probe.exe', 'd3d12-sparse-probe.exe', 'd3d12-clock-probe.exe', 'd3d12-load-probe.exe', 'cpu-count-probe.exe', 'tls-slots-probe.exe', 'tls-late-probe.exe', 'tls-late-dll.dll', 'many-files-probe.exe', 'log-flood-probe.exe', 'missing-import-probe.exe', 'parent-query-probe.exe', 'd3d12-shared-probe.exe', 'd3d12-existing-heap-probe.exe', 'osk-typed-probe.exe', 'd3d9ex-d3d11-share-probe.exe',
                  'input-message32-probe.exe', 'input-message64-probe.exe',
                  'prefix-baseline32-probe.exe', 'prefix-baseline64-probe.exe',
                  'proton-ui32-probe.exe', 'proton-ui64-probe.exe',

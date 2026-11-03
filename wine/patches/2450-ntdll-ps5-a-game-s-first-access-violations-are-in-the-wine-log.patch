@@ -1,0 +1,98 @@
+From 0000000000000000000000000000000000000000 Mon Sep 17 00:00:00 2001
+From: Mihawk <163614687+mihawk-99@users.noreply.github.com>
+Date: Mon, 02 Nov 2026 12:00:00 -0400
+Subject: [PATCH] ntdll: PS5: A game's first access violations are in the Wine log, with where and on which thread.
+
+A game with its own crash handler catches its fault and quits, and nothing reaches UnhandledExceptionFilter: a recompiled PC
+game and NFS Heat (testers, 2026-11-01) left no line saying what faulted. In a PS5 title or helper
+(WINE_PS5_NTDLL_DIR), dispatch_exception now writes an err line for the first access violation or in-page error at each of
+the first 16 faulting instructions: the kind of access and the address touched (ExceptionInformation[0] and [1], in words by
+wine/ps5/pw_wine_fault_words.h), the instruction's module and offset (LdrFindEntryForAddress, lock-free), and the thread's id
+and name (one server call), and the touched page's region as NtQueryVirtualMemory gives it (base and size, state,
+protection, type, allocation): a decommitted page, a reservation never committed, or no view at all (MEM_FREE). One line per instruction, so a runtime's repeated null checks take one slot. No behaviour changes.
+Host test tests/test_pw_wine_fault_words.c; compiled for x86_64 and i386 PE with -Wall. Not run on a console.
+---
+diff --git a/dlls/ntdll/exception.c b/dlls/ntdll/exception.c
+index 3b524d0..16921fd 100644
+--- a/dlls/ntdll/exception.c
++++ b/dlls/ntdll/exception.c
+@@ -34,6 +34,7 @@
+ #include "wine/debug.h"
+ #include "excpt.h"
+ #include "ntdll_misc.h"
++#include "pw_wine_fault_words.h"
+ 
+ WINE_DEFAULT_DEBUG_CHANNEL(seh);
+ WINE_DECLARE_DEBUG_CHANNEL(threadname);
+@@ -191,6 +192,60 @@ static LONG call_vectored_handlers( EXCEPTION_RECORD *rec, CONTEXT *context )
+ }
+ 
+ 
++/*******************************************************************
++ *		ps5_note_first_chance
++ *
++ * In a PS5 title or helper (the starter sets WINE_PS5_NTDLL_DIR for both), the first access violation or in-page error
++ * at each of the first 16 faulting instructions, in the Wine log: what was touched and how, where (module and offset),
++ * on which thread, and the touched page's region as NtQueryVirtualMemory gives it. A game whose own handler catches its crash and quits leaves no unhandled-exception line, and
++ * this is what is left of it. Lock-free; the thread name is one server call, at most 16 times a session.
++ */
++static void ps5_note_first_chance( const EXCEPTION_RECORD *rec )
++{
++    static LONG state;   /* 0: not asked, 1: a title, 2: not */
++    static ULONGLONG seen[16];
++    struct { THREAD_NAME_INFORMATION info; WCHAR text[32]; } name;
++    MEMORY_BASIC_INFORMATION region;
++    const WCHAR *module = L"?";
++    USHORT module_len = 1;
++    LDR_DATA_TABLE_ENTRY *mod;
++    ULONG_PTR rva = 0;
++    unsigned int slot;
++
++    if (rec->ExceptionCode != EXCEPTION_ACCESS_VIOLATION && rec->ExceptionCode != EXCEPTION_IN_PAGE_ERROR) return;
++    if (rec->NumberParameters < 2) return;
++    if (!state)
++    {
++        WCHAR value[2];
++        SIZE_T len;
++        NTSTATUS status = RtlQueryEnvironmentVariable( NULL, L"WINE_PS5_NTDLL_DIR", 18, value, ARRAY_SIZE(value) - 1, &len );
++        InterlockedExchange( &state, status == STATUS_VARIABLE_NOT_FOUND ? 2 : 1 );
++    }
++    if (state != 1) return;
++    if (!(slot = pw_wine_fault_first( seen, ARRAY_SIZE(seen), (ULONG_PTR)rec->ExceptionAddress ))) return;
++    if (!LdrFindEntryForAddress( rec->ExceptionAddress, &mod ))
++    {
++        module = mod->BaseDllName.Buffer;
++        module_len = mod->BaseDllName.Length / sizeof(WCHAR);
++        rva = (ULONG_PTR)rec->ExceptionAddress - (ULONG_PTR)mod->DllBase;
++    }
++    if (NtQueryInformationThread( NtCurrentThread(), ThreadNameInformation, &name, sizeof(name), NULL ))
++        name.info.ThreadName.Length = 0, name.info.ThreadName.Buffer = name.text;
++    /* the touched page as Wine sees it: a decommitted page, a reservation never committed, or no view at all */
++    if (NtQueryVirtualMemory( NtCurrentProcess(), (void *)rec->ExceptionInformation[1], MemoryBasicInformation, &region,
++                              sizeof(region), NULL ))
++        memset( &region, 0, sizeof(region) );
++    ERR( "first-chance %s %u: %s of %p at %p (%s+%#Ix), thread %04lx %s, region %p+%#Ix %s protect %#lx %s"
++         " (allocation %p)\n",
++         rec->ExceptionCode == EXCEPTION_ACCESS_VIOLATION ? "access violation" : "in-page error", slot,
++         pw_wine_fault_access_word( rec->ExceptionInformation[0] ), (void *)rec->ExceptionInformation[1],
++         rec->ExceptionAddress, debugstr_wn(module, module_len), rva, GetCurrentThreadId(),
++         debugstr_wn( name.info.ThreadName.Buffer, name.info.ThreadName.Length / sizeof(WCHAR) ),
++         region.BaseAddress, region.RegionSize, pw_wine_fault_state_word( region.State ), region.Protect,
++         pw_wine_fault_type_word( region.Type ), region.AllocationBase );
++}
++
++
+ /*******************************************************************
+  *		dispatch_exception
+  */
+@@ -213,6 +268,8 @@ NTSTATUS WINAPI dispatch_exception( EXCEPTION_RECORD *rec, CONTEXT *context )
+             WINE_BACKTRACE_LOG( "--- Exception %#lx.\n", rec->ExceptionCode );
+     }
+ 
++    ps5_note_first_chance( rec );
++
+     switch (rec->ExceptionCode)
+     {
+     case EXCEPTION_WINE_STUB:
+-- 
+2.56.0

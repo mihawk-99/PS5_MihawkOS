@@ -38,13 +38,28 @@ static void *larges[MAX_LARGE];
 static uint32_t large_count;
 static PwWineHeapStats stats;
 
+/* The guard around the mutex (pw_wine_heap_set_guard); none until set. */
+static void (*guard_enter)(void),(*guard_leave)(void);
+
+void pw_wine_heap_set_guard(void (*enter)(void),void (*leave)(void))
+{
+    guard_leave=leave;guard_enter=enter;
+}
+
 /* The heap's one mutex, counting the calls that had to wait for it. */
 static void lock_heap(void)
 {
+    if(guard_enter)guard_enter();
     if(pthread_mutex_trylock(&lock)) {
         pthread_mutex_lock(&lock);
         stats.contended++;
     }
+}
+
+static void unlock_heap(void)
+{
+    pthread_mutex_unlock(&lock);
+    if(guard_leave)guard_leave();
 }
 
 static void *(*backing_map)(size_t bytes);
@@ -52,7 +67,7 @@ static void (*backing_unmap)(void *address,size_t bytes);
 
 void pw_wine_heap_set_backing(void *(*map_bytes)(size_t bytes),void (*unmap_bytes)(void *address,size_t bytes))
 {
-    lock_heap();backing_map=map_bytes;backing_unmap=unmap_bytes;pthread_mutex_unlock(&lock);
+    lock_heap();backing_map=map_bytes;backing_unmap=unmap_bytes;unlock_heap();
 }
 /* *from_backing says where the memory came from, for its release. Once a backing is set there is no mapping of the
  * heap's own: one the kernel places lands in any hole it finds, inside a Windows view too, and the program reads what
@@ -201,13 +216,13 @@ static Header *owned_aligned(const void *pointer,void **base)
 
 void *pw_wine_heap_malloc(size_t bytes)
 {
-    lock_heap();void *result=allocate(bytes);pthread_mutex_unlock(&lock);
+    lock_heap();void *result=allocate(bytes);unlock_heap();
     return result;
 }
 void *pw_wine_heap_calloc(size_t count,size_t bytes)
 {
     if(bytes && count>SIZE_MAX/bytes) {
-        lock_heap();stats.failures++;pthread_mutex_unlock(&lock);return NULL;
+        lock_heap();stats.failures++;unlock_heap();return NULL;
     }
     void *result=pw_wine_heap_malloc(count*bytes);
     if(result)memset(result,0,count*bytes);
@@ -218,7 +233,7 @@ void *pw_wine_heap_memalign(size_t alignment,size_t bytes)
     if(!alignment || (alignment&(alignment-1)))return NULL;
     if(alignment<=HEADER)return pw_wine_heap_malloc(bytes);
     if(bytes>SIZE_MAX-alignment || alignment>UINT32_MAX) {
-        lock_heap();stats.failures++;pthread_mutex_unlock(&lock);return NULL;
+        lock_heap();stats.failures++;unlock_heap();return NULL;
     }
     lock_heap();
     uint8_t *base=allocate(bytes+alignment),*result=NULL;
@@ -228,7 +243,7 @@ void *pw_wine_heap_memalign(size_t alignment,size_t bytes)
         result=(uint8_t *)(((uintptr_t)base+HEADER+alignment-1)&~(uintptr_t)(alignment-1));
         *(Header *)(result-HEADER)=(Header){MAGIC_ALIGNED,(uint32_t)(result-base),(uint32_t)bytes};
     }
-    pthread_mutex_unlock(&lock);
+    unlock_heap();
     return result;
 }
 void pw_wine_heap_free(void *pointer)
@@ -242,7 +257,7 @@ void pw_wine_heap_free(void *pointer)
         ((Header *)((uint8_t *)pointer-HEADER))->magic=0;release(header);
     }
     else stats.foreign_frees++;
-    pthread_mutex_unlock(&lock);
+    unlock_heap();
 }
 void *pw_wine_heap_realloc(void *pointer,size_t bytes)
 {
@@ -257,22 +272,22 @@ void *pw_wine_heap_realloc(void *pointer,size_t bytes)
         void *moved=allocate(bytes);
         if(moved){memcpy(moved,pointer,old<bytes?old:bytes);
                   ((Header *)((uint8_t *)pointer-HEADER))->magic=0;release(header);}
-        pthread_mutex_unlock(&lock);
+        unlock_heap();
         return moved;
     }
     if(!header) {
         /* Not ours: its size is unknown, so it cannot be moved safely. */
-        stats.failures++;pthread_mutex_unlock(&lock);return NULL;
+        stats.failures++;unlock_heap();return NULL;
     }
     size_t old=header->requested;
     if(header->magic==MAGIC_SMALL && bytes+HEADER<=class_bytes(header->class_index) &&
        bytes<=UINT32_MAX) {
         note_live((int64_t)bytes-(int64_t)old);header->requested=(uint32_t)bytes;
-        pthread_mutex_unlock(&lock);return pointer;
+        unlock_heap();return pointer;
     }
     void *moved=allocate(bytes);
     if(moved){memcpy(moved,pointer,old<bytes?old:bytes);release(header);}
-    pthread_mutex_unlock(&lock);
+    unlock_heap();
     return moved;
 }
 size_t pw_wine_heap_usable_size(const void *pointer)
@@ -284,11 +299,11 @@ size_t pw_wine_heap_usable_size(const void *pointer)
         usable=((Header *)((const uint8_t *)pointer-HEADER))->requested;
     else if(header)usable=header->magic==MAGIC_SMALL?class_bytes(header->class_index)-HEADER:
         (size_t)(((LargeHeader *)header-1)->mapped-HEADER-sizeof(LargeHeader));
-    pthread_mutex_unlock(&lock);
+    unlock_heap();
     return usable;
 }
 void pw_wine_heap_stats(PwWineHeapStats *out)
 {
     if(!out)return;
-    lock_heap();*out=stats;pthread_mutex_unlock(&lock);
+    lock_heap();*out=stats;unlock_heap();
 }

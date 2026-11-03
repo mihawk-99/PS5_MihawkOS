@@ -1,0 +1,8 @@
+# The control overlay's panel held open over a drawing probe at 120 Hz (tools/run-battery.py panel-120-title): L3+R3 at
+# 5 s, the panel open until CIRCLE at 32 s, a picture at 8 s; run-console --expect-panel-p95 reads perf's frame windows
+# between "control overlay opened" and "closed".
+anchor frame
+5 l3 0.3
+5 r3 0.3
+8 capture
+32 circle

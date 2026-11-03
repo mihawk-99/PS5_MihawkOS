@@ -1,0 +1,50 @@
+{
+  "battery": "a8final-base-2026-11-02-suspend-server64-title",
+  "expected_cases": [
+    "suspend-server64-title"
+  ],
+  "revision": "9207da01692ff00723612333525c8590b57a91b9",
+  "dirty": true,
+  "cases": [
+    {
+      "case": "suspend-server64-title",
+      "run": "a8final-base-2026-11-02-suspend-server64-title-suspend-server64-title",
+      "runner_status": 1,
+      "seconds": 222.5,
+      "result": "exited",
+      "probe_verdict": "FAIL",
+      "returned_to_launcher": true,
+      "exit_stall": false,
+      "passed": false,
+      "run_seconds": 168.9,
+      "launch_readiness": {
+        "ready": true,
+        "seconds": 0.172,
+        "settle_seconds": 0.0,
+        "census_seconds": 0.16,
+        "previous_cleanup_verified": true
+      },
+      "stages": {
+        "launched": 1.06,
+        "title_started": 1.55,
+        "elevated": 1.55,
+        "wine_loaded": 1.85,
+        "wineboot_started": 4.42,
+        "wineboot_ended": 22.46,
+        "marker": 165.41,
+        "launcher_started": 167.27,
+        "closed": 168.93
+      },
+      "runner_overhead_seconds": 53.6,
+      "layout": "launcher",
+      "fault_records": 0,
+      "helpers": 11,
+      "protocol_errors": 0,
+      "pipe_memory_exhausted": 0,
+      "search_errors": 0
+    }
+  ],
+  "complete": true,
+  "seconds": 222.5,
+  "passed": false
+}

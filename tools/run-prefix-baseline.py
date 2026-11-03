@@ -1,6 +1,7 @@
 #!/usr/bin/env python3
 # SPDX-License-Identifier: GPL-3.0-or-later
-"""Run the PE32/PE64 baseline probe in a fresh console-created prefix.
+"""Run the PE32/PE64 baseline probe in a fresh console-created prefix (or, with --probe, another probe: the controller's
+first session in a new prefix, tests/pad-api-probe.c).
 
 Owns only games/proton-baseline-test and its matching prefix. Refuses to remove
 an existing entry without its exact ownership marker. Never edits game prefixes.
@@ -49,6 +50,9 @@ def main():
     parser = argparse.ArgumentParser(description=__doc__)
     parser.add_argument('--name', required=True)
     parser.add_argument('--arch', choices=('32', '64'), required=True)
+    parser.add_argument('--probe', help='a probe in .deps/probes, NAME<arch>-probe.exe (default prefix-baseline)')
+    parser.add_argument('--marker', default='PS5_PROTON_PREFIX_BASELINE')
+    parser.add_argument('--env', action='append', default=[], help='NAME=VALUE for the run')
     args = parser.parse_args()
     if not re.fullmatch(r'[A-Za-z0-9_-]+', args.name):
         parser.error('use a plain run name')
@@ -58,7 +62,7 @@ def main():
     settings = console.load_settings()
     if not idle(settings):
         raise RuntimeError('console is occupied: nothing changed')
-    name = 'prefix-baseline' + args.arch + '-probe.exe'
+    name = (args.probe or 'prefix-baseline') + args.arch + '-probe.exe'
     probe = (ROOT / '.deps/probes' / name).read_bytes()
     with connect(settings) as ftp:
         remove_owned(ftp)
@@ -75,7 +79,7 @@ def main():
                 raise RuntimeError('baseline test upload differs: ' + filename)
     result = subprocess.run([sys.executable, str(ROOT / 'tools/run-console.py'), '--name', args.name,
                              '--profile', ENTRY, '--no-stdout', '--env', 'PROTON_LAYOUT=launcher',
-                             '--marker', 'PS5_PROTON_PREFIX_BASELINE', '--seconds', '600',
+                             '--marker', args.marker, '--seconds', '600', *[w for e in args.env for w in ('--env', e)],
                              '--pad-script', str(ROOT / 'tests/pad-scripts/prefix-text.txt'),
                              '--watchdog', '660', '--exit-stall', '60'], cwd=ROOT)
     record = json.loads(evidence.read_text())

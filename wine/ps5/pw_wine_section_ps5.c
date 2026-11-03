@@ -259,7 +259,11 @@ void __wine_ps5_section_init(uintptr_t host_limit, unsigned (*host_protection_of
 
 uint64_t __wine_ps5_section_min_bytes(void)
 {
-    return __wine_ps5_payload_memory_ready() ? pw_wine_dsection_min_bytes() : (uint64_t)256 << 20;
+    /* The program in the title too: its pager asks the title's own table (pw_ps5_dsection_page), so its views of a large
+     * shared section are the same direct memory as every helper's. Only a title with no program of its own keeps 256 MiB. */
+    const char *title_client = getenv("WINE_PS5_TITLE_CLIENT");
+    return __wine_ps5_payload_memory_ready() || (title_client && !strcmp(title_client, "1")) ? pw_wine_dsection_min_bytes()
+                                                                                          : (uint64_t)256 << 20;
 }
 
 int __wine_ps5_section_arena_contains(uintptr_t base, size_t bytes)

@@ -404,7 +404,10 @@ static int helper_suspend_tick(long long now)
     const int change = pw_suspend_tick(&helper_suspend, (uint64_t)now, away);
     if (change != PW_SUSPEND_NONE) {
         char line[160];
-        if (change == PW_SUSPEND_GAP)
+        if (change == PW_SUSPEND_STALL)
+            snprintf(line, sizeof(line), "wine-child: this helper's control thread stalled %lld ms: not a suspend\n",
+                     now - before);
+        else if (change == PW_SUSPEND_GAP)
             snprintf(line, sizeof(line), "wine-child: suspend gap: this helper was frozen %lld ms; nothing is ended until "
                      "%u ms after the return\n", now - before, (unsigned)PW_SUSPEND_GRACE_MS);
         else
@@ -965,6 +968,14 @@ static void vm_census_report(void (*say_line)(const char *))
             line[used] = 0;
         }
         say_line(line);
+        /* How full they are, and whether a reservation shares them (Alpha 8: Steam's page tables, packing or not) */
+        at = snprintf(line, sizeof(line), "wine-child: vm page-table fill ");
+        if (at > 0 && (size_t)at < sizeof(line) - 2) {
+            size_t used = (size_t)at + pw_vm_census_format_fill(&census, line + at, sizeof(line) - (size_t)at - 2);
+            line[used++] = '\n';
+            line[used] = 0;
+            say_line(line);
+        }
         /* Where those regions lie, by 1 GiB window of the address space (Alpha 6, MihawkOS uses fewer page tables): a few
          * dense windows cannot shrink by packing, scattered ones can. */
         at = snprintf(line, sizeof(line), "wine-child: vm page-table windows ");

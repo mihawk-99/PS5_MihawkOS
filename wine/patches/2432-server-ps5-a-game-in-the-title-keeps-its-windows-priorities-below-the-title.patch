@@ -1,0 +1,43 @@
+From 0000000000000000000000000000000000000000 Mon Sep 17 00:00:00 2001
+From: Mihawk <163614687+mihawk-99@users.noreply.github.com>
+Date: Mon, 02 Nov 2026 10:00:00 -0400
+Subject: [PATCH] server: PS5: A game in the title keeps its Windows priorities, below the title's own.
+
+Patch 2405 runs every Windows thread of a game in the title at SCHED_RR 767, the console's lowest priority, so that no
+game thread can keep the title's own threads (SCHED_FIFO 700: its loop, the server, the GPU broker, input) off a CPU,
+which had frozen a tester's console. On that floor alone a Windows priority did nothing: in the title a time-critical
+thread woke as late as a normal one (priority-probe, time-critical p99 5.3 ms, intitle-priority-title-base-2026-11-01-01),
+where the old mapping from 700 (patch 0896, WINE_PS5_SCHED=1) had passed.
+
+When the title runs a game itself it now sets WINE_PS5_SCHED_TITLE to that floor (native/proton_wine.cpp), and this
+server, which reaches the title's own threads, gives each one the priority pw_wine_thread_set_windows_priority maps
+(wine/ps5/pw_wine_threads.c, src/pw_helper_sched.h, host-tested): normal and below at the floor, above normal one native
+step up per band from it, time critical five, the realtime class six, never above 701. A game thread then still never
+outranks a title thread. WINE_PS5_SCHED=1 keeps patch 0896's mapping; WINE_PS5_SCHED_TITLE=0 in a launch keeps every
+thread at the floor.
+---
+--- a/server/thread.c
++++ b/server/thread.c
+@@ -425,9 +425,19 @@
+ static void apply_thread_priority( struct thread *thread )
+ {
+     extern int pw_wine_thread_set_priority( long tid, int policy, int priority );
++    extern int pw_wine_thread_set_windows_priority( long tid, int effective );
+     int status;
+ 
+-    if (!ps5_scheduling || thread->unix_tid == -1 || thread->unix_pid != getpid()) return;
++    if (thread->unix_tid == -1 || thread->unix_pid != getpid()) return;
++    if (!ps5_scheduling)
++    {
++        /* The game the title runs itself (WINE_PS5_SCHED_TITLE): its Windows priorities from its own floor, below
++         * every title thread (wine/ps5/pw_wine_threads.c); ENOTSUP when the title runs none. */
++        status = pw_wine_thread_set_windows_priority( thread->unix_tid, get_effective_thread_priority( thread ));
++        if (status && status != ENOTSUP && debug_level)
++            fprintf( stderr, "%04x: native priority not set: %d\n", thread->id, status );
++        return;
++    }
+     status = pw_wine_thread_set_priority( thread->unix_tid, SCHED_RR,
+                                           ps5_native_priority( get_effective_thread_priority( thread )));
+     if (status && debug_level)
+-- 
+2.56.0

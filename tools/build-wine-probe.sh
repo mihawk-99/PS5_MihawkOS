@@ -255,6 +255,13 @@ for bits in 32 64; do
         "$root/tests/vk-probe.c" "$wine/build/dlls/kernel32/$arch/libkernel32.a" \
         -o "$root/.deps/probes/vk$bits-probe.exe"
 done
+# A present loop in FIFO, MAILBOX and IMMEDIATE against the display's refresh (src/pw_present_pacing.h).
+clang --target=x86_64-windows --no-default-config -fuse-ld=lld -Wl,/timestamp:0 -nostdlib -O2 -Wall -Wextra -Werror \
+    -I"$wine/source/include" -I"$wine/build/include" -I"$wine/source/include/msvcrt" \
+    -Wl,/entry:mainCRTStartup -Wl,/subsystem:console \
+    "$root/tests/vk-present-probe.c" "$wine/build/dlls/kernel32/x86_64-windows/libkernel32.a" \
+    "$wine/build/dlls/user32/x86_64-windows/libuser32.a" \
+    -o "$root/.deps/probes/vk-present-probe.exe"
 # One crossing's cost by kind (docs/IA32_DESIGN.md, M4 step 1): the same source, 32- and 64-bit.
 for bits in 32 64; do
     if [[ $bits == 32 ]]; then target=i686-windows arch=i386-windows; else target=x86_64-windows arch=x86_64-windows; fi
@@ -377,6 +384,24 @@ clang --target=x86_64-windows --no-default-config -fuse-ld=lld -Wl,/timestamp:0 
     -Wl,/entry:mainCRTStartup -Wl,/subsystem:console \
     "$root/tests/intitle-stall-probe.c" "$wine/build/dlls/kernel32/x86_64-windows/libkernel32.a" \
     "$wine/build/dlls/user32/x86_64-windows/libuser32.a" -o "$root/.deps/probes/intitle-stall-probe.exe"
+# A fixed reservation above the console's address space, as a game asked for (Wine patch 2430): kernel32 and user32.
+clang --target=x86_64-windows --no-default-config -fuse-ld=lld -Wl,/timestamp:0 -nostdlib -O2 -Wall -Wextra -Werror \
+    -I"$wine/source/include" -I"$wine/build/include" -I"$wine/source/include/msvcrt" \
+    -Wl,/entry:mainCRTStartup -Wl,/subsystem:console \
+    "$root/tests/high-reserve-probe.c" "$wine/build/dlls/kernel32/x86_64-windows/libkernel32.a" \
+    "$wine/build/dlls/user32/x86_64-windows/libuser32.a" -o "$root/.deps/probes/high-reserve-probe.exe"
+# A game's threads suspended from outside while they work, as a crash reporter's minidump does (tests/suspend-server-probe.c).
+clang --target=x86_64-windows --no-default-config -fuse-ld=lld -Wl,/timestamp:0 -nostdlib -O2 -Wall -Wextra -Werror \
+    -Wno-missing-field-initializers -I"$wine/source/include" -I"$wine/build/include" -I"$wine/source/include/msvcrt" \
+    -Wl,/entry:mainCRTStartup -Wl,/subsystem:console \
+    "$root/tests/suspend-server-probe.c" "$wine/build/dlls/kernel32/x86_64-windows/libkernel32.a" \
+    "$wine/build/dlls/user32/x86_64-windows/libuser32.a" -o "$root/.deps/probes/suspend-server-probe.exe"
+# What a launcher finds when it asks whether a Visual C++ redistributable is installed (tests/vcredist-check-probe.c, Wine 2455).
+clang --target=x86_64-windows --no-default-config -fuse-ld=lld -Wl,/timestamp:0 -nostdlib -O2 -Wall -Wextra -Werror \
+    -Wno-missing-field-initializers -I"$wine/source/include" -I"$wine/build/include" -I"$wine/source/include/msvcrt" \
+    -Wl,/entry:mainCRTStartup -Wl,/subsystem:console \
+    "$root/tests/vcredist-check-probe.c" "$wine/build/dlls/kernel32/x86_64-windows/libkernel32.a" \
+    "$wine/build/dlls/user32/x86_64-windows/libuser32.a" -o "$root/.deps/probes/vcredist-check-probe.exe"
 # A game folder with no game.json (tools/run-games-autodetect.py): where it runs from, then it closes its session.
 clang --target=x86_64-windows --no-default-config -fuse-ld=lld -Wl,/timestamp:0 -nostdlib -O2 -Wall -Wextra -Werror \
     -I"$wine/source/include" -I"$wine/build/include" -I"$wine/source/include/msvcrt" \
@@ -430,6 +455,13 @@ clang --target=x86_64-windows --no-default-config -fuse-ld=lld -Wl,/timestamp:0 
     "$wine/build/dlls/user32/x86_64-windows/libuser32.a" "$wine/build/dlls/winhttp/x86_64-windows/libwinhttp.a" \
     "$wine/build/dlls/crypt32/x86_64-windows/libcrypt32.a" "$wine/build/dlls/msvcrt/x86_64-windows/libmsvcrt.a" \
     -o "$root/.deps/probes/tls-probe.exe"
+# Xbox Live's HTTP client's WinHTTP calls, on the main thread and a pool thread (tests/winhttp-probe.c).
+clang --target=x86_64-windows --no-default-config -fuse-ld=lld -Wl,/timestamp:0 -nostdlib -O2 -Wall -Wextra -Werror \
+    -I"$wine/source/include" -I"$wine/build/include" -I"$wine/source/include/msvcrt" \
+    -Wl,/entry:mainCRTStartup -Wl,/subsystem:console \
+    "$root/tests/winhttp-probe.c" "$wine/build/dlls/kernel32/x86_64-windows/libkernel32.a" \
+    "$wine/build/dlls/user32/x86_64-windows/libuser32.a" "$wine/build/dlls/winhttp/x86_64-windows/libwinhttp.a" \
+    -o "$root/.deps/probes/winhttp-probe.exe"
 # A prefix wineboot made, the service manager and an MSI installer (tests/prefix-probe.c, tools/run-prefix-test.py).
 clang --target=x86_64-windows --no-default-config -fuse-ld=lld -Wl,/timestamp:0 -nostdlib -O2 \
     -I"$wine/source/include" -I"$wine/build/include" -I"$wine/source/include/msvcrt" \
@@ -524,6 +556,47 @@ clang --target=x86_64-windows --no-default-config -fuse-ld=lld -Wl,/timestamp:0 
     "$wine/build/dlls/user32/x86_64-windows/libuser32.a" "$wine/build/dlls/d3d12/x86_64-windows/libd3d12.a" \
     "$wine/build/dlls/dxgi/x86_64-windows/libdxgi.a" \
     -o "$root/.deps/probes/d3d12-levels-probe.exe"
+# Whether a game reads the GPU's clock (tests/d3d12-clock-probe.c, PS5_Vulkan's broker: a submission without a marker).
+clang --target=x86_64-windows --no-default-config -fuse-ld=lld -Wl,/timestamp:0 -nostdlib -O2 -Wall -Wextra -Werror \
+    -I"$wine/source/include" -I"$wine/build/include" -I"$wine/source/include/msvcrt" \
+    -Wl,/entry:mainCRTStartup -Wl,/subsystem:console \
+    "$root/tests/d3d12-clock-probe.c" "$wine/build/dlls/kernel32/x86_64-windows/libkernel32.a" \
+    "$wine/build/dlls/user32/x86_64-windows/libuser32.a" "$wine/build/dlls/d3d12/x86_64-windows/libd3d12.a" \
+    -o "$root/.deps/probes/d3d12-clock-probe.exe"
+# How much a game may load through Direct3D 12 before E_OUTOFMEMORY, kind by kind (tests/d3d12-load-probe.c).
+clang --target=x86_64-windows --no-default-config -fuse-ld=lld -Wl,/timestamp:0 -nostdlib -O2 -Wall -Wextra -Werror \
+    -I"$wine/source/include" -I"$wine/build/include" -I"$wine/source/include/msvcrt" \
+    -Wl,/entry:mainCRTStartup -Wl,/subsystem:console \
+    "$root/tests/d3d12-load-probe.c" "$wine/build/dlls/kernel32/x86_64-windows/libkernel32.a" \
+    "$wine/build/dlls/user32/x86_64-windows/libuser32.a" "$wine/build/dlls/d3d12/x86_64-windows/libd3d12.a" \
+    "$wine/build/dlls/dxgi/x86_64-windows/libdxgi.a" \
+    -o "$root/.deps/probes/d3d12-load-probe.exe"
+# Every processor count a game can ask for, and the processor numbers its threads see (tests/cpu-count-probe.c, Wine 2457).
+clang --target=x86_64-windows --no-default-config -fuse-ld=lld -Wl,/timestamp:0 -nostdlib -O2 -Wall -Wextra -Werror \
+    -I"$wine/source/include" -I"$wine/build/include" -I"$wine/source/include/msvcrt" \
+    -Wl,/entry:mainCRTStartup -Wl,/subsystem:console \
+    "$root/tests/cpu-count-probe.c" "$wine/build/dlls/kernel32/x86_64-windows/libkernel32.a" \
+    "$wine/build/dlls/user32/x86_64-windows/libuser32.a" \
+    -o "$root/.deps/probes/cpu-count-probe.exe"
+# How many of the TEB's 64 TLS slots a program still gets after loading Direct3D 12 (tests/tls-slots-probe.c).
+clang --target=x86_64-windows --no-default-config -fuse-ld=lld -Wl,/timestamp:0 -nostdlib -O2 -Wall -Wextra -Werror \
+    -I"$wine/source/include" -I"$wine/build/include" -I"$wine/source/include/msvcrt" \
+    -Wl,/entry:mainCRTStartup -Wl,/subsystem:console \
+    "$root/tests/tls-slots-probe.c" "$wine/build/dlls/kernel32/x86_64-windows/libkernel32.a" \
+    "$wine/build/dlls/user32/x86_64-windows/libuser32.a" \
+    -o "$root/.deps/probes/tls-slots-probe.exe"
+# Whether threads started before a DLL with static TLS loaded get its block (tests/tls-late-probe.c, tls-late-dll.c).
+clang --target=x86_64-windows --no-default-config -fuse-ld=lld -Wl,/timestamp:0 -nostdlib -O2 -Wall -Wextra -Werror \
+    -I"$wine/source/include" -I"$wine/build/include" -I"$wine/source/include/msvcrt" \
+    -shared -Wl,/entry:DllMainCRTStartup \
+    "$root/tests/tls-late-dll.c" "$wine/build/dlls/kernel32/x86_64-windows/libkernel32.a" \
+    -o "$root/.deps/probes/tls-late-dll.dll"
+clang --target=x86_64-windows --no-default-config -fuse-ld=lld -Wl,/timestamp:0 -nostdlib -O2 -Wall -Wextra -Werror \
+    -I"$wine/source/include" -I"$wine/build/include" -I"$wine/source/include/msvcrt" \
+    -Wl,/entry:mainCRTStartup -Wl,/subsystem:console \
+    "$root/tests/tls-late-probe.c" "$wine/build/dlls/kernel32/x86_64-windows/libkernel32.a" \
+    "$wine/build/dlls/user32/x86_64-windows/libuser32.a" \
+    -o "$root/.deps/probes/tls-late-probe.exe"
 # How many files a program may hold open for writing (tests/many-files-probe.c, wine/ps5/pw_wine_codeshare.h's release).
 clang --target=x86_64-windows --no-default-config -fuse-ld=lld -Wl,/timestamp:0 -nostdlib -O2 -Wall -Wextra -Werror \
     -I"$wine/source/include" -I"$wine/build/include" -I"$wine/source/include/msvcrt" \
@@ -577,6 +650,23 @@ clang --target=x86_64-windows --no-default-config -fuse-ld=lld -Wl,/timestamp:0 
     "$wine/build/dlls/user32/x86_64-windows/libuser32.a" "$wine/build/dlls/d3d12/x86_64-windows/libd3d12.a" \
     -o "$root/.deps/probes/d3d12-existing-heap-probe.exe"
 # A texture shared between a Direct3D 9Ex and a Direct3D 11 device of one process (tests/d3d9ex-d3d11-share-probe.c).
+# The controller a game sees before and after the control overlay switches it (tests/pad-identity-probe.c; Wine 2471, 2472).
+clang --target=x86_64-windows --no-default-config -fuse-ld=lld -Wl,/timestamp:0 -nostdlib -O2 -Wall -Wextra -Werror \
+    -I"$wine/source/include" -I"$wine/build/include" -I"$wine/source/include/msvcrt" \
+    -Wl,/entry:mainCRTStartup -Wl,/subsystem:console \
+    "$root/tests/pad-identity-probe.c" "$wine/build/dlls/kernel32/x86_64-windows/libkernel32.a" \
+    "$wine/build/dlls/user32/x86_64-windows/libuser32.a" -o "$root/.deps/probes/pad-identity-probe.exe"
+# The controller through every API a game finds it with, and centred at rest (tests/pad-api-probe.c; Wine 2480).
+for bits in 32 64; do
+    if [[ $bits == 32 ]]; then target=i686-windows arch=i386-windows; else target=x86_64-windows arch=x86_64-windows; fi
+    clang --target=$target --no-default-config -fuse-ld=lld -Wl,/timestamp:0 -nostdlib -O2 -Wall -Wextra -Werror \
+        -Wno-missing-field-initializers -I"$wine/source/include" -I"$wine/build/include" -I"$wine/source/include/msvcrt" \
+        -Wl,/entry:mainCRTStartup -Wl,/subsystem:console \
+        "$root/tests/pad-api-probe.c" "$wine/build/dlls/kernel32/$arch/libkernel32.a" "$wine/build/dlls/user32/$arch/libuser32.a" \
+        "$wine/build/dlls/dinput8/$arch/libdinput8.a" "$wine/build/dlls/winmm/$arch/libwinmm.a" \
+        "$wine/build/libs/dxguid/$arch/libdxguid.a" "$wine/build/dlls/msvcrt/$arch/libmsvcrt.a" \
+        -o "$root/.deps/probes/pad-api$bits-probe.exe"
+done
 # The on-screen keyboard's text reaching a game window without a person (tests/osk-typed-probe.c; WINE_PS5_OSK_TEST=type).
 clang --target=x86_64-windows --no-default-config -fuse-ld=lld -Wl,/timestamp:0 -nostdlib -O2 -Wall -Wextra -Werror \
     -I"$wine/source/include" -I"$wine/build/include" -I"$wine/source/include/msvcrt" \
@@ -838,6 +928,18 @@ for arch in x86_64-windows i386-windows; do
         $2 == ".mydata" { found = 1; vma = strtonum("0x" $4) % 0x100000000; size = strtonum("0x" $3)
                           size = int((size + 4095) / 4096) * 4096; if (vma % 16384 == 0 && size % 16384 == 0) exit 2 }
         END { if (!found) exit 3 }' || { echo "shared-section$suffix-probe.exe: .mydata missing or 16 KiB aligned" >&2; exit 1; }
+done
+
+# A named shared section between two processes, Steam's browser IPC (Alpha 8): both arches, so a 32-bit parent (steam.exe's
+# side) can start the 64-bit copy (the browser's side) with --child=.
+for arch in x86_64-windows i386-windows; do
+    target=x86_64-windows; suffix=64
+    if [[ $arch == i386-windows ]]; then target=i686-windows; suffix=32; fi
+    clang --target="$target" --no-default-config -fuse-ld=lld -Wl,/timestamp:0 -nostdlib -O2 -Wall -Wextra -Werror \
+        -I"$wine/source/include" -I"$wine/build/include" -I"$wine/source/include/msvcrt" \
+        -Wl,/entry:mainCRTStartup -Wl,/subsystem:console \
+        "$root/tests/named-section-probe.c" "$wine/build/dlls/kernel32/$arch/libkernel32.a" \
+        "$wine/build/dlls/user32/$arch/libuser32.a" -o "$root/.deps/probes/named-section$suffix-probe.exe"
 done
 
 # A thread killed mid-conversion keeps no lock (patch 1171).

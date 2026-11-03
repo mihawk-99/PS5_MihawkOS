@@ -31,7 +31,8 @@ static inline int pw_wine_inherited(const char *entry)
         "WINE_PS5_ASYNC_PRESENT=",   /* the broker WSI presents from its own thread (graphics patch 0024) */
         "WINE_PS5_PRESENT_LINK=",    /* presents over a connection of their own (graphics patch 0026) */
         "WINE_PS5_SCHED_CENSUS=","WINE_PS5_CENSUS_MS=","WINE_PS5_EARLY=","WINE_PS5_VMMAP=","WINE_PS5_MAPLOG_MIB=","WINE_PS5_SAMPLE=","WINE_PS5_MALLOC_TRACE=","WINE_PS5_FILE_TRACE=",   /* the helper's census budgets and its once-a-second early memory line (native/proton_wine_child.c) */
-        "WINE_PS5_DSECTION_MIN_MIB=","WINE_PS5_TITLE_PROCESS=","WINE_PS5_TITLE_PID=","WINE_PS5_TITLE_GAMES=","WINE_PS5_TITLE_OPTOUT=","WINE_PS5_TITLE_PICK=","WINE_PS5_TITLE_LISTED=","WINE_PS5_CHROMIUM_ARGS=",   /* the title and its helpers agree on which sections are direct memory */
+        "WINE_PS5_DSECTION_MIN_MIB=","WINE_PS5_TITLE_PROCESS=","WINE_PS5_TITLE_PID=","WINE_PS5_TITLE_GAMES=","WINE_PS5_TITLE_OPTOUT=","WINE_PS5_TITLE_PICK=","WINE_PS5_TITLE_LISTED=","WINE_PS5_CHROMIUM_ARGS=",
+        "WINE_PS5_HIGH_RESERVE_ELSEWHERE=",   /* a game's own override of Wine patch 2430: the game its launcher starts in a helper takes it too */   /* the title and its helpers agree on which sections are direct memory */
         "WINE_PS5_CODE_BUDGET_MIB=","WINE_PS5_CODE_BUDGET_START_MIB=",   /* the code cache's budget and a test's start (docs/FLEXIBLE_MEMORY.md) */
         "WINE_PS5_PAYLOAD_DMEM=","WINE_PS5_PRX_LOADER=","WINE_PS5_NATIVE_SIGNALS=","WINEARCH=",   /* wow64: a 32-bit program runs in its helper (docs/IA32_DESIGN.md, M3) */
         "WINETEST_",  /* watchdog, slice and threading controls must reach payload conformance tests */

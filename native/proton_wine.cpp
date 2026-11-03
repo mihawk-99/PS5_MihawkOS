@@ -19,6 +19,7 @@ extern "C" {
 #include "../src/pw_osk.h"
 #include "pw_osk_ps5.h"
 #include "../src/pw_vkbd.h"
+#include "../src/pw_overlay.h"
 #include "../src/pw_dialog_keys.h"
 #include "../src/pw_setup.h"
 #include "../src/pw_runtime_check.h"
@@ -41,6 +42,7 @@ extern "C" {
 #include "../src/pw_memory_guard.h"
 #include "../src/pw_firmware.h"
 #include "../src/pw_hang_breaker.h"
+#include "../src/pw_freeze_watch.h"
 #include "../src/pw_log_sessions.h"
 #include "../src/pw_capped_log.h"
 #include "../src/pw_missing_dll.h"
@@ -54,6 +56,7 @@ extern "C" {
 #include "../src/pw_memory_helper.h"
 #include "../src/pw_aurelia.h"
 #include "../src/pw_steam.h"
+#include "../src/pw_steam_memory.h"
 #include "../src/pw_steam_guide.h"
 #include "../src/pw_path_nocase.h"
 #include "../src/pw_steamcmd.h"
@@ -92,6 +95,8 @@ void catchReturnFromMain(int);
 #include <pthread_np.h>
 #include <signal.h>
 #include <sys/param.h>
+#include <sys/sysctl.h>
+#include <sys/user.h>
 #include <sys/cpuset.h>
 #include <fcntl.h>
 #include <sys/stat.h>
@@ -939,6 +944,71 @@ void dump_line(void *, const char *text)
     const int length = snprintf(line, sizeof(line), "ntsync: %s\n", text);
     if (length > 0) output(line, std::min<size_t>(static_cast<size_t>(length), sizeof(line) - 1));
 }
+// Each thread of process pid as the kernel sees it (kern.proc.pid with its threads): name, state, wait channel, last
+// CPU and run time, at most `budget` lines in all. The console's records are larger than the SDK's
+// (native/proton_flight_recorder.cpp), so they are stepped by the size each gives. A title's sysctl names are approved
+// one by one: a refusal is said once and the list is not asked again.
+void say_kernel_threads(int pid, unsigned &budget)
+{
+    static bool refused;
+    static unsigned char buffer[256 << 10];   // the title loop's only
+    if (refused || !budget) return;
+    int mib[4] = {CTL_KERN, KERN_PROC, KERN_PROC_PID | KERN_PROC_INC_THREAD, pid};
+    size_t bytes = sizeof(buffer);
+    int size = 0;
+    if (sysctl(mib, 4, buffer, &bytes, nullptr, 0)) {
+        const int error = errno;
+        refused = error != ESRCH;
+        say("Wine: freeze snapshot: no kernel thread list for process %d (errno %d)%s", pid, error,
+            refused ? "; not asked again" : "");
+        return;
+    }
+    if (bytes >= sizeof(size)) memcpy(&size, buffer, sizeof(size));
+    if (size <= 0 || size_t(size) > bytes) {
+        say("Wine: freeze snapshot: process %d's kernel thread list unreadable (%zu bytes, record %d)", pid, bytes, size);
+        return;
+    }
+    const size_t count = bytes / size_t(size);
+    say("Wine: freeze snapshot: process %d, %zu threads as the kernel sees them", pid, count);
+    for (size_t i = 0; i < count && budget; ++i, --budget) {
+        kinfo_proc record{};
+        memcpy(&record, buffer + i * size_t(size), std::min(sizeof(record), size_t(size)));
+        say("Wine: freeze thread %d \"%s\" state=%d wait=%s cpu=%d run_ms=%llu", record.ki_tid, record.ki_tdname,
+            record.ki_stat, record.ki_wmesg[0] ? record.ki_wmesg : "-", record.ki_lastcpu,
+            (unsigned long long)(record.ki_runtime / 1000));
+    }
+}
+
+// The server's snapshot prints on stderr, which in a title reaches klog only, and an owner's run keeps no klog. For the
+// length of a freeze snapshot stderr goes to a file (never a pipe: a full one would stop the server holding its lock),
+// whose lines then go to the Wine log beside the device's dump, at most 256 KiB.
+int server_snapshot_logged(unsigned wait_ms)
+{
+    if (!server_snapshot) return -1;
+    const char *path = PROTON_DATA_ROOT "/logs/freeze-snapshot.tmp";
+    const int file = open(path, O_RDWR | O_CREAT | O_TRUNC | O_CLOEXEC, 0644);
+    const int saved = file >= 0 ? dup(STDERR_FILENO) : -1;
+    if (saved < 0 || dup2(file, STDERR_FILENO) < 0) {
+        if (saved >= 0) close(saved);
+        if (file >= 0) close(file);
+        return server_snapshot(wait_ms);   // to klog, as before
+    }
+    const int status = server_snapshot(wait_ms);
+    dup2(saved, STDERR_FILENO);
+    close(saved);
+    char chunk[4096];
+    size_t copied = 0;
+    ssize_t got;
+    lseek(file, 0, SEEK_SET);
+    while (copied < (256u << 10) && (got = read(file, chunk, sizeof(chunk))) > 0) {
+        output(chunk, size_t(got));
+        copied += size_t(got);
+    }
+    close(file);
+    unlink(path);
+    return status;
+}
+
 void dump_hang(unsigned seconds)
 {
     say("Wine: hang snapshot %u s after the close request", seconds);
@@ -1320,6 +1390,19 @@ __attribute__((format(printf, 1, 2))) void fail(const char *format, ...)
 
 // Suspend and resume (src/pw_suspend.h): this loop ticks the clock; the flight recorder's thread reads the hold.
 static PwSuspendClock title_suspend;
+// The control overlay's Mouse off (src/pw_overlay.h): as if unplugged, no mouse input reaches the game (deliver) and the
+// pointer the broker draws for programs in helpers is not drawn; a game in the title is told (patch 2470)
+static std::atomic<bool> mouse_unplugged{false};
+// The controller the session gives programs (src/pw_controller.h) and the game it is saved for when the control overlay's
+// Controller button switches it (Wine patches 2471, 2472)
+static int session_controller = PW_CONTROLLER_XBOX_360;
+static ProtonGame controller_game;
+static void (*server_cursor)(int *, int *) = nullptr;
+static void shown_cursor(int *x, int *y)
+{
+    if (mouse_unplugged.load(std::memory_order_relaxed)) *x = *y = -1;
+    else server_cursor(x, y);
+}
 static std::atomic<uint64_t> suspend_resumed_ms{0};
 static std::atomic<uint32_t> suspend_away{0};
 static int suspend_hold(uint64_t now_ms)
@@ -1542,6 +1625,16 @@ static void title_program_schedule()
     const int status=set_hook ? set_hook(title_program_thread_start) : -1;
     say("Wine: the game in the title runs as a helper's: its threads SCHED_RR at %d%s",title_program_priority,
         status ? " -- NOT SET: this runtime has no thread start hook" : "");
+    // Its Windows priorities above normal step up from there, never to the title's own 700 (src/pw_helper_sched.h,
+    // pw_helper_sched_windows_priority; Wine patch 2432). WINE_PS5_SCHED_TITLE=0 in the launch keeps them all at the floor.
+    if(getenv("WINE_PS5_SCHED_TITLE")) {
+        say("Wine: the game's Windows priorities: WINE_PS5_SCHED_TITLE=%s (the launch's)",getenv("WINE_PS5_SCHED_TITLE"));
+    } else if(!status && title_program_priority>PW_HELPER_SCHED_SERVICE_DEFAULT) {
+        setenv("WINE_PS5_SCHED_TITLE",std::to_string(title_program_priority).c_str(),1);
+        say("Wine: the game's Windows priorities above normal: up to %d (time critical %d), never above the title's %d",
+            pw_helper_sched_windows_priority(31,title_program_priority),
+            pw_helper_sched_windows_priority(15,title_program_priority),PW_HELPER_SCHED_SERVICE_DEFAULT);
+    }
 }
 
 int start_owner_graphics(int server_fd,const struct pw_child_bootstrap *boot)
@@ -2434,7 +2527,8 @@ void proton_run_wine()
     }
     {
         // The controller programs see (src/pw_controller.h): the player's setting, or a game's or a test's own
-        // WINE_PS5_CONTROLLER. Only the DualSense has the HID device; xinput reads WINE_PS5_CONTROLLER (patch 2400).
+        // WINE_PS5_CONTROLLER. xinput reads WINE_PS5_CONTROLLER (patch 2400); the PS5 bus makes the DualSense's HID device, or
+        // for an Xbox controller the HID gamepad Windows makes for one (patch 2480), which DirectInput and SDL find.
         // A game's SDL_XINPUT_ENABLED=0 chose the DualSense over HID when both were there; with an Xbox controller,
         // XInput is the only one, so it goes.
         const char *own = getenv("WINE_PS5_CONTROLLER");
@@ -2442,8 +2536,11 @@ void proton_run_wine()
         if (controller < 0) error = own ? EINVAL : pw_controller_load(&controller, proton_controller_path().c_str());
         if (controller < 0) controller = PW_CONTROLLER_XBOX_360;
         setenv("WINE_PS5_CONTROLLER", pw_controller_word(controller), 1);
-        if (controller == PW_CONTROLLER_DUALSENSE) setenv("WINE_PS5_HID", "1", 1);
-        else unsetenv("WINE_PS5_HID");
+        // An Xbox controller: "live", every game's process runs the PS5 bus, which makes the Xbox HID gamepad (patch 2480)
+        // and lets the control overlay switch to the DualSense (patch 2472)
+        setenv("WINE_PS5_HID", controller == PW_CONTROLLER_DUALSENSE ? "1" : "live", 1);
+        session_controller = controller;
+        controller_game = game;
         const char *sdl = getenv("SDL_XINPUT_ENABLED");
         const bool sdl_dropped = controller != PW_CONTROLLER_DUALSENSE && sdl && !strcmp(sdl, "0");
         if (sdl_dropped) unsetenv("SDL_XINPUT_ENABLED");
@@ -2617,6 +2714,9 @@ void proton_run_wine()
     int (*server_dialog)(char *, unsigned) = nullptr; // the dialog box in front, its caption and lines (patch 2419)
     int (*server_windows)(void *, unsigned) = nullptr;
     auto deliver = [&](const PwWineInput *event) {
+        if (mouse_unplugged.load(std::memory_order_relaxed) && (event->type == PW_WINE_INPUT_MOUSE_MOVE ||
+                event->type == PW_WINE_INPUT_MOUSE_BUTTON || event->type == PW_WINE_INPUT_MOUSE_WHEEL))
+            return 0;
         return server_input ? server_input(event, 1) : post_input ? post_input(event) : -1;
     };
     auto sink_stats = symbol<void (*)(PwWineSinkStats *)>("pw_wine_sink_stats");
@@ -2668,6 +2768,8 @@ void proton_run_wine()
         set_dns_config(title_dns_config);
     auto set_dualsense = symbol<void (*)(const uint8_t *)>("pw_wine_set_dualsense");
     auto set_pad = symbol<void (*)(const PwWinePad *)>("pw_wine_set_pad");
+    auto set_pad_kind = symbol<void (*)(int)>("pw_wine_set_pad_kind");
+    if (set_pad_kind) set_pad_kind(session_controller);   // xinput and the PS5 bus follow it (patches 2471, 2472)
     auto set_cwd = symbol<int (*)(const char *)>("pw_cwd_set");
     char cwd[1024]={0};
     // The program starts in game.json's "directory", or in its executable's.
@@ -2795,9 +2897,10 @@ void proton_run_wine()
             // foreground window's process, and the cursor the touchpad moves, drawn by the title (patches 0931, 0932).
             if(auto set_frames=symbol<void (*)(void (*)(int,int),void (*)(int))>("pw_ps5_set_frame_sink"))
                 set_frames(proton_gpu_broker_frame_attach,proton_gpu_broker_frame_detach);
+            server_cursor=module_symbol ? (void (*)(int *,int *))module_symbol(server,"pw_wineserver_cursor") : nullptr;
             proton_gpu_broker_set_desktop(
                 module_symbol ? (int (*)())module_symbol(server,"pw_wineserver_foreground") : nullptr,
-                module_symbol ? (void (*)(int *,int *))module_symbol(server,"pw_wineserver_cursor") : nullptr);
+                server_cursor ? shown_cursor : nullptr);
             if(setup_preparing)proton_cover_start(PROTON_DATA_ROOT "/" PW_SETUP_COVER_NAME,proton_gpu_broker_set_cover);
             if(steam_guide) {
                 PwSetupRecord setup_record;
@@ -3030,6 +3133,20 @@ void proton_run_wine()
     unsigned own_end_tick = 0, own_capture_tick = 0;
     const char *osk_mode = getenv("WINE_PS5_OSK");
     const bool own_only = osk_mode && !strcmp(osk_mode, "own");
+    // The control overlay (src/pw_overlay.h, Alpha 8): the gesture opens it in the keyboard's panel; its Keyboard tile opens
+    // the keyboard above, whose CIRCLE comes back to it. Its statistics HUD stays over the game once it closes, sampled here
+    // twice a second; its Mouse off is as if the mouse were unplugged.
+    static PwOverlay control{};
+    control.controller = session_controller;
+    unsigned pad_swap_until = 0;   // the controller is away until this tick around a switch of its kind
+    static PwVkbdStick control_stick{};
+    bool control_open = false, control_touching = false, keyboard_from_control = false, open_keyboard = false;
+    PwHud hud{};
+    uint64_t hud_ms = 0, hud_cpu_us = 0;
+    bool hud_on_screen = false;
+    unsigned long long hud_flips = 0;
+    double hud_gpu = -1;
+    static PwWinePerf hud_perf_before, hud_perf_now;
     if (osk_test && strcmp(osk_test, "type") && strcmp(osk_test, "open")) osk_test = nullptr;
     pw_osk_typer_start(&osk_typer, "", 0);
     say("Controls: on-screen keyboard=%s", pw_osk_trigger_id(controls.keyboard));
@@ -3051,6 +3168,17 @@ void proton_run_wine()
     // no game is opened in it. The launcher then shows the setup's Done step.
     unsigned prefix_made_tick = 0;
     if (setup_preparing) say("setup: the first session; it ends 5 s after the prefix is made");
+    // A runtime whose Windows modules changed updates each existing prefix once (src/pw_setup.h): say why it is slower.
+    if (FILE *file = !setup_preparing ? fopen((prefix + "/.update-timestamp").c_str(), "r") : nullptr) {
+        char stamp[64] = {};
+        struct stat inf{};
+        const size_t got = fread(stamp, 1, sizeof(stamp) - 1, file);
+        fclose(file);
+        if (got && !stat((runtime + "/share/wine/wine.inf").c_str(), &inf) &&
+            pw_setup_prefix_outdated(stamp, (unsigned long long)inf.st_mtime))
+            say("Wine: prefix updated for this runtime: its Windows modules changed, so wineboot copies them into the "
+                "prefix once; this launch takes longer");
+    }
     // The store-client option's sign-in session (src/pw_steam.h): the client's own window is more than the console's memory
     // holds, so once the sign-in is saved (a remembered user in the client's loginusers.vdf that was not there at the
     // start) the session ends 20 s later, when the client has written the rest of its state, and the launcher shows the
@@ -3323,6 +3451,7 @@ void proton_run_wine()
     uint64_t breaker_census_ms = 0;
     const uint64_t breaker_armed_ms = monotonic_ms();
     bool breaker_said = false;
+    PwFreezeWatch freeze_watch{};   // the freeze snapshot (src/pw_freeze_watch.h), on the hang breaker's sample
 #ifdef PS5_GPU_BROKER
     const bool breaker_armed = owner_broker_running && programs_in_helpers;
     if (breaker_armed)
@@ -3354,6 +3483,10 @@ void proton_run_wine()
     if (windows_probe) { unlink(windows_request.c_str());unlink(windows_reply.c_str());unlink(windows_temp.c_str()); }
     auto set_suspend = symbol<void (*)(uint32_t, uint32_t)>("pw_wine_set_suspend");
     bool system_overlaid = false;
+    // Test only: hold this loop that many ms every 5 s, as the registry save on a server that does not answer held it
+    // 3 s every 30 s (src/pw_suspend.h); the title watchdog must still end a hung game (run-battery title-stall64).
+    const char *loop_stall = getenv("PROTON_TEST_TITLE_LOOP_STALL_MS");
+    const unsigned loop_stall_ms = loop_stall ? (unsigned)std::min(9000ul, strtoul(loop_stall, nullptr, 10)) : 0;
     for (unsigned tick = 0;; ++tick) {
         // Suspend and resume (src/pw_suspend.h): the system's word, every fourth tick, and the clock's gap between two
         // ticks for a suspend nobody announced. The helpers read away and the beat from their input pages, the broker
@@ -3376,6 +3509,9 @@ void proton_run_wine()
                 else if (change == PW_SUSPEND_BACK)
                     snprintf(line, sizeof(line), "suspend back: the app is in the foreground after %llu ms",
                              (unsigned long long)(at - title_suspend.left_ms));
+                else if (change == PW_SUSPEND_STALL)
+                    snprintf(line, sizeof(line), "title loop stalled %llu ms between two ticks: not a suspend, the "
+                             "watchdogs' clocks run on (stalls %u)", (unsigned long long)(at - before), title_suspend.stalls);
                 else
                     snprintf(line, sizeof(line), "suspend %s: the clock jumped %llu ms between two ticks",
                              was_away ? "announced" : "unannounced", (unsigned long long)(at - before));
@@ -3504,10 +3640,98 @@ void proton_run_wine()
             if (!strcmp(osk_test, "type") && !own_only && osk_ready) pw_osk_typer_start(&osk_typer, PW_OSK_TEST_TEXT, 1);
         }
         if (controls.keyboard != PW_OSK_OFF || osk_pad.open || osk_test_now) {
-            const bool gesture = pw_osk_detect(&osk_detector, controls.keyboard, &pad);
+            bool gesture = pw_osk_detect(&osk_detector, controls.keyboard, &pad);
+#ifdef PS5_GPU_BROKER
+            // The gesture opens the control overlay, and closes it again
+            if (gesture && !own_open && !control_open && !osk_pad.open && pw_osk_typer_done(&osk_typer)) {
+                gesture = false;
+                proton_guide_set_overlay(proton_gpu_broker_set_overlay, proton_gpu_broker_overlay_refresh);
+                proton_guide_set_hud(proton_gpu_broker_set_hud);
+                if (!guide_screens && !dialog_guide && !own_guide) {
+                    PwSetupRecord record;
+                    pw_setup_record_load(&record, PROTON_DATA_ROOT "/setup.txt");
+                    own_guide = proton_guide_start(record.language, proton_app_root(), proton_gpu_broker_set_cover);
+                }
+                pw_overlay_open(&control);
+                // A game in a helper started with an Xbox controller has no PS5 bus to switch to the DualSense (patch 2472)
+                control.pad_next_launch = !title_client_claimed.load() && session_controller != PW_CONTROLLER_DUALSENSE;
+                control_stick = PwVkbdStick{};
+                control_touching = pad.touch_count > 0;
+                proton_guide_overlay(&control);
+                pw_osk_pad_open(&osk_pad, &pad);
+                control_open = true;
+                say("Wine: control overlay opened (%s)", pw_osk_trigger_id(controls.keyboard));
+            } else if (control_open) {
+                // Its buttons: the pad as it is now, the game sees it idle (pw_osk_pad_filter below)
+                const uint64_t now_ms = monotonic_ms();
+                const uint32_t pressed = pw_osk_pad_pressed(&osk_pad, &pad);
+                int result = PW_OVERLAY_NONE, dx = 0, dy = 0;
+                bool changed = false, close = gesture || (pressed & PAD_CIRCLE);
+                gesture = false;
+                if (pressed & PAD_UP) pw_overlay_move(&control, -1), changed = true;
+                if (pressed & PAD_DOWN) pw_overlay_move(&control, 1), changed = true;
+                if (pw_vkbd_stick(&control_stick, pad.left_x, pad.left_y, now_ms, &dx, &dy) && dy)
+                    pw_overlay_move(&control, dy), changed = true;
+                if (pressed & PAD_CROSS) result = pw_overlay_press(&control, now_ms);
+                if (pad.touch_count && !control_touching) result = pw_overlay_touch(&control, pad.touch_x, pad.touch_y, now_ms);
+                control_touching = pad.touch_count > 0;
+                if (pw_overlay_expire(&control, now_ms)) changed = true;
+                if (result == PW_OVERLAY_ARMED) {
+                    changed = true;
+                    say("Wine: control overlay: exit asked once");
+                } else if (result == PW_OVERLAY_TOGGLED && control.focus == PW_OVERLAY_STATS) {
+                    changed = true;
+                    say("Wine: control overlay: statistics %s", control.stats ? "on" : "off");
+                } else if (result == PW_OVERLAY_TOGGLED) {   // the mouse: its buttons let go first, then it is gone
+                    changed = true;
+                    if (control.mouse_off)
+                        for (uint32_t button = 0; button < 5; ++button) {
+                            PwWineInput up{};
+                            up.type = PW_WINE_INPUT_MOUSE_BUTTON, up.code = button, up.down = 0;
+                            deliver(&up);
+                        }
+                    mouse_unplugged.store(control.mouse_off, std::memory_order_relaxed);
+                    PwWineInput present{};
+                    present.type = PW_WINE_INPUT_MOUSE_PRESENT, present.down = !control.mouse_off;
+                    say("Wine: control overlay: mouse %s (%d)", control.mouse_off ? "off, as if unplugged" : "on", deliver(&present));
+                } else if (result == PW_OVERLAY_DO_EXIT) {   // the game ends as a user would end it (stop-game, below)
+                    if (FILE *stop = fopen(PROTON_DATA_ROOT "/stop-game", "w")) fputs("control-overlay-exit\n", stop), fclose(stop);
+                    say("Wine: control overlay: exit to the menu");
+                    close = true;
+                } else if (result == PW_OVERLAY_DO_CONTROLLER) {
+                    // As unplugging one controller and plugging in another: the pad goes away for half a second (XInput
+                    // says not connected, patch 2423 tells the windows), the kind changes (the DualSense's HID device comes
+                    // or goes, patch 2472), and it comes back as the new kind. Nothing is held: the game sees the pad idle
+                    // while the overlay is open. Saved as the game's own (its Options row), for its next launch.
+                    changed = true;
+                    pad_swap_until = tick + 60;
+                    if (set_pad_kind) set_pad_kind(control.controller);
+                    const char *word = pw_controller_word(control.controller);
+                    // a test launch (its own env words, tools/run-console.py) leaves the library entry as it was
+                    const std::string saved = !proton_launch().env.empty() ? std::string("no: a test launch") :
+                        controller_game.id.empty() ? std::string("no library entry") :
+                        proton_game_set_env(controller_game, "WINE_PS5_CONTROLLER", word);
+                    say("Wine: control overlay: controller %s (saved: %s)", word, saved.empty() ? "yes" : saved.c_str());
+                } else if (result == PW_OVERLAY_DO_KEYBOARD) {
+                    close = open_keyboard = keyboard_from_control = true;
+                }
+                if (close) {
+                    control_open = false;
+                    pw_osk_pad_close(&osk_pad, &pad);
+                    if (!open_keyboard) {
+                        proton_guide_overlay(nullptr);
+                        if (own_guide && !control.stats) log_line(proton_guide_stop("the control overlay closed")), own_guide = false;
+                        say("Wine: control overlay closed");
+                    }
+                } else if (changed) {
+                    proton_guide_overlay(&control);
+                }
+            }
+#endif
             const bool own_type_test = osk_test_now && !strcmp(osk_test, "type") && (own_only || !osk_ready);
-            if ((gesture || (osk_test_now && !strcmp(osk_test, "open")) || own_type_test) && !osk_pad.open &&
+            if ((gesture || open_keyboard || (osk_test_now && !strcmp(osk_test, "open")) || own_type_test) && !osk_pad.open &&
                 pw_osk_typer_done(&osk_typer)) {
+                open_keyboard = false;
                 const PwOskPs5Ops *system_ops = pw_osk_ps5_system_ops();
                 PwOskPs5Ops ops = system_ops ? *system_ops : PwOskPs5Ops{};
                 ops.log = [](const char *line) { say("Wine: %s", line); };
@@ -3539,6 +3763,7 @@ void proton_run_wine()
                     own_touching = pad.touch_count > 0;
                     if (own_type_test) {   // the test line through the keyboard, finished with Done a second later
                         pw_vkbd_type(&own, PW_OSK_TEST_TEXT);
+                        pw_osk_typer_text(&osk_typer, PW_OSK_TEST_TEXT);
                         own_end_tick = tick + 120;
                     } else if (osk_test_now) {
                         own_end_tick = tick + 360;
@@ -3568,10 +3793,11 @@ void proton_run_wine()
                 say("Wine: keyboard picture asked of the GPU broker (%d)", asked);
             }
             if (own_open) {
-                // Its buttons: the pad as it is now, the game sees it idle (pw_osk_pad_filter below)
+                // Its buttons: the pad as it is now, the game sees it idle (pw_osk_pad_filter below); a button held when
+                // it opened (the Cross on the overlay's Keyboard tile) does nothing until let go
                 int result = PW_VKBD_NONE;
                 bool changed = false;
-                const uint32_t pressed = pad.pressed;
+                const uint32_t pressed = pw_osk_pad_pressed(&osk_pad, &pad);
                 if (pressed & PAD_UP) pw_vkbd_move(&own, 0, -1), changed = true;
                 if (pressed & PAD_DOWN) pw_vkbd_move(&own, 0, 1), changed = true;
                 if (pressed & PAD_LEFT) pw_vkbd_move(&own, -1, 0), changed = true;
@@ -3580,32 +3806,37 @@ void proton_run_wine()
                 if (pw_vkbd_stick(&own_stick, pad.left_x, pad.left_y, monotonic_ms(), &dx, &dy)) pw_vkbd_move(&own, dx, dy), changed = true;
                 if (pressed & PAD_L1) pw_vkbd_page(&own, -1), changed = true;
                 if (pressed & PAD_R1) pw_vkbd_page(&own, 1), changed = true;
-                if (pressed & PAD_SQUARE) pw_vkbd_backspace(&own), changed = true;
-                if (pressed & PAD_TRIANGLE) pw_vkbd_type(&own, " "), changed = true;
+                if (pressed & PAD_SQUARE) result = pw_vkbd_backspace(&own), changed = true;
+                if (pressed & PAD_TRIANGLE) result = pw_vkbd_type(&own, " "), memcpy(own.typed, " ", 2), changed = true;
                 if (pressed & PAD_CROSS) result = pw_vkbd_press(&own), changed = true;
                 if (pad.touch_count && !own_touching) result = pw_vkbd_touch(&own, pad.touch_x, pad.touch_y), changed = true;
                 own_touching = pad.touch_count > 0;
                 if (pressed & PAD_OPTIONS) result = PW_VKBD_FINISHED;
-                if (pressed & PAD_CIRCLE) result = PW_VKBD_CANCELLED;
                 const char *by = nullptr;
                 if (own_end_tick && tick >= own_end_tick) {   // a test's end: the type test finishes, the open test closes
                     result = osk_test && !strcmp(osk_test, "type") ? PW_VKBD_FINISHED : PW_VKBD_CANCELLED;
                     by = "title";
                 }
+                // Each press reaches the game now, as a keyboard's (the owner: "real-time"): characters, Backspace, Done's Return
+                pw_osk_own_typed(&osk_typer, result, own.typed);
+                if (pressed & PAD_CIRCLE) result = PW_VKBD_CANCELLED;
                 if (result == PW_VKBD_FINISHED || result == PW_VKBD_CANCELLED) {
-                    char line[PW_VKBD_TEXT * 4 + 1] = {};
-                    if (result == PW_VKBD_FINISHED) pw_vkbd_utf8(&own, line, sizeof(line));
-                    proton_guide_keyboard(nullptr);
+                    // what was typed is the game's already: Done sent Return above, CIRCLE sends nothing
+                    // opened from the control overlay, CIRCLE goes back to it; the HUD keeps the guide running
+                    const bool back = keyboard_from_control && result == PW_VKBD_CANCELLED && !by;
+                    keyboard_from_control = false;
 #ifdef PS5_GPU_BROKER
-                    if (own_guide) log_line(proton_guide_stop("the keyboard closed"));
+                    if (back) proton_guide_overlay(&control);
+                    else proton_guide_keyboard(nullptr);
+                    if (own_guide && !back && !control.stats) log_line(proton_guide_stop("the keyboard closed")), own_guide = false;
+#else
+                    proton_guide_keyboard(nullptr);
 #endif
-                    own_guide = false;
                     own_open = false;
                     own_end_tick = own_capture_tick = 0;
-                    pw_osk_pad_close(&osk_pad, &pad);
-                    if (line[0]) pw_osk_typer_start(&osk_typer, line, 1);
-                    say("Wine: keyboard ended by=%s (%s, %u bytes)", by ? by : "player",
-                        line[0] ? "typing" : "nothing typed", (unsigned)strlen(line));
+                    if (back) control_open = true, control_touching = pad.touch_count > 0;
+                    else pw_osk_pad_close(&osk_pad, &pad);
+                    say("Wine: keyboard ended by=%s (%s)", by ? by : "player", result == PW_VKBD_FINISHED ? "Return" : "closed");
                 } else if (changed) {
                     proton_guide_keyboard(&own);
                 }
@@ -3614,7 +3845,7 @@ void proton_run_wine()
                 osk_test_end_tick = 0;
                 pw_osk_ps5_close(&osk);   // the pad is given back by the poll just below, which finds the dialog gone
             }
-            if (osk_pad.open && !own_open) {   // the system's dialog (MihawkOS's own is handled above)
+            if (osk_pad.open && !own_open && !control_open) {   // the system's dialog (MihawkOS's own and the overlay above)
                 char line[PW_OSK_PS5_TEXT * 4] = {};
                 const int answer = pw_osk_ps5_poll(&osk, line, sizeof(line));
                 if (answer != 0) {   // finished, cancelled, or no longer shown
@@ -3625,7 +3856,66 @@ void proton_run_wine()
             }
         }
         pw_osk_pad_filter(&osk_pad, &shown_pad);
-        // The line it returned, a few events a tick so the game's input queue keeps up.
+#ifdef PS5_GPU_BROKER
+        // The statistics HUD's figures, twice a second while it shows (src/pw_overlay.h): frames from Wine's counters for a
+        // game in the title, else the frames the display showed; the title's CPU time; the GPU's busy time when the broker
+        // times it; direct memory; the system pool's page tables from the census and the title's own
+        if ((control.stats || control_open) && tick % 60 == 0) {
+            const uint64_t now_ms = monotonic_ms();
+            rusage usage{};
+            getrusage(RUSAGE_SELF, &usage);
+            const uint64_t cpu_us = uint64_t(usage.ru_utime.tv_sec + usage.ru_stime.tv_sec) * 1000000u +
+                                    uint64_t(usage.ru_utime.tv_usec + usage.ru_stime.tv_usec);
+            const double gpu = proton_gpu_broker_gpu_seconds();
+            const unsigned long long flips = proton_gpu_broker_flips();
+            if (perf.snapshot) perf.snapshot(&hud_perf_now);
+            if (hud_ms && now_ms > hud_ms) {
+                const double seconds = (now_ms - hud_ms) / 1000.0;
+                unsigned busiest = 0;
+                uint64_t frames = 0;
+                for (unsigned api = 0; api < PW_PERF_APIS; ++api) {
+                    const uint64_t n = hud_perf_now.frames[api].frames - hud_perf_before.frames[api].frames;
+                    if (n > frames) frames = n, busiest = api;
+                }
+                const float p99 = frames && perf.percentile ?
+                    perf.percentile(&hud_perf_now.frames[busiest], &hud_perf_before.frames[busiest], 99) / 1000.0f : 0;
+                pw_hud_frames(&hud, float((frames ? frames : flips - hud_flips) / seconds), p99);
+                const unsigned cpus = std::max(1, __builtin_popcountll(cpus_seen.load()) ? __builtin_popcountll(cpus_seen.load())
+                                                                                        : int(sysconf(_SC_NPROCESSORS_ONLN)));
+                hud.cpu = float((cpu_us - hud_cpu_us) / 1e4 / seconds / cpus);
+                hud.gpu = gpu >= 0 && hud_gpu >= 0 ? float((gpu - hud_gpu) / seconds * 100) : -1.0f;
+            } else {
+                hud.cpu = hud.gpu = -1;
+            }
+            struct ps5_memory_stats direct{};
+            if (ps5_memory_query(&direct)) hud.memory_used = direct.total_bytes - direct.free_bytes, hud.memory_total = direct.total_bytes;
+            // the base's census can read more free than its total (8672 of 8192): unknown, as the page-table guard takes it
+            if (pw_page_table_known(census.page_tables, census.page_tables_free))
+                hud.small_free = int(census.page_tables_free), hud.small_total = int(census.page_tables);
+            else
+                hud.small_free = hud.small_total = 0;
+            int gpu_total = 0, gpu_free = 0;
+            if (sceKernelGetPageTableStats(&hud.big_total, &hud.big_free, &gpu_total, &gpu_free)) hud.big_total = 0;
+            if (control.stats) proton_guide_hud(&hud), hud_on_screen = true;
+            control.figures = hud;
+            // What the HUD shows, 2 s after it comes on and every 10 s while it does (tools/run-console.py --expect-hud checks
+            // it against perf's lines)
+            static unsigned hud_said;
+            if (control.stats && hud.graph_count && ++hud_said % 20 == 4)
+                say("hud: fps=%.1f low=%.1f frame_ms=%.2f cpu=%.0f gpu=%.0f small=%d/%d big=%d/%d", hud.fps, hud.low_fps,
+                    hud.fps > 0 ? 1000.0 / hud.fps : 0.0, hud.cpu, hud.gpu, hud.small_total - hud.small_free, hud.small_total,
+                    hud.big_total - hud.big_free, hud.big_total);
+            if (control_open && control.focus == PW_OVERLAY_STATS) proton_guide_overlay(&control);   // the card's figures
+            hud_ms = now_ms, hud_cpu_us = cpu_us, hud_gpu = gpu, hud_flips = flips, hud_perf_before = hud_perf_now;
+        }
+        if (!control.stats && !control_open) hud_ms = 0;
+        if (!control.stats && hud_on_screen) {
+            proton_guide_hud(nullptr);
+            hud_on_screen = false;
+            if (own_guide && !control_open && !own_open) log_line(proton_guide_stop("the statistics closed")), own_guide = false;
+        }
+#endif
+        // What the keyboards typed, a few events a tick so the game's input queue keeps up.
         for (unsigned i = 0; i < 8; ++i) {
             PwWineInput typed_event{};
             if (!pw_osk_typer_next(&osk_typer, &typed_event)) break;
@@ -3634,7 +3924,7 @@ void proton_run_wine()
         struct pad gamepad{};
         pw_controls_gamepad(&controls, &shown_pad, &gamepad);
         PwWinePad state{};
-        state.connected = pw_controls_game_connected(&gamepad);
+        state.connected = pw_controls_game_connected(&gamepad) && tick >= pad_swap_until;
         for (size_t i = 0; i < sizeof(ps_buttons)/sizeof(ps_buttons[0]); ++i)
             if (gamepad.held & ps_buttons[i]) state.buttons |= xi_buttons[i];
         state.left_trigger = std::clamp(gamepad.l2, 0.f, 1.f) * 255;
@@ -3646,7 +3936,7 @@ void proton_run_wine()
         if (set_pad) set_pad(&state);
         uint8_t report[64];
         proton_dualsense_report(&gamepad, tick, report);
-        if (set_dualsense) set_dualsense(pw_controls_game_connected(&gamepad) ? report : nullptr);
+        if (set_dualsense) set_dualsense(pw_controls_game_connected(&gamepad) && tick >= pad_swap_until ? report : nullptr);
         if (tick == 0 || pad.pressed || (pad.connected != was_connected) || (pad.intercepted != was_intercepted))
             say("Wine: pad connected=%d%s buttons=%#x touch=%u", pad.connected, pad.intercepted ? " (the system has it: idle to the game)" : "",
                 pad.held, pad.touch_count);
@@ -3943,13 +4233,16 @@ void proton_run_wine()
         if (tick && tick % 1250 == 0) title_vm_census_say();
         if (tick == 2500 && getenv("PROTON_PT2M_TITLE_PROBE") && !strcmp(getenv("PROTON_PT2M_TITLE_PROBE"), "1"))
             title_pt2m_probe();
+        if (loop_stall_ms && tick && tick % 600 == 0) usleep(loop_stall_ms * 1000);
+        // The loop waits for it 250 ms at most: the request stays with the server, which saves when it next runs. A
+        // server that did not answer held this loop its full 3000 ms every 30 s (a tester's Risk of Rain 2, 2026-11-01).
         if (tick && tick % 3750 == 0 && flush_registry) {
             const uint64_t begin = sceKernelGetProcessTime();
-            const int status = flush_registry(3000);
+            const int status = flush_registry(250);
             const uint64_t took_ms = (sceKernelGetProcessTime() - begin) / 1000;
             if (status || took_ms >= 250)
-                say("Wine: registry %s in %llu ms (every 30 s)", status ? "NOT saved" : "saved",
-                    (unsigned long long)took_ms);
+                say("Wine: registry %s in %llu ms (every 30 s)%s", status ? "NOT saved" : "saved", (unsigned long long)took_ms,
+                    status ? "; the server has not answered, the save waits there" : "");
         }
         // The census is read every 100 ms, guard or not (its page tables change that often; its processes every half
         // second): the hang breaker goes by its age. A read that fails (the
@@ -3989,6 +4282,27 @@ void proton_run_wine()
                         PW_MEMORY_GUARD_CLOSE_MS / 1000, PW_MEMORY_GUARD_WINDOW_MS / 1000, memory_end,
                         PW_MEMORY_GUARD_END_MS / 1000, census.page_tables_free, census.page_tables,
                         PW_PAGE_TABLE_CLOSE_FREE, PW_PAGE_TABLE_END_FREE);
+                }
+                // Steam's start takes ~2,000 of the system's page tables (src/pw_steam_memory.h). With fewer than its need
+                // free, this Steam session ends at once and the launcher shows why on its return, unless the player held
+                // TRIANGLE on that warning, which lets the next session go on. Only here can the title read that pool.
+                // PROTON_STEAM_TABLES_TEST=<need> raises the need for a test launch, so a console with room still shows it.
+                const char *tables_test = getenv("PROTON_STEAM_TABLES_TEST");
+                const unsigned steam_need = tables_test && atoi(tables_test) > 0 ? unsigned(atoi(tables_test)) : PW_STEAM_NEED_TABLES;
+                if (!census_seen && proton_launch().profile == "steam" &&
+                    pw_page_table_known(census.page_tables, census.page_tables_free) && census.page_tables_free < steam_need) {
+                    if (!remove(PROTON_DATA_ROOT "/" PW_STEAM_TABLES_GO_ON)) {
+                        say("Wine: Steam starts with %u of %u system page tables free (it needs about %u): the player chose to "
+                            "go on", census.page_tables_free, census.page_tables, steam_need);
+                    } else {
+                        if (FILE *note = fopen(PROTON_DATA_ROOT "/" PW_STEAM_TABLES_SHORT, "w")) {
+                            fprintf(note, "%u %u\n", census.page_tables_free, census.page_tables);
+                            fclose(note);
+                        }
+                        say("Wine: Steam ended at its start: %u of %u system page tables free, it needs about %u; the launcher "
+                            "says what to do", census.page_tables_free, census.page_tables, steam_need);
+                        end_game("too few page tables for Steam", true);
+                    }
                 }
                 // Part 4 of the memory plan: the user's payloads take the same memory as a game's helpers (the volunteers' 63-267
                 // MiB, one console's single payload.elf 158 MiB), so the session starts by saying what closing them would free.
@@ -4153,7 +4467,7 @@ void proton_run_wine()
                 std::string flat(text);
                 std::replace(flat.begin(), flat.end(), '\n', '|');
                 say("Wine: the game's dialog box is in front: %s", flat.c_str());
-                if (dialog_up.empty() && !dialog_guide) {
+                if (dialog_up.empty() && !dialog_guide && !own_guide) {   // the overlay's, keyboard's or HUD's guide is theirs
                     PwSetupRecord record;
                     pw_setup_record_load(&record, PROTON_DATA_ROOT "/setup.txt");
                     dialog_guide = proton_guide_start(record.language, proton_app_root(), proton_gpu_broker_set_cover);
@@ -4165,7 +4479,9 @@ void proton_run_wine()
             } else if (!up && !dialog_up.empty()) {
                 say("Wine: the game's dialog box closed");
                 proton_guide_dialog(nullptr, nullptr);
-                if (dialog_guide) log_line(proton_guide_stop("the dialog box closed"));
+                // the control overlay, the keyboard or the HUD came up meanwhile: the guide is theirs now
+                if (dialog_guide && (control_open || own_open || control.stats)) own_guide = true;
+                else if (dialog_guide) log_line(proton_guide_stop("the dialog box closed"));
                 dialog_guide = false;
                 dialog_up.clear();
             }
@@ -4187,6 +4503,39 @@ void proton_run_wine()
             if (in_title) pw_hang_breaker_title_decide(&sample, shown_flips > title_client_flips.load(), &verdict);
             else pw_hang_breaker_decide(&sample, &verdict);
             proton_flight_publish(sample.present_age_ms, sample.census_age_ms, sample.census_known, verdict == PW_HANG_STALLED);
+            // The freeze snapshot (src/pw_freeze_watch.h): what every thread does and waits on, early and once per
+            // stall, the game left running.
+            const PwFreezeAction freeze = pw_freeze_watch_step(&freeze_watch, sample.present_age_ms,
+                in_title ? shown_flips > title_client_flips.load() : shown_last_ms != 0, pw_suspend_hold(&title_suspend, now), 0);
+            if (freeze == PW_FREEZE_RECOVERED) {
+                say("Wine: freeze snapshot: the game drew again after about %llu s without a new frame",
+                    (unsigned long long)(freeze_watch.stalled_ms / 1000));
+            } else if (freeze == PW_FREEZE_SNAPSHOT) {
+                say("Wine: freeze snapshot %u of %u: no new frame for %llu ms while the game runs; the game is left running",
+                    freeze_watch.taken, PW_FREEZE_MAX_SNAPSHOTS, (unsigned long long)sample.present_age_ms);
+                // every thread's last request and wait, in the Wine log
+                say("Wine: freeze snapshot: server status=%d (its lines are in the Wine log)", server_snapshot_logged(1000));
+                if (device_dump) device_dump(dump_line, nullptr, 400, 500);       // who waits on what, and who holds it
+                unsigned budget = 256;
+                if (in_title) say_kernel_threads(getpid(), budget);
+                int pids[PW_HANG_MAX_HELPERS];
+                const unsigned helpers = list_helpers ? list_helpers(pids, PW_HANG_MAX_HELPERS, nullptr) : 0;
+                for (unsigned i = 0; i < helpers && i < PW_HANG_MAX_HELPERS; ++i) say_kernel_threads(pids[i], budget);
+                title_vm_census_say();
+                int total = 0, spare = 0, gpu_total = 0, gpu_free = 0;
+                const bool tables = !sceKernelGetPageTableStats(&total, &spare, &gpu_total, &gpu_free);
+                struct ps5_memory_stats direct{};
+                const bool direct_read = ps5_memory_query(&direct);
+                say("Wine: freeze snapshot: page tables here %d free of %d (gpu %d of %d)%s; system pool %u free of %u (census "
+                    "%lld ms old); system memory %llu MiB; direct memory %llu MiB free of %llu, largest %llu MiB%s",
+                    spare, total, gpu_free, gpu_total, tables ? "" : " (no reading)", census.page_tables_free,
+                    census.page_tables, census.taken_ms ? (long long)(now - census.taken_ms) : -1ll,
+                    (unsigned long long)(census.system >> 20), (unsigned long long)(direct.free_bytes >> 20),
+                    (unsigned long long)(direct.total_bytes >> 20), (unsigned long long)(direct.largest_bytes >> 20),
+                    direct_read ? "" : " (no reading)");
+                say("Wine: freeze snapshot ends");
+                pw_capped_log_sync(&title_log);
+            }
             if (verdict == PW_HANG_FINE) {
                 breaker_said = false;
             } else if (!breaker_said && pw_suspend_hold(&title_suspend, now)) {

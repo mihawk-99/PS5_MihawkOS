@@ -1152,9 +1152,14 @@ PwSteamCensus proton_system_memory()
 {
 	PwSteamCensus out{};
 #if defined(PS5_HOST_REFERENCE)
-	/* The PC has no such memory; the render test's made-up figures: PROTON_MEMORY_TEST="system[,payloads MiB,payloads]" */
-	if (const char *test = getenv("PROTON_MEMORY_TEST"); test && *test)
-		out.known = sscanf(test, "%u,%u,%u", &out.system_mib, &out.payload_mib, &out.payload_count) >= 1;
+	/* The PC has no such memory; the render test's made-up figures: PROTON_MEMORY_TEST="system[,payloads MiB,payloads[,tables free,tables total]]" */
+	if (const char *test = getenv("PROTON_MEMORY_TEST"); test && *test) {
+		/* ",tables free,tables total" after them: the page-table warning's figures */
+		const int read = sscanf(test, "%u,%u,%u,%u,%u", &out.system_mib, &out.payload_mib, &out.payload_count, &out.tables_free,
+			&out.tables_total);
+		out.known = read >= 1;
+		out.tables_known = read >= 5;
+	}
 #else
 	/* The memory helper's census (src/pw_memory_helper.c census_take), taken here, when Steam is chosen: every process's
 	 * resident memory but the title's (sceKernelGetResidentFmemCount, 16 KiB pages), the user's payloads apart. No /data,

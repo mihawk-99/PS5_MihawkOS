@@ -105,6 +105,7 @@ typedef enum {
     PW_STEAM_SCREEN_SIGNED_IN,  /* the sign-in is saved: the session ends, Steam closes and reopens in Big Picture */
     PW_STEAM_SCREEN_DIALOG,     /* a game in the title opened a dialog box: its caption and text, CROSS to answer it */
     PW_STEAM_SCREEN_KEYBOARD,   /* MihawkOS's own on-screen keyboard (src/pw_vkbd.h), where the system's will not load */
+    PW_STEAM_SCREEN_OVERLAY,    /* MihawkOS's control overlay over a game (src/pw_overlay.h), in the keyboard's panel */
 } PwSteamScreen;
 
 enum {

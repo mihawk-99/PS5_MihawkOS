@@ -26,6 +26,12 @@ void *pw_wine_heap_memalign(size_t alignment,size_t bytes);
 /* Usable bytes of a block this heap returned, 0 for anything else. */
 size_t pw_wine_heap_usable_size(const void *pointer);
 void pw_wine_heap_stats(PwWineHeapStats *stats);
+/* Called around every hold of the heap's mutex, from before asking for it until after letting it go: ntdll's start
+ * sets the synchronization device's critical section (pw_ntsync_critical_enter/leave, wine/ps5/pw_wine_dmem_ps5.c), so a
+ * suspend that lands inside waits until the thread has let go. A thread suspended holding the mutex stopped every other
+ * thread's next malloc, a minidump's own (a8-rel-base-2026-11-02 suspend-server64). The in-process server's copy has
+ * none: its code runs with signals blocked. A leave without its enter (the guard set meanwhile) does nothing. */
+void pw_wine_heap_set_guard(void (*enter)(void),void (*leave)(void));
 
 /* Where the heap's address space comes from. By default it maps anonymous
  * memory itself, which on the console draws from about 440 MiB of flexible

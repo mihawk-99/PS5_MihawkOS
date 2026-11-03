@@ -1,0 +1,105 @@
+From 0000000000000000000000000000000000000000 Mon Sep 17 00:00:00 2001
+From: Mihawk <163614687+mihawk-99@users.noreply.github.com>
+Date: Mon, 02 Nov 2026 15:00:00 -0400
+Subject: [PATCH] xinput: PS5: controller 0 follows the kind the control overlay switches to.
+
+The title's control overlay (PS5_Proton src/pw_overlay.h, Alpha 8) switches the controller a game sees while it runs:
+Xbox 360, Xbox One or the DualSense, mostly so a game shows the right button prompts. xinput read WINE_PS5_CONTROLLER once
+per process (patch 2400). Now the title's sink also carries the kind (pw_wine_pad_kind, -1 until set), read through a new
+Unix call, unix_pad_kind, on each look at controller 0: hidden for the DualSense, 045e:02ea for an Xbox One, else
+045e:028e. The overlay disconnects the controller for half a second around a switch (patch 2423 tells the windows), so a
+game that looks for controllers again sees the new one. The switch is logged once per kind. Not run on a console.
+---
+ dlls/xinput1_3/main.c    | 15 +++++++++++++++
+ dlls/xinput1_3/unixlib.c | 11 +++++++++++
+ dlls/xinput1_3/unixlib.h |  1 +
+ 3 files changed, 27 insertions(+)
+
+diff --git a/dlls/xinput1_3/main.c b/dlls/xinput1_3/main.c
+index 283cddf..59f545c 100644
+--- a/dlls/xinput1_3/main.c
++++ b/dlls/xinput1_3/main.c
+@@ -156,10 +156,25 @@ static BOOL has_title_pad(void)
+     return title_pad != 0;
+ }
+ 
++/* The kind the title's control overlay switched to, live (patch 2471): it wins over WINE_PS5_CONTROLLER once set. The
++ * overlay disconnects the controller around a switch, so a game sees it go and come back as the new kind. */
++static void title_pad_kind(void)
++{
++    static LONG said = -1;
++    INT32 kind = -1;
++
++    if (__wine_unix_call(title_pad, unix_pad_kind, &kind) || kind < 0 || kind > 2) return;
++    title_pad_hidden = kind == 2;
++    title_pad_product = kind == 1 ? 0x02ea : 0x028e;
++    if (InterlockedExchange(&said, kind) != kind)
++        ERR("pad-path xinput: controller 0 switched to %s\n", kind == 2 ? "the DualSense (hidden)" : kind == 1 ? "045e:02ea" : "045e:028e");
++}
++
+ static BOOL title_pad_state(DWORD index, XINPUT_STATE *state)
+ {
+     struct xinput_pad_state pad = {0};
+ 
++    if (!index) title_pad_kind();
+     if (index || title_pad_hidden || __wine_unix_call(title_pad, unix_pad_state, &pad) || !pad.connected) return FALSE;
+     memset(state, 0, sizeof(*state));
+     state->dwPacketNumber = pad.packet;
+diff --git a/dlls/xinput1_3/unixlib.c b/dlls/xinput1_3/unixlib.c
+index 54488c8..389e478 100644
+--- a/dlls/xinput1_3/unixlib.c
++++ b/dlls/xinput1_3/unixlib.c
+@@ -39,11 +39,13 @@
+  * are missing and xinput uses HID. */
+ static int (*title_pad)( struct xinput_pad_state *state );
+ static void (*title_rumble)( UINT32 left, UINT32 right );
++static int (*title_kind)( void );
+ 
+ static NTSTATUS pad_init( void *args )
+ {
+     title_pad = dlsym( RTLD_DEFAULT, "pw_wine_pad" );
+     title_rumble = dlsym( RTLD_DEFAULT, "pw_wine_set_rumble" );
++    title_kind = dlsym( RTLD_DEFAULT, "pw_wine_pad_kind" );
+     return title_pad ? STATUS_SUCCESS : STATUS_NOT_SUPPORTED;
+ }
+ 
+@@ -65,11 +67,19 @@ static NTSTATUS pad_rumble( void *args )
+     return STATUS_SUCCESS;
+ }
+ 
++/* The controller kind the title's overlay set (0 Xbox 360, 1 Xbox One, 2 DualSense), -1 for none: an INT32 */
++static NTSTATUS pad_kind( void *args )
++{
++    *(INT32 *)args = title_kind ? title_kind() : -1;
++    return STATUS_SUCCESS;
++}
++
+ const unixlib_entry_t __wine_unix_call_funcs[] =
+ {
+     pad_init,
+     pad_state,
+     pad_rumble,
++    pad_kind,
+ };
+ 
+ C_ASSERT( ARRAYSIZE(__wine_unix_call_funcs) == unix_funcs_count );
+@@ -81,6 +91,7 @@ const unixlib_entry_t __wine_unix_call_wow64_funcs[] =
+     pad_init,
+     pad_state,
+     pad_rumble,
++    pad_kind,
+ };
+ 
+ C_ASSERT( ARRAYSIZE(__wine_unix_call_wow64_funcs) == unix_funcs_count );
+diff --git a/dlls/xinput1_3/unixlib.h b/dlls/xinput1_3/unixlib.h
+index b47d9cb..26897fd 100644
+--- a/dlls/xinput1_3/unixlib.h
++++ b/dlls/xinput1_3/unixlib.h
+@@ -49,6 +49,7 @@ enum xinput_unix_funcs
+     unix_pad_init,
+     unix_pad_state,
+     unix_pad_rumble,
++    unix_pad_kind,
+     unix_funcs_count,
+ };
+ 

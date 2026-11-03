@@ -418,7 +418,7 @@ class VulkanExample : public ps5ui::KitExample
 			settingsList.item(i).title = tr(rows[i][0]);
 			if (rows[i][1] != PW_TEXT_COUNT) settingsList.item(i).subtitle = tr(rows[i][1]);
 		}
-		const PwSetupText clicks[] = { PW_TEXT_SET_CLICK_LEFT, PW_TEXT_SET_CLICK_RIGHT, PW_TEXT_SET_CLICK_MIDDLE, PW_TEXT_SET_KEYBOARD,
+		const PwSetupText clicks[] = { PW_TEXT_SET_CLICK_LEFT, PW_TEXT_SET_CLICK_RIGHT, PW_TEXT_SET_CLICK_MIDDLE, PW_TEXT_SET_OVERLAY,
 			PW_TEXT_SET_RESTORE };
 		for (size_t i = 0; i < 5 && i < controlsList.items().size(); ++i) controlsList.item(i).title = tr(clicks[i]);
 		for (unsigned i = 0; i < PW_CONTROLS_BUTTONS && i < buttonList.items().size(); ++i) buttonList.item(i).title = buttonName(i);
@@ -753,8 +753,9 @@ class VulkanExample : public ps5ui::KitExample
 		page = Page::steamWarning;
 		feedback.play(hui::audio::Cue::error);
 		proton_say("steam memory: warned before %s: %u MiB in %u processes (payloads %u MiB in %u); Steam needs about %u MiB "
-			"more; the swap point is %u MiB", what, census.system_mib, census.processes, census.payload_mib, census.payload_count,
-			steamWarnNeed, PW_STEAM_SWAP_POINT_MIB);
+			"more; the swap point is %u MiB; system page tables %u free of %u%s (Steam needs %u)", what, census.system_mib,
+			census.processes, census.payload_mib, census.payload_count, steamWarnNeed, PW_STEAM_SWAP_POINT_MIB, census.tables_free,
+			census.tables_total, census.tables_known ? "" : " (no reading)", PW_STEAM_NEED_TABLES);
 		return true;
 	}
 
@@ -774,6 +775,7 @@ class VulkanExample : public ps5ui::KitExample
 		if (steamWarnSeconds < PW_STEAM_WARNING_HOLD_SECONDS) return;
 		feedback.play(hui::audio::Cue::saved);
 		proton_say("steam memory: the player held TRIANGLE %.0f s and went on", PW_STEAM_WARNING_HOLD_SECONDS);
+		if (FILE *go_on = fopen(PROTON_DATA_ROOT "/" PW_STEAM_TABLES_GO_ON, "w")) fclose(go_on);   // the next session's check
 		page = steamWarnFrom == SteamFrom::files ? Page::files : Page::library;
 		switch (steamWarnFrom) {
 		case SteamFrom::tile: pressSteam(); break;
@@ -851,8 +853,11 @@ class VulkanExample : public ps5ui::KitExample
 		} else {
 			name = "WINE_PS5_TITLE_GAMES", value = envWord(game, name) == "0" ? "" : "0";
 		}
-		// A scripted run previews (nothing written), as Settings' rows do
-		const std::string problem = ps5.frameBudget ? std::string() : proton_game_set_env(game, name, value);
+		// A scripted run previews (nothing written), as Settings' rows do, unless it tests the save itself
+		// (PROTON_OPTIONS_SAVE_TEST=1: tools/test-launcher-ui.py reads the game.json back)
+		const char *save_test = getenv("PROTON_OPTIONS_SAVE_TEST");
+		const bool preview = ps5.frameBudget && !(save_test && !strcmp(save_test, "1"));
+		const std::string problem = preview ? std::string() : proton_game_set_env(game, name, value);
 		if (!problem.empty()) {
 			optionsNote = home.fill(PW_TEXT_OPTIONS_NOT_SAVED, { problem }), optionsSaveFailed = true;
 			feedback.play(hui::audio::Cue::error);
@@ -866,7 +871,7 @@ class VulkanExample : public ps5ui::KitExample
 			if (entry.id == game.id) entry.env = game.env;
 		optionsNote = home.fill(PW_TEXT_OPTIONS_APPLIES, { game.name }), optionsSaveFailed = false;
 		feedback.play(hui::audio::Cue::saved);
-		proton_say("options: %s %s %s=%s", game.name.c_str(), ps5.frameBudget ? "preview" : "saved", name.c_str(),
+		proton_say("options: %s %s %s=%s", game.name.c_str(), preview ? "preview" : "saved", name.c_str(),
 			value.empty() ? "(as Settings)" : value.c_str());
 		syncOptions();
 	}
@@ -1455,8 +1460,12 @@ class VulkanExample : public ps5ui::KitExample
 			scene.circle(card.x + 86, card.y + 96, 34, look.warning);
 			hui::ui::text(scene, homeFonts.semibold, "!", card.x + 86, card.y + 110, 40, hui::gfx::Color::rgb(0xffffff), hui::gfx::Align::center);
 			HomeGrid::fitted(scene, homeFonts.semibold, tr(PW_TEXT_STEAM_MEM_TITLE), card.x + 140, card.y + 112, 46, card.w - 200, ink);
-			float y = home.paragraph(scene, homeFonts.regular, home.fill(PW_TEXT_STEAM_MEM_LINE, { std::to_string(steamWarnCensus.system_mib),
-				std::to_string(steamWarnNeed), std::to_string(PW_STEAM_SWAP_POINT_MIB) }), card.x + 70, card.y + 190, 27, card.w - 140, quiet) + 16;
+			const std::string line = pw_steam_tables_short(&steamWarnCensus)
+				? home.fill(PW_TEXT_STEAM_MEM_TABLES, { std::to_string(steamWarnCensus.tables_free),
+					std::to_string(steamWarnCensus.tables_total), std::to_string(PW_STEAM_NEED_TABLES) })
+				: home.fill(PW_TEXT_STEAM_MEM_LINE, { std::to_string(steamWarnCensus.system_mib), std::to_string(steamWarnNeed),
+					std::to_string(PW_STEAM_SWAP_POINT_MIB) });
+			float y = home.paragraph(scene, homeFonts.regular, line, card.x + 70, card.y + 190, 27, card.w - 140, quiet) + 16;
 			y = home.paragraph(scene, homeFonts.semibold, tr(PW_TEXT_STEAM_MEM_STEPS), card.x + 70, y, 27, card.w - 140, ink) + 10;
 			std::vector<PwSetupText> steps = { PW_TEXT_STEAM_MEM_STEP_CLOSE, PW_TEXT_STEAM_MEM_STEP_RESTART,
 				steamWarnSignedIn ? PW_TEXT_STEAM_MEM_STEP_OPEN : PW_TEXT_STEAM_MEM_STEP_INSTALL };
@@ -1728,7 +1737,7 @@ class VulkanExample : public ps5ui::KitExample
 				  { hui::ui::Button::circle, tr(PW_TEXT_HINT_BACK) } }, 120, 1040);
 		} else if (configuring) {
 			const bool keyboardRow = page == Page::controls && controlsList.focus() == 3;
-			paint.heading(tr(keyboardRow ? PW_TEXT_SET_KEYBOARD : PW_TEXT_SET_MOUSE_TITLE), 1240, y, 38, look.text);
+			paint.heading(tr(keyboardRow ? PW_TEXT_SET_OVERLAY : PW_TEXT_SET_MOUSE_TITLE), 1240, y, 38, look.text);
 			y += 65;
 			paragraph(paint, tr(keyboardRow ? PW_TEXT_SET_KEYBOARD_BODY : PW_TEXT_SET_MOUSE_BODY), 1240, y, 24, look.text_muted);
 			y += 30;
@@ -2073,6 +2082,23 @@ public:
 		filesList.style.panel = optionsList.style.panel = false;   // on the menu's own milk-glass panel
 		syncThemes();
 		proton_say("launcher UI: %zu themes, active=%s", themes.items().size(), theme().id);
+		// A Steam session that ended for want of page tables (native/proton_wine.cpp) left its figures: the warning shows them
+		if (FILE *note = fopen(PROTON_DATA_ROOT "/" PW_STEAM_TABLES_SHORT, "r")) {
+			char text[64] = {};
+			(void)!fgets(text, sizeof(text), note);
+			fclose(note);
+			remove(PROTON_DATA_ROOT "/" PW_STEAM_TABLES_SHORT);
+			PwSteamCensus noted{};
+			if (pw_steam_tables_parse(text, &noted)) {
+				steamWarnFrom = SteamFrom::tile, steamWarnCensus = noted;
+				steamWarnSignedIn = proton_steam_step(store) == PW_STEAM_STEP_SIGNED_IN;
+				steamWarnNeed = pw_steam_memory_need(steamWarnSignedIn);
+				steamWarnSeconds = 0.0f, steamWarnArmed = false;
+				page = Page::steamWarning;
+				proton_say("steam memory: Steam ended at its start with %u of %u system page tables free (it needs about %u)",
+					noted.tables_free, noted.tables_total, PW_STEAM_NEED_TABLES);
+			}
+		}
 		home.load(kit, getAssetPath());
 		if (!makeSky(homeSky)) proton_say("home: the sky's pipeline failed; the gloss look's backdrop stands in");
 		// A passing checklist shows at every start from the home screen (cycle 0); a return from a game and a test run's

@@ -11,6 +11,33 @@ static pthread_rwlock_t cwd_lock = PTHREAD_RWLOCK_INITIALIZER;
 static char cwd[PW_CWD_PATH_MAX] = "/";
 static char *fd_paths[PW_CWD_MAX_FDS];
 
+/* The guard around the lock (pw_cwd_set_guard); none until set. Every path call reads under the lock with signals open
+ * and close() writes under it (pw_cwd_forget): a thread suspended holding it stopped a close inside Wine's merged-write
+ * lock, whose own suspend then never landed (suspend-server64-title, a8final-base-2026-11-02). */
+static void (*guard_enter)(void), (*guard_leave)(void);
+
+void pw_cwd_set_guard(void (*enter)(void), void (*leave)(void))
+{
+    guard_leave = leave;
+    guard_enter = enter;
+}
+
+static void lock_cwd(int write)
+{
+    if (guard_enter) guard_enter();
+    if (write) pthread_rwlock_wrlock(&cwd_lock);
+    else pthread_rwlock_rdlock(&cwd_lock);
+}
+
+static void unlock_cwd(void)
+{
+    int saved = errno;   /* a suspend that landed meanwhile runs in the leave */
+
+    pthread_rwlock_unlock(&cwd_lock);
+    if (guard_leave) guard_leave();
+    errno = saved;
+}
+
 static int copy_out(const char *text, size_t length, char *out, size_t size)
 {
     if (length >= size) { errno = ENAMETOOLONG; return -1; }
@@ -23,10 +50,10 @@ size_t pw_cwd_get(char *out, size_t size)
 {
     size_t length;
 
-    pthread_rwlock_rdlock(&cwd_lock);
+    lock_cwd(0);
     length = strlen(cwd);
     if (copy_out(cwd, length, out, size)) length = 0;
-    pthread_rwlock_unlock(&cwd_lock);
+    unlock_cwd();
     return length;
 }
 
@@ -65,9 +92,9 @@ int pw_cwd_set(const char *absolute)
     char folded[PW_CWD_PATH_MAX];
 
     if (pw_cwd_fold(absolute, folded, sizeof(folded))) return -1;
-    pthread_rwlock_wrlock(&cwd_lock);
+    lock_cwd(1);
     memcpy(cwd, folded, strlen(folded) + 1);
-    pthread_rwlock_unlock(&cwd_lock);
+    unlock_cwd();
     return 0;
 }
 
@@ -91,9 +118,9 @@ int pw_cwd_join(const char *base, const char *path, char *out, size_t size)
     if (path[0] == '/') return copy_out(path, strlen(path), out, size);
     if (!path[0]) { errno = ENOENT; return -1; }
     if (base) return join_locked(base, path, out, size);
-    pthread_rwlock_rdlock(&cwd_lock);
+    lock_cwd(0);
     status = join_locked(cwd, path, out, size);
-    pthread_rwlock_unlock(&cwd_lock);
+    unlock_cwd();
     return status;
 }
 
@@ -103,10 +130,10 @@ void pw_cwd_track(int fd, const char *absolute)
 
     if (fd < 0 || fd >= PW_CWD_MAX_FDS || !absolute || absolute[0] != '/') return;
     copy = strdup(absolute);
-    pthread_rwlock_wrlock(&cwd_lock);
+    lock_cwd(1);
     free(fd_paths[fd]);
     fd_paths[fd] = copy;           /* NULL when out of memory: untracked */
-    pthread_rwlock_unlock(&cwd_lock);
+    unlock_cwd();
 }
 
 void pw_cwd_forget(int fd)
@@ -114,10 +141,10 @@ void pw_cwd_forget(int fd)
     char *old;
 
     if (fd < 0 || fd >= PW_CWD_MAX_FDS) return;
-    pthread_rwlock_wrlock(&cwd_lock);
+    lock_cwd(1);
     old = fd_paths[fd];
     fd_paths[fd] = NULL;
-    pthread_rwlock_unlock(&cwd_lock);
+    unlock_cwd();
     free(old);
 }
 
@@ -126,9 +153,9 @@ int pw_cwd_fd_path(int fd, char *out, size_t size)
     int status = -1;
 
     if (fd < 0 || fd >= PW_CWD_MAX_FDS) return -1;
-    pthread_rwlock_rdlock(&cwd_lock);
+    lock_cwd(0);
     if (fd_paths[fd]) status = copy_out(fd_paths[fd], strlen(fd_paths[fd]), out, size);
-    pthread_rwlock_unlock(&cwd_lock);
+    unlock_cwd();
     return status;
 }
 
@@ -140,9 +167,9 @@ int pw_cwd_resolve_at(int dirfd, int at_fdcwd, const char *path, char *out, size
     if (path[0] == '/' || dirfd == at_fdcwd) return pw_cwd_join(NULL, path, out, size);
     if (!path[0]) { errno = ENOENT; return -1; }
     if (dirfd < 0 || dirfd >= PW_CWD_MAX_FDS) { errno = EBADF; return -1; }
-    pthread_rwlock_rdlock(&cwd_lock);
+    lock_cwd(0);
     status = fd_paths[dirfd] ? join_locked(fd_paths[dirfd], path, out, size) : -2;
-    pthread_rwlock_unlock(&cwd_lock);
+    unlock_cwd();
     if (status == -2) { errno = EBADF; status = -1; }
     return status;
 }
@@ -185,7 +212,7 @@ int pw_cwd_link_add(const char *absolute, const char *target)
     if (!strcmp(folded, "/") || strpbrk(folded, "\t\n")) { errno = EINVAL; return -1; }
     path = strdup(folded);
     copy = strdup(target);
-    pthread_rwlock_wrlock(&cwd_lock);
+    lock_cwd(1);
     if (!path || !copy) { errno = ENOMEM; status = -1; }
     else if (find_link_locked(folded) >= 0) { errno = EEXIST; status = -1; }
     else if (link_count == PW_CWD_MAX_LINKS) { errno = ENOSPC; status = -1; }
@@ -194,7 +221,7 @@ int pw_cwd_link_add(const char *absolute, const char *target)
         links[link_count++].target = copy;
         path = copy = NULL;
     }
-    pthread_rwlock_unlock(&cwd_lock);
+    unlock_cwd();
     free(path);
     free(copy);
     return status;
@@ -207,13 +234,13 @@ int pw_cwd_link_remove(const char *absolute)
     int i;
 
     if (pw_cwd_fold(absolute, folded, sizeof(folded))) return -1;
-    pthread_rwlock_wrlock(&cwd_lock);
+    lock_cwd(1);
     if ((i = find_link_locked(folded)) >= 0) {
         path = links[i].path;
         target = links[i].target;
         links[i] = links[--link_count];
     }
-    pthread_rwlock_unlock(&cwd_lock);
+    unlock_cwd();
     if (i < 0) { errno = ENOENT; return -1; }
     free(path);
     free(target);
@@ -227,13 +254,13 @@ ssize_t pw_cwd_link_target(const char *absolute, char *out, size_t size)
     int i;
 
     if (pw_cwd_fold(absolute, folded, sizeof(folded))) return -1;
-    pthread_rwlock_rdlock(&cwd_lock);
+    lock_cwd(0);
     if ((i = find_link_locked(folded)) >= 0) {
         length = (ssize_t)strlen(links[i].target);
         if ((size_t)length > size) length = (ssize_t)size;   /* readlink() truncates */
         memcpy(out, links[i].target, (size_t)length);
     }
-    pthread_rwlock_unlock(&cwd_lock);
+    unlock_cwd();
     if (i < 0) errno = EINVAL;
     return length;
 }
@@ -249,9 +276,9 @@ int pw_cwd_follow(const char *absolute, int follow_last, char *out, size_t size)
     const char *p;
 
     if (!absolute || absolute[0] != '/') { errno = EINVAL; return -1; }
-    pthread_rwlock_rdlock(&cwd_lock);
+    lock_cwd(0);
     if (!link_count || copy_out(absolute, strlen(absolute), todo, sizeof(todo))) {
-        pthread_rwlock_unlock(&cwd_lock);
+        unlock_cwd();
         return copy_out(absolute, strlen(absolute), out, size);
     }
     done[0] = 0;
@@ -298,7 +325,7 @@ int pw_cwd_follow(const char *absolute, int follow_last, char *out, size_t size)
             done[used] = 0;
         }
     }
-    pthread_rwlock_unlock(&cwd_lock);
+    unlock_cwd();
     if (status) return -1;
     /* No link on the way: the path goes to the kernel as it came. */
     if (!hops) return copy_out(absolute, strlen(absolute), out, size);
@@ -319,12 +346,12 @@ int pw_cwd_probe_directory(const char *absolute)
     size_t slot = hash_path(absolute) % PW_CWD_MAX_PROBED, tries;
     int needed = 1;
 
-    pthread_rwlock_wrlock(&cwd_lock);
+    lock_cwd(1);
     for (tries = 0; tries < PW_CWD_MAX_PROBED; tries++, slot = (slot + 1) % PW_CWD_MAX_PROBED) {
         if (!probed[slot]) { probed[slot] = strdup(absolute); break; }  /* NULL: probe again */
         if (!strcmp(probed[slot], absolute)) { needed = 0; break; }
     }
-    pthread_rwlock_unlock(&cwd_lock);
+    unlock_cwd();
     return needed;
 }
 
@@ -333,7 +360,7 @@ ssize_t pw_cwd_links_format(const char *directory, char *out, size_t size)
     size_t used = 0, i, length = strlen(directory);
     int status = 0;
 
-    pthread_rwlock_rdlock(&cwd_lock);
+    lock_cwd(0);
     for (i = 0; i < link_count && !status; i++) {
         const char *name = links[i].path + parent_length(links[i].path);
         size_t name_length, target_length = strlen(links[i].target);
@@ -349,7 +376,7 @@ ssize_t pw_cwd_links_format(const char *directory, char *out, size_t size)
         out[used + name_length + 1 + target_length] = '\n';
         used += name_length + target_length + 2;
     }
-    pthread_rwlock_unlock(&cwd_lock);
+    unlock_cwd();
     if (status) return -1;
     out[used] = 0;
     return (ssize_t)used;

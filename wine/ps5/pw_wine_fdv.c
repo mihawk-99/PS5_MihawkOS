@@ -33,29 +33,43 @@ static const struct ps5_fdv_ops ops = {
     ops_open, ops_close, ops_dup2, ops_lseek, ops_fstat, ops_placeholder, ops_log,
 };
 
-static int api_enter(int fd, uint32_t *pin) { return ps5_fdv_enter(fd, pin); }
-static void api_leave(uint32_t pin) { ps5_fdv_leave(pin); }
-static int api_sending(int fd, uint32_t *pin) { return ps5_fdv_sending(fd, pin); }
-static void api_sent(uint32_t pin, int delivered) { ps5_fdv_sent(pin, delivered); }
-static int api_received(int fd) { return ps5_fdv_received(fd); }
-static void api_dup_note(int from, int to) { ps5_fdv_dup_note(from, to); }
-static void api_forget(int fd) { ps5_fdv_forget(fd); }
-static void api_keep(uint32_t pin) { ps5_fdv_keep(pin); }
-static void api_renamed(const char *from, const char *to) { ps5_fdv_renamed(from, to); }
+/* The budget's one mutex (ps5platform fdv.c) is taken with signals open on every descriptor call. A thread suspended
+ * holding it (a minidump's SuspendThread) stopped the next thread that pinned a file inside a guarded section (Wine's
+ * merged writes, 2454), and that thread's own suspend, waiting for the section to end, never landed: the suspending
+ * thread waited for its context forever (suspend-server64-title, cf-base-2026-11-02-01). So no suspend lands inside the
+ * budget, the heap's rule (pw_ntsync_critical_enter, src/pw_ntsync.c); the kernel call between enter and leave stays
+ * open. */
+extern void pw_ntsync_critical_enter(void);
+extern void pw_ntsync_critical_leave(void);
+/* errno survives the leave: a suspend that landed meanwhile runs there */
+#define GUARDED(call) do { int saved_; pw_ntsync_critical_enter(); call; saved_ = errno; pw_ntsync_critical_leave(); \
+                           errno = saved_; } while (0)
+
+static int api_enter(int fd, uint32_t *pin) { int r; GUARDED(r = ps5_fdv_enter(fd, pin)); return r; }
+static void api_leave(uint32_t pin) { GUARDED(ps5_fdv_leave(pin)); }
+static int api_sending(int fd, uint32_t *pin) { int r; GUARDED(r = ps5_fdv_sending(fd, pin)); return r; }
+static void api_sent(uint32_t pin, int delivered) { GUARDED(ps5_fdv_sent(pin, delivered)); }
+static int api_received(int fd) { int r; GUARDED(r = ps5_fdv_received(fd)); return r; }
+static void api_dup_note(int from, int to) { GUARDED(ps5_fdv_dup_note(from, to)); }
+static void api_forget(int fd) { GUARDED(ps5_fdv_forget(fd)); }
+static void api_keep(uint32_t pin) { GUARDED(ps5_fdv_keep(pin)); }
+static void api_renamed(const char *from, const char *to) { GUARDED(ps5_fdv_renamed(from, to)); }
+static int api_close(int fd) { int r; GUARDED(r = ps5_fdv_close(fd)); return r; }
 /* A full descriptor table (EMFILE from dup, fcntl or open): parking makes room under the 249-file budget, but a parked
  * file keeps its slot (a placeholder socket), so the table itself gains only when something closes. The shared code
  * copies are what can: files come first (pw_wine_codeshare.h, a tester's store-client download, 2026-10-31). */
 enum { RELEASE_BATCH = 64 };
-static unsigned api_make_room(void) { return ps5_fdv_make_room() + pw_wine_codeshare_release(RELEASE_BATCH); }
+static unsigned api_make_room(void) { unsigned r; GUARDED(r = ps5_fdv_make_room()); return r + pw_wine_codeshare_release(RELEASE_BATCH); }
 static int api_open(const char *path, int flags, mode_t mode)
 {
-    int fd = ps5_fdv_open(path, flags, mode);
-    if (fd < 0 && errno == EMFILE && pw_wine_codeshare_release(RELEASE_BATCH)) fd = ps5_fdv_open(path, flags, mode);
+    int fd;
+    GUARDED(fd = ps5_fdv_open(path, flags, mode));
+    if (fd < 0 && errno == EMFILE && pw_wine_codeshare_release(RELEASE_BATCH)) GUARDED(fd = ps5_fdv_open(path, flags, mode));
     return fd;
 }
 
 static const struct pw_wine_fdv table = {
-    api_open, ps5_fdv_close, api_enter, api_leave, api_sending, api_sent, api_received,
+    api_open, api_close, api_enter, api_leave, api_sending, api_sent, api_received,
     api_dup_note, api_forget, api_keep, api_renamed, api_make_room,
 };
 

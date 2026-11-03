@@ -23,6 +23,7 @@ enum {
     PW_VM_PROTS = 4, PW_VM_SIZES = 4,   /* flexible_kind: r / rw / rx / other by <64 KiB / <1 MiB / <8 MiB / more */
     PW_VM_CLASS_FLEXIBLE = 0, PW_VM_CLASS_DIRECT = 1, PW_VM_CLASS_RESERVED = 2, PW_VM_CLASSES = 3,   /* a mapping's class, below */
     PW_VM_WALK_LIMIT = 65536,     /* mappings walked at most; a walk that reaches it says so */
+    PW_VM_FILLS = 5,              /* a 2 MiB region's accessible bytes: <64 KiB, <256 KiB, <1 MiB, <2 MiB, all of it */
 };
 
 /* One record's fields. */
@@ -89,6 +90,15 @@ typedef struct PwVmCensus {
                                                                             * window a mapping starts in */
     unsigned window_count;
     uint64_t window_other;       /* regions in windows past the PW_VM_WINDOWS kept */
+    /* How full each touched 2 MiB region is (Alpha 8, Steam's page tables on 10.xx-11.xx): its accessible bytes by
+     * PW_VM_FILLS class, and of them the regions a reservation (protection 0) shares, i.e. pages a program committed
+     * inside its own larger reservation, which no placement can pack. accessible: every accessible byte, so
+     * accessible / 2 MiB is what the same memory would take packed. */
+    uint64_t fill[PW_VM_FILLS], fill_reserved[PW_VM_FILLS];
+    uint64_t accessible;
+    uint64_t fill_region;        /* the walk's current region, and its accessible and reserved bytes so far */
+    uint64_t fill_accessible, fill_reserved_bytes;
+    int fill_open;
     int truncated;               /* the walk stopped at PW_VM_WALK_LIMIT */
     int failed;                  /* the walk stopped at a query that failed */
 } PwVmCensus;
@@ -122,6 +132,9 @@ size_t pw_vm_census_format_flexbig(const PwVmCensus *census, char *out, size_t s
 size_t pw_vm_census_format_flexible(const PwVmCensus *census, char *out, size_t size);
 /* "name:flags=regions/mappings ..." for the n groups that brought the most 2 MiB regions, most first, into out. */
 size_t pw_vm_census_format_regions(const PwVmCensus *census, unsigned n, char *out, size_t size);
+/* "regions=N fill <64K=a/r <256K=... <1M=... <2M=... full=...; accessible MiB packed ~P": each fill class's regions and,
+ * after the slash, how many of them a reservation shares, into out (PwVmCensus.fill). */
+size_t pw_vm_census_format_fill(const PwVmCensus *census, char *out, size_t size);
 /* "0xGIB=regions/MiB ..." for the n 1 GiB windows of the address space that brought the most 2 MiB regions, most first, then
  * "+N" for the rest, into out: whether a process's page tables come from a few dense areas or scattered ones. */
 size_t pw_vm_census_format_windows(const PwVmCensus *census, unsigned n, char *out, size_t size);

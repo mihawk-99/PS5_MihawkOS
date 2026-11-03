@@ -983,6 +983,36 @@ static void far_chunks(void)
     assert(!pw_ntsync_release(back));
 }
 
+/* Another lock's critical section (Wine's heap, pw_ntsync_critical_enter): a signal that lands inside waits for the
+ * last leave, nested sections count, and outside one runs at once. A thread suspended holding the heap's mutex
+ * stopped every other thread's next malloc (a8-rel-base-2026-11-02 suspend-server64). */
+static volatile int critical_handled;
+static void critical_signal(int signal)
+{
+    if (pw_ntsync_signal_deferred(signal)) return;
+    critical_handled++;
+}
+
+static void critical_sections(void)
+{
+    struct sigaction action = {.sa_handler = critical_signal}, old;
+    sigemptyset(&action.sa_mask);
+    assert(!sigaction(SIGUSR1, &action, &old));
+    critical_handled = 0;
+    pw_ntsync_critical_enter();
+    pw_ntsync_critical_enter();
+    assert(!pthread_kill(pthread_self(), SIGUSR1) && critical_handled == 0);   /* to itself: delivered before it returns */
+    pw_ntsync_critical_leave();
+    assert(critical_handled == 0);
+    pw_ntsync_critical_leave();
+    assert(critical_handled == 1);
+    assert(!pthread_kill(pthread_self(), SIGUSR1) && critical_handled == 2);
+    pw_ntsync_critical_leave();   /* one leave too many changes nothing */
+    assert(!pthread_kill(pthread_self(), SIGUSR1) && critical_handled == 3);
+    assert(!sigaction(SIGUSR1, &old, NULL));
+    puts("critical sections: a signal inside waits for the last leave");
+}
+
 int main(int argc, char **argv)
 {
     char name[64];
@@ -1010,6 +1040,7 @@ int main(int argc, char **argv)
     round_trips();
     processes();
     far_chunks();
+    critical_sections();
     if (!getenv("PW_NTSYNC_TEST_CHUNKS")) {
         /* The whole suite again, with every child mapping the objects in chunks as a helper does. */
         const pid_t pid = fork();

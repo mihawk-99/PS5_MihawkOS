@@ -3,6 +3,8 @@
 #include "pw_steam_screen.h"
 #include "pw_loading_art.h"
 #include "pw_vkbd.h"
+#include "pw_overlay.h"
+#include "pw_controller.h"
 
 #include <math.h>
 #include <stdio.h>
@@ -739,6 +741,300 @@ static void draw_keyboard(const Ctx *ctx, const PwVkbd *kbd)
     keyboard_region(ctx, kbd, 0, PW_VKBD_PANEL_Y, W, PW_VKBD_PANEL_Y + PW_VKBD_PANEL_H);
 }
 
+/* ---- The control overlay (src/pw_overlay.h): kabuki-ps5's layout (ideas only) in the keyboard's Frosted Meadow glass. One
+ * see-through panel down the right of the screen, x 1032..1920, which the broker blurs the game under and lets bubbles rise
+ * in (its left 165 px and the rail's strip); on it the rail of round glass buttons at the edge, and the focused button's
+ * card beside it. Drawn whole on each change (a few presses a second, and the Statistics card twice a second; shortcut:
+ * no cached base as the keyboard's, add one if a change is seen to lag on the console). ---- */
+
+/* One line centred on cx, made smaller (to 70 %) if it is wider than width */
+static void centred_line(const Ctx *ctx, int semibold, float pixels, const char *text, float cx, float y, float width,
+                         uint32_t color)
+{
+    Pen p = pen(ctx, semibold, pixels);
+    float w = measure(&p, text, strlen(text));
+    if (w > width) {
+        p.pixels = fmaxf(pixels * 0.7f, pixels * width / w);
+        w = measure(&p, text, strlen(text));
+    }
+    reached(ctx, y + p.pixels * 0.3f, w > width + 0.5f, draw(ctx->canvas, &p, text, strlen(text), cx - w / 2, y, color, 1.0f));
+}
+
+/* The panel's glass from nothing: the keyboard slab's colours down the screen, a sheen and a white rim on its left edge,
+ * and the meadow along the bottom */
+static void overlay_backdrop(uint32_t *canvas)
+{
+    const float *top = meadow_top();
+    for (int y = 0; y < H; ++y) {
+        const float t = (float)y / H;
+        const uint32_t slab = mix(rgb(228, 243, 255), rgb(206, 232, 252), t);
+        const uint32_t green = mix(rgb(184, 242, 90), rgb(70, 170, 40), (y - 990) / 90.0f);
+        const float green_alpha = 0.42f + (0.55f - 0.42f) * clampf((y - 990) / 90.0f, 0, 1);
+        for (int x = PW_OVERLAY_PANEL_X; x < W; ++x) {
+            const int dx = x - PW_OVERLAY_PANEL_X;
+            canvas[(size_t)y * W + x] = 0;
+            blend(canvas, x, y, slab, 0.42f + (0.55f - 0.42f) * t);
+            if (dx < 150) blend(canvas, x, y, 0xffffffffu, 0.45f * (1 - dx / 150.0f));
+            if (dx < 2) blend(canvas, x, y, 0xffffffffu, 0.95f);
+            const float cover = clampf(y + 1.0f - top[x], 0, 1);
+            if (cover > 0) blend(canvas, x, y, green, green_alpha * cover);
+        }
+    }
+}
+
+/* A button's picture, line drawn, size about 2 * r: Exit a door with an arrow out, Statistics three bars, the keyboard
+ * its keys, the mouse its shape (struck through when it is off) */
+static void overlay_icon(uint32_t *canvas, int which, float cx, float cy, float r, uint32_t ink, int off)
+{
+    const float w = r > 20 ? 3.0f : 2.5f;
+    switch (which) {
+    case PW_OVERLAY_EXIT:
+        line(canvas, cx - r * 0.2f, cy - r * 0.8f, cx - r * 0.8f, cy - r * 0.8f, w, ink);
+        line(canvas, cx - r * 0.8f, cy - r * 0.8f, cx - r * 0.8f, cy + r * 0.8f, w, ink);
+        line(canvas, cx - r * 0.8f, cy + r * 0.8f, cx - r * 0.2f, cy + r * 0.8f, w, ink);
+        line(canvas, cx - r * 0.3f, cy, cx + r * 0.8f, cy, w, ink);
+        line(canvas, cx + r * 0.8f, cy, cx + r * 0.4f, cy - r * 0.4f, w, ink);
+        line(canvas, cx + r * 0.8f, cy, cx + r * 0.4f, cy + r * 0.4f, w, ink);
+        break;
+    case PW_OVERLAY_STATS:
+        for (int i = 0; i < 3; ++i) {
+            const float x = cx + (i - 1) * r * 0.6f, h = r * (0.6f + 0.5f * (i == 1) + 0.25f * (i == 2));
+            fill_rounded(canvas, x - r * 0.18f, cy + r * 0.8f - h * 1.2f, x + r * 0.18f, cy + r * 0.8f, 2, ink, 1, 1, 1.0f);
+        }
+        break;
+    case PW_OVERLAY_KEYBOARD:
+        ring_rounded(canvas, cx - r * 0.95f, cy - r * 0.6f, cx + r * 0.95f, cy + r * 0.6f, r * 0.15f, ink, 1, w);
+        for (int row = 0; row < 2; ++row)
+            for (int k = 0; k < 4; ++k)
+                disc(canvas, cx + (k - 1.5f) * r * 0.42f, cy - r * 0.22f + row * r * 0.3f, r * 0.08f, ink, 1);
+        line(canvas, cx - r * 0.45f, cy + r * 0.35f, cx + r * 0.45f, cy + r * 0.35f, w, ink);
+        break;
+    case PW_OVERLAY_MOUSE:
+        ring_rounded(canvas, cx - r * 0.5f, cy - r * 0.85f, cx + r * 0.5f, cy + r * 0.85f, r * 0.5f, ink, 1, w);
+        line(canvas, cx, cy - r * 0.85f, cx, cy - r * 0.25f, w, ink);
+        line(canvas, cx - r * 0.5f, cy - r * 0.25f, cx + r * 0.5f, cy - r * 0.25f, w, ink);
+        if (off) line(canvas, cx - r * 0.9f, cy + r * 0.9f, cx + r * 0.9f, cy - r * 0.9f, w + 1, rgb(0xe8, 0x41, 0x2c));
+        break;
+    case PW_OVERLAY_CONTROLLER:   /* a pad: its body, the D-pad's cross, two face buttons */
+        ring_rounded(canvas, cx - r, cy - r * 0.5f, cx + r, cy + r * 0.55f, r * 0.45f, ink, 1, w);
+        line(canvas, cx - r * 0.62f, cy, cx - r * 0.22f, cy, w, ink);
+        line(canvas, cx - r * 0.42f, cy - r * 0.2f, cx - r * 0.42f, cy + r * 0.2f, w, ink);
+        disc(canvas, cx + r * 0.32f, cy + r * 0.08f, r * 0.11f, ink, 1);
+        disc(canvas, cx + r * 0.56f, cy - r * 0.12f, r * 0.11f, ink, 1);
+        break;
+    }
+}
+
+/* The focus's blue glass, or the keys' white glass, over a rounded rectangle */
+static void glass_face(uint32_t *canvas, float x0, float y0, float x1, float y1, float r, int focus)
+{
+    const PwVkbdKey key = {PW_VKBD_CHAR, "", x0, y0, x1 - x0, y1 - y0};
+    if (focus) {
+        fill_rounded(canvas, x0 - 6, y0 - 6, x1 + 6, y1 + 6, r + 6, rgb(80, 205, 255), 0.9f, 0.9f, 30.0f);   /* the glow */
+        band(canvas, x0, y0, x1, y1, r, 0, 0.5f, rgb(0x9b, 0xe8, 0xff), 1, rgb(0x2a, 0xa3, 0xee), 1);
+        band(canvas, x0, y0, x1, y1, r, 0.5f, 1, rgb(0x2a, 0xa3, 0xee), 1, rgb(0x0b, 0x5f, 0xc4), 1);
+    } else {
+        band(canvas, x0, y0, x1, y1, r, 0, 1, 0xffffffffu, 0.9f, rgb(228, 241, 252), 0.84f);
+    }
+    if (r <= 16) { glass(canvas, &key, focus ? 2.5f : 1.5f); return; }
+    band(canvas, x0, y0, x1, y1, r, 0, 0.48f, 0xffffffffu, focus ? 0.55f : 0.9f, 0xffffffffu, 0.1f);   /* the gloss */
+    ring_rounded(canvas, x0 - 1, y0 - 1, x1 + 1, y1 + 1, r + 1, rgb(90, 145, 205), 0.55f, 1.0f);
+    ring_rounded(canvas, x0, y0, x1, y1, r, 0xffffffffu, focus ? 1.0f : 0.95f, focus ? 2.5f : 1.5f);
+}
+
+/* On (Aero green) or Off (grey), its right end at right, centred on cy */
+static void on_off(const Ctx *ctx, int on, float right, float cy)
+{
+    uint32_t *canvas = ctx->canvas;
+    const char *word = say(ctx, on ? PW_TEXT_OVERLAY_ON : PW_TEXT_SET_KEYBOARD_OFF);
+    const Pen p = pen(ctx, 1, 24);
+    const float w = fminf(measure(&p, word, strlen(word)), 140), x0 = right - w - 44, y0 = cy - 20, y1 = cy + 20;
+    if (on) {
+        band(canvas, x0, y0, right, y1, 20, 0, 0.5f, rgb(0xc6, 0xf5, 0x6e), 1, rgb(0x5c, 0xc2, 0x2a), 1);
+        band(canvas, x0, y0, right, y1, 20, 0.5f, 1, rgb(0x5c, 0xc2, 0x2a), 1, rgb(0x23, 0x86, 0x1a), 1);
+    } else {
+        fill_rounded(canvas, x0, y0, right, y1, 20, rgb(150, 165, 185), 0.9f, 0.9f, 1.0f);
+    }
+    ring_rounded(canvas, x0, y0, right, y1, 20, 0xffffffffu, 0.9f, 1.5f);
+    centred_line(ctx, 1, 24, word, (x0 + right) / 2, cy + 9, 140, 0xffffffffu);
+}
+
+/* The HUD's lines from line `first`, each `step` apart from the baseline y, the pools with their bars at bar_right */
+static void hud_rows(const Ctx *ctx, const PwHud *hud, int first, float x, float y, float step, float pixels, float width,
+                     float bar_right)
+{
+    char text[PW_HUD_LINE];
+    for (int i = first; i < PW_HUD_LINES; ++i, y += step) {
+        pw_hud_line(hud, i, text, sizeof(text));
+        text_line(ctx, 0, pixels, text, x, y, i >= 4 ? width - 150 : width, KEY_INK);
+        const int total = i == 4 ? hud->small_total : hud->big_total, free_count = i == 4 ? hud->small_free : hud->big_free;
+        if (i < 4 || total <= 0) continue;
+        /* how full, green, then amber near the guard's close, red near its end */
+        static const uint32_t colours[] = {0xff5cc22au, 0xffffb020u, 0xffe8412cu};
+        const float bx0 = bar_right - 132, by = y - pixels * 0.35f;
+        fill_rounded(ctx->canvas, bx0, by - 5, bar_right, by + 5, 5, 0xffffffffu, 0.7f, 0.7f, 1.0f);
+        const float used = clampf((float)(total - free_count) / total, 0, 1);
+        if (used > 0) fill_rounded(ctx->canvas, bx0, by - 5, bx0 + fmaxf(10, (bar_right - bx0) * used), by + 5, 5,
+                                   colours[pw_hud_pool_level(free_count, total)], 1, 1, 1.0f);
+    }
+}
+
+/* The frame-time graph inside (x0, y0)-(x1, y1): one bar a sample, a faint line at 16.7 ms */
+static void hud_graph(uint32_t *canvas, const PwHud *hud, float x0, float y0, float x1, float y1)
+{
+    const float bar = (x1 - x0) / PW_HUD_GRAPH, top = pw_hud_graph_top(hud);
+    fill_rounded(canvas, x0 - 4, y0 - 2, x1 + 4, y1 + 2, 6, 0xffffffffu, 0.45f, 0.45f, 1.0f);
+    for (unsigned i = 0; i < hud->graph_count; ++i) {
+        const unsigned at = hud->graph_count < PW_HUD_GRAPH ? i : (hud->graph_next + i) % PW_HUD_GRAPH;
+        const float h = fminf(hud->frame_ms[at] / top, 1) * (y1 - y0), bx = x0 + i * bar;
+        for (int y = (int)(y1 - h); y < (int)y1; ++y)
+            for (int x = (int)bx; x < (int)(bx + bar - 1); ++x) blend(canvas, x, y, rgb(0x2a, 0xa3, 0xee), 0.95f);
+    }
+    const float line60 = y1 - (1000.0f / 60 / top) * (y1 - y0);
+    line(canvas, x0, line60, x1, line60, 1.0f, rgb(0x23, 0x86, 0x1a));
+}
+
+static const PwSetupText overlay_names[PW_OVERLAY_TILES] = {PW_TEXT_OVERLAY_EXIT, PW_TEXT_OVERLAY_STATS, PW_TEXT_SET_KEYBOARD,
+                                                            PW_TEXT_OVERLAY_MOUSE, PW_TEXT_OVERLAY_CONTROLLER};
+
+/* The focused button's card: its picture and name, its switch, and what it does */
+static void overlay_card(const Ctx *ctx, const PwOverlay *overlay)
+{
+    uint32_t *canvas = ctx->canvas;
+    const float x0 = PW_OVERLAY_CARD_X, y0 = PW_OVERLAY_CARD_Y, x1 = x0 + PW_OVERLAY_CARD_W, y1 = y0 + PW_OVERLAY_CARD_H;
+    const float pad = 28, left = x0 + pad, right = x1 - pad, width = right - left;
+    const int which = overlay->focus;
+    fill_rounded(canvas, x0, y0 + 10, x1, y1 + 10, 28, 0xff04225au, 0.18f, 0.18f, 30.0f);   /* a soft shadow */
+    band(canvas, x0, y0, x1, y1, 28, 0, 1, 0xffffffffu, 0.80f, rgb(232, 244, 253), 0.74f);
+    band(canvas, x0, y0, x1, y1, 28, 0, 0.22f, 0xffffffffu, 0.6f, 0xffffffffu, 0.0f);
+    ring_rounded(canvas, x0, y0, x1, y1, 28, 0xffffffffu, 0.95f, 2.0f);
+    /* the header: the picture in a blue glass tile, the name, the switch */
+    glass_face(canvas, left, y0 + 26, left + 56, y0 + 82, 14, 1);
+    overlay_icon(canvas, which, left + 28, y0 + 54, 17, 0xffffffffu, which == PW_OVERLAY_MOUSE && overlay->mouse_off);
+    const float header_w = which == PW_OVERLAY_STATS || which == PW_OVERLAY_MOUSE ? width - 76 - 140 : width - 76;
+    text_line(ctx, 1, 32, say(ctx, overlay_names[which]), left + 76, y0 + 66, header_w, KEY_INK);
+    if (which == PW_OVERLAY_STATS) on_off(ctx, overlay->stats, right, y0 + 54);
+    if (which == PW_OVERLAY_MOUSE) on_off(ctx, !overlay->mouse_off, right, y0 + 54);
+    line(canvas, left, y0 + 110, right, y0 + 110, 1.5f, rgb(160, 200, 235));
+    switch (which) {
+    case PW_OVERLAY_STATS: {
+        const PwHud *hud = &overlay->figures;
+        char text[PW_HUD_LINE];
+        pw_hud_line(hud, 0, text, sizeof(text));
+        text_line(ctx, 1, 34, text, left, y0 + 166, width, KEY_INK);
+        hud_graph(canvas, hud, left + 4, y0 + 188, right - 4, y0 + 268);
+        hud_rows(ctx, hud, 1, left, y0 + 320, 52, 27, width, right);
+        break;
+    }
+    case PW_OVERLAY_CONTROLLER: {
+        /* the three kinds, the chosen one blue glass with a check; Cross moves to the next */
+        for (int kind = 0; kind < PW_CONTROLLER_KINDS; ++kind) {
+            const float ry = y0 + 136 + kind * 76, chosen = kind == overlay->controller;
+            glass_face(canvas, left, ry, right, ry + 60, 16, chosen);
+            text_line(ctx, 1, 27, pw_controller_name(kind), left + 24, ry + 40, width - 100, chosen ? 0xffffffffu : KEY_INK);
+            if (chosen) icon_check(canvas, right - 34, ry + 30, 0xffffffffu);
+        }
+        /* what to expect, in short words: a line each, its dot */
+        const PwSetupText limits[] = {PW_TEXT_OVERLAY_PAD_LIMIT_START,
+                                      overlay->pad_next_launch ? PW_TEXT_OVERLAY_PAD_NEXT_LAUNCH : PW_TEXT_OVERLAY_PAD_LIMIT_DUALSENSE,
+                                      PW_TEXT_OVERLAY_PAD_LIMIT_STEAM};
+        float y = y0 + 392;
+        for (int i = 0; i < 3; ++i) {
+            disc(canvas, left + 6, y - 8, 4, rgb(0x2a, 0xa3, 0xee), 1);
+            y = paragraph(ctx, 22, say(ctx, limits[i]), left + 22, y, width - 22, 4, KEY_INK) + 12;
+        }
+        break;
+    }
+    case PW_OVERLAY_MOUSE:
+        overlay_icon(canvas, PW_OVERLAY_MOUSE, (x0 + x1) / 2, y0 + 330, 110, overlay->mouse_off ? rgb(150, 165, 185) : KEY_INK,
+                     overlay->mouse_off);
+        break;
+    default: {   /* Exit and the keyboard: one big glass button, the press it waits for */
+        const int armed = which == PW_OVERLAY_EXIT && overlay->armed_ms;
+        glass_face(canvas, left + 30, y0 + 250, right - 30, y0 + 350, 20, 1);
+        overlay_icon(canvas, which, left + 82, y0 + 300, 22, 0xffffffffu, 0);
+        centred_line(ctx, 1, 32, say(ctx, overlay_names[which]), (left + right) / 2 + 26, y0 + 312, width - 180, 0xffffffffu);
+        if (armed) {   /* Exit's second press: the words under it, an amber line */
+            centred_line(ctx, 1, 26, say(ctx, PW_TEXT_OVERLAY_EXIT_AGAIN), (left + right) / 2, y0 + 410, width, AMBER_INK);
+            fill_rounded(canvas, left + 60, y0 + 430, right - 60, y0 + 438, 4, rgb(0xff, 0xb0, 0x20), 1, 1, 1.0f);
+        }
+        break;
+    }
+    }
+    /* the hints at the card's foot, centred: CROSS chooses, CIRCLE closes */
+    const float hy = y1 - 44;
+    float hwidth = 0;
+    for (int pass = 0; pass < 2; ++pass) {
+        const Ctx *c = pass ? ctx : &(const Ctx){NULL, ctx->faces, ctx->language, NULL};
+        float hx = pass ? (x0 + x1 - hwidth) / 2 : 0;
+        hx = hint_button(c, 0, NULL, hx, hy) + 34;
+        icon_check(c->canvas, hx, hy, NAME_INK);
+        hx += 60;
+        hx = hint_button(c, 1, NULL, hx, hy) + 10;
+        line(c->canvas, hx, hy - 8, hx + 16, hy + 8, 3.0f, NAME_INK);
+        line(c->canvas, hx + 16, hy - 8, hx, hy + 8, 3.0f, NAME_INK);
+        hwidth = hx + 16;
+    }
+}
+
+static void draw_overlay(const Ctx *ctx, const PwOverlay *overlay)
+{
+    if (!overlay) return;
+    overlay_backdrop(ctx->canvas);
+    text_line(ctx, 1, 26, say(ctx, PW_TEXT_SET_OVERLAY), PW_OVERLAY_CARD_X + 6, PW_OVERLAY_CARD_Y - 32, PW_OVERLAY_CARD_W,
+              NAME_INK);
+    overlay_card(ctx, overlay);
+    /* the rail: a round glass button each, its picture, and the focused one's name under it */
+    for (int i = 0; i < PW_OVERLAY_TILES; ++i) {
+        const PwOverlayTile t = pw_overlay_tile(i);
+        const float cx = t.x + t.w / 2, cy = t.y + t.h / 2, r = t.w / 2;
+        const int focus = overlay->focus == i;
+        glass_face(ctx->canvas, t.x, t.y, t.x + t.w, t.y + t.h, r, focus);
+        overlay_icon(ctx->canvas, i, cx, cy, r * 0.5f, focus ? 0xffffffffu : KEY_INK, i == PW_OVERLAY_MOUSE && overlay->mouse_off);
+        const int on = i == PW_OVERLAY_STATS ? overlay->stats : i == PW_OVERLAY_MOUSE ? !overlay->mouse_off : -1;
+        if (on >= 0) {   /* a toggle's state: a green or grey dot at its corner */
+            disc(ctx->canvas, cx + r * 0.72f, cy - r * 0.72f, 9, 0xffffffffu, 1);
+            disc(ctx->canvas, cx + r * 0.72f, cy - r * 0.72f, 7, on ? rgb(0x5c, 0xc2, 0x2a) : rgb(150, 165, 185), 1);
+        }
+        if (focus) centred_line(ctx, 1, 22, say(ctx, overlay_names[i]), cx, t.y + t.h + 30, 1920 - (PW_OVERLAY_CARD_X +
+                                PW_OVERLAY_CARD_W) - 24, NAME_INK);
+    }
+}
+
+static uint32_t premultiplied(uint32_t color, float alpha)
+{
+    const unsigned a = (unsigned)(clampf(alpha, 0, 1) * 255 + 0.5f);
+    uint32_t out = a << 24;
+    for (int shift = 0; shift < 24; shift += 8) out |= (((color >> shift) & 0xff) * a + 127) / 255 << shift;
+    return out;
+}
+
+void pw_steam_screen_hud(uint32_t *canvas, const PwSteamFaces *faces, const PwHud *hud)
+{
+    const int x0 = PW_HUD_X, y0 = PW_HUD_Y, x1 = PW_HUD_X + PW_HUD_W, y1 = PW_HUD_Y + PW_HUD_H;
+    const Ctx ctx = {canvas, faces, NULL, NULL};
+    const int saved[4] = {clip.x0, clip.y0, clip.x1, clip.y1};
+    clip.x0 = x0, clip.y0 = y0, clip.x1 = x1, clip.y1 = y1;
+    for (int y = y0; y < y1; ++y) memset(canvas + (size_t)y * W + x0, 0, PW_HUD_W * sizeof(uint32_t));
+    /* the glass: the panel's slab, a sheen on its top, a white rim; the corners stay clear */
+    for (int y = y0; y < y1; ++y)
+        for (int x = x0; x < x1; ++x) {
+            const float cover = clampf(0.5f - rounded(x + 0.5f, y + 0.5f, x0 + 1, y0 + 1, x1 - 1, y1 - 1, 18), 0, 1);
+            if (cover <= 0) continue;
+            const float t = (float)(y - y0) / PW_HUD_H;
+            canvas[(size_t)y * W + x] = premultiplied(mix(rgb(228, 243, 255), rgb(206, 232, 252), t), (0.62f + 0.12f * t) * cover);
+            if (t < 0.3f) blend(canvas, x, y, 0xffffffffu, 0.35f * (1 - t / 0.3f) * cover);
+        }
+    ring_rounded(canvas, x0 + 1, y0 + 1, x1 - 1, y1 - 1, 18, 0xffffffffu, 0.95f, 2.0f);
+    char text[PW_HUD_LINE];
+    const float left = x0 + 18;
+    pw_hud_line(hud, 0, text, sizeof(text));
+    text_line(&ctx, 1, 30, text, left, y0 + 40, PW_HUD_W - 36, KEY_INK);
+    hud_graph(canvas, hud, left, y0 + 50, x1 - 18, y0 + 92);
+    hud_rows(&ctx, hud, 1, left, y0 + 118, 26, 22, PW_HUD_W - 36, x1 - 18);
+    clip.x0 = saved[0], clip.y0 = saved[1], clip.x1 = saved[2], clip.y1 = saved[3];
+}
+
 void pw_steam_screen_keyboard_changed(uint32_t *canvas, const uint32_t *backdrop, const PwSteamScreenState *state,
                                       const PwSteamFaces *faces, const struct PwVkbd *before)
 {
@@ -771,6 +1067,10 @@ void pw_steam_screen_draw(uint32_t *canvas, const uint32_t *backdrop, const PwSt
     const Ctx ctx = {canvas, faces, state->language, report};
     if (state->screen == PW_STEAM_SCREEN_KEYBOARD) {
         draw_keyboard(&ctx, state->keyboard);
+        return;
+    }
+    if (state->screen == PW_STEAM_SCREEN_OVERLAY) {
+        draw_overlay(&ctx, state->overlay);
         return;
     }
     const float x = PW_STEAM_TEXT_X0, width = PW_STEAM_TEXT_X1 - PW_STEAM_TEXT_X0, notes = PW_STEAM_CARD_Y1 - 58;

@@ -35,6 +35,17 @@ int main(void)
     assert(pw_usb_key_code(0x04) == ('A' | 0x1e << 8));
     assert(pw_usb_key_code(0x1a) == ('W' | 0x11 << 8));
     assert(pw_usb_key_code(0x29) == (0x1b | 0x01 << 8));                       /* Escape */
+    /* Backspace: VK_BACK with its scan code, pressed and released like any key (a tester, 2026-11-02, whose backspace did
+     * nothing: it was the on-screen keyboard's, src/pw_vkbd.h; a USB keyboard's is this, and Wine makes it '\b') */
+    assert(pw_usb_key_code(0x2a) == (0x08 | 0x0e << 8));
+    {
+        PwUsbKeyboard up = {0}, back = {.keys = {0x2a}};
+        PwWineInput out[PW_USB_KEYBOARD_EVENTS];
+        assert(pw_usb_keyboard_events(&up, &back, out, PW_USB_KEYBOARD_EVENTS) == 1 && out[0].type == PW_WINE_INPUT_KEY &&
+               out[0].code == (0x08 | 0x0e << 8) && out[0].down == 1);
+        assert(pw_usb_keyboard_events(&back, &up, out, PW_USB_KEYBOARD_EVENTS) == 1 && out[0].code == (0x08 | 0x0e << 8) &&
+               out[0].down == 0);
+    }
     assert(pw_usb_key_code(0x4f) == (0x27 | 0x4d << 8 | PW_WINE_KEY_EXTENDED)); /* Right arrow */
     assert(pw_usb_key_code(0x58) == (0x0d | 0x1c << 8 | PW_WINE_KEY_EXTENDED)); /* keypad Enter */
     assert(pw_usb_key_code(0x28) == (0x0d | 0x1c << 8));                       /* Enter */

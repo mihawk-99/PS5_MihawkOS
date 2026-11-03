@@ -1,5 +1,6 @@
 /* SPDX-License-Identifier: GPL-3.0-or-later */
 #include "pw_osk.h"
+#include "pw_vkbd.h"
 #include <string.h>
 
 static int complete(unsigned trigger, const struct pad *pad)
@@ -47,12 +48,22 @@ void pw_osk_pad_filter(PwOskPad *state, struct pad *shown)
     shown->pressed &= ~state->hold;
 }
 
-void pw_osk_typer_start(PwOskTyper *typer, const char *utf8, int enter)
+/* Room for n more items: the ones already typed are dropped first */
+static int room(PwOskTyper *typer, unsigned n)
+{
+    const unsigned typed = typer->next / 2;
+    if (typed) {
+        memmove(typer->items, typer->items + typed, (typer->count - typed) * sizeof(typer->items[0]));
+        typer->count -= typed;
+        typer->next -= typed * 2;
+    }
+    return typer->count + n <= PW_OSK_MAX_UNITS;
+}
+
+int pw_osk_typer_text(PwOskTyper *typer, const char *utf8)
 {
     const unsigned char *text = (const unsigned char *)utf8;
-    memset(typer, 0, sizeof(*typer));
-    typer->enter = enter != 0;
-    while (text && *text && typer->count + 2 <= PW_OSK_MAX_UNITS) {
+    while (text && *text) {
         uint32_t code = *text;
         unsigned length = 1;
         if ((code & 0xe0u) == 0xc0u) { code &= 0x1fu; length = 2; }
@@ -66,28 +77,39 @@ void pw_osk_typer_start(PwOskTyper *typer, const char *utf8, int enter)
         text += length;
         if (code > 0x10ffffu || (code >= 0xd800u && code <= 0xdfffu)) code = 0xfffdu;
         if (code < 0x20u || code == 0x7fu) continue;   /* a control is not typed */
+        if (!room(typer, 2)) return 0;                 /* a pair's room, and one left for an Enter after the line */
         if (code >= 0x10000u) {
             code -= 0x10000u;
-            typer->units[typer->count++] = (uint16_t)(0xd800u | (code >> 10));
-            typer->units[typer->count++] = (uint16_t)(0xdc00u | (code & 0x3ffu));
+            typer->items[typer->count++] = 0xd800u | (code >> 10);
+            typer->items[typer->count++] = 0xdc00u | (code & 0x3ffu);
         } else {
-            typer->units[typer->count++] = (uint16_t)code;
+            typer->items[typer->count++] = code;
         }
     }
+    return 1;
+}
+
+int pw_osk_typer_key(PwOskTyper *typer, uint32_t code)
+{
+    if (!room(typer, 1)) return 0;
+    typer->items[typer->count++] = code | PW_OSK_TYPER_KEY;
+    return 1;
+}
+
+void pw_osk_typer_start(PwOskTyper *typer, const char *utf8, int enter)
+{
+    memset(typer, 0, sizeof(*typer));
+    pw_osk_typer_text(typer, utf8);
+    if (enter) pw_osk_typer_key(typer, PW_OSK_KEY_RETURN);
 }
 
 int pw_osk_typer_next(PwOskTyper *typer, PwWineInput *event)
 {
-    const unsigned steps = typer->count * 2 + (typer->enter ? 2 : 0);
-    if (typer->next >= steps) return 0;
+    if (typer->next >= typer->count * 2) return 0;
+    const uint32_t item = typer->items[typer->next / 2];
     memset(event, 0, sizeof(*event));
-    if (typer->next < typer->count * 2) {
-        event->type = PW_WINE_INPUT_CHAR;
-        event->code = typer->units[typer->next / 2];
-    } else {
-        event->type = PW_WINE_INPUT_KEY;
-        event->code = 0x0d | (0x1cu << PW_WINE_KEY_SCAN_SHIFT);   /* Return, scan code 0x1c */
-    }
+    event->type = (item & PW_OSK_TYPER_KEY) ? PW_WINE_INPUT_KEY : PW_WINE_INPUT_CHAR;
+    event->code = item & ~PW_OSK_TYPER_KEY;
     event->down = (typer->next & 1) ? 0 : 1;
     typer->next++;
     return 1;
@@ -95,5 +117,13 @@ int pw_osk_typer_next(PwOskTyper *typer, PwWineInput *event)
 
 int pw_osk_typer_done(const PwOskTyper *typer)
 {
-    return typer->next >= typer->count * 2 + (typer->enter ? 2 : 0);
+    return typer->next >= typer->count * 2;
+}
+
+int pw_osk_own_typed(PwOskTyper *typer, int vkbd_result, const char *typed)
+{
+    if (vkbd_result == PW_VKBD_TYPED) pw_osk_typer_text(typer, typed);
+    else if (vkbd_result == PW_VKBD_ERASED) pw_osk_typer_key(typer, PW_OSK_KEY_BACK);
+    else if (vkbd_result == PW_VKBD_FINISHED) pw_osk_typer_key(typer, PW_OSK_KEY_RETURN);
+    return vkbd_result;
 }

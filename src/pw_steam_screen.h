@@ -42,6 +42,7 @@ typedef struct PwSteamScreenState {
     const char *dialog_title;        /* PW_STEAM_SCREEN_DIALOG: the box's caption (UTF-8), or NULL */
     const char *dialog_text;         /* its text, lines split by '\n' (UTF-8), or NULL; cut to what fits */
     const struct PwVkbd *keyboard;   /* PW_STEAM_SCREEN_KEYBOARD: the keyboard as it stands, or NULL */
+    const struct PwOverlay *overlay; /* PW_STEAM_SCREEN_OVERLAY: the control overlay as it stands, or NULL */
 } PwSteamScreenState;
 
 /* What a drawing did with its words (for the test): the lowest pixel row one reached, how many lines were cut because
@@ -64,6 +65,11 @@ void pw_steam_screen_keyboard_changed(uint32_t *canvas, const uint32_t *backdrop
 /* What moves, over a copy of the still picture: the tube's liquid (installing, updating, slow) or the line scanning the
  * code (the phone screen), for tick (the loading screen's frame count). Nothing outside their rectangles is written. */
 void pw_steam_screen_animate(uint32_t *canvas, const PwSteamScreenState *state, unsigned tick);
+
+/* The statistics HUD (src/pw_overlay.h) as a see-through card in canvas's rectangle PW_HUD_X, PW_HUD_Y, PW_HUD_W x PW_HUD_H,
+ * premultiplied over nothing (the broker blends it over the game): nothing outside the rectangle is written. */
+struct PwHud;
+void pw_steam_screen_hud(uint32_t *canvas, const PwSteamFaces *faces, const struct PwHud *hud);
 
 /* Whether the display name can be drawn whole with these faces (else the screen says "You're signed in" alone). */
 int pw_steam_screen_persona_drawable(const PwSteamFaces *faces, const char *persona);

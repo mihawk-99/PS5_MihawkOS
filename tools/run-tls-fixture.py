@@ -10,6 +10,10 @@ Games and production prefixes are untouched. Until 2026-10-16 it ran in a fresh
 proton-tls-test prefix: 122 of its 177 s made that prefix and 47 s deleted it
 (evidence/gate-timing-review-2026-10-16-01.json); a leftover entry is still removed.
 Run tls-probe.exe directly without fixture arguments for public-network diagnosis.
+--winhttp runs winhttp-probe.exe instead (Xbox Live's HTTP client's calls, the certificate not checked) against the
+trusted endpoint; --env NAME=VALUE passes to the launch (WINE_PS5_TITLE_PICK=winhttp-probe.exe: in the title).
+A WINEDEBUG in --env replaces the default channels: keep warn+debugstr in it, or the probe's verdict never reaches
+the log (winhttp64-title-base-2026-11-03-01 passed on its stdout and was recorded as failed).
 """
 import argparse
 from datetime import datetime, timezone
@@ -134,6 +138,8 @@ def main():
     parser.add_argument('--name', required=True)
     parser.add_argument('--trusted-port', type=int, default=int(os.environ.get('PROTON_TLS_TRUSTED_PORT', '0')))
     parser.add_argument('--untrusted-port', type=int, default=int(os.environ.get('PROTON_TLS_UNTRUSTED_PORT', '0')))
+    parser.add_argument('--winhttp', action='store_true', help='run winhttp-probe.exe against the trusted endpoint')
+    parser.add_argument('--env', action='append', default=[], help='NAME=VALUE for the launch')
     args = parser.parse_args()
     if not all(0 <= port <= 65535 for port in (args.trusted_port, args.untrusted_port)):
         parser.error('fixture ports must be 0 (automatic) or 1..65535')
@@ -154,7 +160,8 @@ def main():
     with socket.socket(socket.AF_INET, socket.SOCK_DGRAM) as route:
         route.connect((settings['host'], settings['klog_port']))
         host = route.getsockname()[0]
-    executable = (ROOT / '.deps/probes/tls-probe.exe').read_bytes()   # the deployed C:\tls-probe.exe
+    probe, marker = ('winhttp-probe.exe', 'PS5_PROTON_WINHTTP') if args.winhttp else ('tls-probe.exe', 'PS5_PROTON_TLS_PROBE')
+    executable = (ROOT / '.deps/probes' / probe).read_bytes()   # the deployed C:\<probe>
     endpoints = []
     installed = False
     status = 1
@@ -166,7 +173,8 @@ def main():
             endpoints.append(server(host, certificate, key, args.trusted_port))
             _, certificate, key = certificates(directory, 'untrusted', host)
             endpoints.append(server(host, certificate, key, args.untrusted_port))
-            arguments = f'{host} {endpoints[0][0].server_port} {endpoints[1][0].server_port} {ROOT_FILE}'
+            arguments = (f'{host} {endpoints[0][0].server_port}' if args.winhttp else
+                         f'{host} {endpoints[0][0].server_port} {endpoints[1][0].server_port} {ROOT_FILE}')
             with connect(settings) as ftp:
                 remove_owned(ftp, listing, remove_tree)
                 installed = True
@@ -176,8 +184,8 @@ def main():
                 if readback.getvalue() != trusted_root:
                     raise RuntimeError('TLS fixture upload differs: ' + ROOT_FILE)
             status = subprocess.run([sys.executable, str(ROOT / 'tools/run-console.py'), '--name', args.name,
-                '--exe', 'tls-probe.exe', '--args', arguments, '--no-stdout', '--marker', 'PS5_PROTON_TLS_PROBE',
-                '--exit-stall', '60'], cwd=ROOT).returncode
+                '--exe', probe, '--args', arguments, '--no-stdout', '--marker', marker,
+                '--exit-stall', '60', *[f'--env={pair}' for pair in args.env]], cwd=ROOT).returncode
     finally:
         for endpoint, thread in endpoints:
             endpoint.shutdown()
@@ -202,8 +210,8 @@ def main():
                        'probe_sha256': hashlib.sha256(executable).hexdigest()}
             fixture['ports'] = [endpoint.server_port for endpoint, _ in endpoints]
             record['tls_fixture'] = fixture
-            record['passed'] = record.get('passed', False) and fixture['root_removed'] and removed and all(
-                fixture[name] >= 1 for name in ('trusted_answers', 'untrusted_answers'))
+            record['passed'] = record.get('passed', False) and removed and fixture['trusted_answers'] >= 1 and (
+                args.winhttp or fixture['root_removed'] and fixture['untrusted_answers'] >= 1)
             evidence.write_text(json.dumps(record, indent=1) + '\n')
             status = 0 if record['passed'] else 1
     return status

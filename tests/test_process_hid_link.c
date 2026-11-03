@@ -1,6 +1,6 @@
 /* SPDX-License-Identifier: GPL-3.0-or-later */
-/* Patch 2401's own DualSense link name (ntdll NtCreateFile): which names it takes and what it makes of them. The code
- * under test is extracted from the patch by tests/extract_process_rules.py; WCHAR is Wine's 16 bits here. */
+/* Patch 2401's own DualSense link name, with patch 2480's Xbox gamepad (ntdll NtCreateFile): which names it takes and what it makes of them. The code
+ * under test is extracted from patch 2480 (which holds the whole block) by tests/extract_process_rules.py; WCHAR is Wine's 16 bits here. */
 #include <assert.h>
 #include <stddef.h>
 #include <string.h>
@@ -36,8 +36,14 @@ int main(void)
     /* A program may spell the name in another case; the server's lookup ignores case, and the spelling is kept. */
     n = own(u"\\??\\hid#vid_054c&pid_0ce6#x", 7, out, 256);
     assert(same(out, n, u"\\??\\hid#vid_054c&pid_0ce6#x#7"));
-    /* Not the DualSense's link: another device, a path below the device, the prefix alone, a file. */
-    assert(!own(u"\\??\\HID#VID_045E&PID_028E#256&PS5-LOCAL-1&0&0&1#{4d1e55b2-f16f-11cf-88cb-001111000030}", 1, out, 256));
+    /* Windows' HID gamepad for an Xbox controller (patch 2480), 360 or One, is a program's own too. */
+    n = own(u"\\??\\HID#VID_045E&PID_028E&IG_00#256&PS5-LOCAL-1&0&0&0#{4d1e55b2-f16f-11cf-88cb-001111000030}", 0x2a, out, 256);
+    assert(same(out, n, u"\\??\\HID#VID_045E&PID_028E&IG_00#256&PS5-LOCAL-1&0&0&0#{4d1e55b2-f16f-11cf-88cb-001111000030}#2a"));
+    assert(own(u"\\??\\HID#VID_045E&PID_02EA&IG_00#x", 1, out, 256));
+    /* Not the controller's link: another device, a path below the device, the prefix alone, a file. */
+    assert(!own(u"\\??\\HID#VID_046D&PID_C52B#256&PS5-LOCAL-1&0&0&1#{4d1e55b2-f16f-11cf-88cb-001111000030}", 1, out, 256));
+    assert(!own(u"\\??\\HID#VID_045E&PID_02", 1, out, 256));
+    assert(!own(u"\\??\\HID#VID_045E&PID_028E&IG_00#x\\y", 1, out, 256));
     assert(!own(u"\\??\\HID#VID_054C&PID_0CE6#256&PS5-LOCAL-1&0&0&1#{4d1e55b2-f16f-11cf-88cb-001111000030}\\x", 1, out, 256));
     assert(!own(u"\\??\\HID#VID_054C&PID_0CE6#", 1, out, 256));
     assert(!own(u"\\??\\C:\\windows\\system32\\hid.dll", 1, out, 256));

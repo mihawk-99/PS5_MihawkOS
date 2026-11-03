@@ -1,0 +1,10 @@
+# The control overlay's Controller button (tools/run-battery.py controller-swap64-title): L3+R3 opens the overlay over
+# tests/pad-identity-probe.c, UP wraps to Controller (the rail's last), and CROSS switches Xbox 360 -> Xbox One, then 5 s
+# later -> DualSense; each switch takes the pad away for half a second. The probe passes once it has seen all three.
+20 l3 0.3
+20 r3 0.3
+21.5 up
+22.5 cross
+27.5 cross
+29 capture
+40 circle

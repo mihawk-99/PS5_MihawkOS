@@ -268,6 +268,17 @@ typedef enum {
     PW_TEXT_SET_KEYBOARD_L3R3,
     PW_TEXT_SET_KEYBOARD_OPTIONS,
     PW_TEXT_SET_KEYBOARD_BODY,
+    PW_TEXT_SET_OVERLAY, /* the control overlay (src/pw_overlay.h): Settings' row and the panel's name */
+    PW_TEXT_OVERLAY_EXIT,
+    PW_TEXT_OVERLAY_EXIT_AGAIN,
+    PW_TEXT_OVERLAY_STATS,
+    PW_TEXT_OVERLAY_MOUSE,
+    PW_TEXT_OVERLAY_ON,
+    PW_TEXT_OVERLAY_CONTROLLER,  /* the Controller button and its card's limits */
+    PW_TEXT_OVERLAY_PAD_LIMIT_START,
+    PW_TEXT_OVERLAY_PAD_LIMIT_DUALSENSE,
+    PW_TEXT_OVERLAY_PAD_LIMIT_STEAM,
+    PW_TEXT_OVERLAY_PAD_NEXT_LAUNCH,
     PW_TEXT_SET_ABOUT,
     PW_TEXT_SET_ABOUT_SUB,
     PW_TEXT_SET_RUNTIME,
@@ -403,6 +414,7 @@ typedef enum {
     PW_TEXT_STEAM_MEM_STEP_INSTALL,
     PW_TEXT_STEAM_MEM_STEP_OPEN,
     PW_TEXT_STEAM_MEM_STEP_PAYLOADS,
+    PW_TEXT_STEAM_MEM_TABLES,
     /* The main menu's update line (src/pw_update_notice.h): checking, found, downloading ({1} the version, {2} MB so far,
      * {3} MB in all, {4} percent; without a size, {2} only), checking the signature, unpacking ({2} percent), ready and
      * its R2 hint (the status bar's and the detail's), and each failure */
@@ -464,6 +476,11 @@ int pw_setup_record_save(const PwSetupRecord *record, const char *path);
  * matched, and the first session of first-install-unattended-2026-10-19-03 never ended. Trims trailing CR, LF and
  * spaces from stamp in place; 1 when it is made. */
 int pw_setup_prefix_made(char *stamp);
+/* 1 when an existing prefix's stamp names another wine.inf time than the runtime's: wineboot updates the prefix in
+ * this session, copying Wine's builtin DLLs again (tools/stage-wine.py: wine.inf names them, so a changed builtin
+ * changes its time), and this launch takes longer. 0 for the same time, or a stamp without one (no prefix yet: the
+ * guided setup says that itself). */
+int pw_setup_prefix_outdated(const char *stamp, unsigned long long inf_time);
 
 /* The first session's cover (docs/GUIDED_SETUP.md, "Preparing"): what the user sees instead of a black desktop while
  * wineboot makes the prefix. The launcher draws its words when Start is pressed and keeps that frame
