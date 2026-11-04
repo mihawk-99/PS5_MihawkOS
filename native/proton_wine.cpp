@@ -3840,6 +3840,29 @@ void proton_run_wine()
             }
         }
     }
+    // A user's per-console raise (local patch, 2026-11-03, RastaFairy): the file
+    // /data/ps5proton/memory-guard.txt holds "<limit>:<end>" in MiB and raises the guard
+    // past the firmware marks, which are calibrated on the author's consoles and make the
+    // desktop unbootable on untested firmware (issues #37/#31/#25: 7.40 -> 990 MiB,
+    // graphics_claimed=0). PROTON_SYSTEM_MEMORY_LIMIT can only lower a limit, so the file
+    // is the one way up; it is explicit per-console consent written over FTP, and
+    // everything it does is logged. Bounds keep the observe-mode ceiling.
+    {
+        unsigned raise_limit = 0, raise_end = 0;
+        if (FILE *raise = fopen(PROTON_DATA_ROOT "/memory-guard.txt", "r")) {
+            if (fscanf(raise, "%u:%u", &raise_limit, &raise_end) != 2) raise_limit = raise_end = 0;
+            fclose(raise);
+            if (raise_limit >= 800 && raise_limit <= 4000 && raise_end >= raise_limit && raise_end <= 4070) {
+                say("Wine: memory-guard.txt: the guard runs at %u/%u MiB (the firmware marks said %u/%u)",
+                    raise_limit, raise_end, memory_limit, memory_end);
+                memory_limit = raise_limit;
+                memory_end = raise_end;
+            } else {
+                say("Wine: memory-guard.txt refused (limit 800..4000, end limit..4070): keeping %u/%u MiB",
+                    memory_limit, memory_end);
+            }
+        }
+    }
     pw_memory_guard memory_guard{};
     pw_memory_guard_init(&memory_guard, memory_limit, memory_end);
     pw_page_table_guard page_table_guard{};   // the system's page tables, a pool apart (src/pw_memory_guard.h)

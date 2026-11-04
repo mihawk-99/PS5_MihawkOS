@@ -29,6 +29,52 @@ static int named(const char *name, const char *want)
     return !strncmp(name, want, n) && !strncmp(name + n, ".elf", strlen(name + n));
 }
 
+
+/* A user's own allowlist (local patch, 2026-11-03, RastaFairy): the file
+ * /data/ps5proton/payloads-allowed.txt, one payload name per line, '#' starts a
+ * comment. The kernel keeps 19 characters of a process name and may cut the
+ * ".elf" suffix anywhere (qafutkn_util_mk2.el, 2026-10-31), so a line matches
+ * when the process's name, without a trailing ".elf", and the line agree up to
+ * the shorter one's length. A payload on this list is counted for the memory
+ * notice but never blocks the check; a missing file changes nothing. The read
+ * is retried until the file opens (early calls may run before /data is
+ * granted). */
+static int user_allowed(const char *name)
+{
+    static char lines[16][24];
+    static unsigned count;
+    static int read_done;
+    if (!read_done) {
+        FILE *f = fopen("/data/ps5proton/payloads-allowed.txt", "r");
+        if (f) {
+            char row[64];
+            read_done = 1;
+            while (count < sizeof(lines) / sizeof(lines[0]) && fgets(row, sizeof(row), f)) {
+                char *p = row;
+                while (*p == ' ' || *p == '\t') ++p;
+                if (*p == '#' || *p == '\n' || *p == '\0') continue;
+                char *end = p;
+                while (*end && *end != '\r' && *end != '\n' && *end != ' ' && *end != '\t' && *end != '#') ++end;
+                *end = '\0';
+                if (p[0]) {
+                    snprintf(lines[count], sizeof(lines[0]), "%s", p);
+                    ++count;
+                }
+            }
+            fclose(f);
+        }
+    }
+    char base[sizeof(lines[0]) + 8];
+    snprintf(base, sizeof(base), "%s", name);
+    const size_t bl = strlen(base);
+    if (bl > 4 && !strcmp(base + bl - 4, ".elf")) base[bl - 4] = '\0';
+    for (unsigned i = 0; i < count; ++i) {
+        const size_t a = strlen(lines[i]), b = strlen(base);
+        if (a && b && strncmp(base, lines[i], a < b ? a : b) == 0) return 1;
+    }
+    return 0;
+}
+
 const char *pw_payload_label(int which)
 {
     return which >= 0 && which < PW_PAYLOAD_KNOWN ? labels[which] : "";
@@ -64,6 +110,8 @@ void pw_payload_check(const PwPayloadProcess *list, unsigned count, int self, co
                 apart <= PW_PAYLOAD_DAEMON_SLACK_S && apart >= -PW_PAYLOAD_DAEMON_SLACK_S;
         if (mine) continue;
         out->payload_resident += p->resident;
+        /* the user's own allowlist: counted above for the memory notice, never blocking */
+        if (user_allowed(p->name)) continue;
         if (generic) {
             out->unnamed++;
             out->unnamed_resident += p->resident;
