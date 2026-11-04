@@ -18,15 +18,24 @@ _Static_assert(sizeof(struct pw_vm_query_info) == 72 && offsetof(struct pw_vm_qu
                "libkernel query record");
 extern int sceKernelVirtualQuery(const void *, int, void *, size_t);
 
-int pw_wine_vm_entry(const void *address, PwWineVmEntry *entry)
+static int pw_wine_vm_entry_impl(const void *address, PwWineVmEntry *entry, int *failure_kind,
+                                 int *kernel_status)
 {
     struct pw_vm_query_info info = {0};
     const int status = sceKernelVirtualQuery(address, 1, &info, sizeof(info));
 
+    if (failure_kind) *failure_kind = PW_WINE_VM_FAILURE_NONE;
+    if (kernel_status) *kernel_status = status;
     /* The kernel returns EACCES when NEXT has no remaining mapping. */
     if ((uint32_t)status == UINT32_C(0x8002000d)) return 1;
-    if (status || (uintptr_t)info.end <= (uintptr_t)address ||
-        (uintptr_t)info.end <= (uintptr_t)info.start) return -1;
+    if (status) {
+        if (failure_kind) *failure_kind = PW_WINE_VM_FAILURE_QUERY;
+        return -1;
+    }
+    if ((uintptr_t)info.end <= (uintptr_t)address || (uintptr_t)info.end <= (uintptr_t)info.start) {
+        if (failure_kind) *failure_kind = PW_WINE_VM_FAILURE_ENTRY;
+        return -1;
+    }
     entry->start = (uintptr_t)info.start;
     entry->end = (uintptr_t)info.end;
     entry->protection = (unsigned)info.protection;
@@ -35,6 +44,11 @@ int pw_wine_vm_entry(const void *address, PwWineVmEntry *entry)
     memcpy(entry->name, info.name, sizeof(info.name));
     entry->name[sizeof(info.name)] = 0;
     return 0;
+}
+
+int pw_wine_vm_entry(const void *address, PwWineVmEntry *entry)
+{
+    return pw_wine_vm_entry_impl(address, entry, NULL, NULL);
 }
 
 int pw_wine_vm_query(const void *address, void **start, void **end)
@@ -50,22 +64,34 @@ int pw_wine_vm_query(const void *address, void **start, void **end)
     return 0;
 }
 
-int pw_wine_vm_foreign(const void *address, size_t bytes, const PwWineVmEntry *like, PwWineVmEntry *found,
-                       int (*fill)(uintptr_t address, size_t bytes))
+static int pw_wine_vm_foreign_impl(const void *address, size_t bytes, const PwWineVmEntry *like,
+                                   PwWineVmEntry *found, int (*fill)(uintptr_t address, size_t bytes),
+                                   int *failure_kind, int *kernel_status)
 {
     const uintptr_t high = (uintptr_t)address + bytes;
     int asked_again = 0;
 
+    if (failure_kind) *failure_kind = PW_WINE_VM_FAILURE_NONE;
+    if (kernel_status) *kernel_status = 0;
     for (uintptr_t cursor = (uintptr_t)address; cursor < high;)
     {
-        const int status = pw_wine_vm_entry((const void *)cursor, found);
-        if (status < 0) return -1;
+        int entry_failure = PW_WINE_VM_FAILURE_NONE, entry_kernel_status = 0;
+        const int status = pw_wine_vm_entry_impl((const void *)cursor, found, &entry_failure,
+                                                  &entry_kernel_status);
+        if (status < 0) {
+            if (failure_kind) *failure_kind = entry_failure;
+            if (kernel_status) *kernel_status = entry_kernel_status;
+            return -1;
+        }
         const uintptr_t hole_end = status || found->start >= high ? high : found->start > cursor ? found->start : cursor;
         if (fill && hole_end > cursor)
         {
             if (fill(cursor, hole_end - cursor))
             {
-                if (asked_again++) return -1;
+                if (asked_again++) {
+                    if (failure_kind) *failure_kind = PW_WINE_VM_FAILURE_REFILL;
+                    return -1;
+                }
                 continue;
             }
             asked_again = 0;
@@ -75,6 +101,19 @@ int pw_wine_vm_foreign(const void *address, size_t bytes, const PwWineVmEntry *l
         cursor = found->end;
     }
     return 0;
+}
+
+int pw_wine_vm_foreign(const void *address, size_t bytes, const PwWineVmEntry *like, PwWineVmEntry *found,
+                       int (*fill)(uintptr_t address, size_t bytes))
+{
+    return pw_wine_vm_foreign_impl(address, bytes, like, found, fill, NULL, NULL);
+}
+
+int pw_wine_vm_foreign_diagnostic(const void *address, size_t bytes, const PwWineVmEntry *like,
+                                  PwWineVmEntry *found, int (*fill)(uintptr_t address, size_t bytes),
+                                  int *failure_kind, int *kernel_status)
+{
+    return pw_wine_vm_foreign_impl(address, bytes, like, found, fill, failure_kind, kernel_status);
 }
 
 int pw_wine_vm_gap(const void *address, const void *limit, pw_wine_vm_owned_query owned, const PwWineVmEntry *like,
