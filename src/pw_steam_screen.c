@@ -340,8 +340,9 @@ static float paragraph(const Ctx *ctx, float pixels, const char *text, float x, 
     return y + shown * pixels * 1.45f;
 }
 
-/* CROSS and its word, its pill ending at right, on the baseline y. */
-static void cross_hint(const Ctx *ctx, PwSetupText key, float right, float y)
+/* A pad button and its word, its pill ending at right, on the baseline y: CROSS (blue) or TRIANGLE (green). The pill's
+ * left edge. */
+static float pad_hint(const Ctx *ctx, int triangle, PwSetupText key, float right, float y)
 {
     const char *word = say(ctx, key);
     const Pen p = pen(ctx, 1, 27);
@@ -350,11 +351,21 @@ static void cross_hint(const Ctx *ctx, PwSetupText key, float right, float y)
     const float x = right - w, glyph = x - 34;
     fill_rounded(ctx->canvas, glyph - 30, y - 38, right + 22, y + 16, 27, 0xffffffffu, 0.75f, 0.75f, 1.0f);
     ring_rounded(ctx->canvas, glyph - 30, y - 38, right + 22, y + 16, 27, 0xff9fb4d2u, 0.8f, 1.5f);
-    disc(ctx->canvas, glyph, y - 11, 19, BLUE, 1.0f);
-    line(ctx->canvas, glyph - 7, y - 18, glyph + 7, y - 4, 3.2f, 0xffffffffu);
-    line(ctx->canvas, glyph + 7, y - 18, glyph - 7, y - 4, 3.2f, 0xffffffffu);
+    disc(ctx->canvas, glyph, y - 11, 19, triangle ? GREEN : BLUE, 1.0f);
+    if (triangle) {
+        line(ctx->canvas, glyph, y - 21, glyph - 9, y - 4, 3.0f, 0xffffffffu);
+        line(ctx->canvas, glyph - 9, y - 4, glyph + 9, y - 4, 3.0f, 0xffffffffu);
+        line(ctx->canvas, glyph + 9, y - 4, glyph, y - 21, 3.0f, 0xffffffffu);
+    } else {
+        line(ctx->canvas, glyph - 7, y - 18, glyph + 7, y - 4, 3.2f, 0xffffffffu);
+        line(ctx->canvas, glyph + 7, y - 18, glyph - 7, y - 4, 3.2f, 0xffffffffu);
+    }
     reached(ctx, y + 16, 0, draw(ctx->canvas, &p, word, strlen(word), x, y, INK, 1.0f));
+    return glyph - 30;
 }
+
+/* CROSS and its word, its pill ending at right, on the baseline y. */
+static void cross_hint(const Ctx *ctx, PwSetupText key, float right, float y) { (void)pad_hint(ctx, 0, key, right, y); }
 
 static void step_line(const Ctx *ctx, int step)
 {
@@ -1058,6 +1069,29 @@ void pw_steam_screen_keyboard_changed(uint32_t *canvas, const uint32_t *backdrop
     }
 }
 
+void pw_steam_handover_checklist(PwSteamHandover step, PwSteamChecklist *out)
+{
+    static const PwSteamChecklist ready = {PW_TEXT_HANDOVER_READY_GAME, PW_TEXT_HANDOVER_READY, PW_TEXT_HANDOVER_READY_BODY, 3, 0,
+                                           {PW_TEXT_HANDOVER_SAVE, PW_TEXT_HANDOVER_ROOM, PW_TEXT_HANDOVER_START_GAME},
+                                           {PW_TEXT_HANDOVER_SAVE, PW_TEXT_HANDOVER_ROOM, PW_TEXT_HANDOVER_START}};
+    static const PwSteamChecklist back = {PW_TEXT_HANDOVER_BACK, PW_TEXT_HANDOVER_BACK, PW_TEXT_HANDOVER_BACK_BODY, 2, 0,
+                                          {PW_TEXT_HANDOVER_CLOUD, PW_TEXT_HANDOVER_REOPEN},
+                                          {PW_TEXT_HANDOVER_CLOUD, PW_TEXT_HANDOVER_REOPEN}};
+    static const PwSteamChecklist leaving = {PW_TEXT_HANDOVER_SAVE, PW_TEXT_HANDOVER_SAVE, PW_TEXT_HANDOVER_BACK_BODY, 0, 0,
+                                             {0}, {0}};
+    static const PwSteamChecklist stuck = {PW_TEXT_HANDOVER_STUCK, PW_TEXT_HANDOVER_STUCK, PW_TEXT_HANDOVER_STUCK_BODY, 0, 0,
+                                           {0}, {0}};
+    switch (step) {
+    case PW_STEAM_HANDOVER_SAVE: *out = ready; break;
+    case PW_STEAM_HANDOVER_ROOM: *out = ready; out->done = 1; break;
+    case PW_STEAM_HANDOVER_START: *out = ready; out->done = 2; break;
+    case PW_STEAM_HANDOVER_CLOUD: *out = back; break;
+    case PW_STEAM_HANDOVER_REOPEN: *out = back; out->done = 1; break;
+    case PW_STEAM_HANDOVER_LEAVING: *out = leaving; break;
+    default: *out = stuck; break;
+    }
+}
+
 void pw_steam_screen_draw(uint32_t *canvas, const uint32_t *backdrop, const PwSteamScreenState *state,
                           const PwSteamFaces *faces, PwSteamScreenReport *report)
 {
@@ -1165,6 +1199,66 @@ void pw_steam_screen_draw(uint32_t *canvas, const uint32_t *backdrop, const PwSt
         cross_hint(&ctx, PW_TEXT_CONTINUE, PW_STEAM_TEXT_X1 + 22, notes);
         break;
     }
+    case PW_STEAM_SCREEN_HANDOVER: {
+        /* "Steam", the headline and its line, the tube moving while the title waits, and the checklist (a tick for each
+         * step done, a ring for each to come); the choice instead when Steam has gone quiet */
+        text_line(&ctx, 0, 26, "Steam", x, PW_STEAM_CARD_Y0 + 92, width, SOFT);
+        PwSteamChecklist list;
+        pw_steam_handover_checklist(state->handover, &list);
+        const int named = state->game && state->game[0] && pw_steam_screen_persona_drawable(faces, state->game);
+        const char *args[] = {state->game};
+        char title[320], body[640];
+        if (named) pw_setup_fill(title, sizeof(title), say(&ctx, list.title_named), args, 1);
+        else snprintf(title, sizeof(title), "%s", say(&ctx, list.title));
+        if (state->handover == PW_STEAM_HANDOVER_STUCK) {
+            char minutes[16];
+            snprintf(minutes, sizeof(minutes), "%u", state->seconds / 60 ? state->seconds / 60 : 1);
+            const char *minute_args[] = {minutes};
+            pw_setup_fill(body, sizeof(body), say(&ctx, list.body), minute_args, 1);
+        } else {
+            snprintf(body, sizeof(body), "%s", say(&ctx, list.body));
+        }
+        /* A long game name: the headline in two lines, smaller, and the line below them */
+        float body_y = 414;
+        const Pen big = pen(&ctx, 1, 58);
+        if (measure(&big, title, strlen(title)) <= width) {
+            text_line(&ctx, 1, 58, title, x, 340, width, INK);
+        } else {
+            const Pen p = pen(&ctx, 1, 44);
+            Lines lines;
+            wrap(&p, title, width, &lines);
+            const int shown = lines.count < 2 ? lines.count : 2;
+            int missing = 0;
+            for (int i = 0; i < shown; ++i)
+                missing += draw(canvas, &p, lines.start[i], lines.length[i], x, 318 + i * 44 * 1.3f, INK, 1.0f);
+            reached(&ctx, 318 + (shown - 1) * 44 * 1.3f + 44 * 0.3f, lines.count - shown, missing);
+            body_y = 318 + shown * 44 * 1.3f + 40;
+        }
+        if (state->handover == PW_STEAM_HANDOVER_STUCK) {
+            paragraph(&ctx, 31, body, x, body_y, width, 4, MUTED);
+            const float left = pad_hint(&ctx, 0, PW_TEXT_HANDOVER_WAIT, PW_STEAM_TEXT_X1 + 22, notes);
+            (void)pad_hint(&ctx, 1, PW_TEXT_HANDOVER_CLOSE, left - 24, notes);
+            break;
+        }
+        paragraph(&ctx, 31, body, x, body_y, width, 3, MUTED);   /* three lines end above the tube, the headline in two too */
+        tube_track(&ctx);
+        for (unsigned i = 0; i < list.count; ++i) {
+            const float cy = PW_STEAM_TUBE_Y1 + 72 + i * 56.0f;
+            const int done = i < list.done;
+            if (done) {
+                disc(canvas, x + 18, cy, 18, GREEN, 1.0f);
+                line(canvas, x + 9, cy + 1, x + 15, cy + 7, 3.5f, 0xffffffffu);   /* a tick inside the disc */
+                line(canvas, x + 15, cy + 7, x + 27, cy - 6, 3.5f, 0xffffffffu);
+            } else {
+                ring_rounded(canvas, x, cy - 18, x + 36, cy + 18, 18, i == list.done ? BLUE : SOFT, 1.0f, 3.0f);
+            }
+            char item[320];
+            if (named) pw_setup_fill(item, sizeof(item), say(&ctx, list.item_named[i]), args, 1);
+            else snprintf(item, sizeof(item), "%s", say(&ctx, list.item[i]));
+            text_line(&ctx, done || i == list.done, 31, item, x + 60, cy + 11, width - 60, done || i == list.done ? INK : SOFT);
+        }
+        break;
+    }
     default:
         break;
     }
@@ -1177,6 +1271,10 @@ void pw_steam_screen_animate(uint32_t *canvas, const PwSteamScreenState *state, 
     case PW_STEAM_SCREEN_UPDATING:
     case PW_STEAM_SCREEN_SLOW:
         pw_loading_art_tube(canvas, PW_STEAM_TEXT_X0, PW_STEAM_TUBE_Y0, PW_STEAM_TEXT_X1, PW_STEAM_TUBE_Y1, -1.0f, tick);
+        break;
+    case PW_STEAM_SCREEN_HANDOVER:
+        if (state->handover != PW_STEAM_HANDOVER_STUCK)
+            pw_loading_art_tube(canvas, PW_STEAM_TEXT_X0, PW_STEAM_TUBE_Y0, PW_STEAM_TEXT_X1, PW_STEAM_TUBE_Y1, -1.0f, tick);
         break;
     case PW_STEAM_SCREEN_SCAN: {
         /* a green line sweeping down the code and back, two seconds each way at ten frames a second */

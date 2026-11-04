@@ -45,6 +45,12 @@ struct pw_child_bootstrap {
     uint32_t application_bytes;
     char application[4096];
 };
+/* The title's say on a claim it refused (EBUSY): nonzero takes it as a play request (src/pw_title_play.h), which is
+ * refused (busy returns once the title's screen covers it); answered runs once the refusal is sent. */
+void pw_ps5_set_title_busy(int (*busy)(const struct pw_child_bootstrap *), void (*answered)(void));
+/* The title's wait at the start of pw_ps5_wait_children, once the server has seen the program end and before the helpers
+ * left are closed: a play session waits there for Steam's shutdown (src/pw_title_play.h). */
+void pw_ps5_set_title_exit_wait(void (*wait)(void));
 struct pw_child_message { uint32_t protocol, kind; int32_t pid, value; int64_t tid; };
 /* PW_CHILD_FRAME: a helper's frame page (src/pw_frame_page.h), with its descriptor, once, on its first frame. */
 /* PW_CHILD_RESOLVE: a helper asks the title for a name's IPv4 address (struct pw_child_resolve), with a socket for

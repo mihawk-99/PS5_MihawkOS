@@ -45,8 +45,42 @@ static void write_ppm(const char *folder, const char *tag, const char *name, con
     fclose(file);
 }
 
+/* The handover's checklist (pw_steam_handover_checklist): going to the game ticks Steam's session, then the room, then
+ * the start; coming back the cloud, then Big Picture; each step one tick further, never a timer. Its words name no
+ * closing or shutting down (the owner, 2026-11-03), save the stuck screen's own choice. */
+static void checklist(void)
+{
+    static const struct { PwSteamHandover step; unsigned count, done; PwSetupText title; } steps[] = {
+        {PW_STEAM_HANDOVER_SAVE, 3, 0, PW_TEXT_HANDOVER_READY_GAME},  {PW_STEAM_HANDOVER_ROOM, 3, 1, PW_TEXT_HANDOVER_READY_GAME},
+        {PW_STEAM_HANDOVER_START, 3, 2, PW_TEXT_HANDOVER_READY_GAME}, {PW_STEAM_HANDOVER_CLOUD, 2, 0, PW_TEXT_HANDOVER_BACK},
+        {PW_STEAM_HANDOVER_REOPEN, 2, 1, PW_TEXT_HANDOVER_BACK},      {PW_STEAM_HANDOVER_LEAVING, 0, 0, PW_TEXT_HANDOVER_SAVE},
+        {PW_STEAM_HANDOVER_STUCK, 0, 0, PW_TEXT_HANDOVER_STUCK},
+    };
+    size_t count = 0;
+    const PwSetupLanguage *languages = pw_setup_languages(&count);
+    for (size_t s = 0; s < sizeof(steps) / sizeof(steps[0]); ++s) {
+        PwSteamChecklist list;
+        pw_steam_handover_checklist(steps[s].step, &list);
+        assert(list.count == steps[s].count && list.done == steps[s].done && list.title == steps[s].title);
+        const PwSetupText words[] = {list.title, list.title_named, list.body, list.item[0], list.item[1], list.item[2],
+                                     list.item_named[0], list.item_named[1], list.item_named[2]};
+        for (size_t w = 0; w < sizeof(words) / sizeof(words[0]); ++w) {
+            if (w >= 3 && w < 6 ? w - 3 >= list.count : w >= 6 && w - 6 >= list.count) continue;
+            const char *en = pw_setup_text(&languages[0], words[w]);
+            assert(*en);
+            if (steps[s].step != PW_STEAM_HANDOVER_STUCK) assert(!strstr(en, "Clos") && !strstr(en, "clos") && !strstr(en, "Shut") && !strstr(en, "shut"));
+            for (size_t l = 0; l < count; ++l) assert(*pw_setup_text(&languages[l], words[w]));
+        }
+    }
+    /* the named words take the game's name; the plain ones do not */
+    assert(strstr(pw_setup_text(&languages[0], PW_TEXT_HANDOVER_READY), "{1}") &&
+           strstr(pw_setup_text(&languages[0], PW_TEXT_HANDOVER_START), "{1}") &&
+           !strstr(pw_setup_text(&languages[0], PW_TEXT_HANDOVER_READY_GAME), "{1}"));
+}
+
 int main(int argc, char **argv)
 {
+    checklist();
     if (argc < 2) {
         fprintf(stderr, "usage: %s <inter folder> [<noto folder> | -] [<pictures folder>]\n", argv[0]);
         return 2;
@@ -87,15 +121,28 @@ int main(int argc, char **argv)
         unsigned long long bytes;
         const char *persona;
         const char *dialog_title, *dialog_text;
+        PwSteamHandover handover;
+        const char *game;
     } screens[] = {
-        {PW_STEAM_SCREEN_INSTALLING, "installing", 12, 0, NULL, NULL, NULL},
-        {PW_STEAM_SCREEN_UPDATING, "updating", 134, 212000000ull, NULL, NULL, NULL},
-        {PW_STEAM_SCREEN_SLOW, "slow", 431, 241000000ull, NULL, NULL, NULL},
-        {PW_STEAM_SCREEN_SCAN, "scan", 318, 480000000ull, NULL, NULL, NULL},
-        {PW_STEAM_SCREEN_SIGNED_IN, "signed-in", 612, 480000000ull, "Mihawk", NULL, NULL},
-        {PW_STEAM_SCREEN_SIGNED_IN, "signed-in-long", 612, 480000000ull, "a display name of thirty-two chars", NULL, NULL},
+        {PW_STEAM_SCREEN_INSTALLING, "installing", 12, 0, NULL, NULL, NULL, PW_STEAM_HANDOVER_SAVE, NULL},
+        {PW_STEAM_SCREEN_UPDATING, "updating", 134, 212000000ull, NULL, NULL, NULL, PW_STEAM_HANDOVER_SAVE, NULL},
+        {PW_STEAM_SCREEN_SLOW, "slow", 431, 241000000ull, NULL, NULL, NULL, PW_STEAM_HANDOVER_SAVE, NULL},
+        {PW_STEAM_SCREEN_SCAN, "scan", 318, 480000000ull, NULL, NULL, NULL, PW_STEAM_HANDOVER_SAVE, NULL},
+        {PW_STEAM_SCREEN_SIGNED_IN, "signed-in", 612, 480000000ull, "Mihawk", NULL, NULL, PW_STEAM_HANDOVER_SAVE, NULL},
+        {PW_STEAM_SCREEN_SIGNED_IN, "signed-in-long", 612, 480000000ull, "a display name of thirty-two chars", NULL, NULL, PW_STEAM_HANDOVER_SAVE, NULL},
         {PW_STEAM_SCREEN_DIALOG, "dialog", 0, 0, NULL, "A Game - Aborted",
-         "Unsupported graphics card.\nPlease read the system requirements for details.\nOK"},
+         "Unsupported graphics card.\nPlease read the system requirements for details.\nOK", PW_STEAM_HANDOVER_SAVE, NULL},
+        /* the Steam handover (src/pw_title_play.h): each step; the game's name, a long one, or none */
+        {PW_STEAM_SCREEN_HANDOVER, "handover-save", 0, 0, NULL, NULL, NULL, PW_STEAM_HANDOVER_SAVE, "A Game Demo"},
+        {PW_STEAM_SCREEN_HANDOVER, "handover-room", 0, 0, NULL, NULL, NULL, PW_STEAM_HANDOVER_ROOM, "A Game Demo"},
+        {PW_STEAM_SCREEN_HANDOVER, "handover-start", 0, 0, NULL, NULL, NULL, PW_STEAM_HANDOVER_START, "A Game Demo"},
+        {PW_STEAM_SCREEN_HANDOVER, "handover-start-long", 0, 0, NULL, NULL, NULL, PW_STEAM_HANDOVER_START,
+         "A Very Long Game Name: The Definitive Edition of Everything"},
+        {PW_STEAM_SCREEN_HANDOVER, "handover-start-unnamed", 0, 0, NULL, NULL, NULL, PW_STEAM_HANDOVER_START, NULL},
+        {PW_STEAM_SCREEN_HANDOVER, "handover-cloud", 0, 0, NULL, NULL, NULL, PW_STEAM_HANDOVER_CLOUD, "A Game Demo"},
+        {PW_STEAM_SCREEN_HANDOVER, "handover-reopen", 0, 0, NULL, NULL, NULL, PW_STEAM_HANDOVER_REOPEN, NULL},
+        {PW_STEAM_SCREEN_HANDOVER, "handover-leaving", 0, 0, NULL, NULL, NULL, PW_STEAM_HANDOVER_LEAVING, NULL},
+        {PW_STEAM_SCREEN_HANDOVER, "handover-stuck", 300, 0, NULL, NULL, NULL, PW_STEAM_HANDOVER_STUCK, NULL},
     };
     size_t count = 0, drawn = 0, skipped = 0;
     const PwSetupLanguage *languages = pw_setup_languages(&count);
@@ -109,7 +156,8 @@ int main(int argc, char **argv)
         const PwSteamFaces faces = {own ? own : regular, own ? own : semibold, regular};
         for (size_t s = 0; s < sizeof(screens) / sizeof(screens[0]); ++s) {
             const PwSteamScreenState state = {screens[s].screen, language, screens[s].seconds, screens[s].bytes,
-                                              screens[s].persona, screens[s].dialog_title, screens[s].dialog_text, NULL, NULL};
+                                              screens[s].persona, screens[s].dialog_title, screens[s].dialog_text, NULL, NULL,
+                                              screens[s].handover, screens[s].game};
             PwSteamScreenReport report;
             pw_steam_screen_draw(still, backdrop, &state, &faces, &report);
             if (report.cut || report.missing || report.bottom > PW_STEAM_CARD_Y1 - 12 || report.bottom < PW_STEAM_CARD_Y0) {
@@ -131,7 +179,9 @@ int main(int argc, char **argv)
                     assert(x >= x0 && x <= x1 && y >= y0 && y <= y1);
                     ++moved;
                 }
-            assert(state.screen == PW_STEAM_SCREEN_SIGNED_IN || state.screen == PW_STEAM_SCREEN_DIALOG ? moved == 0 : moved > 1000);
+            const int still_screen = state.screen == PW_STEAM_SCREEN_SIGNED_IN || state.screen == PW_STEAM_SCREEN_DIALOG ||
+                (state.screen == PW_STEAM_SCREEN_HANDOVER && state.handover == PW_STEAM_HANDOVER_STUCK);
+            assert(still_screen ? moved == 0 : moved > 1000);
             if (pictures) write_ppm(pictures, language->tag, screens[s].name, frame);
             ++drawn;
         }
@@ -144,7 +194,7 @@ int main(int argc, char **argv)
             snprintf(line, sizeof(line), "\ngame.exe!0x140000000 + 0x%07x a long frame name that wraps on its own line", i * 4099);
             strcat(text, line);
         }
-        const PwSteamScreenState state = {PW_STEAM_SCREEN_DIALOG, NULL, 0, 0, NULL, "A Game - Aborted", text, NULL, NULL};
+        const PwSteamScreenState state = {PW_STEAM_SCREEN_DIALOG, NULL, 0, 0, NULL, "A Game - Aborted", text, NULL, NULL, PW_STEAM_HANDOVER_SAVE, NULL};
         PwSteamScreenReport report;
         pw_steam_screen_draw(still, backdrop, &state, &latin, &report);
         assert(!report.missing && report.bottom <= PW_STEAM_CARD_Y1 - 12 && report.bottom > PW_STEAM_CARD_Y0);
@@ -166,7 +216,7 @@ int main(int argc, char **argv)
                     kbd.row = (page + shift) % PW_VKBD_ROWS;
                     kbd.col = 1;
                     pw_vkbd_type(&kbd, "héllo Жюль ł");
-                    PwSteamScreenState state = {PW_STEAM_SCREEN_KEYBOARD, &langs[l], 0, 0, NULL, NULL, NULL, &kbd, NULL};
+                    PwSteamScreenState state = {PW_STEAM_SCREEN_KEYBOARD, &langs[l], 0, 0, NULL, NULL, NULL, &kbd, NULL, PW_STEAM_HANDOVER_SAVE, NULL};
                     PwSteamScreenReport report;
                     pw_steam_screen_draw(still, backdrop, &state, &faces, &report);
                     if (report.missing || report.cut || report.bottom >= PW_LOADING_HEIGHT) {
@@ -191,7 +241,7 @@ int main(int argc, char **argv)
         assert(whole);
         PwVkbd kbd, before;
         pw_vkbd_open(&kbd, PW_VKBD_ABC);
-        PwSteamScreenState state = {PW_STEAM_SCREEN_KEYBOARD, pw_setup_default_language(), 0, 0, NULL, NULL, NULL, &kbd, NULL};
+        PwSteamScreenState state = {PW_STEAM_SCREEN_KEYBOARD, pw_setup_default_language(), 0, 0, NULL, NULL, NULL, &kbd, NULL, PW_STEAM_HANDOVER_SAVE, NULL};
         pw_steam_screen_draw(still, backdrop, &state, &faces, NULL);
         const char *steps = "rrrdllluuuxxrdddxbbsrxpdlx";   /* moves, x types, b backspace, s Shift, p the page key */
         size_t panel = (size_t)PW_VKBD_PANEL_Y * PW_LOADING_WIDTH, rows = (size_t)PW_VKBD_PANEL_H * PW_LOADING_WIDTH * 4;
@@ -231,7 +281,7 @@ int main(int argc, char **argv)
                 overlay.figures.cpu = 12, overlay.figures.gpu = -1, overlay.figures.small_total = 8192;
                 overlay.figures.small_free = 900, overlay.figures.big_total = 16384, overlay.figures.big_free = 15000;
                 pw_hud_frames(&overlay.figures, 58, 21);
-                PwSteamScreenState state = {PW_STEAM_SCREEN_OVERLAY, &langs[l], 0, 0, NULL, NULL, NULL, NULL, &overlay};
+                PwSteamScreenState state = {PW_STEAM_SCREEN_OVERLAY, &langs[l], 0, 0, NULL, NULL, NULL, NULL, &overlay, PW_STEAM_HANDOVER_SAVE, NULL};
                 PwSteamScreenReport report;
                 pw_steam_screen_draw(still, backdrop, &state, &faces, &report);
                 if (report.missing || report.cut || report.bottom >= PW_LOADING_HEIGHT) {
@@ -270,7 +320,7 @@ int main(int argc, char **argv)
         if (pictures) write_ppm(pictures, "en", "hud", still);
     }
     /* Nothing over the client: the backdrop alone (the cover is taken off then, but a draw must not fail) */
-    const PwSteamScreenState none = {PW_STEAM_SCREEN_NONE, NULL, 0, 0, NULL, NULL, NULL, NULL, NULL};
+    const PwSteamScreenState none = {PW_STEAM_SCREEN_NONE, NULL, 0, 0, NULL, NULL, NULL, NULL, NULL, PW_STEAM_HANDOVER_SAVE, NULL};
     pw_steam_screen_draw(still, backdrop, &none, &latin, NULL);
     assert(!memcmp(still, backdrop, (size_t)PW_LOADING_WIDTH * PW_LOADING_HEIGHT * 4));
 

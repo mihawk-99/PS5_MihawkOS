@@ -133,6 +133,7 @@ declare -A sources=(
     [test_pw_overlay]="src/pw_overlay.c"
     [test_pw_missing_dll]=""
     [test_pw_spawn_wait]=""
+    [test_pw_title_claim]=""
     [test_pw_capped_log]="src/pw_capped_log.c"
     [test_pw_detailed_logs]="src/pw_detailed_logs.c src/pw_log_sessions.c"
     [test_pw_flight_probe]="src/pw_flight_probe.c"
@@ -145,6 +146,7 @@ declare -A sources=(
     [test_pw_update]="src/pw_update.c src/pw_zip.c src/pw_pack.c src/pw_sha256.c external/zstd/zstddeclib.c"
     [test_pw_update_notice]="src/pw_update_notice.c src/pw_setup.c"
     [test_pw_release]="src/pw_release.c external/monocypher/monocypher.c external/monocypher/monocypher-ed25519.c"
+    [test_pw_release_pick_alpha8]=""   # built below from Alpha 8's own src/pw_release.c (88f76993)
     [test_pw_pe_arch]="src/pw_pe_arch.c"
     [test_pw_start_failure]="src/pw_start_failure.c"
     [test_pw_wine_dl]="wine/ps5/pw_wine_dl.c wine/ps5/pw_wine_prx.c"
@@ -153,6 +155,7 @@ declare -A sources=(
     [test_pw_wine_gpu_keep]=""
     [test_pw_game_folders]="src/pw_game_folders.c src/pw_pe_arch.c"
     [test_pw_steam_appid]="src/pw_steam_appid.c src/pw_path_nocase.c"
+    [test_pw_title_play]="src/pw_title_play.c src/pw_steam_appid.c src/pw_path_nocase.c src/pw_wine_launch.c"
     [test_pw_pad_script]="src/pw_pad_script.c"
     [test_pw_thread_alert]=""
     [test_pw_ntsync]="src/pw_ntsync.c"
@@ -206,6 +209,8 @@ declare -A flags=(
     [test_pw_tooltip]="-I$root/src -I$root/.deps/windows11-theme"
     [test_pw_ws2_32_libc]="-D_DEFAULT_SOURCE -Dgetaddrinfo=pw_test_getaddrinfo -Dfreeaddrinfo=pw_test_freeaddrinfo
         -Dgetnameinfo=pw_test_getnameinfo -Dgethostbyname=pw_test_gethostbyname -Dgethostbyaddr=pw_test_gethostbyaddr"
+    # its small-stack check: ASan moves large locals off the stack, so a frame too big for 64 KiB passed under it
+    [test_pw_steam_appid]="-fno-sanitize=address"
 )
 # The libc calls pw_wine_cwd_libc.c wraps, as tools/build-wine-ps5.sh links them, so the test's own calls reach them.
 flags[test_pw_wine_cwd_links]="-I$root/wine/ps5 $(grep -oh '__wrap_[a-z_0-9]*' "$root/wine/ps5/pw_wine_cwd_libc.c" |
@@ -261,6 +266,18 @@ for test in "$root"/tests/test_*.c; do
         virtual=$root/.deps/wine-ps5/source/dlls/ntdll/unix/virtual.c
         [[ -f $virtual ]] || { echo "$name: skipped (no applied Wine tree; run tools/build-wine-ps5.sh)"; continue; }
         python3 "$root/tests/extract_virtual_guard.py" "$virtual" "$out/virtual_guard.inc"
+    fi
+    if [[ $name == test_pw_release_pick_alpha8 ]]; then
+        # Alpha 8's release rule as it shipped (7.1's is the same file), from git, beside the external code it includes
+        old=$out/alpha8; rm -rf "$old"; mkdir -p "$old/src"; ln -s "$root/external" "$old/external"
+        if ! git -C "$root" show 88f76993:src/pw_release.c > "$old/src/pw_release.c" 2>/dev/null ||
+           ! git -C "$root" show 88f76993:src/pw_release.h > "$old/src/pw_release.h" 2>/dev/null; then
+            echo "$name: skipped (no git history with 88f76993)"; continue
+        fi
+        "${CC:-cc}" -std=gnu11 -O2 -g -Wall -Wextra -Werror -fsanitize=address,undefined -I"$old/src" -o "$out/$name" "$test" \
+            "$old/src/pw_release.c" "$root/external/monocypher/monocypher.c" "$root/external/monocypher/monocypher-ed25519.c"
+        "$out/$name" > "$out/$name.log" 2>&1 || { cat "$out/$name.log" >&2; echo "$name: FAILED" >&2; exit 1; }
+        echo "$name: ok"; ran=$((ran + 1)); continue
     fi
     files=()
     for source in ${sources[$name]}; do files+=("$root/$source"); done

@@ -34,6 +34,30 @@ class BuiltinsDigest(unittest.TestCase):
             self.assertNotEqual(changed, tool.builtins_digest(runtime))           # a new one too
             self.assertRegex(changed, r'^[0-9a-f]{64}$')
 
+    def test_stamp_inf_names_the_modules_as_they_ship(self):
+        """stamp_inf runs once this build's PE modules replaced the PC build's and were stripped: its line and its time
+        follow them (the 8 -> 8.1 update kept every prefix's Alpha 8 copies: the line was taken before, from the PC
+        build's modules, and did not change; a81upd-base-2026-11-04)."""
+        with tempfile.TemporaryDirectory() as folder:
+            runtime = Path(folder)
+            (runtime / 'share/wine').mkdir(parents=True)
+            (runtime / 'lib/wine/x86_64-windows').mkdir(parents=True)
+            dll = runtime / 'lib/wine/x86_64-windows/kernelbase.dll'
+            dll.write_bytes(b'MZ the PC build')
+            inf = runtime / 'share/wine/wine.inf'
+            base = b'[Version]\r\nSignature="$CHICAGO$"\r\n'
+            dll.write_bytes(b'MZ this PS5 build, stripped')
+            tool.stamp_inf(runtime, base)
+            text, time = inf.read_bytes(), inf.stat().st_mtime
+            self.assertTrue(text.startswith(base) and text.endswith(b'\r\n'))
+            self.assertEqual(text.splitlines()[-1].split()[-1].decode(), tool.builtins_digest(runtime))
+            tool.stamp_inf(runtime, base)
+            self.assertEqual((text, time), (inf.read_bytes(), inf.stat().st_mtime))   # an identical rebuild: no update
+            dll.write_bytes(b'MZ the next PS5 build')
+            tool.stamp_inf(runtime, base)
+            self.assertNotEqual(text, inf.read_bytes())                               # a changed module: one update
+            self.assertNotEqual(time, inf.stat().st_mtime)
+
 
 if __name__ == '__main__':
     unittest.main()

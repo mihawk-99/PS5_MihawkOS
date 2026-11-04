@@ -23,11 +23,14 @@ extern "C" {
 #define PW_STEAM_NEED_INSTALL_MIB 500u     /* not installed, or installed and never signed in (its first start) */
 #define PW_STEAM_NEED_SIGNED_IN_MIB 450u   /* signed in: Big Picture, a download running */
 #define PW_STEAM_WARNING_HOLD_SECONDS 5.0f /* TRIANGLE held this long goes on anyway (no dead end) */
-/* The system's CPU page tables Steam needs free (Alpha 8): its start took ~2,000 of the 8,192 on the base
- * (a8-steam-second/-third-base-2026-11-02: 2,183 -> 4,231 and 2,125 -> 4,153 used, sign-in browser up), and the guard
- * asks a game to close at 768 free (PW_PAGE_TABLE_CLOSE_FREE). A fw 11.60 tester started with 2,642 free and Steam ran
- * out (klog/tester-steam-memfull-2026-11-01). */
-#define PW_STEAM_NEED_TABLES 2800u
+/* The system's CPU page tables Steam needs free: what it takes at most, and the 768 free at which the guard asks a game
+ * to close (PW_PAGE_TABLE_CLOSE_FREE). Alpha 8's Steam, its browser in a helper, took ~2,000 of the 8,192 on the base
+ * (a8-steam-second/-third-base-2026-11-02), so 2,800; a fw 11.60 tester started with 2,642 free and Steam ran out
+ * (klog/tester-steam-memfull-2026-11-01). With its browser in the title (8.1), four loops on the base
+ * (8.1's B2 to B5 loops on the base, 2026-11-03): at most 1,434-1,508 at a play session's start (Steam
+ * -silent, its browser in a helper until the game starts), browsing 816-881, back from a game 606-615. 1,508 + 768,
+ * rounded up. */
+#define PW_STEAM_NEED_TABLES 2300u
 /* The title cannot read that pool itself (syscall 671 is in no module it may call, r2-launcher-pools-base-2026-11-02-01),
  * so Steam's own session checks it at its first census (native/proton_wine.cpp): with too few free it writes this file
  * under the data root ("<free> <total>") and ends at once, and the launcher shows the warning on its return. */

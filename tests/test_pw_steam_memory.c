@@ -24,10 +24,13 @@ int main(void)
     /* No census (no /data, or no figure for any process): never warn, whatever the figures say */
     PwSteamCensus none = { 0, 1700, 0, 0, 0, 0, 0, 0 };
     assert(!pw_steam_memory_warn(&none, 0) && !pw_steam_memory_warn(&none, 1) && !pw_steam_memory_warn(NULL, 0));
-    /* The page tables (Alpha 8): the fw 11.60 tester's 2,642 free warns whatever the memory says; 2,800 fits, 2,799 warns;
-     * the base's ~5,900 fits; no reading never warns on them */
-    PwSteamCensus tables = { 1, 900, 80, 30, 6, 1, 8192, 2642 };
+    /* The page tables: 2,000 free warns whatever the memory says; the need fits, one less warns; the fw 11.60 tester's
+     * 2,642 (short for Alpha 8's Steam) fits the 8.1 one, its browser in the title; the base's ~5,900 fits; no reading
+     * never warns on them */
+    PwSteamCensus tables = { 1, 900, 80, 30, 6, 1, 8192, 2000 };
     assert(pw_steam_tables_short(&tables) && pw_steam_memory_warn(&tables, 0) && pw_steam_memory_warn(&tables, 1));
+    tables.tables_free = 2642;
+    assert(!pw_steam_tables_short(&tables) && !pw_steam_memory_warn(&tables, 0));
     tables.tables_free = PW_STEAM_NEED_TABLES;
     assert(!pw_steam_tables_short(&tables) && !pw_steam_memory_warn(&tables, 1));
     tables.tables_free = PW_STEAM_NEED_TABLES - 1;
@@ -41,7 +44,7 @@ int main(void)
     assert(pw_steam_memory_warn(&both, 0) && !pw_steam_tables_short(&both));
     /* The Steam session's note (PW_STEAM_TABLES_SHORT): read back; anything else leaves the census as it was */
     PwSteamCensus noted = { 0, 0, 0, 0, 0, 0, 0, 0 };
-    assert(pw_steam_tables_parse("2642 8192\n", &noted) && noted.tables_known && noted.tables_free == 2642 &&
+    assert(pw_steam_tables_parse("2000 8192\n", &noted) && noted.tables_known && noted.tables_free == 2000 &&
            noted.tables_total == 8192 && pw_steam_memory_warn(&noted, 1));
     PwSteamCensus untouched = { 0, 0, 0, 0, 0, 0, 0, 0 };
     assert(!pw_steam_tables_parse("9000 8192", &untouched) && !pw_steam_tables_parse("12", &untouched) &&

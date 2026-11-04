@@ -152,6 +152,22 @@ typedef enum {
     PW_TEXT_STEAM_REOPEN_BODY,
     PW_TEXT_STEAM_DONE_BODY,
     PW_TEXT_STEAM_OPENING_IN, /* {1} seconds */
+    /* The Steam handover's screen (PW_STEAM_SCREEN_HANDOVER, src/pw_title_play.h): what the title is waiting for */
+    PW_TEXT_HANDOVER_READY,      /* going to the game: {1}, the game's name, from its appmanifest */
+    PW_TEXT_HANDOVER_READY_GAME, /* the same with no name */
+    PW_TEXT_HANDOVER_READY_BODY,
+    PW_TEXT_HANDOVER_SAVE,       /* its checklist (src/pw_steam_screen.h, pw_steam_handover_checklist) */
+    PW_TEXT_HANDOVER_ROOM,
+    PW_TEXT_HANDOVER_START,      /* {1}: the game's name */
+    PW_TEXT_HANDOVER_START_GAME,
+    PW_TEXT_HANDOVER_BACK,       /* coming back from the game */
+    PW_TEXT_HANDOVER_BACK_BODY,
+    PW_TEXT_HANDOVER_CLOUD,      /* its checklist */
+    PW_TEXT_HANDOVER_REOPEN,
+    PW_TEXT_HANDOVER_STUCK,
+    PW_TEXT_HANDOVER_STUCK_BODY, /* {1}: minutes */
+    PW_TEXT_HANDOVER_WAIT,
+    PW_TEXT_HANDOVER_CLOSE,
     /* The memory guard's notices (native/proton_wine.cpp): what ran out, memory or the page tables (a pool apart,
      * src/pw_memory_guard.h), and what was done; pw_setup_guard_notice picks one. */
     PW_TEXT_NOTICE_MEMORY_ASKED,
@@ -301,6 +317,8 @@ typedef enum {
     PW_TEXT_SET_LOG_OFF,
     PW_TEXT_SET_PAD_SEEN, /* {1}: the controller */
     PW_TEXT_SET_UPDATES_SUB,
+    PW_TEXT_SET_UPDATES_CURRENT, /* Settings > Check for updates: {1} this title's name ("Alpha 8.1") */
+    PW_TEXT_SET_UPDATES_OFFERED, /* {1} the release offered, {2} this title's */
     PW_TEXT_SET_AUTO_ON,
     PW_TEXT_SET_AUTO_OFF,
     PW_TEXT_SET_BADGE_CHECKING, /* the rows' badges */

@@ -78,6 +78,7 @@ enum PwTitleRoute {
     PW_TITLE_ROUTE_CHROMIUM,    /* a helper: a Chromium-based game's main process (Electron, NW.js), by its folder;
                                  * in the title it does not draw yet (moonstone-base-2026-10-31-01), so it stays one */
     PW_TITLE_ROUTE_CHROMIUM_CHILD, /* a helper: one of a Chromium game's own processes (--type=) */
+    PW_TITLE_ROUTE_STEAM_BROWSER,  /* the title: Steam's browser (pw_title_game_steam_browser) */
 };
 
 /* The first, cheap half: the setting, the CPU, the per-game lists and the path and name rules. picked wins over every
@@ -196,9 +197,24 @@ static inline enum PwTitleRoute pw_title_game_chromium(enum PwTitleRoute route, 
     return child ? PW_TITLE_ROUTE_CHROMIUM_CHILD : PW_TITLE_ROUTE_CHROMIUM;
 }
 
+/* Steam's browser runs in the title, so its memory and page tables are the title's: steamwebhelper.exe in Steam's
+ * bin\cef folder, its main process (no --type=; Steam starts it --single-process, src/pw_steam.c). In a helper it took
+ * 1,874 of the 8,192 system page tables over Big Picture's first 4 minutes, in the title 607 (a81-b1a/b-base-2026-11-03),
+ * Big Picture drawn and signed in either way. The opt-out (WINE_PS5_TITLE_OPTOUT) keeps it in a helper. Only a route the
+ * path rules left at NOT_LIBRARY changes. */
+static inline enum PwTitleRoute pw_title_game_steam_browser(enum PwTitleRoute route, const char *image,
+                                                            const char *command_line, const char *optout)
+{
+    if (route != PW_TITLE_ROUTE_NOT_LIBRARY || !image) return route;
+    const char *name = pw_title_game_name(image);
+    if (!pw_title_game_listed("steamwebhelper.exe", name) || !pw_title_game_has(image, "\\steam\\bin\\cef\\")) return route;
+    if (command_line && pw_title_game_has(command_line, "--type=")) return route;
+    return pw_title_game_listed(optout, name) ? PW_TITLE_ROUTE_OPTOUT : PW_TITLE_ROUTE_STEAM_BROWSER;
+}
+
 static inline int pw_title_route_in_title(enum PwTitleRoute route)
 {
-    return route == PW_TITLE_ROUTE_GAME || route == PW_TITLE_ROUTE_PICKED;
+    return route == PW_TITLE_ROUTE_GAME || route == PW_TITLE_ROUTE_PICKED || route == PW_TITLE_ROUTE_STEAM_BROWSER;
 }
 
 static inline const char *pw_title_route_word(enum PwTitleRoute route)
@@ -215,6 +231,7 @@ static inline const char *pw_title_route_word(enum PwTitleRoute route)
     case PW_TITLE_ROUTE_NOT_GAME: return "not a game";
     case PW_TITLE_ROUTE_CHROMIUM: return "a Chromium-based game: a helper until one draws in the title";
     case PW_TITLE_ROUTE_CHROMIUM_CHILD: return "a Chromium game's own process";
+    case PW_TITLE_ROUTE_STEAM_BROWSER: return "Steam's browser";
     }
     return "unknown";
 }

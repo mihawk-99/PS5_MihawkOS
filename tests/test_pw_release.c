@@ -3,6 +3,7 @@
 #include "../external/monocypher/monocypher-ed25519.h"
 
 #include <assert.h>
+#include <errno.h>
 #include <stdio.h>
 #include <string.h>
 
@@ -117,6 +118,36 @@ int main(void)
     assert(pw_release_pick(listing, 5, "7.0.0-alpha-7") == -1);   /* the running one is the newest offered */
     assert(pw_release_pick(listing, 5, "8.0.0") == -1);
     assert(pw_release_pick(listing, 0, "1.0.0") == -1);
+
+    /* A release's name for the screen (the owner, 2026-11-04: Settings showed "1...." for "01.003.000") */
+    {
+        char name[40];
+        assert(!pw_release_name("8.1.0-alpha-8", "01.003.000", name, sizeof(name)) && !strcmp(name, "Alpha 8.1"));
+        assert(!pw_release_name("v8.0.0-alpha-8", NULL, name, sizeof(name)) && !strcmp(name, "Alpha 8"));
+        assert(!pw_release_name("7.1.0-alpha-7", NULL, name, sizeof(name)) && !strcmp(name, "Alpha 7.1"));
+        assert(!pw_release_name("v5.0.1-alpha-5", NULL, name, sizeof(name)) && !strcmp(name, "Alpha 5.0.1"));
+        assert(!pw_release_name("6.0.0-beta-2", NULL, name, sizeof(name)) && !strcmp(name, "Beta 6"));
+        /* no stage, an rc, or a tag that does not read: the full version number, never cut */
+        assert(!pw_release_name("v9.0.0", "01.009.000", name, sizeof(name)) && !strcmp(name, "9.0.0"));
+        assert(!pw_release_name("v8.0.0-rc-2", NULL, name, sizeof(name)) && !strcmp(name, "8.0.0-rc-2"));
+        assert(!pw_release_name("8.1.0-alpha-8.1", NULL, name, sizeof(name)) && !strcmp(name, "8.1.0-alpha-8.1"));
+        assert(!pw_release_name("", "01.003.000", name, sizeof(name)) && !strcmp(name, "01.003.000"));
+        assert(!pw_release_name(NULL, "01.003.000", name, sizeof(name)) && !strcmp(name, "01.003.000"));
+        assert(pw_release_name("8.1.0-alpha-8", NULL, name, 5) == E2BIG && !name[0]);
+        /* the offered release's tag from its signed manifest's base (Alpha 8's update file, unchanged) */
+        char tag[40];
+        pw_release_base_tag("https://github.com/mihawk-99/PS5_MihawkOS/releases/download/v8.1.0-alpha-8/", tag, sizeof(tag));
+        assert(!strcmp(tag, "v8.1.0-alpha-8"));
+        pw_release_base_tag("http://192.0.2.1:8766/serve", tag, sizeof(tag));
+        assert(!strcmp(tag, "serve"));
+        pw_release_base_tag("", tag, sizeof(tag));
+        assert(!tag[0]);
+        pw_release_base_tag("https://example.invalid/a-very-long-folder-name-that-does-not-fit/", tag, 8);
+        assert(!tag[0]);
+        /* the 8.1 tag must be one an Alpha 8 console reads and takes as newer (its pick, built into Alpha 8) */
+        assert(pw_release_tag_compare("v8.1.0-alpha-8", "8.0.0-alpha-8") > 0);
+        assert(pw_release_tag_compare("v8.1.0-alpha-8.1", "8.0.0-alpha-8") < 0);   /* why VERSION is not "...-alpha-8.1" */
+    }
 
     puts("test_pw_release: ok");
     return 0;

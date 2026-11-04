@@ -831,11 +831,17 @@ void proton_set_args(int argc, char **argv)
 			gLaunch.aurelia = !value.empty() && value != "0";
 		} else if (key == "ended") {
 			gLaunch.ended = value;
+		} else if (key == "play" && pw_steam_id_valid(value.c_str())) {
+			gLaunch.play = value;
+		} else if (key == "returning") {
+			gLaunch.returning = value == "1" || pw_steam_id_valid(value.c_str());
+			if (value != "1" && pw_steam_id_valid(value.c_str())) gLaunch.returned = value;
 		}
 	}
-	proton_say("launch: mode=%s profile=%s path=%s cycle=%u argc=%d env=%zu%s%s",
+	proton_say("launch: mode=%s profile=%s path=%s cycle=%u argc=%d env=%zu%s%s%s%s",
 		gLaunch.game ? "game" : "launcher", gLaunch.profile.c_str(), gLaunch.path.c_str(),
-		gLaunch.cycle, argc, gLaunch.env.size(), gLaunch.ended.empty() ? "" : " ended=", gLaunch.ended.c_str());
+		gLaunch.cycle, argc, gLaunch.env.size(), gLaunch.ended.empty() ? "" : " ended=", gLaunch.ended.c_str(),
+		gLaunch.play.empty() ? "" : " play=", gLaunch.play.c_str());
 }
 
 const ProtonLaunch &proton_launch()
@@ -865,16 +871,22 @@ static std::string host_executable(const ProtonGame &game)
 	return !host.empty() && pw_path_nocase(host.c_str(), held, sizeof(held)) ? std::string(held) : std::string();
 }
 
-void proton_add_steam_ids(ProtonGame &game)
+std::string proton_steam_appid(const ProtonGame &game)
 {
-	game.steam_words.clear();
 	char found[PW_STEAM_ID_MAX] = "";
 	const std::string host = host_executable(game);
 	if (!host.empty()) pw_steam_appid_of(host.c_str(), found, sizeof(found));
+	return found;
+}
+
+void proton_add_steam_ids(ProtonGame &game)
+{
+	game.steam_words.clear();
+	const std::string found = proton_steam_appid(game);
 	std::vector<const char *> env;
 	for (const auto &word : game.env) env.push_back(word.c_str());
 	char words[2][PW_STEAM_ID_WORD];
-	const size_t added = pw_steam_id_words(env.data(), env.size(), found[0] ? found : nullptr, words);
+	const size_t added = pw_steam_id_words(env.data(), env.size(), found.empty() ? nullptr : found.c_str(), words);
 	for (size_t i = 0; i < added; ++i) game.steam_words.push_back(words[i]);
 }
 
@@ -980,8 +992,8 @@ void proton_finish_restart()
 
 void proton_restart(const ProtonGame *game, unsigned cycle, const char *reason, const char *ended)
 {
-	char storage[5][1024];
-	char *argv[6];
+	char storage[14][1024];
+	char *argv[15];
 	int count = 0;
 	if (game) {
 		snprintf(storage[count], sizeof(storage[count]), "profile=%s", game->id.c_str());
@@ -997,6 +1009,23 @@ void proton_restart(const ProtonGame *game, unsigned cycle, const char *reason, 
 		/* A program the launcher's Files chose, run with this entry's prefix and settings (the title's path= launch) */
 		if (!game->run_path.empty()) {
 			snprintf(storage[count], sizeof(storage[count]), "path=%s", game->run_path.c_str());
+			argv[count] = storage[count];
+			count++;
+		}
+		if (!game->play.empty()) {
+			snprintf(storage[count], sizeof(storage[count]), "play=%s", game->play.c_str());
+			argv[count] = storage[count];
+			count++;
+		}
+		if (game->returning && count < 12) {
+			snprintf(storage[count], sizeof(storage[count]), "returning=%s",
+				 pw_steam_id_valid(game->returned.c_str()) ? game->returned.c_str() : "1");
+			argv[count] = storage[count];
+			count++;
+		}
+		/* A handover's env= words, as many as leave room for cycle= and ended= */
+		for (size_t i = 0; i < game->launch_env.size() && count < 12; ++i) {
+			snprintf(storage[count], sizeof(storage[count]), "env=%s", game->launch_env[i].c_str());
 			argv[count] = storage[count];
 			count++;
 		}

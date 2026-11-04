@@ -93,6 +93,25 @@ std::string running_version()
 	return version != param.end() && version->is_string() ? version->get<std::string>() : std::string();
 }
 
+/* What players call a release (pw_release_name): its tag's name ("Alpha 8.1"), else its version in full, never cut
+ * (Settings showed "1...." for "01.003.000": the owner, 2026-11-04). */
+std::string release_name(const std::string &tag, const std::string &version)
+{
+	char name[64];
+	return pw_release_name(tag.c_str(), version.c_str(), name, sizeof(name)) ? version : std::string(name);
+}
+
+/* The name kept with a release found (kFoundFile's second line, this launcher's own), for that version; else the
+ * version's own. An older launcher reads only the first line. */
+std::string kept_name(const std::string &version)
+{
+	const std::string kept = read_file(kFoundFile);
+	const size_t line = kept.find('\n');
+	if (version.empty() || line == std::string::npos || kept.compare(0, line, version)) return version;
+	const std::string name = kept.substr(line + 1, kept.find_first_of("\r\n", line + 1) - line - 1);
+	return name.empty() ? version : name;
+}
+
 /* A PC fixture's address in the title folder (a rehearsal), else the build's. */
 std::string source()
 {
@@ -124,7 +143,7 @@ void finish(ProtonUpdate found)
 	proton_say("update: %s %s: %s", found.phase == ProtonUpdate::failed ? "failed" : "state", found.version.c_str(),
 		found.message.c_str());
 	// The main menu's notice on later starts: kept while a release is offered, dropped once none is
-	if (found.phase == ProtonUpdate::available) write_file(kFoundFile, found.version + "\n");
+	if (found.phase == ProtonUpdate::available) write_file(kFoundFile, found.version + "\n" + found.name + "\n");
 	else if (found.phase == ProtonUpdate::current) remove(kFoundFile);
 	std::lock_guard<std::mutex> hold(gLock);
 	gState = found;
@@ -139,7 +158,8 @@ void check()
 	if (pw_update_pending(kUpdate, staged, sizeof(staged))) {
 		found.phase = ProtonUpdate::ready;
 		found.version = staged;
-		found.message = PS5_TITLE_NAME " " + found.version + " is downloaded. It is switched in when " PS5_TITLE_NAME
+		found.name = kept_name(found.version);
+		found.message = PS5_TITLE_NAME " " + found.name + " is downloaded. It is switched in when " PS5_TITLE_NAME
 			" starts: press CROSS to restart now.";
 		return finish(found);
 	}
@@ -157,13 +177,14 @@ void check()
 	}
 	if (!offer.found) {
 		found.phase = ProtonUpdate::current;
-		found.message = PS5_TITLE_NAME " " + running + " is the newest release.";
+		found.message = PS5_TITLE_NAME " " + proton_update_installed_name() + " is the newest release.";
 		return finish(found);
 	}
 	found.phase = ProtonUpdate::available;
 	found.version = offer.version;
+	found.name = release_name(offer.tag, offer.version);
 	found.download = offer.zip_size;
-	found.message = PS5_TITLE_NAME " " + found.version + " is available.";
+	found.message = PS5_TITLE_NAME " " + found.name + " is available.";
 	{
 		std::lock_guard<std::mutex> hold(gLock);
 		gOffer = offer;
@@ -184,6 +205,7 @@ void download(PwUpdateOffer offer)
 	ProtonUpdate found;
 	found.phase = ProtonUpdate::failed;
 	found.version = offer.version;
+	found.name = release_name(offer.tag, offer.version);
 	// No free-space check: a title process has no statfs (measured in phase 8); a full disk is said as the write fails.
 	// Leaving the launcher (a game) ends this process and so the download; the next launcher start begins it again.
 	const std::string error = pw_update_take(fetch, offer, kUpdate, inflate, [](int step, uint64_t done, uint64_t total) {
@@ -196,7 +218,7 @@ void download(PwUpdateOffer offer)
 		return finish(found);
 	}
 	found.phase = ProtonUpdate::ready;
-	found.message = PS5_TITLE_NAME " " + offer.version + " is ready. Restart now, or it is switched in the next time "
+	found.message = PS5_TITLE_NAME " " + found.name + " is ready. Restart now, or it is switched in the next time "
 		PS5_TITLE_NAME " starts.";
 	finish(found);
 }
@@ -252,6 +274,16 @@ ProtonUpdate proton_update_state()
 {
 	std::lock_guard<std::mutex> hold(gLock);
 	ProtonUpdate state = gState;
+#if defined(PS5_HOST_REFERENCE)
+	/* The PC asks no network; the render test's made-up offer: PROTON_UPDATE_TEST="available|ready,<contentVersion>[,<tag>]" */
+	if (const char *test = getenv("PROTON_UPDATE_TEST"); test && *test) {
+		const std::string words = test;
+		const size_t first = words.find(','), second = words.find(',', first + 1);
+		state.phase = !words.compare(0, first, "ready") ? ProtonUpdate::ready : ProtonUpdate::available;
+		state.version = words.substr(first + 1, second == std::string::npos ? std::string::npos : second - first - 1);
+		state.name = release_name(second == std::string::npos ? std::string() : words.substr(second + 1), state.version);
+	}
+#endif
 	if (state.phase == ProtonUpdate::downloading) {
 		state.progress.written = gDone;
 		state.progress.to_write = gTotal;
@@ -281,7 +313,8 @@ void proton_update_on_start(int argc, char **argv)
 		ProtonUpdate found;
 		found.phase = ProtonUpdate::failed;
 		found.version = version;
-		found.message = std::string("The switch to " PS5_TITLE_NAME " ") + version + " stopped at " + failed + ": " +
+		found.name = kept_name(found.version);
+		found.message = std::string("The switch to " PS5_TITLE_NAME " ") + found.name + " stopped at " + failed + ": " +
 			strerror(-status) + ". It goes on the next time " PS5_TITLE_NAME " starts.";
 		finish(found);
 		return;
@@ -368,7 +401,9 @@ std::string proton_update_notice(const PwSetupLanguage *language)
 		}
 		if (!version.empty()) notice.phase = PW_UPDATE_NOTICE_AVAILABLE;
 	}
-	notice.version = version.c_str();
+	const std::string name = version.empty() ? std::string() :
+		version == state.version && !state.name.empty() ? state.name : kept_name(version);
+	notice.version = name.c_str();
 	pw_update_notice_text(language, &notice, line, sizeof(line));
 	return line;
 }
@@ -385,4 +420,9 @@ void proton_update_restart_now()
 	proton_say("update: Restart now, from the main menu");
 	char *none[] = { nullptr };
 	restart(none);
+}
+
+std::string proton_update_installed_name()
+{
+	return release_name(PROTON_VERSION, running_version());
 }

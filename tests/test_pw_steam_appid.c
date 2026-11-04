@@ -5,6 +5,7 @@
 #include "../src/pw_steam_appid.h"
 #include <assert.h>
 #include <errno.h>
+#include <pthread.h>
 #include <stdio.h>
 #include <stdlib.h>
 #include <string.h>
@@ -18,6 +19,24 @@ static const char *at(const char *relative)
     static char path[512];
     snprintf(path, sizeof(path), "%s/%s", root, relative);
     return path;
+}
+
+/* pw_steam_app_name on a 64 KiB stack, as Wine's spawn thread had when the title called it (title_busy): its 64 KiB
+ * buffer overflowed that stack (8.1's B4 run on the base, 2026-11-03). */
+static void *small_stack_name(void *name)
+{
+    return (void *)(long)pw_steam_app_name(at("Steam/steamapps"), "504230", name, 64);
+}
+
+static int name_on_small_stack(char *name)
+{
+    pthread_attr_t attributes;
+    pthread_t thread;
+    void *result = NULL;
+    assert(!pthread_attr_init(&attributes) && !pthread_attr_setstacksize(&attributes, 64u << 10));
+    assert(!pthread_create(&thread, &attributes, small_stack_name, name) && !pthread_join(thread, &result));
+    pthread_attr_destroy(&attributes);
+    return (int)(long)result;
 }
 
 static void folder(const char *relative)
@@ -101,6 +120,42 @@ int main(void)
     assert(pw_steam_appid_of(at("Steam/steamapps/common/Platformer2D/Mods/deep/Mod.exe"), id, sizeof(id)) == 0 && !strcmp(id, "504230"));
     assert(pw_steam_appid_of(at("Steam/steamapps/common/Some Action Game/x64/ActionGame.exe"), id, sizeof(id)) == 0 && !strcmp(id, "1145350"));
     assert(pw_steam_appid_of(at("Steam/STEAMAPPS/Common/PLATFORMER2D/Platformer2D.exe"), id, sizeof(id)) == 0 && !strcmp(id, "504230"));
+    /* The game's name (the handover's screen, src/pw_title_play.h): its manifest's top-level "name", escapes read, the
+     * folder in any case; none for an id with no manifest, a bad id, or a name that does not fit */
+    {
+        char name[64];
+        assert(pw_steam_app_name(at("Steam/steamapps"), "504230", name, sizeof(name)) == 0 && !strcmp(name, "A \"quoted\" game"));
+        assert(pw_steam_app_name(at("steam/SteamApps"), "1145350", name, sizeof(name)) == 0);
+        assert(pw_steam_app_name(at("Steam/steamapps"), "999", name, sizeof(name)) == ENOENT);
+        assert(pw_steam_app_name(at("Steam/steamapps"), "0", name, sizeof(name)) == EINVAL);
+        assert(pw_steam_app_name(at("Steam/steamapps"), "504230", name, 4) == EINVAL);
+        name[0] = 0;
+        assert(name_on_small_stack(name) == 0 && !strcmp(name, "A \"quoted\" game"));
+        const char *spaced = "\"AppState\" { \"appid\" \"7\" \"name\" \"  A Game Demo \" }";
+        assert(pw_steam_manifest_name(spaced, strlen(spaced), name, sizeof(name)) == 0 && !strcmp(name, "A Game Demo"));
+        const char *blank = "\"AppState\" { \"name\" \"   \" }";
+        assert(pw_steam_manifest_name(blank, strlen(blank), name, sizeof(name)) == EINVAL);
+        const char *nested = "\"AppState\" { \"UserConfig\" { \"name\" \"inner\" } \"appid\" \"7\" }";
+        assert(pw_steam_manifest_name(nested, strlen(nested), name, sizeof(name)) == EINVAL);
+    }
+    /* The game's artwork for the handover's screen: none at first (the screen's own backdrop), then each cache layout,
+     * the newest first; a bad id or no room is refused */
+    {
+        char hero[600];
+        assert(pw_steam_hero_path(at("Steam"), "504230", hero, sizeof(hero)) == ENOENT);
+        folder("Steam/appcache/librarycache");
+        assert(pw_steam_hero_path(at("Steam"), "504230", hero, sizeof(hero)) == ENOENT);
+        write_file("Steam/appcache/librarycache/504230_library_hero.jpg", "old");
+        assert(pw_steam_hero_path(at("Steam"), "504230", hero, sizeof(hero)) == 0 && strstr(hero, "504230_library_hero.jpg"));
+        folder("Steam/appcache/librarycache/504230/3f2a9c");
+        write_file("Steam/appcache/librarycache/504230/3f2a9c/library_hero.jpg", "deeper");
+        assert(pw_steam_hero_path(at("steam"), "504230", hero, sizeof(hero)) == 0 && strstr(hero, "3f2a9c/library_hero.jpg"));
+        write_file("Steam/appcache/librarycache/504230/LIBRARY_HERO.JPG", "new");
+        assert(pw_steam_hero_path(at("Steam"), "504230", hero, sizeof(hero)) == 0 && strstr(hero, "504230/LIBRARY_HERO.JPG"));
+        assert(pw_steam_hero_path(at("Steam"), "1145350", hero, sizeof(hero)) == ENOENT);
+        assert(pw_steam_hero_path(at("Steam"), "0", hero, sizeof(hero)) == EINVAL);
+        assert(pw_steam_hero_path(at("Steam"), "504230", hero, 8) == ENOENT);
+    }
     /* A folder with no manifest, a path outside any library, and the folder itself (no program inside) say nothing. */
     assert(pw_steam_appid_of(at("Steam/steamapps/common/Orphan/Orphan.exe"), id, sizeof(id)) == ENOENT);
     assert(pw_steam_appid_of(at("Steam/steamapps/common/Platformer2D"), id, sizeof(id)) == ENOENT);

@@ -5,6 +5,7 @@
 #include <vector>
 
 #include "../src/pw_steam_guide.h"
+#include "../src/pw_steam_screen.h"
 // A loading screen for the seconds before a game shows its first frame. The title draws it on the
 // console's display itself, straight through VideoOut (a Java game, a .NET one or a DXVK one shows
 // nothing of its own for 8 to 22 s), and closes it when the game's own presenter (Vulkan or OpenGL)
@@ -61,6 +62,13 @@ std::string proton_cover_stop(const char *why);
 bool proton_guide_start(const char *language, const char *app_root, bool (*show)(const void *));
 // What shows now (PW_STEAM_SCREEN_NONE: the client's own windows); the drawing thread takes it up within 0.1 s.
 void proton_guide_show(PwSteamScreen screen, unsigned seconds, unsigned long long bytes, const char *persona);
+// The Steam handover's step (PW_STEAM_SCREEN_HANDOVER, src/pw_title_play.h) over everything, its game's name (NULL: "the
+// game"), its library artwork's path for the backdrop (NULL: the Aero one; read when first shown) and, for
+// PW_STEAM_HANDOVER_STUCK, how long Steam has been quiet; proton_guide_show(NONE) takes it off.
+void proton_guide_handover(PwSteamHandover step, const char *game, const char *art, unsigned seconds);
+// Returns once that step's first frame went to the broker (or the broker refused it: the cover cannot draw now), or at
+// once when the guide is not running.
+void proton_guide_handover_wait(PwSteamHandover step);
 // A game's dialog box over its frames (PW_STEAM_SCREEN_DIALOG): its caption and its lines; NULL takes it off.
 void proton_guide_dialog(const char *title, const char *text);
 // MihawkOS's own on-screen keyboard over the game (PW_STEAM_SCREEN_KEYBOARD, src/pw_vkbd.h): its state, copied; drawn again

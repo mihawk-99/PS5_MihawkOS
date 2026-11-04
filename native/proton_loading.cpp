@@ -415,12 +415,13 @@ uint32_t mix_color(uint32_t a, uint32_t b, float t)
 // The source image cover-fit into the poster once; the drawing loop then copies pixels. Every poster is full-bleed
 // (the owner's choice): a wide store header or hero is cropped to the 2:3 tile, never letterboxed. A 3x3 box around
 // each output pixel replaces one bilinear tap, so the art's own text stays smooth at 220x330.
-void fit_cover(const stbi_uc *rgba, int width, int height, std::vector<uint32_t> &out)
+void fit_cover(const stbi_uc *rgba, int width, int height, std::vector<uint32_t> &out, int out_w = kPosterW,
+               int out_h = kPosterH)
 {
-    out.assign(size_t(kPosterW) * kPosterH, kTheme.surface_high);
-    const float scale = std::max(float(kPosterW) / width, float(kPosterH) / height);
+    out.assign(size_t(out_w) * out_h, kTheme.surface_high);
+    const float scale = std::max(float(out_w) / width, float(out_h) / height);
     const float draw_w = float(width) * scale, draw_h = float(height) * scale;
-    const float off_x = (float(kPosterW) - draw_w) * 0.5f, off_y = (float(kPosterH) - draw_h) * 0.5f;
+    const float off_x = (float(out_w) - draw_w) * 0.5f, off_y = (float(out_h) - draw_h) * 0.5f;
     const auto sample = [&](float fx, float fy) {
         const int x0 = std::clamp(int(std::floor(fx)), 0, width - 1);
         const int y0 = std::clamp(int(std::floor(fy)), 0, height - 1);
@@ -434,8 +435,8 @@ void fit_cover(const stbi_uc *rgba, int width, int height, std::vector<uint32_t>
         return mix_color(mix_color(at(x0, y0), at(x1, y0), tx), mix_color(at(x0, y1), at(x1, y1), tx), ty);
     };
     const float radius = scale < 1.0f ? 0.5f / scale : 0.0f;   // half the source footprint this output pixel covers
-    for (int py = 0; py < kPosterH; ++py)
-        for (int px = 0; px < kPosterW; ++px) {
+    for (int py = 0; py < out_h; ++py)
+        for (int px = 0; px < out_w; ++px) {
             const float cx = (float(px) + 0.5f - off_x) / scale;
             const float cy = (float(py) + 0.5f - off_y) / scale;
             unsigned r = 0, g = 0, b = 0, n = 0;
@@ -447,7 +448,7 @@ void fit_cover(const stbi_uc *rgba, int width, int height, std::vector<uint32_t>
                     b += pixel & 0xff;
                     ++n;
                 }
-            out[size_t(py) * kPosterW + size_t(px)] = rgb(r / n, g / n, b / n);
+            out[size_t(py) * out_w + size_t(px)] = rgb(r / n, g / n, b / n);
         }
 }
 
@@ -1532,6 +1533,11 @@ struct Guide {
     const PwSetupLanguage *language = nullptr;
     PwSteamScreenState wanted{};           // under state_lock, with persona and the dialog's words
     std::string persona, dialog_title, dialog_text;
+    std::string game;                      // under state_lock: the Steam handover's game (PW_STEAM_SCREEN_HANDOVER)
+    std::string art;                       // under state_lock: its library artwork's path, or empty: the Aero backdrop
+    std::vector<uint32_t> art_backdrop;    // the artwork cover-fit and dimmed, read when the handover first shows it
+    std::condition_variable seen;          // with state_lock: a handover step's first frame went to the broker (seen_step)
+    int seen_step = -1;
     PwVkbd keyboard{};                     // under state_lock: MihawkOS's own keyboard as it stands, and each change's count
     unsigned keyboard_changes = 0;
     uint64_t keyboard_changed_ns = 0;      // under state_lock: when the last change came (the press, for the lag's record)
@@ -1610,14 +1616,14 @@ void *guide_run(void *)
     scePthreadSetprio(pthread_self(), 690);
     int back = 0;
     PwSteamScreenState drawn{};
-    std::string drawn_persona, drawn_dialog;
+    std::string drawn_persona, drawn_dialog, drawn_game, drawn_art, loaded_art;
     unsigned drawn_keyboard = 0;
     PwVkbd keyboard_shown{};               // the keyboard as the canvas shows it, while keyboard_on_canvas
     bool keyboard_on_canvas = false;
     bool any = false;
     for (unsigned tick = 0; !guide.stop.load(); ++tick) {
         PwSteamScreenState now;
-        std::string persona, dialog_title, dialog_text;
+        std::string persona, dialog_title, dialog_text, game, art;
         PwVkbd keyboard;
         PwOverlay control;
         unsigned keyboard_changes;
@@ -1629,6 +1635,8 @@ void *guide_run(void *)
             persona = guide.persona;
             dialog_title = guide.dialog_title;
             dialog_text = guide.dialog_text;
+            game = guide.game;
+            art = guide.art;
             keyboard = guide.keyboard;
             control = guide.control;
             keyboard_changes = guide.keyboard_changes;
@@ -1640,6 +1648,7 @@ void *guide_run(void *)
         now.persona = persona.empty() ? nullptr : persona.c_str();
         now.dialog_title = dialog_title.c_str();
         now.dialog_text = dialog_text.c_str();
+        now.game = game.empty() ? nullptr : game.c_str();
         const bool panel = now.screen == PW_STEAM_SCREEN_KEYBOARD || now.screen == PW_STEAM_SCREEN_OVERLAY;
         if (panel) {
             if (guide.covering && guide.show(nullptr)) guide.covering = false;
@@ -1704,20 +1713,46 @@ void *guide_run(void *)
         } else {
             if (!any || now.screen != drawn.screen || now.seconds != drawn.seconds ||
                 now.bytes / 1000000 != drawn.bytes / 1000000 || persona != drawn_persona ||
-                dialog_title + '\n' + dialog_text != drawn_dialog || keyboard_changes != drawn_keyboard) {
+                dialog_title + '\n' + dialog_text != drawn_dialog || keyboard_changes != drawn_keyboard ||
+                now.handover != drawn.handover || game != drawn_game || art != drawn_art) {
                 if (!any || now.screen != drawn.screen) say("steam guide: screen %d, %u s in", int(now.screen), now.seconds);
-                pw_steam_screen_draw(guide.still.data(), guide.backdrop.data(), &now, &guide.set, nullptr);
+                // The handover's game artwork (Steam's own cache), read here, when it first shows; none: the Aero backdrop
+                if (now.screen == PW_STEAM_SCREEN_HANDOVER && art != loaded_art) {
+                    loaded_art = art;
+                    std::vector<uint32_t>().swap(guide.art_backdrop);
+                    int width = 0, height = 0, channels = 0;
+                    stbi_uc *rgba = art.empty() ? nullptr : stbi_load(art.c_str(), &width, &height, &channels, 4);
+                    if (rgba) {
+                        fit_cover(rgba, width, height, guide.art_backdrop, PW_LOADING_WIDTH, PW_LOADING_HEIGHT);
+                        stbi_image_free(rgba);
+                        for (auto &pixel : guide.art_backdrop) pixel = mix_color(pixel, 0xff000000u, 0.25f);
+                    }
+                    say("steam guide: the handover's backdrop is %s", guide.art_backdrop.empty() ?
+                        (art.empty() ? "the Aero one (no artwork)" : "the Aero one (its artwork does not read)") :
+                        "the game's artwork");
+                }
+                const bool on_art = now.screen == PW_STEAM_SCREEN_HANDOVER && !guide.art_backdrop.empty();
+                pw_steam_screen_draw(guide.still.data(), on_art ? guide.art_backdrop.data() : guide.backdrop.data(), &now,
+                                     &guide.set, nullptr);
+                drawn_art = art;
                 ++guide.drawn;
                 drawn = now;
                 drawn_persona = persona;
                 drawn_dialog = dialog_title + '\n' + dialog_text;
+                drawn_game = game;
                 drawn_keyboard = keyboard_changes;
                 any = true;
             }
             memcpy(guide.frames[back].data(), guide.still.data(), guide.still.size() * sizeof(uint32_t));
             pw_steam_screen_animate(guide.frames[back].data(), &now, tick);
-            if (guide.show(guide.frames[back].data())) back ^= 1, ++guide.shown, guide.covering = true;
+            const bool handed = guide.show(guide.frames[back].data());
+            if (handed) back ^= 1, ++guide.shown, guide.covering = true;
             else ++guide.refused;
+            // A handover step's first frame, handed over or refused (the cover cannot draw now): its waiter goes on
+            if (now.screen == PW_STEAM_SCREEN_HANDOVER) {
+                std::lock_guard<std::mutex> hold(guide.state_lock);
+                if (guide.seen_step != int(now.handover)) guide.seen_step = int(now.handover), guide.seen.notify_all();
+            }
         }
         for (int i = 0; i < 10 && !guide.stop.load(); ++i) usleep(10000);
     }
@@ -1753,6 +1788,7 @@ bool proton_guide_start(const char *language, const char *app_root, bool (*show)
     guide.stop = false;
     guide.covering = false;
     guide.shown = guide.refused = guide.drawn = 0;
+    guide.seen_step = -1;
     if (pthread_create(&guide.thread, nullptr, guide_run, nullptr)) {
         say("steam guide: no screens (no thread); the client's windows show");
         for (auto *canvas : {&guide.backdrop, &guide.still, &guide.frames[0], &guide.frames[1]}) std::vector<uint32_t>().swap(*canvas);
@@ -1772,6 +1808,22 @@ void proton_guide_show(PwSteamScreen screen, unsigned seconds, unsigned long lon
     guide.wanted.seconds = seconds;
     guide.wanted.bytes = bytes;
     guide.persona = persona ? persona : "";
+}
+
+void proton_guide_handover(PwSteamHandover step, const char *game, const char *art, unsigned seconds)
+{
+    std::lock_guard<std::mutex> hold(guide.state_lock);
+    guide.wanted.screen = PW_STEAM_SCREEN_HANDOVER;
+    guide.wanted.handover = step;
+    guide.wanted.seconds = seconds;
+    guide.game = game ? game : "";
+    guide.art = art ? art : "";
+}
+
+void proton_guide_handover_wait(PwSteamHandover step)
+{
+    std::unique_lock<std::mutex> hold(guide.state_lock);
+    guide.seen.wait(hold, [&] { return !guide.running.load() || guide.stop.load() || guide.seen_step == int(step); });
 }
 
 void proton_guide_dialog(const char *title, const char *text)
@@ -1827,7 +1879,11 @@ std::string proton_guide_stop(const char *why)
 {
     std::lock_guard<std::mutex> hold(guide.lock);
     if (!guide.running) return std::string();
-    guide.stop = true;
+    {
+        std::lock_guard<std::mutex> wake(guide.state_lock);
+        guide.stop = true;
+        guide.seen.notify_all();
+    }
     pthread_join(guide.thread, nullptr);
     if (guide.overlaid && guide.overlay && guide.overlay(nullptr, 0, 0, 0, 0)) guide.overlaid = false;
     if (guide.hud_shown && guide.hud_show && guide.hud_show(nullptr, 0, 0, 0, 0)) guide.hud_shown = false;

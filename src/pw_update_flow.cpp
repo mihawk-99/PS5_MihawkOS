@@ -94,6 +94,11 @@ std::string pw_update_find(const PwUpdateGet &get, const std::string &releases_u
 	if (pw_release_version_compare(release.version, running) <= 0) return {};   /* not newer than what runs: no replay */
 	offer.found = true;
 	offer.version = release.version;
+	if (offer.tag.empty()) {   /* a set address (a rehearsal): the tag of the folder the manifest downloads from */
+		char tag[128];
+		pw_release_base_tag(release.base, tag, sizeof(tag));
+		offer.tag = tag;
+	}
 	offer.zip_url = std::string(release.base) + release.title;
 	memcpy(offer.zip_sha256, release.title_sha256, 32);
 	memcpy(offer.runtime_sha256, release.runtime_sha256, 32);

@@ -62,6 +62,76 @@ int pw_steam_manifest_read(const char *text, size_t length, char *appid, size_t 
     return have_id && have_dir ? 0 : EINVAL;
 }
 
+int pw_steam_manifest_name(const char *text, size_t length, char *name, size_t cap)
+{
+    char key[64] = "", value[272];
+    int depth = 0, have_key = 0, cut = 0;
+    const char *at = text, *end = text ? text + length : NULL;
+    if (!text || !name || !cap) return EINVAL;
+    for (int kind; (kind = token(&at, end, value, sizeof(value), &cut));) {
+        if (kind == '{') { ++depth; have_key = 0; continue; }
+        if (kind == '}') { --depth; have_key = 0; continue; }
+        if (!have_key) { snprintf(key, sizeof(key), "%.63s", value); have_key = 1; continue; }
+        have_key = 0;
+        if (depth == 1 && !cut && !strcasecmp(key, "name")) {
+            /* without the blanks around it, as Steam shows it: a manifest's name can end in a space (the console's run
+             * 8.1's console check on the base, 2026-11-03 drew "Demo  ready") */
+            const char *start = value;
+            size_t length = strlen(value);
+            while (*start == ' ' || *start == '\t') ++start, --length;
+            while (length && (start[length - 1] == ' ' || start[length - 1] == '\t')) --length;
+            if (!length || length >= cap) return EINVAL;
+            memcpy(name, start, length);
+            name[length] = 0;
+            return 0;
+        }
+    }
+    return EINVAL;
+}
+
+int pw_steam_app_name(const char *steamapps, const char *id, char *name, size_t cap)
+{
+    /* text as pw_steam_appid_of's: the title calls this on Wine's spawn thread (title_busy), whose stack 64 KiB overflowed
+     * (8.1's B4 run on the base, 2026-11-03); "name" comes in a manifest's first lines */
+    char file[1200], held[1200], text[8192];
+    if (!steamapps || !name || !cap || !pw_steam_id_valid(id)) return EINVAL;
+    if ((size_t)snprintf(file, sizeof(file), "%s/appmanifest_%s.acf", steamapps, id) >= sizeof(file)) return EINVAL;
+    if (!pw_path_nocase(file, held, sizeof(held))) return ENOENT;
+    FILE *manifest = fopen(held, "rb");
+    if (!manifest) return ENOENT;
+    const size_t got = fread(text, 1, sizeof(text), manifest);
+    fclose(manifest);
+    return pw_steam_manifest_name(text, got, name, cap);
+}
+
+int pw_steam_hero_path(const char *steam, const char *id, char *out, size_t cap)
+{
+    char given[1100], cache[1100], at[1400], folder[1400];
+    if (!steam || !out || !cap || !pw_steam_id_valid(id)) return EINVAL;
+    if ((size_t)snprintf(given, sizeof(given), "%s/appcache/librarycache", steam) >= sizeof(given) ||
+        !pw_path_nocase(given, cache, sizeof(cache)))
+        return ENOENT;
+    /* <id>/library_hero.jpg, or one folder deeper */
+    snprintf(at, sizeof(at), "%s/%s/library_hero.jpg", cache, id);
+    if (pw_path_nocase(at, out, cap)) return 0;
+    snprintf(at, sizeof(at), "%s/%s", cache, id);
+    if (pw_path_nocase(at, folder, sizeof(folder))) {
+        DIR *directory = opendir(folder);
+        for (struct dirent *entry; directory && (entry = readdir(directory));) {
+            if (entry->d_name[0] == '.' ||
+                (size_t)snprintf(at, sizeof(at), "%s/%s/library_hero.jpg", folder, entry->d_name) >= sizeof(at))
+                continue;
+            if (pw_path_nocase(at, out, cap)) {
+                closedir(directory);
+                return 0;
+            }
+        }
+        if (directory) closedir(directory);
+    }
+    snprintf(at, sizeof(at), "%s/%s_library_hero.jpg", cache, id);
+    return pw_path_nocase(at, out, cap) ? 0 : ENOENT;
+}
+
 /* host_exe lies in <steamapps>/common/<folder>/...: the length of the steamapps path and the folder's name. */
 static int common_folder(const char *host_exe, size_t *steamapps, char *folder, size_t cap)
 {

@@ -519,3 +519,11 @@ evidence/a8rel82-base-2026-11-02-e1.json
 
 [steam] bundle G, 2430 on by default (the owner's ask on 2026-11-03, no per-game setting): a game's copy from Steam hit the same refusals, and no game's own setting reaches a Steam launch
 wine/patches/2430-ntdll-ps5-a-reservation-above-the-console-s-address-space-may-be-placed-elsewhere.patch
+
+[steam] 8.1's Steam browser in the title and its play handover (the owner asked on 2026-11-02 for the browser inside MihawkOS in 8.1): the play request, the handover's waits and screens, the title's busy and exit-wait hooks
+src/pw_title_play.c
+src/pw_title_play.h
+tests/test_pw_title_play.c
+wine/ps5/pw_wine_process.h
+wine/ps5/pw_title_claim.h
+tests/test_pw_title_claim.c

@@ -32,6 +32,19 @@ int pw_steam_id_valid(const char *text);
 int pw_steam_manifest_read(const char *text, size_t length, char *appid, size_t appid_cap, char *installdir,
                            size_t installdir_cap);
 
+/* The "name" of an appmanifest's text (top level of "AppState"), the game's name as Steam shows it: 0 when it is there
+ * and fits cap bytes, else EINVAL. */
+int pw_steam_manifest_name(const char *text, size_t length, char *name, size_t cap);
+/* The name of app id in <steamapps>/appmanifest_<id>.acf (a host path; any case on disk): 0, ENOENT when there is no such
+ * manifest, EINVAL when it has no name that fits. */
+int pw_steam_app_name(const char *steamapps, const char *id, char *name, size_t cap);
+
+/* The game's library artwork in Steam's own cache, for the handover's screen (src/pw_title_play.h): under
+ * <steam>/appcache/librarycache (a host path; any case on disk), <id>/library_hero.jpg, the same one folder deeper
+ * (newer clients), or <id>_library_hero.jpg (older ones). 0 with its path in out (cap bytes), ENOENT when there is none
+ * (the screen keeps its own backdrop), EINVAL for a bad id or no room. Only the path: the picture is read when shown. */
+int pw_steam_hero_path(const char *steam, const char *id, char *out, size_t cap);
+
 /* The app id of the program at host_exe (a host path, '/' separators) from the installation: 0 with the id in id (cap
  * bytes, PW_STEAM_ID_MAX at least), ENOENT when nothing says. Several manifests naming one folder: the lowest id. */
 int pw_steam_appid_of(const char *host_exe, char *id, size_t cap);

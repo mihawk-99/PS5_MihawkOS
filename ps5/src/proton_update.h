@@ -31,7 +31,8 @@
 
 struct ProtonUpdate {
 	enum Phase { idle, checking, current, available, downloading, ready, failed } phase{ idle };
-	std::string version;     /* the release offered, once checked */
+	std::string version;     /* the release offered, once checked (its contentVersion, "01.003.000") */
+	std::string name;        /* that release as players know it ("Alpha 8.1", pw_release_name); "" when not known */
 	std::string message;     /* for the screen */
 	uint64_t download{ 0 };  /* the title pack's bytes to download */
 	PwPackProgress progress{};
@@ -40,6 +41,8 @@ struct ProtonUpdate {
 	PwUpdateFailure failure{ PW_UPDATE_FAIL_NONE };   /* when failed: why, for the main menu's line */
 };
 
+/* This title as players know it ("Alpha 8.1": its VERSION, pw_release_name), else its contentVersion. */
+std::string proton_update_installed_name();
 /* Ask the release address what is newest; returns at once. */
 void proton_update_check();
 /* Download the release proton_update_check found into the stage; returns at once. */

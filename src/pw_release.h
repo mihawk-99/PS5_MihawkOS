@@ -45,6 +45,16 @@ int pw_release_parse(const char *text, size_t size, const uint8_t public_key[32]
  * well-formed one. */
 int pw_release_version_compare(const char *a, const char *b);
 
+/* The name a player knows a release by, from its tag or VERSION ("v8.1.0-alpha-8" -> "Alpha 8.1", "8.0.0-alpha-8" ->
+ * "Alpha 8", "7.1.0-alpha-7" -> "Alpha 7.1", "5.0.1-alpha-5" -> "Alpha 5.0.1", "6.0.0-beta-2" -> "Beta 6"): the stage
+ * and X.Y.Z without its trailing zeros. A release without a stage, an rc, or a tag that does not read gives fallback
+ * instead (the full version number: the tag as given, or the contentVersion "01.003.000"). Never shortened: the
+ * Settings line showed "1...." for a contentVersion (the owner, 2026-11-04). 0, or E2BIG when out (cap) is too small. */
+int pw_release_name(const char *tag, const char *fallback, char *out, size_t cap);
+/* A release's tag from its signed manifest's base address, the folder it downloads from
+ * (".../releases/download/v8.1.0-alpha-8/" -> "v8.1.0-alpha-8"); "" when there is none. */
+void pw_release_base_tag(const char *base, char *out, size_t cap);
+
 /* A release tag's version, as GitHub's releases name them ("v7.1.0-alpha-8", "6.0.0", "v8.0.0-rc-2"): X.Y.Z, then
  * the stage (alpha < beta < rc < none), then its number. <0, 0 or >0; a tag that does not read compares below every
  * one that does, so it is never taken as newer. */

@@ -53,6 +53,14 @@ struct ProtonGame {
 	/* A program to run instead, with this entry's prefix and settings (the launcher's Files: the title's path= launch);
 	 * empty: the entry's own executable */
 	std::string run_path;
+	/* A Steam app id: the restart starts this entry's play session for it (play=, src/pw_title_play.h); empty: none */
+	std::string play;
+	/* env= words the title's own handover carries to the next session (a run's test overrides, src/pw_title_play.h) */
+	std::vector<std::string> launch_env;
+	/* The handover back from a play session (returning=1): the next session says so until Big Picture shows */
+	bool returning{ false };
+	/* The app id it played, for the screen's artwork (returning=<id>); empty: returning=1 */
+	std::string returned;
 };
 
 struct ProtonLaunch {
@@ -61,7 +69,8 @@ struct ProtonLaunch {
 	std::string path;       /* game mode: a Windows path given directly */
 	unsigned cycle{ 0 };
 	/* env=NAME=VALUE: test-only overrides of the game's environment. They come
-	 * only from the one-shot wine-run.txt (the restart never writes them), so
+	 * only from the one-shot wine-run.txt (a restart writes them only for the
+	 * title's own Steam handover, src/pw_title_play.h, which is the same run), so
 	 * they apply to one launch and never to a later manual one. */
 	std::vector<std::string> env;
 	/* args=<command line arguments>: test-only, like env=; they replace the
@@ -74,6 +83,13 @@ struct ProtonLaunch {
 	bool aurelia{ false };
 	/* ended=<reason>: why the last session ended, when it failed (native/proton_wine.cpp fail), for the launcher. */
 	std::string ended;
+	/* play=<app id>: the title's own restart into a Steam entry's play session (src/pw_title_play.h): Steam starts that
+	 * game itself and the game takes the title. Only a valid id is kept. */
+	std::string play;
+	/* returning=1 or returning=<app id>: the title's own handover back to browsing after a play session
+	 * (src/pw_title_play.h), with the id it played (returned: its artwork on the screen) when the line names one */
+	bool returning{ false };
+	std::string returned;
 };
 
 /* Present while a session runs (native/proton_wine.cpp): written at its start, removed when it ends through the title.
@@ -172,6 +188,8 @@ std::string proton_game_prefix(const ProtonGame &game);
  * not set. Proton's Wine changes behaviour for a game by those names; nothing else set them. Reads the disk (a few
  * small files), so a launch calls it, not the catalog's listing. Safe to call again after the executable changes. */
 void proton_add_steam_ids(ProtonGame &game);
+/* The app id the installation gives game's executable (the same lookup); empty when nothing says. */
+std::string proton_steam_appid(const ProtonGame &game);
 
 /* Replace this process with the title again: the game, or the launcher when
  * game is NULL. Never returns when it works: the caller is gone. ended, when not empty, is the failed session's reason

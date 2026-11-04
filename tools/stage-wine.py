@@ -285,6 +285,22 @@ def builtins_digest(runtime):
     return digest.hexdigest()
 
 
+def stamp_inf(runtime, patched_inf):
+    """wine.inf's last line and its time, from the runtime's PE modules as they ship (this PS5 build's, stripped). A
+    prefix updates when wine.inf's time differs from the one it recorded (patch 0952), so the time is made from the
+    content: a changed wine.inf or builtin DLL updates every prefix once, a rebuilt identical one none, and the deploy,
+    which goes by content, sends wine.inf again. Taken before this build's modules replaced the PC build's, the line
+    never changed with them, and the 8 -> 8.1 update left every prefix with Alpha 8's copies
+    (a81upd-base-2026-11-04, its step 6)."""
+    inf = runtime / 'share/wine/wine.inf'
+    line = b'; PS5 builtins ' + builtins_digest(runtime).encode() + (b'\r\n' if b'\r\n' in patched_inf else b'\n')
+    inf.write_bytes(patched_inf + line)
+    inf_time = 1_600_000_000 + int(hashlib.sha256(patched_inf + line).hexdigest()[:7], 16)
+    os.utime(inf, (inf_time, inf_time))
+    if inf.read_bytes().splitlines()[-1].split()[-1].decode() != builtins_digest(runtime):
+        raise SystemExit('wine.inf does not name the builtins the runtime ships')
+
+
 def pe_image(path):
     """A PE image, which llvm-strip reads. A fresh host wineboot writes 16-bit placeholders that are MZ alone (the probe
     prefix's 255-byte windows/rundll.exe), and llvm-strip refuses those."""
@@ -321,16 +337,10 @@ def main():
         shutil.copytree(host / 'lib/wine/i386-windows', runtime / 'lib/wine/i386-windows')
     shutil.copytree(host / 'share/wine', runtime / 'share/wine')
     # wine.inf from the patched tree (tools/build-wine-ps5.sh): it names what wineboot registers (winedmo's classes,
-    # patch 2006). A prefix updates when wine.inf's time differs from the one it recorded (patch 0952), so the time is
-    # made from the content: a changed wine.inf updates every prefix once, a rebuilt identical one none. Its last line
-    # names the builtins (builtins_digest), so a changed builtin DLL updates every prefix once too, and the deploy,
-    # which goes by content, sends wine.inf again.
+    # patch 2006). Its builtins line and its time are written once the runtime's PE modules are final (stamp_inf).
     inf = runtime / 'share/wine/wine.inf'
     patched_inf = (DEPS / 'wine-ps5/pe/wine.inf').read_bytes()
-    patched_inf += b'; PS5 builtins ' + builtins_digest(runtime).encode() + (b'\r\n' if b'\r\n' in patched_inf else b'\n')
     inf.write_bytes(patched_inf)
-    inf_time = 1_600_000_000 + int(hashlib.sha256(patched_inf).hexdigest()[:7], 16)
-    os.utime(inf, (inf_time, inf_time))
     bundle = DEPS / 'ca-bundle' / CA_BUNDLE_URL.rsplit('/', 1)[1]
     if not bundle.is_file():
         bundle.parent.mkdir(parents=True, exist_ok=True)
@@ -539,6 +549,7 @@ def main():
     # Many files to one llvm-strip, which strips each on its own: one process per file was 26 of staging's 41 s.
     for first in range(0, len(images), 500):
         subprocess.run(['llvm-strip', '--strip-debug', *images[first:first + 500]], check=True, capture_output=True)
+    stamp_inf(runtime, patched_inf)
     cares_license = DEPS / 'wine-ps5/prx/licenses/cares/LICENSE.md'
     if not cares_license.is_file():
         raise SystemExit('Pinned c-ares license is missing')

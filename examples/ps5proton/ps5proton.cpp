@@ -340,7 +340,11 @@ class VulkanExample : public ps5ui::KitExample
 		const PwSetupText badges[] = { PW_TEXT_COUNT, PW_TEXT_SET_BADGE_CHECKING, PW_TEXT_SET_BADGE_NEWEST, PW_TEXT_SET_BADGE_AVAILABLE,
 			PW_TEXT_STEAM_BADGE_DOWNLOADING, PW_TEXT_SET_BADGE_READY, PW_TEXT_STEAM_BADGE_FAILED };
 		settingsList.item(6).badge = badges[updates.phase] == PW_TEXT_COUNT ? "" : tr(badges[updates.phase]);
-		settingsList.item(6).subtitle = updates.version.empty() ? tr(PW_TEXT_SET_UPDATES_SUB) : PS5_TITLE_NAME " " + updates.version;
+		// Both releases by the names players know (the owner, 2026-11-04: the line showed "1...." for "01.003.000")
+		const std::string installed = proton_update_installed_name();
+		settingsList.item(6).subtitle = updates.version.empty() || updates.phase == ProtonUpdate::current
+			? home.fill(PW_TEXT_SET_UPDATES_CURRENT, { installed })
+			: home.fill(PW_TEXT_SET_UPDATES_OFFERED, { updates.name.empty() ? updates.version : updates.name, installed });
 		const bool automatic = proton_update_auto_enabled();
 		settingsList.item(11).badge = tr(automatic ? PW_TEXT_OPTIONS_BADGE_ON : PW_TEXT_OPTIONS_BADGE_OFF);
 		settingsList.item(11).subtitle = tr(automatic ? PW_TEXT_SET_AUTO_ON : PW_TEXT_SET_AUTO_OFF);

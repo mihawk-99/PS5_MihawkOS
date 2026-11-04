@@ -1,6 +1,6 @@
 /* SPDX-License-Identifier: GPL-3.0-or-later */
 /* Which program runs in the title by default (wine/ps5/pw_wine_title_game.h), and why: a 64-bit library game that
- * imports a graphics API while the setting is on; not a 32-bit one, not the store client or its browser, not an
+ * imports a graphics API while the setting is on, and Steam's browser; not a 32-bit one, not the store client, not an
  * installer, crash reporter or a game's launcher, not a program the player opted out, and not one whose imports say it
  * is no game; and the one program a game's entry picks, whatever its name. */
 #include "../wine/ps5/pw_wine_title_game.h"
@@ -134,8 +134,26 @@ int main(void)
     assert(pw_title_game_inherit(ship, stub_root, NULL, tiny, sizeof(tiny)) && !tiny[0]);
     assert(!pw_title_game_inherit(steam, NULL, NULL, tiny, sizeof(tiny)) && !tiny[0]);
     assert(!pw_title_game_inherit(NULL, stub_root, NULL, other, sizeof(other)) && !other[0]);
+    /* Steam's browser: its main process runs in the title; its --type= processes, a steamwebhelper.exe elsewhere, a
+     * decided route and the opt-out do not. */
+    const char *web = "C:\\Program Files (x86)\\Steam\\bin\\cef\\cef.win64\\steamwebhelper.exe";
+    const char *web_line = "\"C:\\Program Files (x86)\\Steam\\bin\\cef\\cef.win64\\steamwebhelper.exe\" -lang=en_US --single-process";
+    enum PwTitleRoute first = route(web, 1, "1", NULL, NULL);
+    assert(first == PW_TITLE_ROUTE_NOT_LIBRARY);
+    assert(pw_title_game_steam_browser(first, web, web_line, NULL) == PW_TITLE_ROUTE_STEAM_BROWSER);
+    assert(pw_title_game_steam_browser(first, web, NULL, "") == PW_TITLE_ROUTE_STEAM_BROWSER);
+    assert(pw_title_route_in_title(PW_TITLE_ROUTE_STEAM_BROWSER));
+    assert(pw_title_game_steam_browser(first, web, "steamwebhelper.exe --type=crashpad-handler", NULL) == PW_TITLE_ROUTE_NOT_LIBRARY);
+    assert(pw_title_game_steam_browser(first, web, web_line, "SteamWebHelper.exe") == PW_TITLE_ROUTE_OPTOUT);
+    assert(pw_title_game_steam_browser(PW_TITLE_ROUTE_NOT_LIBRARY, "D:\\elsewhere\\steamwebhelper.exe", NULL, NULL) ==
+           PW_TITLE_ROUTE_NOT_LIBRARY);
+    assert(pw_title_game_steam_browser(PW_TITLE_ROUTE_NOT_LIBRARY, "C:\\Program Files (x86)\\Steam\\steam.exe", NULL, NULL) ==
+           PW_TITLE_ROUTE_NOT_LIBRARY);
+    assert(pw_title_game_steam_browser(PW_TITLE_ROUTE_32BIT, web, NULL, NULL) == PW_TITLE_ROUTE_32BIT);
+    assert(pw_title_game_steam_browser(PW_TITLE_ROUTE_OFF, web, NULL, NULL) == PW_TITLE_ROUTE_OFF);
+    assert(pw_title_game_steam_browser(PW_TITLE_ROUTE_NOT_LIBRARY, NULL, NULL, NULL) == PW_TITLE_ROUTE_NOT_LIBRARY);
     /* Each reason has its word for the log. */
-    for (int r = PW_TITLE_ROUTE_GAME; r <= PW_TITLE_ROUTE_CHROMIUM_CHILD; ++r) assert(strcmp(pw_title_route_word(r), "unknown"));
+    for (int r = PW_TITLE_ROUTE_GAME; r <= PW_TITLE_ROUTE_STEAM_BROWSER; ++r) assert(strcmp(pw_title_route_word(r), "unknown"));
     assert(pw_title_game_listed("a.exe;;b.exe;", "b.exe") && !pw_title_game_listed("a.exe", "") && !pw_title_game_listed(NULL, "a.exe"));
     printf("test_pw_wine_title_game: ok\n");
     return 0;

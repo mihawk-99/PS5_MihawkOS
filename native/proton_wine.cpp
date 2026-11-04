@@ -58,6 +58,8 @@ extern "C" {
 #include "../src/pw_steam.h"
 #include "../src/pw_steam_memory.h"
 #include "../src/pw_steam_guide.h"
+#include "../src/pw_title_play.h"
+#include "../src/pw_steam_appid.h"
 #include "../src/pw_path_nocase.h"
 #include "../src/pw_steamcmd.h"
 #include "../src/pw_steamcmd_setup.h"
@@ -235,6 +237,44 @@ std::atomic<bool> graphics_claimed{false};
 std::atomic<bool> title_client_claimed{false};
 // The session's root itself ran in the title (start_title_root): no helper root, so no initial status to report.
 static bool title_root_ran=false;
+// "The game comes first" (src/pw_title_play.h). The program the title took (start_title_client), for a refused claim's
+// decision; the session's entry, for the restart; this session being its play session (play=); a play request taken at
+// a game's claim; when Steam was asked to shut down (0: not yet); the player's own stop; a stop this asked for itself.
+static std::mutex play_lock;
+static std::string title_holder_image, title_holder_line;   // under play_lock
+static ProtonGame play_entry;
+static bool play_session = false;
+static std::string play_appid;   // written once, before play_requested
+static std::atomic<bool> play_requested{false};
+static std::atomic<uint64_t> play_shutdown_ms{0};
+static std::atomic<bool> player_left{false};
+static std::atomic<bool> play_stop_ours{false};
+static std::string play_nls, play_modules, play_prefix, play_cwd;   // the shutdown's root, as the session's own
+static void steam_shutdown(const char *why);
+static unsigned steam_helpers();
+static bool steam_shutdown_wait(const char *why, PwSteamHandover step);
+// While the handover's screen covers the title, the title's own process stays out of the broker's game mode
+// (handover_cover): a game mode frame is flipped even over a cover. The game's own Game Mode choice (its notice) waits.
+static std::atomic<bool> handover_direct_held{false};
+static std::atomic<int> handover_game_direct{-1};   // the in-title game's own choice meanwhile (-1: none)
+static void handover_show(PwSteamHandover step, unsigned seconds = 0);
+static void handover_hide(const char *why);
+static bool handover_cover(const void *pixels);
+static std::atomic<bool> handover_released{false};   // the game (or Big Picture after one) took the screen from it
+// Steam's entry, browsing or playing (not its sign-in or setup sessions): Steam is shut down at every end, not killed, so
+// its cloud sync after a game finishes (8.1's B2 loop on the base, 2026-11-03: the stop's end took Steam with the game).
+static bool steam_session = false;
+static int (*title_server_input)(const void *, unsigned) = nullptr;   // the server's input (pw_wineserver_input)
+static std::atomic<uint64_t> play_game_end_ms{0};   // when end_game ended a play session's game alone
+// The handover (src/pw_title_play.h): Steam's folder on the console's disk (its logs, its steamapps; empty: unknown), the
+// game's name (its appmanifest's; empty: "the game"), the session loop's thread (a wait on it reads the pad itself), the
+// player's answer when Steam has gone quiet (1 keep waiting, 2 close it), and the screen's state.
+static std::string steam_host_dir, play_game_name;   // written before the session's Windows programs run
+static std::string play_art;   // the game's library artwork in Steam's cache (pw_steam_hero_path), or empty: the Aero backdrop
+static std::thread::id loop_thread;
+static std::atomic<int> steam_choice{0};
+static std::atomic<bool> steam_stuck{false}, steam_waiting{false}, handover_covering{false};
+static std::atomic<int> handover_step{-1};
 // The screen's flips when it started: the title watchdog waits for the game's first frame after that.
 std::atomic<unsigned long long> title_client_flips{0};
 int (*owner_result)() = nullptr;
@@ -307,7 +347,10 @@ void child_notice(int kind, int pid, int value)
     }
     else if (kind == PW_CHILD_NOTICE_GPU) gpu_lost_pid.compare_exchange_strong(none, pid > 0 ? pid : -1);
 #ifdef PS5_GPU_BROKER
-    else if (kind == PW_CHILD_NOTICE_GAME_MODE) pw_window_direct_set_process(pid, value);   // a game's own Game Mode
+    else if (kind == PW_CHILD_NOTICE_GAME_MODE) {   // a game's own Game Mode
+        if (pid == getpid() && handover_direct_held.load()) handover_game_direct = value;
+        else pw_window_direct_set_process(pid, value);
+    }
 #endif
 }
 
@@ -1249,6 +1292,21 @@ void return_to_launcher(const char *reason)
     // The game's exit (atexit, on a Windows thread) and the title's own stop
     // can both get here: the first one leaves, the other waits to be replaced.
     if (leaving.exchange(true)) for (;;) usleep(100000);
+    // A play request, or any end of a Steam session (src/pw_title_play.h): Steam is asked to shut down, if it was not yet,
+    // and its processes (every helper: the program in the title has ended) are waited for, with no time limit, before
+    // owner_wait below closes whatever is left; then the screen says where the title goes.
+    const PwTitleNext next = pw_title_play_next(play_session, play_requested.load(), player_left.load());
+    // Only while Steam runs: "steam.exe -shutdown" with no Steam left would start one. A play session's game exit has
+    // asked already (play_game_exit).
+    if ((next != PW_TITLE_NEXT_LAUNCHER || steam_session) && (play_shutdown_ms.load() || steam_helpers())) {
+        const bool done = steam_shutdown_wait(next == PW_TITLE_NEXT_PLAY ? "a play request" :
+                                              next == PW_TITLE_NEXT_BROWSE ? "the game ended" : "the session ends",
+                                              next == PW_TITLE_NEXT_PLAY ? PW_STEAM_HANDOVER_SAVE :
+                                              next == PW_TITLE_NEXT_BROWSE ? PW_STEAM_HANDOVER_CLOUD : PW_STEAM_HANDOVER_LEAVING);
+        say("Steam: %s; next: %s", done ? "shut down" : "closed at the player's choice", pw_title_play_next_word(next));
+    }
+    if (next != PW_TITLE_NEXT_LAUNCHER)
+        handover_show(next == PW_TITLE_NEXT_PLAY ? PW_STEAM_HANDOVER_ROOM : PW_STEAM_HANDOVER_REOPEN);
     // A launcher can exit without claiming graphics while headless children
     // remain. Keep their server host alive until every helper has ended.
     // After a SIGKILL ending each helper's monitor still closes its GPU client, which takes the broker's client lock:
@@ -1262,7 +1320,9 @@ void return_to_launcher(const char *reason)
     if (aurelia_session()) aurelia_poll();
     if (steamcmd_session()) steamcmd_poll();
     log_line(proton_cover_stop("the session ended"));
-    log_line(proton_guide_stop("the session ended"));
+    // A handover keeps its screen up until the process is replaced: taken off here, the last frames under it showed
+    // between the sessions (the owner's ~2 s flicker, 8.1's B4 rerun on the base, 2026-11-03)
+    if (next == PW_TITLE_NEXT_LAUNCHER) log_line(proton_guide_stop("the session ended"));
     bool broker_stopped = true;
 #ifdef PS5_GPU_BROKER
     // A program the title ran itself may still be drawing: its broker slot is never closed under it (closing it freed
@@ -1275,7 +1335,11 @@ void return_to_launcher(const char *reason)
     // presents still has the loading screen.
     // A list's games are the screen until something is chosen, so the loading screen stays up for them.
     if (!(aurelia_session() && aurelia_library_ready)) log_line(proton_loading_stop("the game ended"));
-    say("Wine: process completed; returning to launcher");
+    // A handover is no return: tools/run-console.py reads "returning to launcher" as the run's end.
+    const char *const ended_line = next != PW_TITLE_NEXT_LAUNCHER ? "Wine: process completed; handing over to the next session" :
+        "Wine: process completed; returning to launcher";
+    if (next != PW_TITLE_NEXT_LAUNCHER) say("Wine: process completed; handing over to the next session");
+    else say("Wine: process completed; returning to launcher");
     if (aurelia_session() && aurelia_library_ready) {
         long choice = 0;
         struct pad browse{};
@@ -1316,7 +1380,7 @@ void return_to_launcher(const char *reason)
             ended && (broker_stopped || title_client_claimed) ? "PASS" : "FAIL",code,graphics_claimed.load(),broker_stopped,
             title_client_claimed.load());
     }
-    log_line("Wine: process completed; returning to launcher");
+    log_line(ended_line);
     if (fdv_stats) {
         PwWineFdvStats files{};
         fdv_stats(&files);
@@ -1359,12 +1423,25 @@ void return_to_launcher(const char *reason)
     if (!reason && missing_dll.reason[0]) reason = missing_dll.reason;
     // The session's last line in both logs, on disk: a log that stops without it ended some other way (the launcher's
     // next start notes that below it, examples/ps5proton/ps5proton.cpp).
-    say("Session: ended (%s); back to the launcher", reason ? reason : "normally");
-    log_line("Session: ended; back to the launcher");
+    say("Session: ended (%s); %s", reason ? reason : "normally",
+        next != PW_TITLE_NEXT_LAUNCHER ? "handed over to the next session" : "back to the launcher");
+    log_line(next != PW_TITLE_NEXT_LAUNCHER ? "Session: ended; handed over to the next session" :
+             "Session: ended; back to the launcher");
     pw_capped_log_sync(&title_log);
     pw_capped_log_sync(&wine_log);
     // The session came back through the title: the launcher is told why only when it failed.
     remove(proton_title_path(PROTON_SESSION_MARKER).c_str());
+    if (next != PW_TITLE_NEXT_LAUNCHER) {
+        ProtonGame following;
+        following.id = play_entry.id;
+        if (next == PW_TITLE_NEXT_PLAY) following.play = play_appid;
+        following.returning = next == PW_TITLE_NEXT_BROWSE;
+        if (following.returning) following.returned = play_appid;   // its artwork on the way back
+        following.launch_env = proton_launch().env;   // one run's test overrides (env=) last the whole loop
+        say("Wine: the session hands over to %s of %s", pw_title_play_next_word(next), following.id.c_str());
+        proton_restart(&following, proton_launch().cycle + 1, next == PW_TITLE_NEXT_PLAY ? "steam play" : "steam browse",
+                       reason);
+    }
     if (aurelia_next_set) {
         aurelia_next_set = false;
         say("Wine: the session hands over to %s", aurelia_next.id.c_str());
@@ -1469,6 +1546,21 @@ bool end_helpers(const char *why)
 // gone. Only when the kernel refused a SIGKILL, and only with PROTON_STOP_TERMINATE=1, does the server end it as well.
 void end_game(const char *why, bool server_fallback)
 {
+    // A Steam play session (src/pw_title_play.h): the game in the title alone is ended, as a TerminateProcess would (patch
+    // 1002, by its native pid: the title's), not Steam in its helpers: Steam sees its game end, syncs its cloud saves and
+    // is shut down (return_to_launcher). Everything is ended only if the game is still there 20 s later (the loop).
+    uint64_t none = 0;
+    if (play_session && title_client_claimed && title_server_input &&
+        play_game_end_ms.compare_exchange_strong(none, monotonic_ms())) {
+        PwWineInput end{};
+        end.type = PW_WINE_INPUT_END_PROCESS;
+        end.code = (uint32_t)getpid();
+        end.down = 0;
+        say("Wine: %s: ending the game in the title alone (%d); Steam is shut down once it has ended", why,
+            title_server_input(&end, 1));
+        pw_capped_log_sync(&title_log);
+        return;
+    }
     if (!end_helpers(why)) return;
     // A game in the title (docs/TITLE_CLIENT.md): its threads are the title's, and replacing the title under live
     // threads powered the console off (2026-10-03). The server ends them as a TerminateProcess from outside would
@@ -1666,6 +1758,11 @@ int start_owner_graphics(int server_fd,const struct pw_child_bootstrap *boot)
 int start_title_client(int server_fd,const struct pw_child_bootstrap *boot)
 {
     if(title_client_claimed.exchange(true)) { errno=EBUSY;return -1; }
+    {
+        std::lock_guard<std::mutex> hold(play_lock);
+        title_holder_image=boot->image;
+        title_holder_line.assign(boot->command_line,strnlen(boot->command_line,sizeof(boot->command_line)));
+    }
     int cookie=0;
     const int gpu=proton_gpu_broker_open_in_owner(&cookie);
     const int socket=gpu>=0 ? dup(server_fd) : -1;
@@ -1691,6 +1788,219 @@ int start_title_client(int server_fd,const struct pw_child_bootstrap *boot)
     if(pw_wine_start_run(&wine,&config,&ops)) { errno=EIO;return -1; }   // claimed for good: the environment is set
     say("Wine: %s runs in the title beside the broker",boot->image[0] ? boot->image : "a program");
     return 0;
+}
+
+// Steam asked to shut down (src/pw_title_play.h): "steam.exe -shutdown", a root of its own beside the session's, which
+// Steam forwards to the running client; Steam then ends its own processes once it has written what it writes (its cloud
+// sync after a game). Once a session; started off the caller's thread, as the desktop session starts its shell.
+static void steam_shutdown(const char *why)
+{
+    uint64_t none=0;
+    if(!session_connect || !session_start_root || !play_shutdown_ms.compare_exchange_strong(none,monotonic_ms())) return;
+    say("Steam: asked to shut down (%s); the title waits for its processes to end, with no time limit",why);
+    std::thread([]() {
+        const char *const argv[]={"wine",play_entry.executable.c_str(),"-shutdown",nullptr};
+        const int socket=session_connect(play_nls.c_str());
+        const int launched=socket>=0 ?
+            session_start_root(socket,play_modules.c_str(),play_prefix.c_str(),play_cwd.c_str(),3,argv) : -1;
+        if(socket>=0) close(socket);
+        say("Steam: %s -shutdown started (%d)",pw_title_game_name(play_entry.executable.c_str()),launched);
+    }).detach();
+}
+
+// Steam's processes: every helper but the memory helper (in a Steam session the program in the title is its browser or
+// its game, not Steam).
+static unsigned steam_helpers()
+{
+    int pids[64], memory = 0;
+    const unsigned count = list_helpers ? list_helpers(pids, 64, &memory) : 0;
+    unsigned left = 0;
+    for (unsigned i = 0; i < count; ++i) left += pids[i] != memory;
+    return left;
+}
+
+// The handover's screen (PW_STEAM_SCREEN_HANDOVER, src/pw_title_play.h) over the session, in the setup's language: what the
+// title waits for, in place of a black screen or Steam's own windows (its launch dialog among them). The pad goes to it
+// alone while it shows.
+static void handover_show(PwSteamHandover step, unsigned seconds)
+{
+#ifdef PS5_GPU_BROKER
+    static std::atomic<bool> started{false};
+    if (!started.exchange(true)) {
+        PwSetupRecord record;
+        pw_setup_record_load(&record, PROTON_DATA_ROOT "/setup.txt");
+        if (!proton_guide_start(record.language, proton_app_root(), handover_cover))
+            say("Steam: the handover's screen cannot be drawn (no faces)");
+    }
+    if (!handover_direct_held.exchange(true)) pw_window_direct_set_process(getpid(), 0);
+    proton_guide_handover(step, play_game_name.empty() ? nullptr : play_game_name.c_str(),
+                          play_art.empty() ? nullptr : play_art.c_str(), seconds);
+    handover_covering = true;
+    static const char *const words[] = {"getting the game ready: Steam saves its session", "getting the game ready: room for the game",
+                                        "getting the game ready: starting it", "welcome back: saving to Steam Cloud",
+                                        "welcome back: reopening Big Picture", "Steam saves its session",
+                                        "Steam isn't responding: keep waiting or close it"};
+    if (handover_step.exchange(int(step)) != int(step)) say("Steam: the handover's screen: %s", words[step]);
+#else
+    (void)step, (void)seconds;
+#endif
+}
+
+static void handover_hide(const char *why)
+{
+#ifdef PS5_GPU_BROKER
+    if (!handover_covering.exchange(false)) return;
+    proton_guide_show(PW_STEAM_SCREEN_NONE, 0, 0, nullptr);
+    handover_step = -1;
+    say("Steam: the handover's screen is off (%s)", why);
+#else
+    (void)why;
+#endif
+}
+
+// Steam's logs, for the watch's activity (any byte it writes) and its cloud sync's end.
+static unsigned long long steam_log_bytes()
+{
+    static const char *const logs[] = {"bootstrap_log.txt", "cloud_log.txt", "console_log.txt", "connection_log.txt",
+                                       "content_log.txt"};
+    unsigned long long total = 0;
+    struct stat info;
+    for (const char *name : logs)
+        if (!steam_host_dir.empty() && !stat((steam_host_dir + "/logs/" + name).c_str(), &info)) total += info.st_size;
+    return total;
+}
+
+// One look at Steam's shutdown, which has no time limit (src/pw_title_play.h, PwSteamWatch): 1 once its processes have
+// ended, 2 when the player chose to close it, else 0. After PW_STEAM_QUIET_MS with no activity at all the screen asks the
+// player (steam_choice: the pad's CROSS keeps waiting, TRIANGLE closes Steam); nothing is closed without that.
+static int steam_watch_step(PwSteamWatch &watch, PwSteamHandover step)
+{
+    const uint64_t now = monotonic_ms();
+    const unsigned left = steam_helpers();
+    if (!left) {
+        steam_stuck = false;
+        return 1;
+    }
+    if (!steam_stuck) {
+        if (pw_steam_watch_quiet(&watch, now, left, steam_log_bytes())) {
+            steam_choice = 0;
+            steam_stuck = true;
+            say("Steam: no activity for %u s (%u processes, its logs unchanged): the player is asked", PW_STEAM_QUIET_MS / 1000,
+                left);
+            handover_show(PW_STEAM_HANDOVER_STUCK, PW_STEAM_QUIET_MS / 1000);
+        }
+        return 0;
+    }
+    const int choice = steam_choice.exchange(0);
+    if (choice == 1) {
+        steam_stuck = false;
+        pw_steam_watch_begin(&watch, now, left, steam_log_bytes());
+        say("Steam: the player keeps waiting");
+        handover_show(step);
+    } else if (choice == 2) {
+        steam_stuck = false;
+        say("Steam: the player closes it");
+        return 2;
+    }
+    return 0;
+}
+
+// The pad's answer on the STUCK screen, from the session loop's own read (or a wait's on the loop's thread).
+static void steam_choice_from(uint32_t pressed)
+{
+    if (!steam_stuck.load()) return;
+    if (pressed & PAD_CROSS) steam_choice = 1;
+    else if (pressed & PAD_TRIANGLE) steam_choice = 2;
+}
+
+// Steam asked to shut down, then waited for until its processes have ended: no time limit; only the player's choice
+// closes it (then its processes are ended here). step: what the screen says meanwhile. True when Steam ended itself.
+static bool steam_shutdown_wait(const char *why, PwSteamHandover step)
+{
+    steam_shutdown(why);
+    handover_show(step);
+    PwSteamWatch watch;
+    pw_steam_watch_begin(&watch, monotonic_ms(), steam_helpers(), steam_log_bytes());
+    const bool on_loop = std::this_thread::get_id() == loop_thread;
+    steam_waiting = true;
+    for (;;) {
+        if (on_loop) {
+            struct pad answer{};
+            pad_poll(&answer);
+            steam_choice_from(answer.pressed);
+        }
+        const int result = steam_watch_step(watch, step);
+        if (result) {
+            steam_waiting = false;
+            if (result == 2) end_helpers("the player closed Steam");
+            return result == 1;
+        }
+        usleep(100000);
+    }
+}
+
+// A play session's game ending, by itself or ended (Wine's exit hooks, wine/ps5/pw_wine_sink.h): the screen says so at
+// once, and nothing waits here. Waiting here for Steam deadlocked: the server had not seen the game end yet, and Steam,
+// believing its game ran, never finished its shutdown (8.1's B4 rerun on the base, 2026-11-03: "Shutdown" logged, no AC Exit
+// sync, the game's exit thread waiting for good). Steam is waited for in play_exit_wait instead.
+static void play_game_exit()
+{
+    if (steam_helpers()) handover_show(PW_STEAM_HANDOVER_CLOUD);
+}
+
+// The play session's end, from Wine's wait for its helpers (pw_ps5_set_title_exit_wait, wine/ps5/pw_wine_process.c): the
+// server has seen the game end (process_exit_wrapper closed its socket), so Steam sees it gone, syncs its saves and can
+// shut down; asked now, it is waited for with no time limit, before that wait's 15 s close could reach it (it did in
+// 8.1's B3 loop on the base, 2026-11-03). Only the player's choice closes it.
+static void play_exit_wait()
+{
+    if (!steam_helpers()) return;
+    const bool done = steam_shutdown_wait("the game ended", PW_STEAM_HANDOVER_CLOUD);
+    say("Steam: %s after the game's end", done ? "shut down" : "closed at the player's choice");
+    pw_capped_log_sync(&title_log);
+}
+
+// A claim the title refused (EBUSY, wine/ps5/pw_wine_process.c): a library game Steam starts while its browser holds the
+// title is a play request. The game is not started; the title restarts into the play session once Steam has shut down.
+// The start is refused, never held for Steam: held, Steam did nothing at all while its CreateProcess waited, its
+// shutdown never ran, and the hold waited for that shutdown (8.1's B4 rerun on the base, 2026-11-03). Refused before the
+// handover's screen showed, Big Picture's "Failed to start process ... (0x1F)" was seen (the owner's video, 2026-11-03):
+// so this returns once the screen's first frame is up (or the screen cannot draw), and only after the refusal is sent
+// is Steam asked to shut down (title_answered).
+static int title_busy(const struct pw_child_bootstrap *boot)
+{
+    ProtonGame claimant=play_entry;
+    claimant.executable=boot->image;
+    const std::string id=boot->image[0] ? proton_steam_appid(claimant) : std::string();
+    bool wanted;
+    {
+        std::lock_guard<std::mutex> hold(play_lock);
+        wanted=pw_title_play_wanted(play_entry.executable.c_str(),title_holder_image.c_str(),title_holder_line.c_str(),
+                                    boot->image,id.c_str());
+    }
+    if(!wanted) return 0;
+    if(!play_requested.load()) {
+        play_appid=id;
+        char name[256], art[1100];
+        if(!steam_host_dir.empty() && !pw_steam_app_name((steam_host_dir+"/steamapps").c_str(),id.c_str(),name,sizeof(name)))
+            play_game_name=name;
+        if(!steam_host_dir.empty() && !pw_steam_hero_path(steam_host_dir.c_str(),id.c_str(),art,sizeof(art))) play_art=art;
+        play_requested.store(true);
+        say("Steam: %s (app %s) claims the title from Steam's browser: a play request; the title restarts into the play "
+            "session",pw_title_game_name(boot->image),id.c_str());
+        handover_show(PW_STEAM_HANDOVER_SAVE);
+#ifdef PS5_GPU_BROKER
+        proton_guide_handover_wait(PW_STEAM_HANDOVER_SAVE);
+#endif
+    }
+    say("Steam: the start of %s is refused under the handover's screen",pw_title_game_name(boot->image));
+    return 1;
+}
+
+// The refusal is sent (Steam's CreateProcess has returned): now Steam is asked to shut down, free to do it.
+static void title_answered()
+{
+    steam_shutdown("a play request");
 }
 
 // The image's own file and the DLLs beside it, for pw_pe_kind (wine/ps5/pw_wine_pe_imports.h): one open file at a time.
@@ -1909,6 +2219,46 @@ struct PerfReport {
     }
 };
 PerfReport perf;
+
+// The handover's screen as the broker's cover (proton_guide_start's show). The game in the title, or Big Picture after
+// one, replaces it in one flip, with nothing between. The broker's game mode flips a whole-screen frame even over a cover
+// (graphics foundation's gpu-broker, PW_GPU_WINDOW), so each of the screen's next pictures, ten a second, came back over
+// the game (the owner: "Starting game also causes flicker"; 8.1's B4 rerun on the base, 2026-11-03, the game in game mode from its
+// first 1920x1080 frame; and Big Picture's browser under the play request's screen): the title's process is kept out of
+// game mode while the screen covers (handover_show), its frames held under the cover as the broker holds composed ones.
+// Once the title has presented a second of frames, the next picture takes the cover off instead, then game mode returns.
+// (The broker's flips stand still under a cover, so they cannot say when: the screen never came off in that run.)
+static uint64_t title_presents()
+{
+    PwWinePerf now{};
+    if (!perf.snapshot) return 0;
+    perf.snapshot(&now);
+    uint64_t total = 0;
+    for (unsigned api = 0; api < PW_PERF_APIS; ++api) total += now.frames[api].frames;
+    return total;
+}
+static std::atomic<uint64_t> handover_presents_from{0};   // the title's presents when the session's screen went up
+static bool handover_cover(const void *pixels)
+{
+#ifdef PS5_GPU_BROKER
+    const int step = handover_step.load();
+    if (pixels && (play_session || proton_launch().returning) && title_client_claimed.load() &&
+        (step == PW_STEAM_HANDOVER_START || step == PW_STEAM_HANDOVER_REOPEN) &&
+        title_presents() >= handover_presents_from.load() + 120) {
+        proton_gpu_broker_set_cover(nullptr);
+        if (!handover_released.exchange(true)) {
+            if (handover_direct_held.exchange(false)) pw_window_direct_set_process(getpid(), handover_game_direct.load());
+            say("Steam: %s has drawn a second of frames: the handover's screen gives way in one flip",
+                play_session ? "the game" : "Big Picture");
+        }
+        return false;
+    }
+    return proton_gpu_broker_set_cover(pixels);
+#else
+    (void)pixels;
+    return false;
+#endif
+}
 
 /* A one-shot pad script (src/pw_pad_script.h) for a run nobody holds a controller for: read and
  * removed at the game's start, applied over the real pad every tick, its captures and stop fired as
@@ -2289,6 +2639,7 @@ void proton_run_wine()
     if (!launch.profile.empty() && game.id != launch.profile) {
         fail("Wine: requested profile %s is not in the library", launch.profile.c_str());
     }
+    const std::string entry_executable = game.executable;   // the entry's own, before a path= override
     if (!launch.path.empty()) {
         // Another program run with this entry's prefix and settings (tools/run-console.py --program) starts where
         // Explorer would start it, in its own folder, and without the entry's arguments: a Go game ran in a launcher's
@@ -2310,7 +2661,25 @@ void proton_run_wine()
         }
     }
     if (launch.arguments_override) game.arguments = launch.arguments;
+    // A Steam entry's play session (src/pw_title_play.h): Steam starts the request's game itself, which takes the title;
+    // Steam's browser stays in a helper for this session alone.
+    play_session = !launch.play.empty();
+    if (play_session) {
+        char line[1024];
+        const int error = pw_title_play_arguments(game.arguments.c_str(), launch.play.c_str(), line, sizeof(line));
+        if (error) fail("Wine: the play session for app %s has no arguments line (%s)", launch.play.c_str(), strerror(error));
+        game.arguments = line;
+        auto optout = std::find_if(game.env.begin(), game.env.end(),
+                                   [](const std::string &word) { return word.rfind("WINE_PS5_TITLE_OPTOUT=", 0) == 0; });
+        if (optout == game.env.end()) game.env.push_back("WINE_PS5_TITLE_OPTOUT=steamwebhelper.exe");
+        else *optout += ";steamwebhelper.exe";
+        say("Steam: the play session for app %s: %s; Steam's browser in a helper", launch.play.c_str(), line);
+    }
     proton_add_steam_ids(game);   // after the path override: the ids are those of the program that runs
+    // The play request's session program is the entry's own (steam.exe), also when a test started it through another
+    // program (tools/run-console.py --program); the restart starts the entry itself.
+    play_entry = game;
+    play_entry.executable = entry_executable;
     if (game.executable.empty() || !game.complaint.empty()) {
         fail("Wine: requested profile is missing or invalid%s%s", game.complaint.empty() ? "" : ": ",
              game.complaint.c_str());
@@ -2357,6 +2726,25 @@ void proton_run_wine()
         fail("Wine: invalid prefix ID");
     }
     session_prefix = prefix;
+    // Steam's folder on the console's disk, for the handover (its logs, its steamapps: src/pw_title_play.h), and in a play
+    // session the game's name, from its appmanifest
+    if (!strcasecmp(pw_title_game_name(play_entry.executable.c_str()), "steam.exe")) {
+        char host[1024], held[1024];
+        if (!pw_wine_launch_host_dir(prefix.c_str(), play_entry.executable.c_str(), host, sizeof(host))) {
+            std::string dir = host;
+            dir = dir.substr(0, dir.rfind('/'));
+            steam_host_dir = pw_path_nocase(dir.c_str(), held, sizeof(held)) ? held : dir;
+        }
+        char name[256];
+        if (play_session && !steam_host_dir.empty() &&
+            !pw_steam_app_name((steam_host_dir + "/steamapps").c_str(), launch.play.c_str(), name, sizeof(name)))
+            play_game_name = name;
+        play_appid = launch.play;
+        char art[1100];
+        const std::string &played = play_session ? launch.play : launch.returned;
+        if (!steam_host_dir.empty() && !played.empty() && !pw_steam_hero_path(steam_host_dir.c_str(), played.c_str(), art, sizeof(art)))
+            play_art = art;
+    }
     const std::string runtime = PROTON_DATA_ROOT "/runtime/ge11-7";
     const std::string modules = runtime + "/lib/wine/x86_64-unix";
     const std::string ntdll = modules + "/ntdll.prx";
@@ -2691,6 +3079,15 @@ void proton_run_wine()
     perf.percentile = symbol<uint32_t (*)(const PwWinePerfFrames *, const PwWinePerfFrames *, unsigned)>(
         "pw_wine_perf_frame_percentile");
     flush_registry = symbol<int (*)(unsigned)>("pw_wine_server_flush");
+    if (play_session) {
+        auto add_exit_hook = symbol<int (*)(void (*)(void))>("pw_wine_add_exit_hook");
+        auto set_exit_wait = symbol<void (*)(void (*)())>("pw_ps5_set_title_exit_wait");
+        const bool hooked = add_exit_hook && !add_exit_hook(play_game_exit);
+        if (set_exit_wait) set_exit_wait(play_exit_wait);
+        say("Steam: %s", set_exit_wait ? "shut down once the game has ended (the exit's wait for its helpers)" :
+            "NOT shut down at the game's end: this runtime has no exit wait; its end closes Steam");
+        if (!hooked) say("Steam: no screen at the game's exit (this runtime has no exit hooks)");
+    }
     code_cache_stats = symbol<unsigned (*)(uint64_t *, unsigned)>("__wine_ps5_code_cache_stats");
     terminate_game = symbol<int (*)()>("pw_wine_server_terminate");
     stop_audio = symbol<int (*)(unsigned)>("pw_wine_stop_audio");
@@ -2878,6 +3275,9 @@ void proton_run_wine()
             if((named && *named) || title_games) {
                 auto set_title_client=symbol<void (*)(int (*)(int,const struct pw_child_bootstrap *))>("pw_ps5_set_title_client_start");
                 if(set_title_client)set_title_client(start_title_client);
+                // A library game's claim while Steam's browser holds the title: a play request (src/pw_title_play.h).
+                auto set_busy=symbol<void (*)(int (*)(const struct pw_child_bootstrap *),void (*)())>("pw_ps5_set_title_busy");
+                if(set_busy)set_busy(title_busy,title_answered);
                 say("Wine: %s runs in the title beside the broker when started (%s)",
                     named && *named ? named : "a 64-bit library game",set_title_client ? "offered" : "an older runtime: in a helper");
             }
@@ -2910,6 +3310,11 @@ void proton_run_wine()
                     proton_guide_show(steam_guide==2 ? PW_STEAM_SCREEN_UPDATING : PW_STEAM_SCREEN_INSTALLING,0,0,nullptr);
             }
             if(!showcase.empty())proton_guide_start(showcase[0]->tag,proton_app_root(),proton_gpu_broker_set_cover);
+            // The handover's screen from the session's first frame (src/pw_title_play.h): the play session's game starting,
+            // or Big Picture coming back after one; it comes off when that draws (the session loop)
+            handover_presents_from=title_presents();
+            if(play_session) handover_show(PW_STEAM_HANDOVER_START);
+            else if(launch.returning) handover_show(PW_STEAM_HANDOVER_REOPEN);
 #else
             fail("PS5_PROTON_OWNER_BOOTSTRAP FAIL GPU broker absent from this build");
 #endif
@@ -2927,6 +3332,7 @@ void proton_run_wine()
         collect_sections=symbol<void (*)()>("pw_ps5_dsection_collect_now");
         // And the touchpad's pointer and the close request go to the desktop, wherever its windows are.
         server_input=module_symbol ? (int (*)(const void *,unsigned))module_symbol(server,"pw_wineserver_input") : nullptr;
+        title_server_input=server_input;
         server_foreground=module_symbol ? (int (*)())module_symbol(server,"pw_wineserver_foreground") : nullptr;
         server_dialog=module_symbol ? (int (*)(char *,unsigned))module_symbol(server,"pw_wineserver_dialog") : nullptr;
         server_windows=module_symbol ? (int (*)(void *,unsigned))module_symbol(server,"pw_wineserver_windows") : nullptr;
@@ -3063,6 +3469,7 @@ void proton_run_wine()
         }
         // The desktop session restarts its root later through the same means (src/pw_desktop_session.h).
         session_connect=connect_server;session_start_root=start_root;
+        play_nls=runtime+"/share/wine/nls";play_modules=modules;play_prefix=prefix;play_cwd=cwd;
         session_root_present=symbol<int (*)()>("pw_ps5_root_present");
         session_unload_root=symbol<int (*)()>("pw_ps5_unload_root");
         if(desktop_session && (!session_root_present || !session_unload_root))
@@ -3163,6 +3570,7 @@ void proton_run_wine()
     bool was_intercepted = false;
     unsigned stop_tick = 0;
     bool stop_escalated = false;
+    bool play_game_end_full = false;   // end_game's full end after a play session's game would not end alone
     // The guided setup's first session (its marker; examples/ps5proton/setup_tour.hpp) ends itself once wineboot has made
     // the prefix: in a new prefix's first session games never get the DualSense (README, "The Mihawk OS prefix"), so
     // no game is opened in it. The launcher then shows the setup's Done step.
@@ -3209,6 +3617,7 @@ void proton_run_wine()
     };
     const char *client_watch_env = getenv("PROTON_STEAM_SIGNIN_WATCH");
     const bool client_watch = client_watch_env && !strcmp(client_watch_env, "1");
+    steam_session = !strcasecmp(pw_title_game_name(play_entry.executable.c_str()), "steam.exe") && !client_watch && !steam_guide;
     const std::string client_users = prefix + PW_STEAM_LOGINUSERS_REL;
     auto client_signed_in = [&client_users]() {
         char text[65536];
@@ -3487,6 +3896,7 @@ void proton_run_wine()
     // 3 s every 30 s (src/pw_suspend.h); the title watchdog must still end a hung game (run-battery title-stall64).
     const char *loop_stall = getenv("PROTON_TEST_TITLE_LOOP_STALL_MS");
     const unsigned loop_stall_ms = loop_stall ? (unsigned)std::min(9000ul, strtoul(loop_stall, nullptr, 10)) : 0;
+    loop_thread = std::this_thread::get_id();
     for (unsigned tick = 0;; ++tick) {
         // Suspend and resume (src/pw_suspend.h): the system's word, every fourth tick, and the clock's gap between two
         // ticks for a suspend nobody announced. The helpers read away and the beat from their input pages, the broker
@@ -3607,9 +4017,12 @@ void proton_run_wine()
 #endif
         pad_poll(&pad);
         pad_script.apply(pad);
+        steam_choice_from(pad.pressed);   // the handover's "Steam isn't responding" choice (src/pw_title_play.h)
         // Over a guide screen the pad drives the screen alone: CROSS is the guide's, and every button pressed while the
         // screen shows stays away from the client until it is let go (a press must not click what cannot be seen)
         struct pad shown_pad = pad;
+        // Over the handover's screen nothing reaches Steam or the game: a press must not click what cannot be seen
+        if (handover_covering.load()) shown_pad.held &= PAD_INTERCEPTED, shown_pad.pressed &= PAD_INTERCEPTED;
         if (steam_guide) {
             const bool covering = guide_screens && guide_session.screen != PW_STEAM_SCREEN_NONE && !guide_ended;
             if (covering && (pad.pressed & PAD_CROSS)) guide_cross = true;
@@ -4105,19 +4518,76 @@ void proton_run_wine()
                     fprintf(stop, "steam-guide-%s\n", pw_steam_guide_result_word((PwSteamResult)result)), fclose(stop);
             }
         }
+        // Steam asked to shut down here (a play request, the session's stop, the start's safety below): its processes end
+        // the session (programs_remain) whenever Steam is done, with no time limit; if it goes quiet the screen asks the
+        // player, and only their choice closes it (src/pw_title_play.h). A wait of its own (the game's exit,
+        // return_to_launcher) watches it instead.
+        {
+            static PwSteamWatch loop_watch;
+            static const PwSteamHandover loop_step = PW_STEAM_HANDOVER_SAVE;
+            static bool loop_watching = false, loop_closed = false;
+            if (tick % 12 == 0 && play_shutdown_ms.load() && !leaving.load() && !steam_waiting.load() && !loop_closed) {
+                if (!loop_watching) {
+                    loop_watching = true;
+                    pw_steam_watch_begin(&loop_watch, monotonic_ms(), steam_helpers(), steam_log_bytes());
+                }
+                if (steam_watch_step(loop_watch, loop_step) == 2) {
+                    loop_closed = true;
+                    end_game("the player closed Steam", true);
+                }
+            }
+        }
+        // A play session whose game has not taken the title in 300 s: Steam started without its window (-silent), so an
+        // update, a prompt or an error it shows instead is never seen. Back to browsing, where it is.
+        if (play_session && tick == 300 * 120 && !title_client_claimed.load() && !stop_tick) {
+            handover_show(PW_STEAM_HANDOVER_LEAVING);
+            steam_shutdown("the game did not start in 300 s");
+        }
+        // The handover's screen comes off once what it waited for shows: the play session's game, or Big Picture after
+        // one, has drawn a second of frames in the title (title_client_flips: its first claim's count)
+        if (tick % 12 == 6 && handover_covering.load() && handover_released.load() && !play_shutdown_ms.load())
+            handover_hide(play_session ? "the game draws" : "Big Picture draws");
         if (tick % 120 == 0 && !stop_tick && access(PROTON_DATA_ROOT "/stop-game", F_OK) == 0) {
+            char stop_why[64] = "";
+            if (FILE *stop = fopen(PROTON_DATA_ROOT "/stop-game", "r")) {
+                if (!fgets(stop_why, sizeof(stop_why), stop)) stop_why[0] = 0;
+                fclose(stop);
+            }
             unlink(PROTON_DATA_ROOT "/stop-game");
-            stop_tick = tick;
+            // "game-ended" is a test closing only the game, as if it had ended itself (src/pw_title_play.h): the close
+            // alone, no stop, so the stop's 10 s escalation does not end Steam's helpers under its shutdown (it did in
+            // 8.1's B2 loop on the base, 2026-11-03: the game was exiting, Steam was killed). A later stop-game still stops.
+            const bool game_only = !strncmp(stop_why, "game-ended", 10);
+            if (!game_only) stop_tick = tick;
+            // The player's exit, or a test's stop, goes to the launcher.
+            if (!play_stop_ours.load() && !game_only) player_left = true;
+            // Steam browsing ignores a close: it is asked to shut down, as its own Exit would (src/pw_title_play.h). A play
+            // session's close goes to the game, and Steam is shut down once the game has ended (return_to_launcher).
+            if (steam_session && !play_session && !game_only) {
+                handover_show(PW_STEAM_HANDOVER_LEAVING);
+                steam_shutdown("the session is stopped");
+            }
             PwWineInput close{};
             const bool log_off = desktop_session && server_input;  // the in-title sink knows no LOG_OFF
             close.type = log_off ? PW_WINE_INPUT_LOG_OFF : PW_WINE_INPUT_CLOSE;
-            say("Wine: stop requested; asking the game to close%s (%d)",
-                log_off ? ": the desktop session logs off" : "", deliver(&close));
+            say("Wine: stop requested; asking the game to close%s%s (%d)",
+                log_off ? ": the desktop session logs off" : "", game_only ? " (game-ended: the close alone)" : "",
+                deliver(&close));
         }
         // After a sign-in the client ignores the close and is not hung: no snapshot (16 s of klog on 2026-10-26), and it is
         // ended once its token is on disk, checked each second from the close, or 25 s after it.
         const unsigned stop_age = stop_tick ? tick - stop_tick : 0;
-        if (stop_tick && !stop_escalated && stop_age % 120 == 0 &&
+        // Steam asked to shut down is given all the time it takes before the stop ends anything: only the player's choice
+        // closes it (src/pw_title_play.h).
+        const bool steam_closing = play_shutdown_ms.load() != 0;
+        // A play session's game ended alone (end_game) and still there 20 s later: everything is ended.
+        // Not while its exit waits for Steam (play_game_exit): the game is gone then, and Steam is not to be cut short.
+        if (tick % 120 == 30 && play_game_end_ms.load() && !leaving.load() && !play_game_end_full && !steam_waiting.load() &&
+            monotonic_ms() - play_game_end_ms.load() >= 20000) {
+            play_game_end_full = true;
+            end_game("the game did not end in 20 s", true);
+        }
+        if (stop_tick && !stop_escalated && !steam_closing && stop_age % 120 == 0 &&
             (client_signed_wall ? stop_age >= 3000 || (stop_age >= 120 && client_token_written()) : stop_age >= 1200)) {
             stop_escalated = true;
             // The close request reaches only a thread that pumps messages. What every thread waits on is recorded first,
@@ -4540,6 +5010,9 @@ void proton_run_wine()
                 breaker_said = false;
             } else if (!breaker_said && pw_suspend_hold(&title_suspend, now)) {
                 // Away or just back: decided again once the grace is over (the ages count from the return anyway).
+            } else if (!breaker_said && play_shutdown_ms.load()) {
+                // Steam is shutting down (src/pw_title_play.h): its game is over or its browser is closing, and no frame
+                // is the expected; Steam's own wait asks the player if it goes quiet.
             } else if (!breaker_said) {
                 breaker_said = true;
                 if (in_title)

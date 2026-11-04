@@ -33,6 +33,25 @@ typedef struct PwSteamFaces {
     const PwSteamFace *latin;              /* Inter Regular, for a display name's letters the language's face lacks */
 } PwSteamFaces;
 
+/* PW_STEAM_SCREEN_HANDOVER's step: what the title waits for between Steam's sessions (src/pw_title_play.h). The steps
+ * advance on what really happens, never on a timer (pw_steam_handover_checklist). */
+typedef enum PwSteamHandover {
+    PW_STEAM_HANDOVER_SAVE,    /* going to the game: Steam saves its session, ending its own processes */
+    PW_STEAM_HANDOVER_ROOM,    /* Steam has ended: the title restarts so the game gets the memory */
+    PW_STEAM_HANDOVER_START,   /* the play session: Steam starts the game */
+    PW_STEAM_HANDOVER_CLOUD,   /* the game has ended: Steam syncs its saves, then ends */
+    PW_STEAM_HANDOVER_REOPEN,  /* back to browsing: Big Picture opens */
+    PW_STEAM_HANDOVER_LEAVING, /* the player's own exit: Steam saves its session, no game follows */
+    PW_STEAM_HANDOVER_STUCK    /* Steam has shown no activity for long: keep waiting (CROSS) or close it (TRIANGLE) */
+} PwSteamHandover;
+/* A step's words: the headline (title_named when the game's name, {1}, can be drawn), the line below it and the
+ * checklist, whose first `done` items are ticked and the rest pending. */
+typedef struct PwSteamChecklist {
+    PwSetupText title, title_named, body;
+    unsigned count, done;
+    PwSetupText item[3], item_named[3];
+} PwSteamChecklist;
+void pw_steam_handover_checklist(PwSteamHandover step, PwSteamChecklist *out);
 typedef struct PwSteamScreenState {
     PwSteamScreen screen;
     const PwSetupLanguage *language; /* NULL: English */
@@ -43,6 +62,8 @@ typedef struct PwSteamScreenState {
     const char *dialog_text;         /* its text, lines split by '\n' (UTF-8), or NULL; cut to what fits */
     const struct PwVkbd *keyboard;   /* PW_STEAM_SCREEN_KEYBOARD: the keyboard as it stands, or NULL */
     const struct PwOverlay *overlay; /* PW_STEAM_SCREEN_OVERLAY: the control overlay as it stands, or NULL */
+    PwSteamHandover handover;        /* PW_STEAM_SCREEN_HANDOVER: the step */
+    const char *game;                /* its game's name (UTF-8, its appmanifest's), or NULL: "the game" */
 } PwSteamScreenState;
 
 /* What a drawing did with its words (for the test): the lowest pixel row one reached, how many lines were cut because

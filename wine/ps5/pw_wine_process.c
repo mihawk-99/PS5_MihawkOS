@@ -10,6 +10,7 @@
 #include "pw_wine_threads.h"
 #include "pw_wine_perf.h"
 #include "pw_spawn_wait.h"
+#include "pw_title_claim.h"
 #include "../../src/pw_ntsync.h"
 #include <errno.h>
 #include <netdb.h>
@@ -96,6 +97,16 @@ void pw_ps5_set_graphics_start(int (*start)(int,const struct pw_child_bootstrap 
  * the title offers one (WINE_PS5_TITLE_PROCESS). */
 static int (*title_client_start)(int,const struct pw_child_bootstrap *);
 void pw_ps5_set_title_client_start(int (*start)(int,const struct pw_child_bootstrap *)) { title_client_start=start; }
+/* The title's say on a claim it refused (EBUSY): nonzero when it took the claim as a play request (src/pw_title_play.h),
+ * which this process then refuses; answered runs once the refusal is sent. */
+static int (*title_busy)(const struct pw_child_bootstrap *);
+static void (*title_answered)(void);
+void pw_ps5_set_title_busy(int (*busy)(const struct pw_child_bootstrap *), void (*answered)(void)) { title_busy=busy;title_answered=answered; }
+/* pw_title_claim's busy: the request is a struct pw_child_bootstrap */
+static int title_busy_says(const void *request) { return title_busy && title_busy(request); }
+/* The title's own wait at its end, before the helpers left are closed (a play session's Steam shutdown). */
+static void (*title_exit_wait)(void);
+void pw_ps5_set_title_exit_wait(void (*wait)(void)) { title_exit_wait=wait; }
 static int in_title_client(void)
 {
     const char *value=getenv("WINE_PS5_TITLE_CLIENT");
@@ -286,7 +297,7 @@ struct spawn_work { struct pw_child_spawn request; int fds[2]; long long receive
 static void *spawn_worker(void *opaque)
 {
     struct spawn_work *work=opaque;
-    int native_pid=0;
+    int native_pid=0, play_request=0;
     int result;
     /* Test only (missing-import64-title): WINE_PS5_TEST_SPAWN_STALL=<image> holds that program's start for 600 s (past the case's watchdog), as
      * the console's wedged loader held a store overlay's while the game in the title failed (pw_spawn_wait.h). */
@@ -314,8 +325,15 @@ static void *spawn_worker(void *opaque)
     } else if(work->request.bootstrap.flags==PW_CHILD_GRAPHICS && gpu_open && title_client_start) {
         /* Beside the broker: the title's own client, a broker client in this process; once it is taken, a helper. */
         result=title_client_start(work->fds[0],&work->request.bootstrap);
-        if(!result) { native_pid=getpid();title_client_live=1; }
-        else if(errno==EBUSY) {
+        const enum PwTitleClaim claim=pw_title_claim(result,result ? errno : 0,title_busy_says,&work->request.bootstrap);
+        if(claim==PW_TITLE_CLAIM_TITLE) { native_pid=getpid();title_client_live=1; }
+        else if(claim==PW_TITLE_CLAIM_REFUSED) {
+            /* Refused at once (busy returns once the title's screen covers Steam): Steam stays free to shut down */
+            fprintf(stderr,"wine-ps5: %s: the title's place is taken; a play request, refused\n",
+                    pw_title_game_name(work->request.bootstrap.image));
+            play_request=1;
+            errno=ECANCELED;
+        } else if(claim==PW_TITLE_CLAIM_HELPER) {
             fprintf(stderr,"wine-ps5: %s: the title's place is taken; a helper\n",
                     work->request.bootstrap.image[0] ? pw_title_game_name(work->request.bootstrap.image) : "a program");
             result=spawn_native(work->fds[0],&work->request.bootstrap,&native_pid);
@@ -325,6 +343,7 @@ static void *spawn_worker(void *opaque)
         game_line_mark(native_pid,work->request.bootstrap.image);
     struct pw_child_message reply={PW_CHILD_PROTOCOL,PW_CHILD_SPAWN_REPLY,work->request.message.pid,result ? errno : 0,native_pid};
     if(pw_child_send(work->fds[1],&reply,sizeof(reply),NULL,0) && !result && native_pid!=getpid()) pw_ps5_remote_close(native_pid);
+    if(play_request && title_answered) title_answered();
     fprintf(stderr,"wine-ps5: broker requester=%d child=%d status=%d\n",reply.pid,native_pid,reply.value);
     /* A helper's request on the title's clock (tools/start_stages.py): read from its control socket, then answered. */
     fprintf(stderr,"wine-ps5: spawn served requester=%d native=%d received_ms=%lld replied_ms=%lld\n",reply.pid,native_pid,
@@ -350,8 +369,12 @@ static int accept_spawn(const struct pw_child_spawn *request, int fds[2])
     if(work) {
         work->request=*request;memcpy(work->fds,fds,sizeof(work->fds));work->received_ms=payload_ms();
         pthread_mutex_lock(&child_lock);if(!pending_spawns++)pending_since_ms=payload_ms();pthread_mutex_unlock(&child_lock);
-        pthread_t thread;
-        error=pthread_create(&thread,NULL,spawn_worker,work);
+        /* 256 KiB as the resolve worker's: it runs the title's busy and answered callbacks (pw_ps5_set_title_busy), which
+         * the default stack did not hold */
+        pthread_t thread;pthread_attr_t attributes;
+        pthread_attr_init(&attributes);pthread_attr_setstacksize(&attributes,256u<<10);
+        error=pthread_create(&thread,&attributes,spawn_worker,work);
+        pthread_attr_destroy(&attributes);
         if(!error) { pthread_detach(thread);return 0; }
         pthread_mutex_lock(&child_lock);if(!--pending_spawns)pending_since_ms=0;pthread_mutex_unlock(&child_lock);
         free(work);
@@ -1177,6 +1200,7 @@ unsigned int pw_ps5_title_route(const char *unix_name, unsigned short machine, c
     enum PwTitleRoute route = pw_title_game_route_inherited(image, machine == 0x8664, setting,
                                                             getenv("WINE_PS5_TITLE_OPTOUT"), getenv("WINE_PS5_TITLE_PICK"),
                                                             getenv("WINE_PS5_TITLE_LISTED"), inherited);
+    route = pw_title_game_steam_browser(route, image, command_line, getenv("WINE_PS5_TITLE_OPTOUT"));
     enum PwPeKind kind = PW_PE_KIND_UNREAD;
     char deepest[PW_PE_IMPORT_NAME] = "";
     if (route == PW_TITLE_ROUTE_CANDIDATE && unix_name) {
@@ -1339,6 +1363,10 @@ void pw_ps5_wait_children(void)
 {
     unsigned live, waited = 0;
     int let_go = 0;
+    /* First the title's own (pw_ps5_set_title_exit_wait): here the server has seen the program end (process_exit_wrapper
+     * closed its socket), so a play session's Steam sees its game gone and can shut down; the 15 s close below never
+     * reaches it. */
+    if (title_exit_wait) title_exit_wait();
     do {
         live = 0;
         pthread_mutex_lock(&child_lock);

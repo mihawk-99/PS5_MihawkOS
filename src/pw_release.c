@@ -4,6 +4,8 @@
 #include "../external/monocypher/monocypher-ed25519.h"
 
 #include <stdlib.h>
+#include <errno.h>
+#include <stdio.h>
 #include <string.h>
 
 #define SIGNATURE_LINE (10 + 128 + 1)   /* "signature " + 64 bytes in hex + '\n' */
@@ -173,6 +175,42 @@ static int tag_read(const char *tag, unsigned long out[5])
         return !*end;
     }
     return 0;
+}
+
+int pw_release_name(const char *tag, const char *fallback, char *out, size_t cap)
+{
+    static const char *const stages[] = { "Alpha", "Beta" };
+    unsigned long v[5];
+    int n;
+    if (!out || !cap) return E2BIG;
+    if (tag_read(tag, v) && v[3] < 2) {
+        if (!v[2] && !v[1]) n = snprintf(out, cap, "%s %lu", stages[v[3]], v[0]);
+        else if (!v[2]) n = snprintf(out, cap, "%s %lu.%lu", stages[v[3]], v[0], v[1]);
+        else n = snprintf(out, cap, "%s %lu.%lu.%lu", stages[v[3]], v[0], v[1], v[2]);
+    } else {
+        const char *whole = tag && *tag ? tag : fallback ? fallback : "";
+        n = snprintf(out, cap, "%s", whole[0] == 'v' && whole[1] >= '0' && whole[1] <= '9' ? whole + 1 : whole);
+    }
+    if (n < 0 || (size_t)n >= cap) {
+        out[0] = 0;
+        return E2BIG;
+    }
+    return 0;
+}
+
+void pw_release_base_tag(const char *base, char *out, size_t cap)
+{
+    if (!out || !cap) return;
+    out[0] = 0;
+    if (!base) return;
+    size_t end = strlen(base);
+    while (end && base[end - 1] == '/') --end;
+    size_t start = end;
+    while (start && base[start - 1] != '/') --start;
+    if (end > start && end - start < cap) {
+        memcpy(out, base + start, end - start);
+        out[end - start] = 0;
+    }
 }
 
 int pw_release_tag_compare(const char *a, const char *b)
