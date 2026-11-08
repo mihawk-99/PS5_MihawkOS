@@ -131,7 +131,7 @@ void download()
 			} else {
 				failure = check == PW_STEAM_INSTALLER_SIZE ? "the download is not the size of the installer"
 					: check == PW_STEAM_INSTALLER_NOT_SIGNED ? "the download is not a signed installer"
-					: "the download is not a Windows program";
+					: "the download is not a PC program";
 			}
 		}
 		proton_say("steam: %s failed: %s", url, failure.c_str());

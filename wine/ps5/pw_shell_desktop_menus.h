@@ -5,13 +5,14 @@
  * Windows 11's menu on a right-click or the menu key, the classic one with Shift (Shift+F10, Shift+right-click) or from "Show more
  * options". Win32u draws them as the prototype does (patch 1190); their icons are the prototype's (pw_menu_icons.h,
  * tools/build-menu-sprites.py). Every item does what the shell can do, and the prototype's items it has no action for are left
- * out: New Shortcut, Paste shortcut, Open in new window, Open file location, Pin to Start, Empty Recycle Bin, Compress to ZIP
- * file. Share stays as the prototype shows it for a file it cannot share: disabled; so does Open with's Choose another app, as
+ * out: New Shortcut, Paste shortcut, Open in new window, Open file location, Empty Recycle Bin, Compress to ZIP
+ * file. Create shortcut and Pin to Start (pw_shell_shortcut.h) are in this menu and, from shell32's item menu (patch 2494), in the classic one and File Explorer's. Share stays as the prototype shows it for a file it cannot share: disabled; so does Open with's Choose another app, as
  * the prototype shows it with no app picker (Wine's, SHOpenWithDialog, is a stub). View's icon sizes, Auto arrange and
  * Align to grid are the shell view's own settings (IFolderView2, shell32 patch 1102), which keeps and lays them out itself. Included by pw_shell_desktop_view.h (patch 1100), which hands it the desktop's WM_CONTEXTMENU. */
 
 #include <shellapi.h>
 #include "pw_menu_icons.h"
+#include "pw_shell_shortcut.h"
 
 enum
 {
@@ -20,7 +21,7 @@ enum
     PW_DESKTOP_PERSONALIZE, PW_DESKTOP_TERMINAL, PW_DESKTOP_MORE, PW_DESKTOP_CUT, PW_DESKTOP_COPY, PW_DESKTOP_RENAME,
     PW_DESKTOP_SHARE, PW_DESKTOP_DELETE, PW_DESKTOP_OPEN, PW_DESKTOP_COPY_PATH, PW_DESKTOP_PROPERTIES, PW_DESKTOP_NOTEPAD,
     PW_DESKTOP_ICON_SIZE /* + 0..2: large, medium, small */, PW_DESKTOP_AUTO_ARRANGE = PW_DESKTOP_ICON_SIZE + 3,
-    PW_DESKTOP_ALIGN_TO_GRID, PW_DESKTOP_CHOOSE_APP,
+    PW_DESKTOP_ALIGN_TO_GRID, PW_DESKTOP_CHOOSE_APP, PW_DESKTOP_MAKE_SHORTCUT, PW_DESKTOP_PIN_START,
 };
 /* The prototype's icon sizes, in View's order (js/desktop.js ICON: large 96, medium 48, small 32). */
 static const int pw_desktop_icon_sizes[] = {96, 48, 32};
@@ -251,6 +252,11 @@ static HMENU pw_desktop_item_menu( const struct pw_desktop_selection *s )
     }
     else if (s->open_with) pw_desktop_menu_add( menu, PW_DESKTOP_CHOOSE_APP, L"Open with", PW_MENU_ICON_OPEN_WITH, MFS_DISABLED, NULL );
     if (s->movable) pw_desktop_menu_add( menu, PW_DESKTOP_COPY_PATH, L"Copy as path\tCtrl+Shift+C", PW_MENU_ICON_COPY_PATH, 0, NULL );
+    if (one && s->movable)
+    {
+        pw_desktop_menu_add( menu, PW_DESKTOP_MAKE_SHORTCUT, L"Create &shortcut", -1, 0, NULL );   /* access keys underlined only once keys are used (patch 1190) */
+        pw_desktop_menu_add( menu, PW_DESKTOP_PIN_START, L"Pi&n to Start", -1, 0, NULL );
+    }
     if (one) pw_desktop_menu_add( menu, PW_DESKTOP_PROPERTIES, L"Properties\tAlt+Enter", PW_MENU_ICON_PROPERTIES, 0, NULL );
     pw_desktop_menu_add( menu, 0, NULL, -1, 0, NULL );
     if (s->file) pw_desktop_menu_add( menu, PW_DESKTOP_NOTEPAD, L"Edit in Notepad", PW_MENU_ICON_NOTEPAD, 0, NULL );
@@ -258,6 +264,19 @@ static HMENU pw_desktop_item_menu( const struct pw_desktop_selection *s )
     pw_desktop_menu_add( menu, PW_DESKTOP_MORE, L"Show more options\tShift+F10", PW_MENU_ICON_MORE, 0, NULL );
     pw_desktop_menu_end( menu );
     return menu;
+}
+
+static BOOL pw_desktop_path( LPCITEMIDLIST item, WCHAR *path );
+
+/* Create shortcut beside the item, or Pin to Start (a link in Start's Programs, pinned). */
+static void pw_desktop_shortcut( const struct pw_desktop_selection *s, BOOL pin )
+{
+    WCHAR path[MAX_PATH], link[MAX_PATH];
+    if (s->count != 1 || !pw_desktop_path( s->items[0], path )) return;
+    if (FAILED( pw_shell_make_shortcut( path, pin ? PW_SHORTCUT_START : PW_SHORTCUT_DESKTOP, link ) ))
+        MessageBoxW( NULL, L"MihawkOS could not make the shortcut.", L"Desktop", MB_OK | MB_ICONERROR );
+    else if (pin && pw_shell_pin_to_start( link ) < 0)
+        MessageBoxW( NULL, L"Start has no room for another pinned app. Unpin one first.", L"Desktop", MB_OK | MB_ICONINFORMATION );
 }
 
 /* Runs a verb of the selection's or the background's own context menu (shell32), as its classic menu would. */
@@ -284,13 +303,15 @@ static void pw_desktop_shell_menu( struct pw_desktop_browser *browser, const str
 
     if (FAILED( IShellView_GetItemObject( browser->view, SVGIO_SELECTION, &IID_IContextMenu, (void **)&shell ) )) return;
     if ((menu = CreatePopupMenu()) &&
-        SUCCEEDED( IContextMenu_QueryContextMenu( shell, menu, 0, 1, 0x7fff, CMF_NORMAL | (s->count == 1 ? CMF_CANRENAME : 0) ) ) &&
-        (id = TrackPopupMenu( menu, TPM_RETURNCMD | TPM_RIGHTBUTTON, at.x, at.y, 0, browser->view_window, NULL )))
+        SUCCEEDED( IContextMenu_QueryContextMenu( shell, menu, 0, 1, 0x7fff, CMF_NORMAL | (s->count == 1 ? CMF_CANRENAME : 0) ) ))
     {
-        info.hwnd = browser->view_window;
-        info.lpVerb = MAKEINTRESOURCEA( id - 1 );
-        info.nShow = SW_SHOWNORMAL;
-        IContextMenu_InvokeCommand( shell, &info );
+        if ((id = TrackPopupMenu( menu, TPM_RETURNCMD | TPM_RIGHTBUTTON, at.x, at.y, 0, browser->view_window, NULL )))
+        {
+            info.hwnd = browser->view_window;
+            info.lpVerb = MAKEINTRESOURCEA( id - 1 );
+            info.nShow = SW_SHOWNORMAL;
+            IContextMenu_InvokeCommand( shell, &info );
+        }
     }
     if (menu) DestroyMenu( menu );
     IContextMenu_Release( shell );
@@ -453,8 +474,8 @@ static void pw_desktop_menu( struct pw_desktop_browser *browser, LPARAM where )
     case PW_DESKTOP_REFRESH: IShellView_Refresh( browser->view ); break;
     case PW_DESKTOP_NEW_FOLDER: pw_desktop_verb( browser, SVGIO_BACKGROUND, CMDSTR_NEWFOLDERA ); break;
     case PW_DESKTOP_NEW_TEXT: pw_desktop_new_text( browser ); break;
-    case PW_DESKTOP_DISPLAY:
-    case PW_DESKTOP_PERSONALIZE: pw_desktop_run( browser, L"mihawk-appearance.exe", NULL, NULL ); break;
+    case PW_DESKTOP_DISPLAY: pw_desktop_run( browser, L"mihawk-settings.exe", L"system", NULL ); break;
+    case PW_DESKTOP_PERSONALIZE: pw_desktop_run( browser, L"mihawk-settings.exe", L"personalization", NULL ); break;
     case PW_DESKTOP_TERMINAL:
     {
         WCHAR folder[MAX_PATH];
@@ -479,6 +500,8 @@ static void pw_desktop_menu( struct pw_desktop_browser *browser, LPARAM where )
         }
         break;
     case PW_DESKTOP_COPY_PATH: pw_desktop_copy_paths( browser, &s ); break;
+    case PW_DESKTOP_MAKE_SHORTCUT:
+    case PW_DESKTOP_PIN_START: pw_desktop_shortcut( &s, id == PW_DESKTOP_PIN_START ); break;
     case PW_DESKTOP_NOTEPAD:
     {
         WCHAR path[MAX_PATH], arguments[MAX_PATH + 2];

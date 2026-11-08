@@ -160,6 +160,7 @@ static const IServiceProviderVtbl pw_desktop_service_vtbl =
 };
 
 #include "pw_shell_desktop_menus.h"
+#include "pw_shell_wallpaper.h"   /* the wallpaper the view paints behind its icons */
 
 /* The view's window, wrapped. The list view has no background of its own (below): when it asks to be erased, the wallpaper is what is
  * painted there, as the system paints it for Progman. Its menus are the prototype's (pw_shell_desktop_menus.h); the shell's own
@@ -167,6 +168,25 @@ static const IServiceProviderVtbl pw_desktop_service_vtbl =
 static LRESULT CALLBACK pw_desktop_view_proc( HWND hwnd, UINT msg, WPARAM wp, LPARAM lp )
 {
     struct pw_desktop_browser *browser = &pw_desktop_browser;
+    static UINT wallpaper_changed;
+
+    if (!wallpaper_changed) wallpaper_changed = RegisterWindowMessageW( PW_WALLPAPER_CHANGED_MESSAGE );
+    if (msg == wallpaper_changed)
+    {
+        /* Settings > Personalization > Background wrote a new proton.bmp: forget the picture and paint the new one now */
+        pw_shell_wallpaper_forget();
+        RedrawWindow( hwnd, NULL, NULL, RDW_INVALIDATE | RDW_ERASE | RDW_ALLCHILDREN | RDW_UPDATENOW );
+        return 1;
+    }
+    if (msg == WM_USER + 0x1111 /* shell32's SHV_CHANGE_NOTIFY, sent by SHChangeNotify */ && browser->list)
+    {
+        /* what each change notice did to the desktop's items (shell81-view-r5-07: a new shortcut never listed) */
+        int before = SendMessageW( browser->list, LVM_GETITEMCOUNT, 0, 0 );
+        LRESULT result = CallWindowProcW( browser->view_proc, hwnd, msg, wp, lp );
+        WARN( "Mihawk desktop: change %#Ix: %d items, then %d\n", (ULONG_PTR)lp, before,
+              (int)SendMessageW( browser->list, LVM_GETITEMCOUNT, 0, 0 ) );
+        return result;
+    }
 
     switch (msg)
     {
@@ -188,7 +208,13 @@ static LRESULT CALLBACK pw_desktop_view_proc( HWND hwnd, UINT msg, WPARAM wp, LP
             erases = 0;
             largest = 0;
         }
-        PaintDesktop( (HDC)wp );
+        /* the picture the setting names (pw_shell_wallpaper.h), not Wine's desktop bitmap, which only the process
+         * holding the server's desktop window would refresh */
+        {
+            RECT client;
+            GetClientRect( hwnd, &client );
+            if (!pw_shell_wallpaper_paint( (HDC)wp, &client )) PaintDesktop( (HDC)wp );
+        }
         return 1;
     }
     case WM_CONTEXTMENU:
@@ -269,6 +295,7 @@ static void pw_desktop_watch_notify( struct pw_desktop_watch *watch, DWORD bytes
             path[folder_length] = '\\';
             memcpy( path + folder_length + 1, info->FileName, length * sizeof(WCHAR) );
             path[folder_length + 1 + length] = 0;
+            WARN( "Mihawk desktop: watch action %lu %s\n", info->Action, debugstr_w( path ) );
             switch (info->Action)
             {
             case FILE_ACTION_ADDED:

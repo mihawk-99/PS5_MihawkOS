@@ -1,0 +1,334 @@
+From fd8932d43720dc58d36b3a5601105aa19dc77b0b Mon Sep 17 00:00:00 2001
+From: Mihawk <163614687+mihawk-99@users.noreply.github.com>
+Date: Sat, 7 Nov 2026 17:00:00 -0500
+Subject: [PATCH] win32u, uxtheme, user32, comctl32: the message box and the
+ task dialog stay light in the dark theme
+
+The prototype keeps its classic dialogs light in the dark theme (the reference's dark captures of the message box and
+the task dialog are light); in MihawkOS's dark theme their caption bars went dark and the task dialog whole
+(shell81-base-05: message box 53.3% light, 32.2% dark; task dialog 14.1% and 4.9%).
+
+- dlls/win32u/defwnd.c: a window with the property "pw_light_frame" has the light theme's caption (bar #eef2f8 active,
+  #f3f3f3 inactive, title #1a1a1a and #868686, PS5_Proton themes/windows11/appearance.json) whatever the theme; its
+  frame's visible pixel too. Every other window is drawn as before.
+- dlls/uxtheme/window.c: such a window's caption buttons come from the theme's MihawkLight::Window class, the light
+  variant's (PS5_Proton tools/build-wine-theme.py writes every light class again as MihawkLight:: in both variants).
+- dlls/user32/msgbox.c: the message box sets it. A button's footer is filled before its blended sprite: a label drawn at
+  the template's place showed through Cancel and doubled Yes and No (shell81-base-07).
+- dlls/comctl32_v6/taskdialog.c: the task dialog sets it and gives its controls the MihawkLight classes; its page is
+  white and its footer, under the verification box and the buttons, #f3f3f3, with #1a1a1a text; the main instruction
+  is the prototype's 16 px regular (it was 1.25 times the message font, bold) in the theme's instruction colour.
+---
+ dlls/comctl32_v6/taskdialog.c | 89 +++++++++++++++++++++++++++++++++--
+ dlls/user32/msgbox.c          |  6 +++
+ dlls/uxtheme/window.c         |  5 +-
+ dlls/win32u/defwnd.c          | 65 +++++++++++++++++++------
+ 4 files changed, 147 insertions(+), 18 deletions(-)
+
+diff --git a/dlls/comctl32_v6/taskdialog.c b/dlls/comctl32_v6/taskdialog.c
+index 9354a47..2020a50 100644
+--- a/dlls/comctl32_v6/taskdialog.c
++++ b/dlls/comctl32_v6/taskdialog.c
+@@ -597,9 +597,10 @@ static void taskdialog_add_main_instruction(struct taskdialog_info *dialog_info)
+ 
+     ncm.cbSize = sizeof(ncm);
+     SystemParametersInfoW(SPI_GETNONCLIENTMETRICS, ncm.cbSize, &ncm, 0);
+-    /* 1.25 times the height */
+-    ncm.lfMessageFont.lfHeight = ncm.lfMessageFont.lfHeight * 5 / 4;
+-    ncm.lfMessageFont.lfWeight = FW_BOLD;
++    /* PS5_Proton: the prototype's main instruction (prototypes/windows11-shell css/dialogs.css .dlg-task-instr):
++     * 16 px over the 12 px message font, regular weight, in the theme's instruction colour (WM_CTLCOLORSTATIC) */
++    ncm.lfMessageFont.lfHeight = ncm.lfMessageFont.lfHeight * 4 / 3;
++    ncm.lfMessageFont.lfWeight = FW_NORMAL;
+     dialog_info->main_instruction_font = CreateFontIndirectW(&ncm.lfMessageFont);
+ 
+     dialog_info->main_instruction =
+@@ -1207,6 +1208,67 @@ static void taskdialog_destroy(struct taskdialog_info *dialog_info)
+     Free(dialog_info->collapsed_text);
+ }
+ 
++/* PS5_Proton: the prototype's task dialog is light in both themes (css/dialogs.css .dlg-task, the reference's dark
++ * capture): a white page, the #f3f3f3 footer under the verification box and the buttons, its text #1a1a1a, the light
++ * caption (win32u "pw_light_frame") and the light variant's controls (the theme's MihawkLight classes). */
++#define PW_TASK_PAGE RGB(0xff, 0xff, 0xff)
++#define PW_TASK_FOOT RGB(0xf3, 0xf3, 0xf3)
++#define PW_TASK_TEXT RGB(0x1a, 0x1a, 0x1a)
++
++static BOOL CALLBACK pw_task_light_child(HWND child, LPARAM unused)
++{
++    SetWindowTheme(child, L"MihawkLight", NULL);
++    return TRUE;
++}
++
++/* The footer's top in client coordinates: above the verification box and the buttons, whichever is higher; or the
++ * client's bottom when the dialog has neither. */
++static LONG pw_task_footer_top(const struct taskdialog_info *dialog_info)
++{
++    RECT client, rect;
++    LONG top;
++    INT i;
++
++    GetClientRect(dialog_info->hwnd, &client);
++    top = client.bottom;
++    for (i = -1; i < dialog_info->button_count; i++)
++    {
++        HWND item = i < 0 ? dialog_info->verification_box : dialog_info->buttons[i];
++        if (!item || !IsWindowVisible(item)) continue;
++        GetWindowRect(item, &rect);
++        MapWindowPoints(HWND_DESKTOP, dialog_info->hwnd, (POINT *)&rect, 2);
++        top = min(top, rect.top - dialog_info->m.v_spacing * 2);
++    }
++    return max(top, 0);
++}
++
++static HBRUSH pw_task_brush(COLORREF colour)
++{
++    static HBRUSH page, foot;
++    if (colour == PW_TASK_FOOT) return foot ? foot : (foot = CreateSolidBrush(PW_TASK_FOOT));
++    return page ? page : (page = CreateSolidBrush(PW_TASK_PAGE));
++}
++
++static INT_PTR pw_task_colour(const struct taskdialog_info *dialog_info, HDC hdc, HWND control)
++{
++    COLORREF text = PW_TASK_TEXT, back = PW_TASK_PAGE;
++    RECT rect;
++
++    GetWindowRect(control, &rect);
++    MapWindowPoints(HWND_DESKTOP, dialog_info->hwnd, (POINT *)&rect, 2);
++    if (rect.top >= pw_task_footer_top(dialog_info)) back = PW_TASK_FOOT;
++    if (control == dialog_info->main_instruction)
++    {
++        HTHEME theme = OpenThemeData(NULL, L"MihawkLight::TaskDialog");
++        if (!theme || FAILED(GetThemeColor(theme, TDLG_MAININSTRUCTIONPANE, 0, TMT_TEXTCOLOR, &text)))
++            text = RGB(0x00, 0x3e, 0x92);
++        if (theme) CloseThemeData(theme);
++    }
++    SetTextColor(hdc, text);
++    SetBkColor(hdc, back);
++    return (INT_PTR)pw_task_brush(back);
++}
++
+ static INT_PTR CALLBACK taskdialog_proc(HWND hwnd, UINT msg, WPARAM wParam, LPARAM lParam)
+ {
+     static const WCHAR taskdialog_info_propnameW[] = L"TaskDialogInfo";
+@@ -1303,6 +1365,8 @@ static INT_PTR CALLBACK taskdialog_proc(HWND hwnd, UINT msg, WPARAM wParam, LPAR
+             taskdialog_init(dialog_info, hwnd);
+ 
+             SetPropW(hwnd, taskdialog_info_propnameW, dialog_info);
++            SetPropW(hwnd, L"pw_light_frame", (HANDLE)1);
++            EnumChildWindows(hwnd, pw_task_light_child, 0);
+             taskdialog_notify(dialog_info, TDN_DIALOG_CONSTRUCTED, 0, 0);
+             taskdialog_notify(dialog_info, TDN_CREATED, 0, 0);
+             /* Default radio button click notification sent after TDN_CREATED */
+@@ -1351,8 +1415,27 @@ static INT_PTR CALLBACK taskdialog_proc(HWND hwnd, UINT msg, WPARAM wParam, LPAR
+             }
+             return FALSE;
+         }
++        case WM_ERASEBKGND:
++            if (dialog_info)
++            {
++                RECT client;
++                LONG top = pw_task_footer_top(dialog_info);
++                GetClientRect(hwnd, &client);
++                FillRect((HDC)wParam, &client, pw_task_brush(PW_TASK_PAGE));
++                client.top = top;
++                FillRect((HDC)wParam, &client, pw_task_brush(PW_TASK_FOOT));
++                SetWindowLongPtrW(hwnd, DWLP_MSGRESULT, TRUE);
++                return TRUE;
++            }
++            return FALSE;
++        case WM_CTLCOLORDLG:
++            return dialog_info ? (INT_PTR)pw_task_brush(PW_TASK_PAGE) : FALSE;
++        case WM_CTLCOLORSTATIC:
++        case WM_CTLCOLORBTN:
++            return dialog_info ? pw_task_colour(dialog_info, (HDC)wParam, (HWND)lParam) : FALSE;
+         case WM_DESTROY:
+             taskdialog_notify(dialog_info, TDN_DESTROYED, 0, 0);
++            RemovePropW(hwnd, L"pw_light_frame");
+             RemovePropW(hwnd, taskdialog_info_propnameW);
+             taskdialog_destroy(dialog_info);
+             break;
+diff --git a/dlls/user32/msgbox.c b/dlls/user32/msgbox.c
+index 65414c8..6b45347 100644
+--- a/dlls/user32/msgbox.c
++++ b/dlls/user32/msgbox.c
+@@ -272,6 +272,8 @@ static void MSGBOX_OnInit(HWND hwnd, LPMSGBOXPARAMSW lpmb)
+     if (!font) font = (HFONT)GetStockObject( DEFAULT_GUI_FONT );
+     SendMessageW( hwnd, WM_SETFONT, (WPARAM)font, FALSE );
+     SetPropW( hwnd, L"pw_msg_font", font );
++    /* The prototype's message box keeps its light caption in the dark theme too (win32u defwnd.c "pw_light_frame"). */
++    SetPropW( hwnd, L"pw_light_frame", (HANDLE)1 );
+     {
+         HWND text = GetDlgItem( hwnd, MSGBOX_IDTEXT );
+         if (text) SendMessageW( text, WM_SETFONT, (WPARAM)font, FALSE );
+@@ -409,6 +411,9 @@ static void pw_msg_draw_button( HWND hwnd, const DRAWITEMSTRUCT *dis )
+ 
+     if (pressed) sprite = is_default ? PW_DIALOG_BUTTON_DEFAULT_PRESS : PW_DIALOG_BUTTON_NORMAL_PRESS;
+     else sprite = is_default ? PW_DIALOG_BUTTON_DEFAULT : PW_DIALOG_BUTTON_NORMAL;
++    /* The sprite is blended: the footer goes under it first, or whatever the button showed before stays (a label
++     * drawn at the template's place showed through Cancel and doubled Yes and No, shell81-base-07). */
++    pw_msg_fill( dis->hDC, &box, PW_MSG_FACE );
+     pw_msg_sprite( dis->hDC, sprite, box.left, box.top, box.right - box.left );
+     if (GetWindowTextW( dis->hwndItem, label, ARRAY_SIZE(label) ))
+     {
+@@ -476,6 +481,7 @@ static INT_PTR CALLBACK MSGBOX_DlgProc( HWND hwnd, UINT message,
+        if ((HFONT)GetPropW( hwnd, L"pw_msg_font" )) DeleteObject( (HFONT)GetPropW( hwnd, L"pw_msg_font" ) );
+        RemovePropW( hwnd, L"pw_msg_font" );
+        RemovePropW( hwnd, L"pw_msg_icon" );
++       RemovePropW( hwnd, L"pw_light_frame" );
+        return 0;
+ 
+    case WM_COMMAND:
+diff --git a/dlls/uxtheme/window.c b/dlls/uxtheme/window.c
+index bb8186b..fe42c9c 100644
+--- a/dlls/uxtheme/window.c
++++ b/dlls/uxtheme/window.c
+@@ -97,7 +97,10 @@ void WINAPI UXTHEME_NonClientButtonDraw(HWND hwnd, HDC hdc, enum NONCLIENT_BUTTO
+ {
+     HTHEME theme;
+ 
+-    theme = OpenThemeDataForDpi(NULL, L"Window", GetDpiForWindow(hwnd));
++    /* PS5_Proton: a window that keeps the light caption in the dark theme ("pw_light_frame", win32u defwnd.c) draws
++     * its buttons from the theme's MihawkLight classes, the light variant's (tools/build-wine-theme.py mihawk_light) */
++    theme = OpenThemeDataForDpi(NULL, GetPropW(hwnd, L"pw_light_frame") ? L"MihawkLight::Window" : L"Window",
++                                GetDpiForWindow(hwnd));
+     if (!theme)
+     {
+         user_api.pNonClientButtonDraw(hwnd, hdc, type, rect, down, grayed);
+diff --git a/dlls/win32u/defwnd.c b/dlls/win32u/defwnd.c
+index a9c4d2a..c18ba17 100644
+--- a/dlls/win32u/defwnd.c
++++ b/dlls/win32u/defwnd.c
+@@ -1234,8 +1234,44 @@ static HICON get_nc_icon_for_window( HWND hwnd )
+     return icon;
+ }
+ 
++/* PS5_Proton: a window the prototype keeps light in the dark theme (the message box and the task dialog, which set the
++ * property "pw_light_frame") has the light theme's caption, as PS5_Proton themes/windows11/appearance.json names it:
++ * the bar #eef2f8 active and #f3f3f3 inactive, the title #1a1a1a and #868686. Every other window has the theme's. */
++static const WCHAR light_frameW[] = {'p','w','_','l','i','g','h','t','_','f','r','a','m','e',0};
++
++static COLORREF caption_color( HWND hwnd, int index )
++{
++    if (hwnd && NtUserGetProp( hwnd, light_frameW ))
++    {
++        switch (index)
++        {
++        case COLOR_ACTIVECAPTION:
++        case COLOR_GRADIENTACTIVECAPTION:   return RGB( 0xee, 0xf2, 0xf8 );
++        case COLOR_INACTIVECAPTION:
++        case COLOR_GRADIENTINACTIVECAPTION: return RGB( 0xf3, 0xf3, 0xf3 );
++        case COLOR_CAPTIONTEXT:             return RGB( 0x1a, 0x1a, 0x1a );
++        case COLOR_INACTIVECAPTIONTEXT:     return RGB( 0x86, 0x86, 0x86 );
++        }
++    }
++    return get_sys_color( index );
++}
++
++static void fill_caption_rect( HWND hwnd, HDC hdc, const RECT *rect, int index )
++{
++    HBRUSH brush;
++
++    if (!hwnd || !NtUserGetProp( hwnd, light_frameW ))
++    {
++        fill_rect( hdc, rect, get_sys_color_brush( index ));
++        return;
++    }
++    brush = NtGdiCreateSolidBrush( caption_color( hwnd, index ), NULL );
++    fill_rect( hdc, rect, brush );
++    NtGdiDeleteObjectApp( brush );
++}
++
+ /* Draws the bar part (ie the big rectangle) of the caption */
+-static void draw_caption_bar( HDC hdc, const RECT *rect, DWORD style, BOOL active, BOOL gradient )
++static void draw_caption_bar( HWND hwnd, HDC hdc, const RECT *rect, DWORD style, BOOL active, BOOL gradient )
+ {
+     if (gradient)
+     {
+@@ -1245,8 +1281,8 @@ static void draw_caption_bar( HDC hdc, const RECT *rect, DWORD style, BOOL activ
+ 
+         static GRADIENT_RECT mesh[] = {{0, 1}, {1, 2}, {2, 3}};
+ 
+-        left  = get_sys_color( active ? COLOR_ACTIVECAPTION : COLOR_INACTIVECAPTION );
+-        right = get_sys_color( active ? COLOR_GRADIENTACTIVECAPTION : COLOR_GRADIENTINACTIVECAPTION );
++        left  = caption_color( hwnd, active ? COLOR_ACTIVECAPTION : COLOR_INACTIVECAPTION );
++        right = caption_color( hwnd, active ? COLOR_GRADIENTACTIVECAPTION : COLOR_GRADIENTINACTIVECAPTION );
+         vertices[0].Red   = vertices[1].Red   = GetRValue( left ) << 8;
+         vertices[0].Green = vertices[1].Green = GetGValue( left ) << 8;
+         vertices[0].Blue  = vertices[1].Blue  = GetBValue( left ) << 8;
+@@ -1281,7 +1317,7 @@ static void draw_caption_bar( HDC hdc, const RECT *rect, DWORD style, BOOL activ
+     else
+     {
+         DWORD color = active ? COLOR_ACTIVECAPTION : COLOR_INACTIVECAPTION;
+-        fill_rect( hdc, rect, get_sys_color_brush( color ));
++        fill_caption_rect( hwnd, hdc, rect, color );
+     }
+ }
+ 
+@@ -1605,7 +1641,7 @@ static void draw_nc_caption( HDC hdc, RECT *rect, HWND hwnd, DWORD  style,
+ 
+     /* Windows 11: the bar fills the whole caption, with no line beneath it */
+     NtUserSystemParametersInfo( SPI_GETGRADIENTCAPTIONS, 0, &gradient, 0 );
+-    draw_caption_bar( hdc, &r, style, active, gradient );
++    draw_caption_bar( hwnd, hdc, &r, style, active, gradient );
+ 
+     if ((style & WS_SYSMENU) && !(ex_style & WS_EX_TOOLWINDOW))
+     {
+@@ -1652,9 +1688,9 @@ static void draw_nc_caption( HDC hdc, RECT *rect, HWND hwnd, DWORD  style,
+             hFont = NtGdiHfontCreate( &nclm.lfCaptionFont, sizeof(nclm.lfCaptionFont), 0, 0, NULL );
+         hOldFont = NtGdiSelectFont( hdc, hFont );
+         if (active)
+-            NtGdiGetAndSetDCDword( hdc, NtGdiSetTextColor, get_sys_color( COLOR_CAPTIONTEXT ), NULL );
++            NtGdiGetAndSetDCDword( hdc, NtGdiSetTextColor, caption_color( hwnd, COLOR_CAPTIONTEXT ), NULL );
+         else
+-            NtGdiGetAndSetDCDword( hdc, NtGdiSetTextColor, get_sys_color( COLOR_INACTIVECAPTIONTEXT ), NULL );
++            NtGdiGetAndSetDCDword( hdc, NtGdiSetTextColor, caption_color( hwnd, COLOR_INACTIVECAPTIONTEXT ), NULL );
+         NtGdiGetAndSetDCDword( hdc, NtGdiSetBkMode, TRANSPARENT, NULL );
+         DrawTextW( hdc, buffer, -1, &r,
+                      DT_SINGLELINE | DT_VCENTER | DT_NOPREFIX | DT_LEFT );
+@@ -1687,7 +1723,7 @@ BOOL WINAPI NtUserDrawCaptionTemp( HWND hwnd, HDC hdc, const RECT *rect, HFONT f
+     else
+     {
+         DWORD style = get_window_long( hwnd, GWL_STYLE );
+-        draw_caption_bar( hdc, &rc, style, flags & DC_ACTIVE, flags & DC_GRADIENT );
++        draw_caption_bar( hwnd, hdc, &rc, style, flags & DC_ACTIVE, flags & DC_GRADIENT );
+     }
+ 
+     /* drawing icon */
+@@ -1717,7 +1753,8 @@ BOOL WINAPI NtUserDrawCaptionTemp( HWND hwnd, HDC hdc, const RECT *rect, HFONT f
+             color = COLOR_CAPTIONTEXT;
+         else
+             color = COLOR_INACTIVECAPTIONTEXT;
+-        NtGdiGetAndSetDCDword( hdc, NtGdiSetTextColor, get_sys_color( color ), NULL );
++        NtGdiGetAndSetDCDword( hdc, NtGdiSetTextColor,
++                               color == COLOR_BTNTEXT ? get_sys_color( color ) : caption_color( hwnd, color ), NULL );
+         NtGdiGetAndSetDCDword( hdc, NtGdiSetBkMode, TRANSPARENT, NULL );
+ 
+         if (font)
+@@ -1805,18 +1842,18 @@ static void nc_paint( HWND hwnd, HRGN clip )
+     {
+         /* Only the frame's innermost pixel shows (get_visible_rect): the window's own colour, which the
+          * compositor's 1-pixel border is drawn over, as Windows 11 draws a frame over its backdrop. */
+-        HBRUSH brush = get_sys_color_brush( active ? COLOR_ACTIVECAPTION : COLOR_INACTIVECAPTION );
++        int color = active ? COLOR_ACTIVECAPTION : COLOR_INACTIVECAPTION;
+         RECT inside, strip;
+ 
+         get_inside_rect( hwnd, COORDS_WINDOW, &inside, style, ex_style );
+         SetRect( &strip, rect.left, rect.top, rect.right, inside.top );
+-        fill_rect( hdc, &strip, brush );
++        fill_caption_rect( hwnd, hdc, &strip, color );
+         SetRect( &strip, rect.left, inside.bottom, rect.right, rect.bottom );
+-        fill_rect( hdc, &strip, brush );
++        fill_caption_rect( hwnd, hdc, &strip, color );
+         SetRect( &strip, rect.left, inside.top, inside.left, inside.bottom );
+-        fill_rect( hdc, &strip, brush );
++        fill_caption_rect( hwnd, hdc, &strip, color );
+         SetRect( &strip, inside.right, inside.top, rect.right, inside.bottom );
+-        fill_rect( hdc, &strip, brush );
++        fill_caption_rect( hwnd, hdc, &strip, color );
+         rect = inside;
+     }
+     else
+-- 
+2.56.0
+

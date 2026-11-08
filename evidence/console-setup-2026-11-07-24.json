@@ -1,0 +1,94 @@
+{
+ "run": "console-setup-2026-11-07-24",
+ "result": "ready",
+ "stopped_at": null,
+ "steps": {
+  "S0": {
+   "step": "host",
+   "state": "done",
+   "seconds": 0.7,
+   "detail": "dist and the staged runtime are there"
+  },
+  "S1": {
+   "step": "reach",
+   "state": "done",
+   "seconds": 0.0,
+   "detail": "ftpsrv and websrv answer; klog stream open"
+  },
+  "S2": {
+   "step": "guard",
+   "state": "done",
+   "seconds": 0.0,
+   "detail": "no drop, no storage block"
+  },
+  "S3": {
+   "step": "control",
+   "state": "done",
+   "seconds": 0.3,
+   "detail": "ps5vkctl pid 103, no title running, firmware 13600007"
+  },
+  "S4": {
+   "step": "klog",
+   "state": "done",
+   "seconds": 1.7,
+   "detail": "63 lines, no storage damage, no OnionHEN"
+  },
+  "S5": {
+   "step": "salvage",
+   "state": "done",
+   "seconds": 0.0,
+   "detail": "salvaged once this boot"
+  },
+  "S6": {
+   "step": "dev.conf",
+   "state": "done",
+   "seconds": 0.0,
+   "detail": "loopback 8080"
+  },
+  "S7": {
+   "step": "title",
+   "state": "done",
+   "seconds": 5.9,
+   "detail": "178 files equal"
+  },
+  "S8": {
+   "step": "runtime",
+   "state": "did",
+   "seconds": 1.5,
+   "detail": "Uploaded and verified 0 files; prefix probe: preserved existing state"
+  },
+  "S9": {
+   "step": "prefix",
+   "state": "done",
+   "seconds": 0.3,
+   "detail": "prefix ready, firmware 13600007"
+  },
+  "S10": {
+   "step": "read-back",
+   "state": "done",
+   "seconds": 187.5,
+   "detail": "4261 files match"
+  }
+ },
+ "klog": {
+  "connections": 1,
+  "lines": 106,
+  "storage_damage": 0,
+  "onionhen": 0
+ },
+ "build": {
+  "matches_tree": true,
+  "head": "1700ce7397b9",
+  "time": "2026-11-07T17:37:57-0500"
+ },
+ "title_files": 178,
+ "runtime": "Uploaded and verified 0 files; prefix probe: preserved existing state",
+ "prefix_session": null,
+ "firmware": "13600007",
+ "read_back": {
+  "files": 4261,
+  "mismatches": 0
+ },
+ "last_console_write": 1794091546.5470464,
+ "sync": "err usage: sync needs a nine-character title id; this ps5vkctl has no sync: tool"
+}

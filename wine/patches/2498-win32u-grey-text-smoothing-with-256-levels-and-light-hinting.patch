@@ -1,0 +1,109 @@
+From 717b06316bed6e3a11109a443dbb0b271952b802 Mon Sep 17 00:00:00 2001
+From: Mihawk <163614687+mihawk-99@users.noreply.github.com>
+Date: Sat, 7 Nov 2026 15:00:00 -0500
+Subject: [PATCH] win32u: grey text smoothing with 256 levels and light hinting
+
+Smoothed (non-ClearType) text was drawn from 17-level glyphs, fully hinted, blended through a per-level range table;
+MihawkOS's shell text at 1080p and 96 DPI looked stepped and wider than the prototype's, which Chromium draws with
+8-bit coverage and light hinting. Measured on the PC against the prototype (tools/run-settings-render.py, the text
+pixels alone, within 8 levels): Settings Home 65.4 -> 67.3%, Personalization 72.3 -> 75.6%, Display 56.8 -> 59.5%;
+256 levels with full hinting alone was 64.7 / 71.7 / 56.0, so light hinting carries most of it.
+
+- dlls/win32u/dibdrv/graphics.c: a grey-smoothed font's glyphs are fetched as WINE_GGO_GRAY16_BITMAP (256 levels) and
+  kept as 32-bit coverage with the same value in each channel, so they are drawn by the subpixel path: a plain blend,
+  or through the FontSmoothingGamma ramp when one is set. Not ClearType: no colour fringes. Fonts drawn without
+  smoothing, and 8 bpp and lower surfaces, are unchanged.
+- dlls/win32u/freetype.c: grey formats load with FT_LOAD_TARGET_LIGHT (vertical hinting only); glyph metrics use the
+  same flags, so measured and drawn widths agree.
+---
+ dlls/win32u/dibdrv/graphics.c | 34 +++++++++++++++++++++++++++-------
+ dlls/win32u/freetype.c        |  3 ++-
+ 2 files changed, 29 insertions(+), 8 deletions(-)
+
+diff --git a/dlls/win32u/dibdrv/graphics.c b/dlls/win32u/dibdrv/graphics.c
+index 92dea91..0cb150e 100644
+--- a/dlls/win32u/dibdrv/graphics.c
++++ b/dlls/win32u/dibdrv/graphics.c
+@@ -714,12 +714,13 @@ static int get_glyph_depth( UINT aa_flags )
+ {
+     switch (aa_flags)
+     {
+-    case GGO_BITMAP: /* we'll convert non-antialiased 1-bpp bitmaps to 8-bpp */
++    case GGO_BITMAP: return 8; /* we'll convert non-antialiased 1-bpp bitmaps to 8-bpp */
++
++    /* grey smoothing: 256 levels of coverage, the same in each channel, blended through the gamma ramp */
+     case GGO_GRAY2_BITMAP:
+     case GGO_GRAY4_BITMAP:
+     case GGO_GRAY8_BITMAP:
+-    case WINE_GGO_GRAY16_BITMAP: return 8;
+-
++    case WINE_GGO_GRAY16_BITMAP:
+     case WINE_GGO_HRGB_BITMAP:
+     case WINE_GGO_HBGR_BITMAP:
+     case WINE_GGO_VRGB_BITMAP:
+@@ -742,9 +743,16 @@ static const int padding[4] = {0, 3, 2, 1};
+  * For non-antialiased bitmaps convert them to the 17-level format
+  * using only values 0 or 16.
+  */
++static BOOL is_grey_smoothing( UINT aa_flags )
++{
++    return aa_flags == GGO_GRAY2_BITMAP || aa_flags == GGO_GRAY4_BITMAP || aa_flags == GGO_GRAY8_BITMAP ||
++           aa_flags == WINE_GGO_GRAY16_BITMAP;
++}
++
+ static struct cached_glyph *cache_glyph_bitmap( DC *dc, struct cached_font *font, UINT index, UINT flags )
+ {
+-    UINT ggo_flags = font->aa_flags;
++    BOOL grey = is_grey_smoothing( font->aa_flags );
++    UINT ggo_flags = grey ? WINE_GGO_GRAY16_BITMAP : font->aa_flags;
+     static const MAT2 identity = { {0,1}, {0,0}, {0,0}, {0,1} };
+     UINT indices[3] = {0, 0, 0x20};
+     int i, x, y;
+@@ -775,15 +783,27 @@ static struct cached_glyph *cache_glyph_bitmap( DC *dc, struct cached_font *font
+ 
+     if (bit_count == 8) pad = padding[ metrics.gmBlackBoxX % 4 ];
+ 
+-    ret = NtGdiGetGlyphOutline( dc->hSelf, index, ggo_flags, &metrics, size, glyph->bits,
+-                                &identity, FALSE );
++    ret = NtGdiGetGlyphOutline( dc->hSelf, index, ggo_flags, &metrics,
++                                grey ? metrics.gmBlackBoxY * get_dib_stride( metrics.gmBlackBoxX, 8 ) : size,
++                                glyph->bits, &identity, FALSE );
+     if (ret == GDI_ERROR)
+     {
+         free( glyph );
+         return NULL;
+     }
+     assert( ret <= size );
+-    if (font->aa_flags == GGO_BITMAP)
++    if (grey)
++    {
++        /* each 8-bit coverage into a 32-bit one, backwards so the wider pixels never overwrite unread ones */
++        int grey_stride = get_dib_stride( metrics.gmBlackBoxX, 8 );
++        for (y = metrics.gmBlackBoxY - 1; y >= 0; y--)
++        {
++            src = glyph->bits + y * grey_stride;
++            for (x = metrics.gmBlackBoxX - 1; x >= 0; x--)
++                ((DWORD *)(glyph->bits + y * stride))[x] = src[x] * 0x010101;
++        }
++    }
++    else if (font->aa_flags == GGO_BITMAP)
+     {
+         for (y = metrics.gmBlackBoxY - 1; y >= 0; y--)
+         {
+diff --git a/dlls/win32u/freetype.c b/dlls/win32u/freetype.c
+index 1b8fb80..7d7de22 100644
+--- a/dlls/win32u/freetype.c
++++ b/dlls/win32u/freetype.c
+@@ -3103,7 +3103,8 @@ static FT_Int get_load_flags( UINT format, BOOL vertical_metrics, BOOL force_no_
+     case GGO_GRAY4_BITMAP:
+     case GGO_GRAY8_BITMAP:
+     case WINE_GGO_GRAY16_BITMAP:
+-        load_flags |= FT_LOAD_TARGET_NORMAL;
++        /* light hinting for grey smoothing: snapped to the pixel grid vertically only, as Chromium draws text */
++        load_flags |= FT_LOAD_TARGET_LIGHT;
+         break;
+     case WINE_GGO_HRGB_BITMAP:
+     case WINE_GGO_HBGR_BITMAP:
+-- 
+2.56.0
+

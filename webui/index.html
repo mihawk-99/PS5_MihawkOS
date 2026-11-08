@@ -44,7 +44,7 @@
     </div>
     <div id="welcome" class="glass card wide" hidden>
       <h2>No games yet</h2>
-      <p class="muted">Three steps put a Windows game on your PS5:</p>
+      <p class="muted">Three steps put a PC game on your PS5:</p>
       <ol class="steps">
         <li>Copy the game's folder from your computer to the PS5, on the Add a game page.</li>
         <li>Choose the program that starts it, and give it a picture.</li>
@@ -63,7 +63,7 @@
   <!-- Add a game -->
   <section id="page-add" class="page" hidden>
     <div class="head"><div><h1>Add a game</h1>
-      <p class="muted">Copy a Windows game from this computer to your PS5, then set it up. It takes three steps.</p></div></div>
+      <p class="muted">Copy a PC game from this computer to your PS5, then set it up. It takes three steps.</p></div></div>
     <ol class="stepper" id="stepper">
       <li data-step="1">Choose its folder</li>
       <li data-step="2">Copy it to the PS5</li>
@@ -147,7 +147,7 @@
   <!-- Saves -->
   <section id="page-saves" class="page" hidden>
     <div class="head"><div><h1>Saves</h1>
-      <p class="muted">Your games keep their saves and settings in the Windows user folder on your PS5. Keep a copy on this computer, or put one back after you reinstall.</p></div></div>
+      <p class="muted">Your games keep their saves and settings in the MihawkOS user folder on your PS5. Keep a copy on this computer, or put one back after you reinstall.</p></div></div>
     <div class="saves-layout">
       <div class="glass card">
         <h2>Back up</h2>
@@ -167,7 +167,7 @@
     <details class="glass card more" id="saves-browser">
       <summary>Look through the folder yourself</summary>
       <div class="browse-head">
-        <label class="inline">Windows installation<select id="saves-prefix"></select></label>
+        <label class="inline">MihawkOS installation<select id="saves-prefix"></select></label>
         <strong id="saves-path"></strong>
         <span class="actions tight">
           <button type="button" class="button small" id="saves-up">Folder above</button>
@@ -338,7 +338,7 @@
         <label class="full">Program path<input name="executable" maxlength="260" placeholder="C:\Games\Name\Game.exe"></label>
         <label class="full">Arguments<input name="arguments" maxlength="1024"></label>
         <label>Start in<input name="directory" maxlength="260" placeholder="The program's folder"></label>
-        <label>Windows installation (prefix)<input name="prefix" maxlength="64" placeholder="mihawk"></label>
+        <label>MihawkOS installation (prefix)<input name="prefix" maxlength="64" placeholder="mihawk"></label>
         <label>Entry id<input name="id" maxlength="64" pattern="[A-Za-z0-9_\-]{1,64}"></label>
         <label class="check full"><input type="checkbox" name="opengl"> OpenGL game: only for older games that need it</label>
         <label class="full">More environment<textarea name="env" rows="3" placeholder="NAME=VALUE, one a line"></textarea></label>

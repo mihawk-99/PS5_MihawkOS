@@ -1,0 +1,53 @@
+{
+  "battery": "a82upd2-base-2026-11-08-crash",
+  "expected_cases": [
+    "crash-lines64-title"
+  ],
+  "revision": "a98cbb5ed557debee52bb4be77ce10e285444834",
+  "dirty": false,
+  "cases": [
+    {
+      "case": "crash-lines64-title",
+      "run": "a82upd2-base-2026-11-08-crash-crash-lines64-title",
+      "runner_status": 0,
+      "seconds": 12.0,
+      "result": "finished",
+      "probe_verdict": null,
+      "returned_to_launcher": true,
+      "exit_stall": false,
+      "passed": true,
+      "run_seconds": 11.1,
+      "launch_readiness": {
+        "ready": true,
+        "seconds": 0.176,
+        "settle_seconds": 0.0,
+        "census_seconds": 0.164,
+        "previous_cleanup_verified": true
+      },
+      "stages": {
+        "launched": 1.06,
+        "title_started": 1.55,
+        "elevated": 1.55,
+        "wine_loaded": 1.83,
+        "wineboot_started": 4.33,
+        "wineboot_ended": 5.67,
+        "program_started": 5.7,
+        "program_ended": 8.24,
+        "wine_ended": 8.54,
+        "launcher_started": 10.08,
+        "launcher_ended": 10.39,
+        "closed": 11.12
+      },
+      "runner_overhead_seconds": 0.9,
+      "layout": "launcher",
+      "fault_records": 0,
+      "helpers": 6,
+      "protocol_errors": 0,
+      "pipe_memory_exhausted": 0,
+      "search_errors": 0
+    }
+  ],
+  "complete": true,
+  "seconds": 12.0,
+  "passed": true
+}

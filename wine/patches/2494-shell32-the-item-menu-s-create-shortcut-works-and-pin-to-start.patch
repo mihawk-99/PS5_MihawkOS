@@ -1,0 +1,885 @@
+From ac05e7f49063a5bf1292fb6b5e5e76a729e287e8 Mon Sep 17 00:00:00 2001
+From: Mihawk <163614687+mihawk-99@users.noreply.github.com>
+Date: Sat, 7 Nov 2026 06:00:00 -0500
+Subject: [PATCH] shell32: the item menu's Create shortcut works, and Pin to
+ Start
+
+The item menu of a file or folder (MENU_SHV_FILE: File Explorer's right-click, and the desktop's on the Menu key or
+Shift+F10) offered "Create Link", and the command did nothing: its id had no handler ("Unhandled verb" in the log). The
+owner met that item and found no shortcut anywhere (2026-11-06).
+
+- dlls/shell32/shell32.rc, po/*.po: the item reads "Create &shortcut" (the msgid changes in all 49 translation files so
+  their translations are kept; English's own msgstr in en.po and en_US.po said "Create &Link" and now says it too; French
+  now "raccourci"), and "Pi&n to Start" follows it, translated for the ten guided-setup languages, each with an access
+  key of its own (the two items' keys differ in every one, so one key press runs the command).
+- dlls/shell32/shlview_cmenu.c: the id and the verbs "link" and "pintostartscreen" make, for each selected item that is a
+  file or folder, a "<name> - Shortcut.lnk" on the user's Desktop, or in Start's Programs and pinned, through
+  wine/ps5/pw_shell_shortcut.h (the code File Explorer's More menu runs; names and pin list host-tested in
+  src/pw_shortcut.h). An item with no file path (This PC, the Recycle Bin) is skipped.
+- dlls/shell32/shresdef.h: FCIDM_SHVIEW_PINSTART.
+---
+ dlls/shell32/shell32.rc      |  3 ++-
+ dlls/shell32/shlview_cmenu.c | 28 ++++++++++++++++++++++++++++
+ dlls/shell32/shresdef.h      |  3 +++
+ po/ar.po                     |  2 +-
+ po/ast.po                    |  2 +-
+ po/bg.po                     |  2 +-
+ po/ca.po                     |  2 +-
+ po/cs.po                     |  2 +-
+ po/da.po                     |  2 +-
+ po/de.po                     |  6 +++++-
+ po/el.po                     |  2 +-
+ po/en.po                     |  4 ++--
+ po/en_US.po                  |  4 ++--
+ po/eo.po                     |  2 +-
+ po/es.po                     |  6 +++++-
+ po/fa.po                     |  2 +-
+ po/fi.po                     |  2 +-
+ po/fr.po                     |  8 ++++++--
+ po/he.po                     |  2 +-
+ po/hi.po                     |  2 +-
+ po/hr.po                     |  2 +-
+ po/hu.po                     |  2 +-
+ po/it.po                     |  6 +++++-
+ po/ja.po                     |  6 +++++-
+ po/ka.po                     |  2 +-
+ po/ko.po                     |  2 +-
+ po/lt.po                     |  2 +-
+ po/ml.po                     |  2 +-
+ po/nb_NO.po                  |  2 +-
+ po/nl.po                     |  2 +-
+ po/or.po                     |  2 +-
+ po/pa.po                     |  2 +-
+ po/pl.po                     |  6 +++++-
+ po/pt_BR.po                  |  6 +++++-
+ po/pt_PT.po                  |  2 +-
+ po/rm.po                     |  2 +-
+ po/ro.po                     |  2 +-
+ po/ru.po                     |  6 +++++-
+ po/si.po                     |  2 +-
+ po/sk.po                     |  2 +-
+ po/sl.po                     |  2 +-
+ po/sr_RS@cyrillic.po         |  2 +-
+ po/sr_RS@latin.po            |  2 +-
+ po/sv.po                     |  2 +-
+ po/ta.po                     |  2 +-
+ po/te.po                     |  2 +-
+ po/th.po                     |  2 +-
+ po/tr.po                     |  2 +-
+ po/uk.po                     |  2 +-
+ po/wa.po                     |  2 +-
+ po/zh_CN.po                  |  6 +++++-
+ po/zh_TW.po                  |  2 +-
+ 52 files changed, 121 insertions(+), 53 deletions(-)
+
+diff --git a/dlls/shell32/shell32.rc b/dlls/shell32/shell32.rc
+index 8d8a88d..0d8e187 100644
+--- a/dlls/shell32/shell32.rc
++++ b/dlls/shell32/shell32.rc
+@@ -97,7 +97,8 @@ BEGIN
+ 	  MENUITEM "&Copy",		FCIDM_SHVIEW_COPY
+ 	  MENUITEM "&Paste",		FCIDM_SHVIEW_INSERT
+ 	  MENUITEM SEPARATOR
+-	  MENUITEM "Create &Link",	FCIDM_SHVIEW_CREATELINK
++	  MENUITEM "Create &shortcut",	FCIDM_SHVIEW_CREATELINK
++	  MENUITEM "Pi&n to Start",	FCIDM_SHVIEW_PINSTART
+ 	  MENUITEM "&Delete",		FCIDM_SHVIEW_DELETE
+ 	  MENUITEM "&Rename",		FCIDM_SHVIEW_RENAME
+ 	  MENUITEM SEPARATOR
+diff --git a/dlls/shell32/shlview_cmenu.c b/dlls/shell32/shlview_cmenu.c
+index 6029d04..ffd8d71 100644
+--- a/dlls/shell32/shlview_cmenu.c
++++ b/dlls/shell32/shlview_cmenu.c
+@@ -38,6 +38,7 @@
+ #include "shlwapi.h"
+ 
+ #include "wine/debug.h"
++#include "pw_shell_shortcut.h"   /* Create shortcut and Pin to Start (PS5_Proton wine/ps5, patch 2494) */
+ 
+ WINE_DEFAULT_DEBUG_CHANNEL(shell);
+ 
+@@ -332,6 +333,24 @@ static void DoDelete(ContextMenu *This)
+     }
+ }
+ 
++/* Create shortcut and Pin to Start for each selected item that is a file or a folder: a link on the user's Desktop, or in
++ * Start's Programs and pinned (wine/ps5/pw_shell_shortcut.h). The menu had a "Create Link" with no handler behind it. */
++static void DoCreateShortcuts(ContextMenu *This, BOOL pin)
++{
++    WCHAR path[MAX_PATH], link[MAX_PATH];
++    UINT i;
++
++    for (i = 0; i < This->cidl; ++i)
++    {
++        LPITEMIDLIST full = ILCombine(This->pidl, This->apidl[i]);
++
++        if (!full) continue;
++        if (SHGetPathFromIDListW(full, path) && SUCCEEDED(pw_shell_make_shortcut(path, pin ? PW_SHORTCUT_START : PW_SHORTCUT_DESKTOP, link)) && pin)
++            pw_shell_pin_to_start(link);
++        ILFree(full);
++    }
++}
++
+ static void do_copy(ContextMenu *This, HWND hwnd, DWORD drop_effect)
+ {
+     IDataObject *dataobject;
+@@ -1019,6 +1038,10 @@ static HRESULT WINAPI ItemMenu_InvokeCommand(
+             TRACE("Verb FCIDM_SHVIEW_PROPERTIES\n");
+             DoOpenProperties(This, lpcmi->hwnd);
+             break;
++        case FCIDM_SHVIEW_CREATELINK:
++        case FCIDM_SHVIEW_PINSTART:
++            DoCreateShortcuts(This, id + FCIDM_BASE == FCIDM_SHVIEW_PINSTART);
++            break;
+         default:
+             FIXME("Unhandled verb %#x.\n", id);
+             return E_INVALIDARG;
+@@ -1037,6 +1060,8 @@ static HRESULT WINAPI ItemMenu_InvokeCommand(
+             do_paste(This, lpcmi->hwnd);
+         else if (strcmp(lpcmi->lpVerb,"properties")==0)
+             DoOpenProperties(This, lpcmi->hwnd);
++        else if (!strcmp(lpcmi->lpVerb, "link") || !strcmp(lpcmi->lpVerb, "pintostartscreen"))
++            DoCreateShortcuts(This, lpcmi->lpVerb[0] == 'p');
+         else {
+             FIXME("Unhandled string verb %s\n",debugstr_a(lpcmi->lpVerb));
+             return E_FAIL;
+@@ -1074,6 +1099,9 @@ static HRESULT WINAPI ItemMenu_GetCommandString(IContextMenu3 *iface, UINT_PTR c
+         case FCIDM_SHVIEW_CREATELINK:
+             cmdW = L"link";
+             break;
++        case FCIDM_SHVIEW_PINSTART:
++            cmdW = L"pintostartscreen";
++            break;
+         case FCIDM_SHVIEW_DELETE:
+             cmdW = L"delete";
+             break;
+diff --git a/dlls/shell32/shresdef.h b/dlls/shell32/shresdef.h
+index deabe56..0ff0986 100644
+--- a/dlls/shell32/shresdef.h
++++ b/dlls/shell32/shresdef.h
+@@ -440,4 +440,7 @@ FIXME: Need to add them, but for now just let them use the same: searching.avi
+ #define IDB_TB_SMALL_LIGHT      216
+ #define IDB_TB_SMALL_DARK       217
+ 
++/* The item menu's Pin to Start (MihawkOS, patch 2494): beside shlobj.h's FCIDM_SHVIEW_CREATELINK 0x7051. */
++#define FCIDM_SHVIEW_PINSTART   0x7054
++
+ #endif
+diff --git a/po/ar.po b/po/ar.po
+index 502f24c..9f1c999 100644
+--- a/po/ar.po
++++ b/po/ar.po
+@@ -10687,7 +10687,7 @@ msgid "C&ut"
+ msgstr "ق&ص"
+ 
+ #: dlls/shell32/shell32.rc:101
+-msgid "Create &Link"
++msgid "Create &shortcut"
+ msgstr "أنش&ئ اختصارًا"
+ 
+ #: dlls/shell32/shell32.rc:103
+diff --git a/po/ast.po b/po/ast.po
+index fb8c19d..0088286 100644
+--- a/po/ast.po
++++ b/po/ast.po
+@@ -10121,7 +10121,7 @@ msgid "C&ut"
+ msgstr "C&ortar"
+ 
+ #: dlls/shell32/shell32.rc:101
+-msgid "Create &Link"
++msgid "Create &shortcut"
+ msgstr "Crear un &enllaz"
+ 
+ #: dlls/shell32/shell32.rc:103
+diff --git a/po/bg.po b/po/bg.po
+index 635bd5f..0cba170 100644
+--- a/po/bg.po
++++ b/po/bg.po
+@@ -10479,7 +10479,7 @@ msgid "C&ut"
+ msgstr "&Изрежи"
+ 
+ #: dlls/shell32/shell32.rc:101
+-msgid "Create &Link"
++msgid "Create &shortcut"
+ msgstr "Създай &връзка"
+ 
+ #: dlls/shell32/shell32.rc:103
+diff --git a/po/ca.po b/po/ca.po
+index d123755..26b7264 100644
+--- a/po/ca.po
++++ b/po/ca.po
+@@ -10223,7 +10223,7 @@ msgid "C&ut"
+ msgstr "Re&talla"
+ 
+ #: dlls/shell32/shell32.rc:101
+-msgid "Create &Link"
++msgid "Create &shortcut"
+ msgstr "Crea en&llaç"
+ 
+ #: dlls/shell32/shell32.rc:103
+diff --git a/po/cs.po b/po/cs.po
+index 37a3d34..5aa5d22 100644
+--- a/po/cs.po
++++ b/po/cs.po
+@@ -10533,7 +10533,7 @@ msgid "C&ut"
+ msgstr "Vyj&mout"
+ 
+ #: dlls/shell32/shell32.rc:101
+-msgid "Create &Link"
++msgid "Create &shortcut"
+ msgstr "Vytvořit odkaz"
+ 
+ #: dlls/shell32/shell32.rc:103
+diff --git a/po/da.po b/po/da.po
+index 00c3094..08cdfbd 100644
+--- a/po/da.po
++++ b/po/da.po
+@@ -10757,7 +10757,7 @@ msgid "C&ut"
+ msgstr "K&lip"
+ 
+ #: dlls/shell32/shell32.rc:101
+-msgid "Create &Link"
++msgid "Create &shortcut"
+ msgstr "Opret &genvej"
+ 
+ #: dlls/shell32/shell32.rc:103
+diff --git a/po/de.po b/po/de.po
+index ca2de58..6b9b6f2 100644
+--- a/po/de.po
++++ b/po/de.po
+@@ -10205,7 +10205,7 @@ msgid "C&ut"
+ msgstr "&Ausschneiden"
+ 
+ #: dlls/shell32/shell32.rc:101
+-msgid "Create &Link"
++msgid "Create &shortcut"
+ msgstr "&Verknüpfung anlegen"
+ 
+ #: dlls/shell32/shell32.rc:103
+@@ -20377,3 +20377,7 @@ msgstr ""
+ "\t\tangegebene Datum sind. Wird kein Datum angegeben, werden nur\n"
+ "\t\tQuelldateien kopiert, die neuer sind als die Zieldatei.\n"
+ "\n"
++
++#: dlls/shell32/shell32.rc:102
++msgid "Pi&n to Start"
++msgstr "An &Start anheften"
+diff --git a/po/el.po b/po/el.po
+index 5a2d9a7..01e2626 100644
+--- a/po/el.po
++++ b/po/el.po
+@@ -10259,7 +10259,7 @@ msgid "C&ut"
+ msgstr ""
+ 
+ #: dlls/shell32/shell32.rc:101
+-msgid "Create &Link"
++msgid "Create &shortcut"
+ msgstr ""
+ 
+ #: dlls/shell32/shell32.rc:103
+diff --git a/po/en.po b/po/en.po
+index 9d29a29..2243a15 100644
+--- a/po/en.po
++++ b/po/en.po
+@@ -10140,8 +10140,8 @@ msgid "C&ut"
+ msgstr "C&ut"
+ 
+ #: dlls/shell32/shell32.rc:101
+-msgid "Create &Link"
+-msgstr "Create &Link"
++msgid "Create &shortcut"
++msgstr "Create &shortcut"
+ 
+ #: dlls/shell32/shell32.rc:103
+ msgid "&Rename"
+diff --git a/po/en_US.po b/po/en_US.po
+index a29696b..70d0c27 100644
+--- a/po/en_US.po
++++ b/po/en_US.po
+@@ -10140,8 +10140,8 @@ msgid "C&ut"
+ msgstr "C&ut"
+ 
+ #: dlls/shell32/shell32.rc:101
+-msgid "Create &Link"
+-msgstr "Create &Link"
++msgid "Create &shortcut"
++msgstr "Create &shortcut"
+ 
+ #: dlls/shell32/shell32.rc:103
+ msgid "&Rename"
+diff --git a/po/eo.po b/po/eo.po
+index d9e0763..9462476 100644
+--- a/po/eo.po
++++ b/po/eo.po
+@@ -10357,7 +10357,7 @@ msgid "C&ut"
+ msgstr "Enmeti"
+ 
+ #: dlls/shell32/shell32.rc:101
+-msgid "Create &Link"
++msgid "Create &shortcut"
+ msgstr "Krei &ligilon"
+ 
+ #: dlls/shell32/shell32.rc:103
+diff --git a/po/es.po b/po/es.po
+index ce8e72c..9a51cfc 100644
+--- a/po/es.po
++++ b/po/es.po
+@@ -10491,7 +10491,7 @@ msgid "C&ut"
+ msgstr "C&ortar"
+ 
+ #: dlls/shell32/shell32.rc:101
+-msgid "Create &Link"
++msgid "Create &shortcut"
+ msgstr "C&rear acceso directo"
+ 
+ #: dlls/shell32/shell32.rc:103
+@@ -20794,3 +20794,7 @@ msgstr ""
+ "\t\tSi no se especifica fecha, solo se copian archivos si el\n"
+ "\t\tdestino es más antiguo que el origen.\n"
+ "\n"
++
++#: dlls/shell32/shell32.rc:102
++msgid "Pi&n to Start"
++msgstr "&Anclar a Inicio"
+diff --git a/po/fa.po b/po/fa.po
+index aa96016..1f5fc13 100644
+--- a/po/fa.po
++++ b/po/fa.po
+@@ -10182,7 +10182,7 @@ msgid "C&ut"
+ msgstr ""
+ 
+ #: dlls/shell32/shell32.rc:101
+-msgid "Create &Link"
++msgid "Create &shortcut"
+ msgstr ""
+ 
+ #: dlls/shell32/shell32.rc:103
+diff --git a/po/fi.po b/po/fi.po
+index 032996d..0a5b939 100644
+--- a/po/fi.po
++++ b/po/fi.po
+@@ -10130,7 +10130,7 @@ msgid "C&ut"
+ msgstr "&Leikkaa"
+ 
+ #: dlls/shell32/shell32.rc:101
+-msgid "Create &Link"
++msgid "Create &shortcut"
+ msgstr "Lu&o linkki"
+ 
+ #: dlls/shell32/shell32.rc:103
+diff --git a/po/fr.po b/po/fr.po
+index 39677a0..a6b8743 100644
+--- a/po/fr.po
++++ b/po/fr.po
+@@ -10266,8 +10266,8 @@ msgid "C&ut"
+ msgstr "Cou&per"
+ 
+ #: dlls/shell32/shell32.rc:101
+-msgid "Create &Link"
+-msgstr "Créer un &lien"
++msgid "Create &shortcut"
++msgstr "Créer un &raccourci"
+ 
+ #: dlls/shell32/shell32.rc:103
+ msgid "&Rename"
+@@ -21059,3 +21059,7 @@ msgstr ""
+ "\t\tdate spécifiée. Si aucune date n'est fournie, ne copier que si\n"
+ "\t\tle fichier de destination est plus ancien que le fichier source.\n"
+ "\n"
++
++#: dlls/shell32/shell32.rc:102
++msgid "Pi&n to Start"
++msgstr "Épingler à &Démarrer"
+diff --git a/po/he.po b/po/he.po
+index efc8c8a..0cb263f 100644
+--- a/po/he.po
++++ b/po/he.po
+@@ -10684,7 +10684,7 @@ msgid "C&ut"
+ msgstr "&גזירה"
+ 
+ #: dlls/shell32/shell32.rc:101
+-msgid "Create &Link"
++msgid "Create &shortcut"
+ msgstr "&יצירת קישור"
+ 
+ #: dlls/shell32/shell32.rc:103
+diff --git a/po/hi.po b/po/hi.po
+index 908677b..403edbc 100644
+--- a/po/hi.po
++++ b/po/hi.po
+@@ -10030,7 +10030,7 @@ msgid "C&ut"
+ msgstr ""
+ 
+ #: dlls/shell32/shell32.rc:101
+-msgid "Create &Link"
++msgid "Create &shortcut"
+ msgstr ""
+ 
+ #: dlls/shell32/shell32.rc:103
+diff --git a/po/hr.po b/po/hr.po
+index 982c28f..eab1600 100644
+--- a/po/hr.po
++++ b/po/hr.po
+@@ -10688,7 +10688,7 @@ msgid "C&ut"
+ msgstr "&Odreži"
+ 
+ #: dlls/shell32/shell32.rc:101
+-msgid "Create &Link"
++msgid "Create &shortcut"
+ msgstr "Napravi &vezu"
+ 
+ #: dlls/shell32/shell32.rc:103
+diff --git a/po/hu.po b/po/hu.po
+index a82cbd4..a26fc38 100644
+--- a/po/hu.po
++++ b/po/hu.po
+@@ -10718,7 +10718,7 @@ msgid "C&ut"
+ msgstr "Ki&vágás"
+ 
+ #: dlls/shell32/shell32.rc:101
+-msgid "Create &Link"
++msgid "Create &shortcut"
+ msgstr "&Link létrehozása"
+ 
+ #: dlls/shell32/shell32.rc:103
+diff --git a/po/it.po b/po/it.po
+index 8dea0da..6aaa4b4 100644
+--- a/po/it.po
++++ b/po/it.po
+@@ -10780,7 +10780,7 @@ msgid "C&ut"
+ msgstr "&Taglia"
+ 
+ #: dlls/shell32/shell32.rc:101
+-msgid "Create &Link"
++msgid "Create &shortcut"
+ msgstr "Crea co&llegamento"
+ 
+ #: dlls/shell32/shell32.rc:103
+@@ -21574,3 +21574,7 @@ msgstr ""
+ "\t\tSe nessuna data è stata fornita, copia solo se la destinazione è più\n"
+ "\t\tvecchia della sorgente.\n"
+ "\n"
++
++#: dlls/shell32/shell32.rc:102
++msgid "Pi&n to Start"
++msgstr "Aggiungi a &Start"
+diff --git a/po/ja.po b/po/ja.po
+index 14b8f0a..429e8a6 100644
+--- a/po/ja.po
++++ b/po/ja.po
+@@ -10133,7 +10133,7 @@ msgid "C&ut"
+ msgstr "切り取り(&U)"
+ 
+ #: dlls/shell32/shell32.rc:101
+-msgid "Create &Link"
++msgid "Create &shortcut"
+ msgstr "ショートカットの作成(&L)"
+ 
+ #: dlls/shell32/shell32.rc:103
+@@ -20162,3 +20162,7 @@ msgstr ""
+ "\t\tファイルをコピーします。日付が指定されない場合は、\n"
+ "\t\tコピー先がコピー元より古いファイルだけコピーします。\n"
+ "\n"
++
++#: dlls/shell32/shell32.rc:102
++msgid "Pi&n to Start"
++msgstr "スタートにピン留めする(&S)"
+diff --git a/po/ka.po b/po/ka.po
+index 4b0157e..c6388d2 100644
+--- a/po/ka.po
++++ b/po/ka.po
+@@ -10130,7 +10130,7 @@ msgid "C&ut"
+ msgstr "&ამოჭრა"
+ 
+ #: dlls/shell32/shell32.rc:101
+-msgid "Create &Link"
++msgid "Create &shortcut"
+ msgstr "&ბმულის შექმნა"
+ 
+ #: dlls/shell32/shell32.rc:103
+diff --git a/po/ko.po b/po/ko.po
+index 0368f8a..abfdccf 100644
+--- a/po/ko.po
++++ b/po/ko.po
+@@ -10114,7 +10114,7 @@ msgid "C&ut"
+ msgstr "잘라내기(&U)"
+ 
+ #: dlls/shell32/shell32.rc:101
+-msgid "Create &Link"
++msgid "Create &shortcut"
+ msgstr "링크 만들기(&L)"
+ 
+ #: dlls/shell32/shell32.rc:103
+diff --git a/po/lt.po b/po/lt.po
+index 3db52cb..d6b7233 100644
+--- a/po/lt.po
++++ b/po/lt.po
+@@ -10145,7 +10145,7 @@ msgid "C&ut"
+ msgstr "&Iškirpti"
+ 
+ #: dlls/shell32/shell32.rc:101
+-msgid "Create &Link"
++msgid "Create &shortcut"
+ msgstr "Sukurti &nuorodą"
+ 
+ #: dlls/shell32/shell32.rc:103
+diff --git a/po/ml.po b/po/ml.po
+index a16fb6f..15182dc 100644
+--- a/po/ml.po
++++ b/po/ml.po
+@@ -10037,7 +10037,7 @@ msgid "C&ut"
+ msgstr ""
+ 
+ #: dlls/shell32/shell32.rc:101
+-msgid "Create &Link"
++msgid "Create &shortcut"
+ msgstr ""
+ 
+ #: dlls/shell32/shell32.rc:103
+diff --git a/po/nb_NO.po b/po/nb_NO.po
+index 7867cc6..80002f8 100644
+--- a/po/nb_NO.po
++++ b/po/nb_NO.po
+@@ -10447,7 +10447,7 @@ msgid "C&ut"
+ msgstr "Klipp &ut"
+ 
+ #: dlls/shell32/shell32.rc:101
+-msgid "Create &Link"
++msgid "Create &shortcut"
+ msgstr "&Opprett snarvei"
+ 
+ #: dlls/shell32/shell32.rc:103
+diff --git a/po/nl.po b/po/nl.po
+index 746f129..9d298e7 100644
+--- a/po/nl.po
++++ b/po/nl.po
+@@ -10155,7 +10155,7 @@ msgid "C&ut"
+ msgstr "K&nippen"
+ 
+ #: dlls/shell32/shell32.rc:101
+-msgid "Create &Link"
++msgid "Create &shortcut"
+ msgstr "Maak sne&lkoppeling"
+ 
+ #: dlls/shell32/shell32.rc:103
+diff --git a/po/or.po b/po/or.po
+index 6f00eb6..b76ddea 100644
+--- a/po/or.po
++++ b/po/or.po
+@@ -10015,7 +10015,7 @@ msgid "C&ut"
+ msgstr ""
+ 
+ #: dlls/shell32/shell32.rc:101
+-msgid "Create &Link"
++msgid "Create &shortcut"
+ msgstr ""
+ 
+ #: dlls/shell32/shell32.rc:103
+diff --git a/po/pa.po b/po/pa.po
+index 69c89cc..2abd2de 100644
+--- a/po/pa.po
++++ b/po/pa.po
+@@ -10015,7 +10015,7 @@ msgid "C&ut"
+ msgstr ""
+ 
+ #: dlls/shell32/shell32.rc:101
+-msgid "Create &Link"
++msgid "Create &shortcut"
+ msgstr ""
+ 
+ #: dlls/shell32/shell32.rc:103
+diff --git a/po/pl.po b/po/pl.po
+index 0e10513..ddf4c7d 100644
+--- a/po/pl.po
++++ b/po/pl.po
+@@ -10171,7 +10171,7 @@ msgid "C&ut"
+ msgstr "Wy&tnij"
+ 
+ #: dlls/shell32/shell32.rc:101
+-msgid "Create &Link"
++msgid "Create &shortcut"
+ msgstr "Utwórz &skrót"
+ 
+ #: dlls/shell32/shell32.rc:103
+@@ -20251,3 +20251,7 @@ msgstr ""
+ "\t\tJeżeli nie podano żadnej daty, to kopiowane są pliki, które są\n"
+ "\t\tnowsze niż w katalogu docelowym.\n"
+ "\n"
++
++#: dlls/shell32/shell32.rc:102
++msgid "Pi&n to Start"
++msgstr "Przy&pnij do menu Start"
+diff --git a/po/pt_BR.po b/po/pt_BR.po
+index 260e5e4..221f00c 100644
+--- a/po/pt_BR.po
++++ b/po/pt_BR.po
+@@ -10237,7 +10237,7 @@ msgid "C&ut"
+ msgstr "C&ortar"
+ 
+ #: dlls/shell32/shell32.rc:101
+-msgid "Create &Link"
++msgid "Create &shortcut"
+ msgstr "Criar a&talho"
+ 
+ #: dlls/shell32/shell32.rc:103
+@@ -20618,3 +20618,7 @@ msgstr ""
+ "\t\tSe nenhuma data for fornecida, apenas copiar se o destino\n"
+ "\t\tfor mais antigo que a fonte.\n"
+ "\n"
++
++#: dlls/shell32/shell32.rc:102
++msgid "Pi&n to Start"
++msgstr "Fixar em &Iniciar"
+diff --git a/po/pt_PT.po b/po/pt_PT.po
+index 6faa51e..f0389d4 100644
+--- a/po/pt_PT.po
++++ b/po/pt_PT.po
+@@ -10571,7 +10571,7 @@ msgid "C&ut"
+ msgstr "C&ortar"
+ 
+ #: dlls/shell32/shell32.rc:101
+-msgid "Create &Link"
++msgid "Create &shortcut"
+ msgstr "Criar a&talho"
+ 
+ #: dlls/shell32/shell32.rc:103
+diff --git a/po/rm.po b/po/rm.po
+index c3b9c61..c8821d4 100644
+--- a/po/rm.po
++++ b/po/rm.po
+@@ -10095,7 +10095,7 @@ msgid "C&ut"
+ msgstr ""
+ 
+ #: dlls/shell32/shell32.rc:101
+-msgid "Create &Link"
++msgid "Create &shortcut"
+ msgstr ""
+ 
+ #: dlls/shell32/shell32.rc:103
+diff --git a/po/ro.po b/po/ro.po
+index 8f89923..b7d737c 100644
+--- a/po/ro.po
++++ b/po/ro.po
+@@ -10652,7 +10652,7 @@ msgid "C&ut"
+ msgstr "Dec&upează"
+ 
+ #: dlls/shell32/shell32.rc:101
+-msgid "Create &Link"
++msgid "Create &shortcut"
+ msgstr "Creează &link"
+ 
+ #: dlls/shell32/shell32.rc:103
+diff --git a/po/ru.po b/po/ru.po
+index 3e0cee1..40e4533 100644
+--- a/po/ru.po
++++ b/po/ru.po
+@@ -10246,7 +10246,7 @@ msgid "C&ut"
+ msgstr "&Вырезать"
+ 
+ #: dlls/shell32/shell32.rc:101
+-msgid "Create &Link"
++msgid "Create &shortcut"
+ msgstr "Создать &ярлык"
+ 
+ #: dlls/shell32/shell32.rc:103
+@@ -20415,3 +20415,7 @@ msgstr ""
+ "\t\tпосле указанной даты. Если дата не указана, заменяет все старые файлы\n"
+ "\t\tсуществующими новыми.\n"
+ "\n"
++
++#: dlls/shell32/shell32.rc:102
++msgid "Pi&n to Start"
++msgstr "Закрепить на начальном &экране"
+diff --git a/po/si.po b/po/si.po
+index 6df8932..320732d 100644
+--- a/po/si.po
++++ b/po/si.po
+@@ -10315,7 +10315,7 @@ msgid "C&ut"
+ msgstr "කපන්න (&U)"
+ 
+ #: dlls/shell32/shell32.rc:101
+-msgid "Create &Link"
++msgid "Create &shortcut"
+ msgstr "සබැඳියක් හදන්න (&L)"
+ 
+ #: dlls/shell32/shell32.rc:103
+diff --git a/po/sk.po b/po/sk.po
+index 9ee06cd..5be1743 100644
+--- a/po/sk.po
++++ b/po/sk.po
+@@ -10489,7 +10489,7 @@ msgid "C&ut"
+ msgstr ""
+ 
+ #: dlls/shell32/shell32.rc:101
+-msgid "Create &Link"
++msgid "Create &shortcut"
+ msgstr ""
+ 
+ #: dlls/shell32/shell32.rc:103
+diff --git a/po/sl.po b/po/sl.po
+index 550b4d2..1d9f7b2 100644
+--- a/po/sl.po
++++ b/po/sl.po
+@@ -10774,7 +10774,7 @@ msgid "C&ut"
+ msgstr "Iz&reži"
+ 
+ #: dlls/shell32/shell32.rc:101
+-msgid "Create &Link"
++msgid "Create &shortcut"
+ msgstr "Ustvari po&vezavo"
+ 
+ #: dlls/shell32/shell32.rc:103
+diff --git a/po/sr_RS@cyrillic.po b/po/sr_RS@cyrillic.po
+index 2e7b870..3c9cf7b 100644
+--- a/po/sr_RS@cyrillic.po
++++ b/po/sr_RS@cyrillic.po
+@@ -10712,7 +10712,7 @@ msgid "C&ut"
+ msgstr "&Исеци"
+ 
+ #: dlls/shell32/shell32.rc:101
+-msgid "Create &Link"
++msgid "Create &shortcut"
+ msgstr "Направи &везу"
+ 
+ #: dlls/shell32/shell32.rc:103
+diff --git a/po/sr_RS@latin.po b/po/sr_RS@latin.po
+index 16e5e1b..6a57297 100644
+--- a/po/sr_RS@latin.po
++++ b/po/sr_RS@latin.po
+@@ -10849,7 +10849,7 @@ msgid "C&ut"
+ msgstr "&Iseci"
+ 
+ #: dlls/shell32/shell32.rc:101
+-msgid "Create &Link"
++msgid "Create &shortcut"
+ msgstr "Napravi &vezu"
+ 
+ #: dlls/shell32/shell32.rc:103
+diff --git a/po/sv.po b/po/sv.po
+index 1230208..4c09e7d 100644
+--- a/po/sv.po
++++ b/po/sv.po
+@@ -10536,7 +10536,7 @@ msgid "C&ut"
+ msgstr "Klipp &ut"
+ 
+ #: dlls/shell32/shell32.rc:101
+-msgid "Create &Link"
++msgid "Create &shortcut"
+ msgstr "Skapa &länk"
+ 
+ #: dlls/shell32/shell32.rc:103
+diff --git a/po/ta.po b/po/ta.po
+index ace8d61..4afb78a 100644
+--- a/po/ta.po
++++ b/po/ta.po
+@@ -10029,7 +10029,7 @@ msgid "C&ut"
+ msgstr ""
+ 
+ #: dlls/shell32/shell32.rc:101
+-msgid "Create &Link"
++msgid "Create &shortcut"
+ msgstr ""
+ 
+ #: dlls/shell32/shell32.rc:103
+diff --git a/po/te.po b/po/te.po
+index 61ca42c..a0bf4f3 100644
+--- a/po/te.po
++++ b/po/te.po
+@@ -10015,7 +10015,7 @@ msgid "C&ut"
+ msgstr ""
+ 
+ #: dlls/shell32/shell32.rc:101
+-msgid "Create &Link"
++msgid "Create &shortcut"
+ msgstr ""
+ 
+ #: dlls/shell32/shell32.rc:103
+diff --git a/po/th.po b/po/th.po
+index 748b1fc..2ed949e 100644
+--- a/po/th.po
++++ b/po/th.po
+@@ -10272,7 +10272,7 @@ msgid "C&ut"
+ msgstr ""
+ 
+ #: dlls/shell32/shell32.rc:101
+-msgid "Create &Link"
++msgid "Create &shortcut"
+ msgstr ""
+ 
+ #: dlls/shell32/shell32.rc:103
+diff --git a/po/tr.po b/po/tr.po
+index 70f3ea1..e27ff99 100644
+--- a/po/tr.po
++++ b/po/tr.po
+@@ -10195,7 +10195,7 @@ msgid "C&ut"
+ msgstr "&Kes"
+ 
+ #: dlls/shell32/shell32.rc:101
+-msgid "Create &Link"
++msgid "Create &shortcut"
+ msgstr "Kısayol O&luştur"
+ 
+ #: dlls/shell32/shell32.rc:103
+diff --git a/po/uk.po b/po/uk.po
+index 81fec6d..cd04ffe 100644
+--- a/po/uk.po
++++ b/po/uk.po
+@@ -10396,7 +10396,7 @@ msgid "C&ut"
+ msgstr "Ви&різати"
+ 
+ #: dlls/shell32/shell32.rc:101
+-msgid "Create &Link"
++msgid "Create &shortcut"
+ msgstr "&Створити Посилання"
+ 
+ #: dlls/shell32/shell32.rc:103
+diff --git a/po/wa.po b/po/wa.po
+index f21c2ea..e58d5fe 100644
+--- a/po/wa.po
++++ b/po/wa.po
+@@ -10181,7 +10181,7 @@ msgid "C&ut"
+ msgstr ""
+ 
+ #: dlls/shell32/shell32.rc:101
+-msgid "Create &Link"
++msgid "Create &shortcut"
+ msgstr ""
+ 
+ #: dlls/shell32/shell32.rc:103
+diff --git a/po/zh_CN.po b/po/zh_CN.po
+index ec6ccce..1c895a4 100644
+--- a/po/zh_CN.po
++++ b/po/zh_CN.po
+@@ -10066,7 +10066,7 @@ msgid "C&ut"
+ msgstr "剪切(&U)"
+ 
+ #: dlls/shell32/shell32.rc:101
+-msgid "Create &Link"
++msgid "Create &shortcut"
+ msgstr "创建快捷方式(&L)"
+ 
+ #: dlls/shell32/shell32.rc:103
+@@ -19881,3 +19881,7 @@ msgstr ""
+ "[/D | /D:m-d-y] 拷贝在指定时间后创建或修改的文件。\n"
+ "\t\t如果没有提供日期，将会只拷贝目标位置中比源位置旧的文件。\n"
+ "\n"
++
++#: dlls/shell32/shell32.rc:102
++msgid "Pi&n to Start"
++msgstr "固定到“开始”屏幕(&S)"
+diff --git a/po/zh_TW.po b/po/zh_TW.po
+index 8146896..899fe46 100644
+--- a/po/zh_TW.po
++++ b/po/zh_TW.po
+@@ -10142,7 +10142,7 @@ msgid "C&ut"
+ msgstr "剪下(&U)"
+ 
+ #: dlls/shell32/shell32.rc:101
+-msgid "Create &Link"
++msgid "Create &shortcut"
+ msgstr "建立連結(&L)"
+ 
+ #: dlls/shell32/shell32.rc:103
+-- 
+2.56.0
+

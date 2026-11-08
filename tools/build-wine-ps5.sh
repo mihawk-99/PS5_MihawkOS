@@ -405,6 +405,7 @@ python3 "$root/tools/build-explorer-sprites.py"
 python3 "$root/tools/build-menu-sprites.py"
 python3 "$root/tools/build-desktop-sprites.py"
 python3 "$root/tools/build-tooltip-glyphs.py"
+python3 "$root/tools/build-dialog-sprites.py"
 # Every pw_* file copied into the tree below is (re)written by this run: one an earlier run left would hide a copy
 # line that is gone, and a fresh configure would then fail where this tree builds (patch 2065, 788b0ec). The mark is
 # a second old, so a copy made in the same second still counts as this run's.
@@ -414,17 +415,25 @@ touch -d "@$(($(date +%s) - 1))" "$work/copies-start"
 cp -p "$root/.deps/windows11-theme/appearance.h" "$tree/programs/explorer/appearance.h"
 cp -p "$root/.deps/mihawk-icons/original/folder.ico" "$tree/programs/explorer/mihawk-folder.ico"
 cp -p "$root/.deps/mihawk-icons/icons.h" "$tree/programs/explorer/icons.h"
-cp -p "$root/wine/ps5/pw_shell_style.h" "$tree/programs/explorer/pw_shell_style.h"
+# pw_shell_style.h and src/pw_accent.h reach systray.c, desktop.c, explorer.c and the Start and flyout files; makedep
+# does not see a copied header change, so those are touched when one did.
+for header in wine/ps5/pw_shell_style.h src/pw_accent.h; do
+    cmp -s "$root/$header" "$tree/programs/explorer/${header##*/}" || touch "$tree/programs/explorer/systray.c" \
+        "$tree/programs/explorer/desktop.c" "$tree/programs/explorer/explorer.c" "$root/wine/ps5/pw_shell_start.c" \
+        "$root/wine/ps5/pw_shell_flyouts.c"
+    cp -p "$root/$header" "$tree/programs/explorer/${header##*/}"
+done
 cp -p "$root/wine/ps5/pw_shell_start.c" "$tree/programs/explorer/pw_shell_start.c"
 cp -p "$root/wine/ps5/pw_shell_flyouts.c" "$tree/programs/explorer/pw_shell_flyouts.c"
 # Wine's makedep does not track these copied headers: when one changed, the file that includes it must still be rebuilt.
 for header in wine/ps5/pw_shell_wallpaper.h wine/ps5/pw_shell_desktop_view.h wine/ps5/pw_shell_cursors.h \
         wine/ps5/pw_shell_monospace.h .deps/windows11-cursors/pw_cursor_scheme.h wine/ps5/pw_shell_desktop_menus.h \
-        .deps/windows11-theme/pw_menu_icons.h; do
+        .deps/windows11-theme/pw_menu_icons.h wine/ps5/pw_shell_shortcut.h src/pw_shortcut.h; do
     cmp -s "$root/$header" "$tree/programs/explorer/${header##*/}" || touch "$tree/programs/explorer/desktop.c"
     cp -p "$root/$header" "$tree/programs/explorer/${header##*/}"
 done
-for header in wine/ps5/pw_shell_explorer.h src/pw_explorer_layout.h .deps/windows11-theme/pw_explorer_sprites.h; do
+for header in wine/ps5/pw_shell_explorer.h src/pw_explorer_layout.h .deps/windows11-theme/pw_explorer_sprites.h \
+        wine/ps5/pw_shell_shortcut.h src/pw_shortcut.h; do
     cmp -s "$root/$header" "$tree/programs/explorer/${header##*/}" || touch "$tree/programs/explorer/explorer.c"
     cp -p "$root/$header" "$tree/programs/explorer/${header##*/}"
 done
@@ -438,6 +447,16 @@ done
 for header in src/pw_desktop_icons.h src/pw_text_glyphs.h; do
     cmp -s "$root/$header" "$tree/dlls/shell32/${header##*/}" || touch "$tree/dlls/shell32/shlview.c"
     cp -p "$root/$header" "$tree/dlls/shell32/${header##*/}"
+done
+# The item menu's Create shortcut and Pin to Start (patch 2494): the code File Explorer's More menu runs.
+for header in wine/ps5/pw_shell_shortcut.h src/pw_shortcut.h; do
+    cmp -s "$root/$header" "$tree/dlls/shell32/${header##*/}" || touch "$tree/dlls/shell32/shlview_cmenu.c"
+    cp -p "$root/$header" "$tree/dlls/shell32/${header##*/}"
+done
+# The message box's icons and buttons (patch 2490).
+for header in .deps/windows11-theme/pw_dialog_sprites.h; do
+    cmp -s "$root/$header" "$tree/dlls/user32/${header##*/}" || touch "$tree/dlls/user32/msgbox.c"
+    cp -p "$root/$header" "$tree/dlls/user32/${header##*/}"
 done
 for header in wine/ps5/pw_shell_taskbar.h src/pw_taskbar_layout.h src/pw_taskbar_logo.h .deps/windows11-theme/pw_shell_sprites.h \
         src/pw_text_glyphs.h .deps/windows11-theme/pw_shell_glyphs.h; do

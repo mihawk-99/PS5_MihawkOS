@@ -71,7 +71,11 @@ SETS = [('taskbar', ('rest', 'open'), ['search', 'search-hover', 'taskview', 'ex
         ('flyouts', ('quicksettings',), ['tile-on', 'glyph-wifi', 'footer', 'settings'], 'flyout-'),
         ('flyouts', ('quicksettings-off',), ['tile-off', 'glyph-wifi-off'], 'flyout-'),
         ('flyouts', ('quicksettings-wired',), ['glyph-network'], 'flyout-'),
-        ('flyouts', ('notifications',), ['nc-header', 'nc-empty', 'cal-toggle', 'cal-up', 'cal-down', 'cal-dow'], 'flyout-')]
+        ('flyouts', ('notifications',), ['nc-header', 'nc-empty', 'cal-toggle', 'cal-up', 'cal-down', 'cal-dow'], 'flyout-'),
+        ('flyouts', ('quicksettings-grid',), ['plate-split-on', 'plate-simple-off', 'glyph-bluetooth', 'glyph-airplane',
+                                               'glyph-battery-saver', 'glyph-moon', 'glyph-accessibility', 'glyph-cast',
+                                               'glyph-phone', 'glyph-chevron', 'slider-brightness', 'slider-volume',
+                                               'battery', 'edit'], 'flyout-')]
 NAMES = [prefix + name for _, _, names, prefix in SETS for name in names]
 
 

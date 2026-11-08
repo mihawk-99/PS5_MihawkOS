@@ -1,0 +1,157 @@
+{
+  "prefix": "steamguide-62",
+  "launch_readiness": {
+    "ready": true,
+    "seconds": 0.271,
+    "settle_seconds": 0.0,
+    "census_seconds": 0.258,
+    "previous_cleanup_verified": false
+  },
+  "stages_seconds_from_press": {
+    "pressed": 0.0,
+    "downloaded": 0.7,
+    "install_session": 0.9,
+    "install_screen": 5.0,
+    "install_back": 100.8,
+    "signin_session": 100.8,
+    "updating": 104.6,
+    "scan": 384.1,
+    "qr_window": 409.9,
+    "signed_in": 587.9,
+    "session_result": 587.9,
+    "session_result_word": "signed-in",
+    "done_page": 648.5,
+    "big_picture": 653.5,
+    "big_picture_frames": 657.3
+  },
+  "pictures_asked": [
+    [
+      "install_screen",
+      6,
+      11.0
+    ],
+    [
+      "install_screen",
+      30,
+      35.0
+    ],
+    [
+      "updating",
+      8,
+      112.6
+    ],
+    [
+      "updating",
+      60,
+      164.6
+    ],
+    [
+      "updating",
+      120,
+      224.6
+    ],
+    [
+      "updating",
+      180,
+      284.7
+    ],
+    [
+      "updating",
+      240,
+      344.6
+    ],
+    [
+      "scan",
+      3,
+      387.1
+    ],
+    [
+      "scan",
+      15,
+      399.2
+    ],
+    [
+      "qr_window",
+      6,
+      415.9
+    ],
+    [
+      "qr_window",
+      20,
+      429.9
+    ],
+    [
+      "signed_in",
+      2,
+      590.0
+    ],
+    [
+      "signed_in",
+      10,
+      597.9
+    ],
+    [
+      "big_picture_frames",
+      20,
+      677.3
+    ],
+    [
+      "big_picture_frames",
+      50,
+      707.4
+    ]
+  ],
+  "pictures": [
+    "picture-01.png",
+    "picture-02.png",
+    "picture-03.png",
+    "picture-04.png",
+    "picture-05.png",
+    "picture-06.png",
+    "picture-07.png",
+    "picture-08.png",
+    "picture-09.png",
+    "picture-10.png",
+    "picture-11.png"
+  ],
+  "reached_big_picture": true,
+  "signin_saved": [
+    "472"
+  ],
+  "guide_lines": [
+    "[MihawkOS] steam guide: page 1",
+    "[MihawkOS] steam guide: starts at page 1 (failure 0), language en-US",
+    "[MihawkOS] steam guide: downloaded; the install is next",
+    "[MihawkOS] restart: to=steam-setup cycle=0 reason=install eboot=/app0/eboot.bin",
+    "[MihawkOS] steam guide: its screens are drawn over the client's windows, in en-US",
+    "[MihawkOS] steam guide: screen 1, 0 s in",
+    "[MihawkOS] steam guide: screen 1 at 0 s (0 package bytes, 0 processes, browser 0)",
+    "[dce-proc:4203 Info]<50>[MihawkOS] steam guide: its screens closed after 92.5 s (the session ended): 856 frames shown, 0 refused, 90 drawn, taken off",
+    "[MihawkOS] restart: to=launcher cycle=1 reason=wine-ended eboot=/app0/eboot.bin",
+    "[MihawkOS] steam guide: back from its install session (none): resume 1, failure 0",
+    "[MihawkOS] steam guide: page 1",
+    "[MihawkOS] steam guide: starts at page 1 (failure 0, starting the sign-in), language en-US",
+    "[MihawkOS] restart: to=steam cycle=1 reason=sign-in eboot=/app0/eboot.bin",
+    "[MihawkOS] steam guide: its screens are drawn over the client's windows, in en-US",
+    "[MihawkOS] steam guide: screen 2, 0 s in",
+    "[MihawkOS] Client sign-in: watching for a saved sign-in (none yet)",
+    "[MihawkOS] steam guide: screen 2 at 0 s (0 package bytes, 0 processes, browser 0)",
+    "[MihawkOS] steam guide: screen 4 at 273 s (257444476 package bytes, 7 processes, browser 1)",
+    "[MihawkOS] steam guide: screen 4, 273 s in",
+    "[MihawkOS] steam guide: screen 0 at 298 s (257956044 package bytes, 12 processes, browser 1)",
+    "[MihawkOS] steam guide: the client's own window shows, 305.7 s in",
+    "[MihawkOS] Client sign-in: saved, 472 s into the session; closing the client",
+    "[MihawkOS] steam guide: screen 5 at 472 s (257953224 package bytes, 12 processes, browser 1)",
+    "[MihawkOS] steam guide: the session's result is signed-in",
+    "[MihawkOS] steam guide: screen 5, 472 s in",
+    "[MihawkOS] Client sign-in: the client's token was not written, 25 s after the close",
+    "[MihawkOS] steam guide: back from its sign-in session (signed-in): resume 2, failure 0",
+    "[MihawkOS] steam guide: page 3",
+    "[MihawkOS] steam guide: starts at page 3 (failure 0), language en-US",
+    "[MihawkOS] steam guide: Big Picture opens (countdown)",
+    "[MihawkOS] restart: to=steam cycle=2 reason=steam eboot=/app0/eboot.bin"
+  ],
+  "storage_errors": 0,
+  "capture": "klog/a82-guide62-base-2026-11-08",
+  "passed": true
+}

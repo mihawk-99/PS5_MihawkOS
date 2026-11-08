@@ -9,6 +9,7 @@
 #include "appearance.h"
 #include "icons.h"
 
+#include "pw_accent.h"   /* the applied theme's accent (Settings > Themes) */
 struct pw_shell_style { COLORREF surface, pane, text, line, accent, hover, selected; HFONT font, heading; HBRUSH background, paper; BOOL dark; };
 static inline BOOL pw_shell_enabled(void)
 {
@@ -37,7 +38,7 @@ static inline void pw_shell_style_load(struct pw_shell_style *s)
     s->pane = managed ? (s->dark ? PW_APPEARANCE_DARK_PANE : PW_APPEARANCE_LIGHT_PANE) : GetSysColor(COLOR_WINDOW);
     s->text = managed ? (s->dark ? PW_APPEARANCE_DARK_TEXT : PW_APPEARANCE_LIGHT_TEXT) : GetSysColor(COLOR_WINDOWTEXT);
     s->line = managed ? (s->dark ? PW_APPEARANCE_DARK_LINE : PW_APPEARANCE_LIGHT_LINE) : GetSysColor(COLOR_3DSHADOW);
-    s->accent = managed ? (s->dark ? PW_APPEARANCE_DARK_ACCENT : PW_APPEARANCE_LIGHT_ACCENT) : GetSysColor(COLOR_HIGHLIGHT);
+    s->accent = managed ? pw_accent_colorref(pw_accent_fill(pw_accent_current(), s->dark)) : GetSysColor(COLOR_HIGHLIGHT);
     s->hover = managed ? (s->dark ? PW_APPEARANCE_DARK_HOVER : PW_APPEARANCE_LIGHT_HOVER) : GetSysColor(COLOR_3DLIGHT);
     s->selected = managed ? (s->dark ? PW_APPEARANCE_DARK_SELECTED : PW_APPEARANCE_LIGHT_SELECTED) : GetSysColor(COLOR_HIGHLIGHT);
     if (SystemParametersInfoW(SPI_GETNONCLIENTMETRICS, sizeof(metrics), &metrics, 0))

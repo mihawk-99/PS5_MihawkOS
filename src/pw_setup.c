@@ -49,13 +49,13 @@ float pw_setup_hold(float seconds, int held, float dt)
 /* English (US). */
 static const char *const text_en[PW_TEXT_COUNT] = {
     [PW_TEXT_WELCOME_TITLE] = "Welcome to MihawkOS",
-    [PW_TEXT_WELCOME_BODY] = "Let’s get your PS5 ready for Windows games. It takes about ten minutes.",
+    [PW_TEXT_WELCOME_BODY] = "Let’s get your PS5 ready for PC games. It takes about ten minutes.",
     [PW_TEXT_GET_STARTED] = "Get started",
     [PW_TEXT_LANGUAGE_TITLE] = "Choose your language",
-    [PW_TEXT_LANGUAGE_BODY] = "Your Windows games use it too, with its keyboard layout. The Mihawk OS desktop stays in English.",
+    [PW_TEXT_LANGUAGE_BODY] = "Your PC games use it too, with its keyboard layout. The Mihawk OS desktop stays in English.",
     [PW_TEXT_CONTINUE] = "Continue",
     [PW_TEXT_RETRY] = "Try again",
-    [PW_TEXT_ERR_NO_PIECES] = "This copy of MihawkOS has no Windows runtime in its folder. Copy the whole PPSA99170 "
+    [PW_TEXT_ERR_NO_PIECES] = "This copy of MihawkOS has no runtime in its folder. Copy the whole PPSA99170 "
         "folder of the release to /data/homebrew again, then try again.",
     [PW_TEXT_ERR_PARTIAL] = "The PPSA99170 folder has {1} of {2} runtime pieces. Copy the whole folder again, then "
         "try again.",
@@ -63,34 +63,34 @@ static const char *const text_en[PW_TEXT_COUNT] = {
         "again. What is already installed is kept.",
     [PW_TEXT_ERR_DAMAGED] = "A runtime piece in the PPSA99170 folder is damaged or from another version. Copy the "
         "whole folder again, then try again.",
-    [PW_TEXT_INSTALLING_BODY] = "MihawkOS is copying its Windows runtime from its own folder and checking every "
+    [PW_TEXT_INSTALLING_BODY] = "MihawkOS is copying its runtime from its own folder and checking every "
         "file. This takes about a minute.",
     [PW_TEXT_ERR_NO_SPACE] = "Your PS5 needs {1} free and has {2}. Delete something, then try again.",
     [PW_TEXT_ERR_FULL] = "Your PS5’s storage is full. Delete something, then try again. What is already installed "
         "is kept.",
     [PW_TEXT_ERR_WRITE] = "Your PS5’s storage refused a write. Try again; if it happens again, restart the PS5.",
     [PW_TEXT_ERR_CANCELLED] = "The install stopped. What is already installed is kept.",
-    [PW_TEXT_ERR_BUILD] = "This copy of MihawkOS cannot install a Windows runtime. Reinstall MihawkOS.",
-    [PW_TEXT_INSTALLING_TITLE] = "Installing the Windows runtime",
+    [PW_TEXT_ERR_BUILD] = "This copy of MihawkOS cannot install its runtime. Reinstall MihawkOS.",
+    [PW_TEXT_INSTALLING_TITLE] = "Installing the runtime",
     [PW_TEXT_INSTALLING_CHECKING] = "Checking what is already installed…",
     [PW_TEXT_INSTALLING_STATS] = "{1} of {2} MB · {3} MB/s",
     [PW_TEXT_INSTALLED] = "Installed.",
     [PW_TEXT_STOP] = "Stop",
     [PW_TEXT_PREPARE_TITLE] = "Preparing Mihawk OS",
-    [PW_TEXT_PREPARE_BODY] = "The first start builds your Windows drive. It takes a few minutes, and the screen may stay "
+    [PW_TEXT_PREPARE_BODY] = "The first start builds your MihawkOS drive. It takes a few minutes, and the screen may stay "
         "still for a while. It ends by itself and comes back here.",
     [PW_TEXT_PREPARE_NOTE] = "During this first start the controller does not work in games, so MihawkOS ends it as "
         "soon as the drive is ready.",
     [PW_TEXT_PREPARE_START] = "Start",
     [PW_TEXT_PREPARE_FAILED] = "The first start did not finish. Try again: it carries on where it stopped.",
-    [PW_TEXT_BUILD_TITLE] = "Building your Windows drive",
+    [PW_TEXT_BUILD_TITLE] = "Building your MihawkOS drive",
     [PW_TEXT_BUILD_BODY] = "This takes about a minute. When the drive is ready, MihawkOS comes back to the setup by "
         "itself.",
-    [PW_TEXT_BUILD_SETTINGS] = "Setting up Windows",
+    [PW_TEXT_BUILD_SETTINGS] = "Setting up MihawkOS",
     [PW_TEXT_BUILD_DOTNET] = "Installing .NET support",
     [PW_TEXT_BUILD_FINISHING] = "Finishing up",
     [PW_TEXT_LIMITS_TITLE] = "Before you play",
-    [PW_TEXT_LIMITS_BODY] = "MihawkOS is a compatibility layer that runs Windows PC games on your PS5. It’s an "
+    [PW_TEXT_LIMITS_BODY] = "MihawkOS is a compatibility layer that runs PC PC games on your PS5. It’s an "
         "alpha, so some games may not work yet.",
     [PW_TEXT_LIMITS_NOTE_TITLE] = "These games are not supported",
     [PW_TEXT_LIMITS_DRM] = "Games with DRM, such as Denuvo",
@@ -115,7 +115,7 @@ static const char *const text_en[PW_TEXT_COUNT] = {
     [PW_TEXT_STEAM_STEP_DOWNLOAD] = "Download",
     [PW_TEXT_STEAM_STEP_DOWNLOAD_BODY] = "Steam’s installer comes straight from Valve’s servers.",
     [PW_TEXT_STEAM_STEP_INSTALL] = "Install",
-    [PW_TEXT_STEAM_STEP_INSTALL_BODY] = "MihawkOS installs it on your Windows drive in under a minute.",
+    [PW_TEXT_STEAM_STEP_INSTALL_BODY] = "MihawkOS installs it on your MihawkOS drive in under a minute.",
     [PW_TEXT_STEAM_STEP_UPDATE] = "First start",
     [PW_TEXT_STEAM_STEP_UPDATE_BODY] = "Steam updates itself. This takes about 5 minutes.",
     [PW_TEXT_STEAM_STEP_SIGNIN] = "Sign in",
@@ -146,7 +146,7 @@ static const char *const text_en[PW_TEXT_COUNT] = {
         "Steam app on your phone, tap the shield, then scan the code.",
     [PW_TEXT_STEAM_ERR_ENDED] = "Steam closed before you signed in. Try again.",
     [PW_TEXT_STEAM_INSTALLING_TITLE] = "Installing Steam",
-    [PW_TEXT_STEAM_INSTALLING_BODY] = "Valve’s installer is putting Steam on your Windows drive. This takes under a "
+    [PW_TEXT_STEAM_INSTALLING_BODY] = "Valve’s installer is putting Steam on your MihawkOS drive. This takes under a "
         "minute.",
     [PW_TEXT_STEAM_UPDATING_TITLE] = "Steam is updating itself",
     [PW_TEXT_STEAM_UPDATING_BODY] = "The first start downloads Steam’s latest version. It takes about 5 minutes, and "
@@ -189,7 +189,7 @@ static const char *const text_en[PW_TEXT_COUNT] = {
     [PW_TEXT_HOME_GAMES] = "Games: {1}",
     [PW_TEXT_HOME_PAGE] = "Page {1} of {2}",
     [PW_TEXT_HOME_DATE] = "{2}/{1}",
-    [PW_TEXT_HOME_MIHAWK_BODY] = "Your Windows desktop and everything on it",
+    [PW_TEXT_HOME_MIHAWK_BODY] = "Your MihawkOS desktop and everything on it",
     [PW_TEXT_HOME_START] = "Start",
     [PW_TEXT_HOME_NEEDS_DATA] = "Needs access to /data",
     [PW_TEXT_HOME_UNAVAILABLE] = "UNAVAILABLE",
@@ -348,11 +348,11 @@ static const char *const text_en[PW_TEXT_COUNT] = {
     [PW_TEXT_SET_HZ_BODY_OFF] = "Off: the screen stays at 60 Hz. Use it if your TV shows no picture or flickers when a game starts. This is one setting for every game.",
     [PW_TEXT_SET_ABOUT_COPYRIGHT] = "MihawkOS. Copyright (C) 2026 Mihawk and the authors credited in NOTICE.md.",
     [PW_TEXT_SET_ABOUT_LICENCE] = "This program is free software under the GNU General Public License, version 3 or later. It comes with ABSOLUTELY NO WARRANTY. You may share and change it under that licence’s terms.",
-    [PW_TEXT_SET_ABOUT_TEXTS] = "Licence texts: {1} (this title) and {2} (the Windows runtime).",
+    [PW_TEXT_SET_ABOUT_TEXTS] = "Licence texts: {1} (this title) and {2} (the MihawkOS runtime).",
     [PW_TEXT_SET_ABOUT_SOURCE] = "Source: {1}",
     [PW_TEXT_SET_ABOUT_AFFILIATION] = "Not affiliated with Sony, Microsoft or Valve.",
     [PW_TEXT_SET_RUNTIME_TITLE] = "Runtime",
-    [PW_TEXT_SET_RUNTIME_BODY] = "Windows programs run on a Wine runtime of about 1.2 GB. Install it, or repair it, from its pieces in {1} or in a mihawkos folder on a USB stick.",
+    [PW_TEXT_SET_RUNTIME_BODY] = "PC programs run on a Wine runtime of about 1.2 GB. Install it, or repair it, from its pieces in {1} or in a mihawkos folder on a USB stick.",
     [PW_TEXT_SET_RUNTIME_PROGRESS] = "{1} of {2} MB, {3} MB/s, piece {4} of {5}",
     [PW_TEXT_SET_RUNTIME_CHECKING] = "Checking what is installed already",
     [PW_TEXT_SET_RUNTIME_KEEP] = "You can keep the console on this screen. Closing MihawkOS stops the install; it goes on from where it stopped next time.",
@@ -361,7 +361,7 @@ static const char *const text_en[PW_TEXT_COUNT] = {
     [PW_TEXT_SET_MUSIC_PLAYING] = "Playing: {1}",
     [PW_TEXT_SET_MUSIC_NOW] = "Music: {1}",
     [PW_TEXT_SET_MUSIC_OFF] = "Music off",
-    [PW_TEXT_SET_SETUP_BODY] = "Run the first-launch tour again: your language, installing the Windows runtime, and the first start of Mihawk OS. What is installed already is kept.",
+    [PW_TEXT_SET_SETUP_BODY] = "Run the first-launch tour again: your language, installing the MihawkOS runtime, and the first start of Mihawk OS. What is installed already is kept.",
     [PW_TEXT_SET_UPDATES_TITLE] = "Updates",
     [PW_TEXT_SET_UPDATES_BODY] = "MihawkOS looks for a newer release on GitHub by itself when you open it, at most once an hour (Automatic update check), and when you ask, and downloads it in the background. A release is installed only when it is signed with MihawkOS’s key; it is switched in when you restart, or the next time MihawkOS starts.",
     [PW_TEXT_SET_UPDATES_PROGRESS] = "{1} of {2} MB",
@@ -370,7 +370,7 @@ static const char *const text_en[PW_TEXT_COUNT] = {
     [PW_TEXT_SET_LOG_MORE] = "Sessions write more while it is on: turn it off when you are done. The 5 newest folders are kept, at most 96 MB each.",
     [PW_TEXT_SET_WEBUI_CONNECT] = "Connect the PS5 to your network: the Web UI then opens here, with its address and a code to scan.",
     [PW_TEXT_SET_WEBUI_BODY] = "Scan the code with your phone, or type the address in a browser on your home network. It walks you through adding a game from your computer, gives each game its picture and its own settings, puts games on the PS5 home screen, backs up your saves and changes these settings.",
-    [PW_TEXT_SET_PAD_BODY] = "Which controller Windows games and Steam see. Your DualSense is shown to them as one controller, so menus show one set of buttons.",
+    [PW_TEXT_SET_PAD_BODY] = "Which controller PC games and Steam see. Your DualSense is shown to them as one controller, so menus show one set of buttons.",
     [PW_TEXT_SET_PAD_XBOX] = "Xbox 360 or Xbox One: every game that supports a controller sees it. Steam shows Xbox buttons.",
     [PW_TEXT_SET_PAD_DUALSENSE] = "DualSense: Steam and games made for it show PlayStation buttons. Games that only know Xbox controllers see none.",
     [PW_TEXT_SET_MOUSE_TITLE] = "Mouse controls",
@@ -512,22 +512,22 @@ static const char *const text_en[PW_TEXT_COUNT] = {
 
 static const char *const text_fr[PW_TEXT_COUNT] = {
     [PW_TEXT_WELCOME_TITLE] = "Bienvenue sur MihawkOS",
-    [PW_TEXT_WELCOME_BODY] = "Préparons votre PS5 pour les jeux Windows. Comptez une dizaine de minutes.",
+    [PW_TEXT_WELCOME_BODY] = "Préparons votre PS5 pour les jeux PC. Comptez une dizaine de minutes.",
     [PW_TEXT_GET_STARTED] = "Commencer",
     [PW_TEXT_LANGUAGE_TITLE] = "Choisissez votre langue",
-    [PW_TEXT_LANGUAGE_BODY] = "Vos jeux Windows l’utilisent aussi, avec sa disposition de clavier. Le bureau de "
+    [PW_TEXT_LANGUAGE_BODY] = "Vos jeux PC l’utilisent aussi, avec sa disposition de clavier. Le bureau de "
         "Mihawk OS reste en anglais.",
     [PW_TEXT_CONTINUE] = "Continuer",
     [PW_TEXT_RETRY] = "Réessayer",
-    [PW_TEXT_ERR_NO_PIECES] = "Cette copie de MihawkOS n’a pas d’environnement Windows dans son dossier. Copiez de "
+    [PW_TEXT_ERR_NO_PIECES] = "Cette copie de MihawkOS n’a pas d’environnement MihawkOS dans son dossier. Copiez de "
         "nouveau tout le dossier PPSA99170 de la version dans /data/homebrew, puis réessayez.",
-    [PW_TEXT_ERR_PARTIAL] = "Le dossier PPSA99170 contient {1} morceaux de l’environnement Windows sur {2}. Copiez "
+    [PW_TEXT_ERR_PARTIAL] = "Le dossier PPSA99170 contient {1} morceaux de l’environnement MihawkOS sur {2}. Copiez "
         "de nouveau tout le dossier, puis réessayez.",
-    [PW_TEXT_ERR_READ] = "Impossible de lire un morceau de l’environnement Windows dans le dossier PPSA99170. Copiez "
+    [PW_TEXT_ERR_READ] = "Impossible de lire un morceau de l’environnement MihawkOS dans le dossier PPSA99170. Copiez "
         "de nouveau le dossier, puis réessayez. Ce qui est déjà installé est conservé.",
-    [PW_TEXT_ERR_DAMAGED] = "Un morceau de l’environnement Windows dans le dossier PPSA99170 est endommagé ou d’une "
+    [PW_TEXT_ERR_DAMAGED] = "Un morceau de l’environnement MihawkOS dans le dossier PPSA99170 est endommagé ou d’une "
         "autre version. Copiez de nouveau tout le dossier, puis réessayez.",
-    [PW_TEXT_INSTALLING_BODY] = "MihawkOS copie son environnement Windows depuis son propre dossier et vérifie "
+    [PW_TEXT_INSTALLING_BODY] = "MihawkOS copie son environnement MihawkOS depuis son propre dossier et vérifie "
         "chaque fichier. Cela prend environ une minute.",
     [PW_TEXT_ERR_NO_SPACE] = "Votre PS5 a besoin de {1} libres et n’en a que {2}. Supprimez quelque chose, puis "
         "réessayez.",
@@ -537,29 +537,29 @@ static const char *const text_fr[PW_TEXT_COUNT] = {
         "reproduit, redémarrez la PS5.",
     [PW_TEXT_ERR_CANCELLED] = "Installation arrêtée. Ce qui est déjà installé est "
         "conservé.",
-    [PW_TEXT_ERR_BUILD] = "Cette copie de MihawkOS ne peut pas installer d’environnement Windows. Réinstallez "
+    [PW_TEXT_ERR_BUILD] = "Cette copie de MihawkOS ne peut pas installer d’environnement MihawkOS. Réinstallez "
         "MihawkOS.",
-    [PW_TEXT_INSTALLING_TITLE] = "Installation de l’environnement Windows",
+    [PW_TEXT_INSTALLING_TITLE] = "Installation de l’environnement MihawkOS",
     [PW_TEXT_INSTALLING_CHECKING] = "Vérification de ce qui est déjà installé…",
     [PW_TEXT_INSTALLING_STATS] = "{1} sur {2} Mo · {3} Mo/s",
     [PW_TEXT_INSTALLED] = "Installé.",
     [PW_TEXT_STOP] = "Arrêter",
     [PW_TEXT_PREPARE_TITLE] = "Préparation de Mihawk OS",
-    [PW_TEXT_PREPARE_BODY] = "Le premier démarrage crée votre disque Windows. Cela prend quelques minutes, et "
+    [PW_TEXT_PREPARE_BODY] = "Le premier démarrage crée votre disque MihawkOS. Cela prend quelques minutes, et "
         "l’écran peut rester immobile un moment. Il se termine tout seul et revient ici.",
     [PW_TEXT_PREPARE_NOTE] = "Pendant ce premier démarrage, la manette ne fonctionne pas dans les jeux : MihawkOS "
         "le termine donc dès que le disque est prêt.",
     [PW_TEXT_PREPARE_START] = "Démarrer",
     [PW_TEXT_PREPARE_FAILED] = "Le premier démarrage ne s’est pas terminé. Réessayez : il reprend "
         "là où il s’est arrêté.",
-    [PW_TEXT_BUILD_TITLE] = "Création de votre disque Windows",
+    [PW_TEXT_BUILD_TITLE] = "Création de votre disque MihawkOS",
     [PW_TEXT_BUILD_BODY] = "Cela prend environ une minute. Une fois le disque prêt, MihawkOS revient tout seul à la "
         "configuration.",
-    [PW_TEXT_BUILD_SETTINGS] = "Configuration de Windows",
+    [PW_TEXT_BUILD_SETTINGS] = "Configuration de MihawkOS",
     [PW_TEXT_BUILD_DOTNET] = "Installation de la prise en charge de .NET",
     [PW_TEXT_BUILD_FINISHING] = "Finalisation",
     [PW_TEXT_LIMITS_TITLE] = "Avant de jouer",
-    [PW_TEXT_LIMITS_BODY] = "MihawkOS est une couche de compatibilité qui fait tourner les jeux PC Windows sur votre "
+    [PW_TEXT_LIMITS_BODY] = "MihawkOS est une couche de compatibilité qui fait tourner les jeux PC PC sur votre "
         "PS5. C’est une version alpha : certains jeux peuvent ne pas encore fonctionner.",
     [PW_TEXT_LIMITS_NOTE_TITLE] = "Ces jeux ne sont pas pris en charge",
     [PW_TEXT_LIMITS_DRM] = "Les jeux avec DRM, comme Denuvo",
@@ -587,7 +587,7 @@ static const char *const text_fr[PW_TEXT_COUNT] = {
     [PW_TEXT_STEAM_STEP_DOWNLOAD_BODY] = "Le programme d’installation de Steam vient directement des serveurs de "
         "Valve.",
     [PW_TEXT_STEAM_STEP_INSTALL] = "Installation",
-    [PW_TEXT_STEAM_STEP_INSTALL_BODY] = "MihawkOS l’installe sur votre disque Windows en moins d’une minute.",
+    [PW_TEXT_STEAM_STEP_INSTALL_BODY] = "MihawkOS l’installe sur votre disque MihawkOS en moins d’une minute.",
     [PW_TEXT_STEAM_STEP_UPDATE] = "Premier démarrage",
     [PW_TEXT_STEAM_STEP_UPDATE_BODY] = "Steam se met à jour tout seul. Cela prend environ 5 minutes.",
     [PW_TEXT_STEAM_STEP_SIGNIN] = "Connexion",
@@ -619,7 +619,7 @@ static const char *const text_fr[PW_TEXT_COUNT] = {
         "l’application Steam de votre téléphone, touchez le bouclier, puis scannez le code.",
     [PW_TEXT_STEAM_ERR_ENDED] = "Steam s’est fermé avant la connexion. Réessayez.",
     [PW_TEXT_STEAM_INSTALLING_TITLE] = "Installation de Steam",
-    [PW_TEXT_STEAM_INSTALLING_BODY] = "Le programme d’installation de Valve installe Steam sur votre disque Windows. "
+    [PW_TEXT_STEAM_INSTALLING_BODY] = "Le programme d’installation de Valve installe Steam sur votre disque MihawkOS. "
         "Cela prend moins d’une minute.",
     [PW_TEXT_STEAM_UPDATING_TITLE] = "Steam se met à jour",
     [PW_TEXT_STEAM_UPDATING_BODY] = "Le premier démarrage télécharge la dernière version de Steam. Cela prend environ "
@@ -662,7 +662,7 @@ static const char *const text_fr[PW_TEXT_COUNT] = {
     [PW_TEXT_HOME_GAMES] = "Jeux : {1}",
     [PW_TEXT_HOME_PAGE] = "Page {1} sur {2}",
     [PW_TEXT_HOME_DATE] = "{1}/{2}",
-    [PW_TEXT_HOME_MIHAWK_BODY] = "Votre bureau Windows et tout ce qu’il contient",
+    [PW_TEXT_HOME_MIHAWK_BODY] = "Votre bureau MihawkOS et tout ce qu’il contient",
     [PW_TEXT_HOME_START] = "Démarrer",
     [PW_TEXT_HOME_NEEDS_DATA] = "Nécessite l’accès à /data",
     [PW_TEXT_HOME_UNAVAILABLE] = "INDISPONIBLE",
@@ -821,11 +821,11 @@ static const char *const text_fr[PW_TEXT_COUNT] = {
     [PW_TEXT_SET_HZ_BODY_OFF] = "Désactivé : l’écran reste à 60 Hz. Utilisez-le si votre TV n’affiche rien ou scintille au lancement d’un jeu. Ce réglage vaut pour tous les jeux.",
     [PW_TEXT_SET_ABOUT_COPYRIGHT] = "MihawkOS. Copyright (C) 2026 Mihawk et les auteurs cités dans NOTICE.md.",
     [PW_TEXT_SET_ABOUT_LICENCE] = "Ce programme est un logiciel libre sous la licence publique générale GNU, version 3 ou ultérieure. Il est fourni SANS AUCUNE GARANTIE. Vous pouvez le partager et le modifier selon les termes de cette licence.",
-    [PW_TEXT_SET_ABOUT_TEXTS] = "Textes des licences : {1} (ce titre) et {2} (le runtime Windows).",
+    [PW_TEXT_SET_ABOUT_TEXTS] = "Textes des licences : {1} (ce titre) et {2} (le runtime MihawkOS).",
     [PW_TEXT_SET_ABOUT_SOURCE] = "Source : {1}",
     [PW_TEXT_SET_ABOUT_AFFILIATION] = "Sans lien avec Sony, Microsoft ou Valve.",
     [PW_TEXT_SET_RUNTIME_TITLE] = "Runtime",
-    [PW_TEXT_SET_RUNTIME_BODY] = "Les programmes Windows tournent sur un runtime Wine d’environ 1,2 Go. Installez-le, ou réparez-le, à partir de ses morceaux dans {1} ou dans un dossier mihawkos sur une clé USB.",
+    [PW_TEXT_SET_RUNTIME_BODY] = "Les programmes PC tournent sur un runtime Wine d’environ 1,2 Go. Installez-le, ou réparez-le, à partir de ses morceaux dans {1} ou dans un dossier mihawkos sur une clé USB.",
     [PW_TEXT_SET_RUNTIME_PROGRESS] = "{1} sur {2} Mo, {3} Mo/s, morceau {4} sur {5}",
     [PW_TEXT_SET_RUNTIME_CHECKING] = "Vérification de ce qui est déjà installé",
     [PW_TEXT_SET_RUNTIME_KEEP] = "Vous pouvez laisser la console sur cet écran. Fermer MihawkOS arrête l’installation ; elle reprendra là où elle s’est arrêtée la prochaine fois.",
@@ -834,7 +834,7 @@ static const char *const text_fr[PW_TEXT_COUNT] = {
     [PW_TEXT_SET_MUSIC_PLAYING] = "En cours : {1}",
     [PW_TEXT_SET_MUSIC_NOW] = "Musique : {1}",
     [PW_TEXT_SET_MUSIC_OFF] = "Musique coupée",
-    [PW_TEXT_SET_SETUP_BODY] = "Relancez la visite du premier démarrage : votre langue, l’installation du runtime Windows et le premier démarrage de Mihawk OS. Ce qui est déjà installé est conservé.",
+    [PW_TEXT_SET_SETUP_BODY] = "Relancez la visite du premier démarrage : votre langue, l’installation du runtime MihawkOS et le premier démarrage de Mihawk OS. Ce qui est déjà installé est conservé.",
     [PW_TEXT_SET_UPDATES_TITLE] = "Mises à jour",
     [PW_TEXT_SET_UPDATES_BODY] = "MihawkOS cherche une version plus récente sur GitHub de lui-même à son ouverture, au plus une fois par heure (Recherche automatique de mises à jour) et quand vous le demandez, et la télécharge en arrière-plan. Une version n’est installée que si elle est signée avec la clé de MihawkOS ; elle prend effet quand vous redémarrez, ou au prochain démarrage de MihawkOS.",
     [PW_TEXT_SET_UPDATES_PROGRESS] = "{1} sur {2} Mo",
@@ -843,7 +843,7 @@ static const char *const text_fr[PW_TEXT_COUNT] = {
     [PW_TEXT_SET_LOG_MORE] = "Les sessions écrivent davantage tant qu’il est activé : désactivez-le quand vous avez fini. Les 5 dossiers les plus récents sont gardés, 96 Mo au plus chacun.",
     [PW_TEXT_SET_WEBUI_CONNECT] = "Connectez la PS5 à votre réseau : la Web UI s’ouvre alors ici, avec son adresse et un code à scanner.",
     [PW_TEXT_SET_WEBUI_BODY] = "Scannez le code avec votre téléphone, ou tapez l’adresse dans un navigateur de votre réseau domestique. Elle vous guide pour ajouter un jeu depuis votre ordinateur, donne à chaque jeu son image et ses propres réglages, place des jeux sur l’écran d’accueil de la PS5, sauvegarde vos parties et modifie ces réglages.",
-    [PW_TEXT_SET_PAD_BODY] = "La manette que voient les jeux Windows et Steam. Votre DualSense leur est présentée comme une seule manette, pour que les menus montrent un seul jeu de boutons.",
+    [PW_TEXT_SET_PAD_BODY] = "La manette que voient les jeux PC et Steam. Votre DualSense leur est présentée comme une seule manette, pour que les menus montrent un seul jeu de boutons.",
     [PW_TEXT_SET_PAD_XBOX] = "Xbox 360 ou Xbox One : tout jeu qui gère une manette la voit. Steam affiche les boutons Xbox.",
     [PW_TEXT_SET_PAD_DUALSENSE] = "DualSense : Steam et les jeux faits pour elle affichent les boutons PlayStation. Les jeux qui ne connaissent que les manettes Xbox n’en voient aucune.",
     [PW_TEXT_SET_MOUSE_TITLE] = "Commandes de la souris",
@@ -985,22 +985,22 @@ static const char *const text_fr[PW_TEXT_COUNT] = {
 
 static const char *const text_es[PW_TEXT_COUNT] = {
     [PW_TEXT_WELCOME_TITLE] = "Bienvenido a MihawkOS",
-    [PW_TEXT_WELCOME_BODY] = "Vamos a preparar tu PS5 para los juegos de Windows. Tardarás unos diez minutos.",
+    [PW_TEXT_WELCOME_BODY] = "Vamos a preparar tu PS5 para los juegos de PC. Tardarás unos diez minutos.",
     [PW_TEXT_GET_STARTED] = "Empezar",
     [PW_TEXT_LANGUAGE_TITLE] = "Elige tu idioma",
-    [PW_TEXT_LANGUAGE_BODY] = "Tus juegos de Windows también lo usarán, con su distribución de teclado. El escritorio de "
+    [PW_TEXT_LANGUAGE_BODY] = "Tus juegos de PC también lo usarán, con su distribución de teclado. El escritorio de "
         "Mihawk OS sigue en inglés.",
     [PW_TEXT_CONTINUE] = "Continuar",
     [PW_TEXT_RETRY] = "Reintentar",
-    [PW_TEXT_ERR_NO_PIECES] = "Esta copia de MihawkOS no tiene el entorno de Windows en su carpeta. Copia de nuevo "
+    [PW_TEXT_ERR_NO_PIECES] = "Esta copia de MihawkOS no tiene el entorno de MihawkOS en su carpeta. Copia de nuevo "
         "toda la carpeta PPSA99170 de la versión en /data/homebrew y vuelve a intentarlo.",
-    [PW_TEXT_ERR_PARTIAL] = "La carpeta PPSA99170 tiene {1} de {2} partes del entorno de Windows. Copia de nuevo "
+    [PW_TEXT_ERR_PARTIAL] = "La carpeta PPSA99170 tiene {1} de {2} partes del entorno de MihawkOS. Copia de nuevo "
         "toda la carpeta y vuelve a intentarlo.",
-    [PW_TEXT_ERR_READ] = "No se puede leer una parte del entorno de Windows de la carpeta PPSA99170. Copia de nuevo "
+    [PW_TEXT_ERR_READ] = "No se puede leer una parte del entorno de MihawkOS de la carpeta PPSA99170. Copia de nuevo "
         "la carpeta y vuelve a intentarlo. Lo que ya está instalado se conserva.",
-    [PW_TEXT_ERR_DAMAGED] = "Una parte del entorno de Windows de la carpeta PPSA99170 está dañada o es de otra "
+    [PW_TEXT_ERR_DAMAGED] = "Una parte del entorno de MihawkOS de la carpeta PPSA99170 está dañada o es de otra "
         "versión. Copia de nuevo toda la carpeta y vuelve a intentarlo.",
-    [PW_TEXT_INSTALLING_BODY] = "MihawkOS está copiando su entorno de Windows desde su propia carpeta y comprobando "
+    [PW_TEXT_INSTALLING_BODY] = "MihawkOS está copiando su entorno de MihawkOS desde su propia carpeta y comprobando "
         "cada archivo. Tarda alrededor de un minuto.",
     [PW_TEXT_ERR_NO_SPACE] = "Tu PS5 necesita {1} libres y tiene {2}. Borra algo y vuelve a intentarlo.",
     [PW_TEXT_ERR_FULL] = "El almacenamiento de tu PS5 está lleno. Borra algo y vuelve a intentarlo. Lo que ya está instalado "
@@ -1008,27 +1008,27 @@ static const char *const text_es[PW_TEXT_COUNT] = {
     [PW_TEXT_ERR_WRITE] = "El almacenamiento de tu PS5 ha rechazado una escritura. Vuelve a intentarlo; si pasa de nuevo, "
         "reinicia la PS5.",
     [PW_TEXT_ERR_CANCELLED] = "La instalación se ha detenido. Lo que ya está instalado se conserva.",
-    [PW_TEXT_ERR_BUILD] = "Esta copia de MihawkOS no puede instalar un entorno de Windows. Vuelve a instalar MihawkOS.",
-    [PW_TEXT_INSTALLING_TITLE] = "Instalando el entorno de Windows",
+    [PW_TEXT_ERR_BUILD] = "Esta copia de MihawkOS no puede instalar un entorno de MihawkOS. Vuelve a instalar MihawkOS.",
+    [PW_TEXT_INSTALLING_TITLE] = "Instalando el entorno de MihawkOS",
     [PW_TEXT_INSTALLING_CHECKING] = "Comprobando lo que ya está instalado…",
     [PW_TEXT_INSTALLING_STATS] = "{1} de {2} MB · {3} MB/s",
     [PW_TEXT_INSTALLED] = "Instalado.",
     [PW_TEXT_STOP] = "Detener",
     [PW_TEXT_PREPARE_TITLE] = "Preparando Mihawk OS",
-    [PW_TEXT_PREPARE_BODY] = "El primer inicio crea tu disco de Windows. Tarda unos minutos y la pantalla puede quedarse "
+    [PW_TEXT_PREPARE_BODY] = "El primer inicio crea tu disco de MihawkOS. Tarda unos minutos y la pantalla puede quedarse "
         "quieta un rato. Termina solo y vuelve aquí.",
     [PW_TEXT_PREPARE_NOTE] = "Durante este primer inicio el mando no funciona en los juegos, así que MihawkOS lo termina "
         "en cuanto el disco está listo.",
     [PW_TEXT_PREPARE_START] = "Iniciar",
     [PW_TEXT_PREPARE_FAILED] = "El primer inicio no ha terminado. Vuelve a intentarlo: continúa donde se quedó.",
-    [PW_TEXT_BUILD_TITLE] = "Creando tu disco de Windows",
+    [PW_TEXT_BUILD_TITLE] = "Creando tu disco de MihawkOS",
     [PW_TEXT_BUILD_BODY] = "Tarda alrededor de un minuto. Cuando el disco esté listo, MihawkOS vuelve solo a la "
         "configuración.",
-    [PW_TEXT_BUILD_SETTINGS] = "Configurando Windows",
+    [PW_TEXT_BUILD_SETTINGS] = "Configurando MihawkOS",
     [PW_TEXT_BUILD_DOTNET] = "Instalando la compatibilidad con .NET",
     [PW_TEXT_BUILD_FINISHING] = "Terminando",
     [PW_TEXT_LIMITS_TITLE] = "Antes de jugar",
-    [PW_TEXT_LIMITS_BODY] = "MihawkOS es una capa de compatibilidad que ejecuta juegos de PC para Windows en tu PS5. "
+    [PW_TEXT_LIMITS_BODY] = "MihawkOS es una capa de compatibilidad que ejecuta juegos de PC para PC en tu PS5. "
         "Es una versión alfa, así que puede que algunos juegos aún no funcionen.",
     [PW_TEXT_LIMITS_NOTE_TITLE] = "Estos juegos no son compatibles",
     [PW_TEXT_LIMITS_DRM] = "Juegos con DRM, como Denuvo",
@@ -1054,7 +1054,7 @@ static const char *const text_es[PW_TEXT_COUNT] = {
     [PW_TEXT_STEAM_STEP_DOWNLOAD] = "Descarga",
     [PW_TEXT_STEAM_STEP_DOWNLOAD_BODY] = "El instalador de Steam llega directamente de los servidores de Valve.",
     [PW_TEXT_STEAM_STEP_INSTALL] = "Instalación",
-    [PW_TEXT_STEAM_STEP_INSTALL_BODY] = "MihawkOS lo instala en tu disco de Windows en menos de un minuto.",
+    [PW_TEXT_STEAM_STEP_INSTALL_BODY] = "MihawkOS lo instala en tu disco de MihawkOS en menos de un minuto.",
     [PW_TEXT_STEAM_STEP_UPDATE] = "Primer inicio",
     [PW_TEXT_STEAM_STEP_UPDATE_BODY] = "Steam se actualiza solo. Tarda unos 5 minutos.",
     [PW_TEXT_STEAM_STEP_SIGNIN] = "Inicio de sesión",
@@ -1086,7 +1086,7 @@ static const char *const text_es[PW_TEXT_COUNT] = {
         "la aplicación de Steam de tu móvil, toca el escudo y escanea el código.",
     [PW_TEXT_STEAM_ERR_ENDED] = "Steam se ha cerrado antes de que iniciaras sesión. Vuelve a intentarlo.",
     [PW_TEXT_STEAM_INSTALLING_TITLE] = "Instalando Steam",
-    [PW_TEXT_STEAM_INSTALLING_BODY] = "El instalador de Valve está poniendo Steam en tu disco de Windows. Tarda menos "
+    [PW_TEXT_STEAM_INSTALLING_BODY] = "El instalador de Valve está poniendo Steam en tu disco de MihawkOS. Tarda menos "
         "de un minuto.",
     [PW_TEXT_STEAM_UPDATING_TITLE] = "Steam se está actualizando",
     [PW_TEXT_STEAM_UPDATING_BODY] = "El primer inicio descarga la última versión de Steam. Tarda unos 5 minutos y la "
@@ -1129,7 +1129,7 @@ static const char *const text_es[PW_TEXT_COUNT] = {
     [PW_TEXT_HOME_GAMES] = "Juegos: {1}",
     [PW_TEXT_HOME_PAGE] = "Página {1} de {2}",
     [PW_TEXT_HOME_DATE] = "{1}/{2}",
-    [PW_TEXT_HOME_MIHAWK_BODY] = "Tu escritorio de Windows y todo lo que contiene",
+    [PW_TEXT_HOME_MIHAWK_BODY] = "Tu escritorio de MihawkOS y todo lo que contiene",
     [PW_TEXT_HOME_START] = "Iniciar",
     [PW_TEXT_HOME_NEEDS_DATA] = "Necesita acceso a /data",
     [PW_TEXT_HOME_UNAVAILABLE] = "NO DISPONIBLE",
@@ -1288,11 +1288,11 @@ static const char *const text_es[PW_TEXT_COUNT] = {
     [PW_TEXT_SET_HZ_BODY_OFF] = "Desactivado: la pantalla se queda a 60 Hz. Úsalo si tu TV no muestra imagen o parpadea al iniciar un juego. Es un único ajuste para todos los juegos.",
     [PW_TEXT_SET_ABOUT_COPYRIGHT] = "MihawkOS. Copyright (C) 2026 Mihawk y los autores citados en NOTICE.md.",
     [PW_TEXT_SET_ABOUT_LICENCE] = "Este programa es software libre bajo la Licencia Pública General de GNU, versión 3 o posterior. Se ofrece SIN NINGUNA GARANTÍA. Puedes compartirlo y modificarlo según los términos de esa licencia.",
-    [PW_TEXT_SET_ABOUT_TEXTS] = "Textos de las licencias: {1} (este título) y {2} (el runtime de Windows).",
+    [PW_TEXT_SET_ABOUT_TEXTS] = "Textos de las licencias: {1} (este título) y {2} (el runtime de MihawkOS).",
     [PW_TEXT_SET_ABOUT_SOURCE] = "Código fuente: {1}",
     [PW_TEXT_SET_ABOUT_AFFILIATION] = "Sin relación con Sony, Microsoft ni Valve.",
     [PW_TEXT_SET_RUNTIME_TITLE] = "Runtime",
-    [PW_TEXT_SET_RUNTIME_BODY] = "Los programas de Windows funcionan sobre un runtime de Wine de unos 1,2 GB. Instálalo, o repáralo, desde sus piezas en {1} o en una carpeta mihawkos de una memoria USB.",
+    [PW_TEXT_SET_RUNTIME_BODY] = "Los programas de PC funcionan sobre un runtime de Wine de unos 1,2 GB. Instálalo, o repáralo, desde sus piezas en {1} o en una carpeta mihawkos de una memoria USB.",
     [PW_TEXT_SET_RUNTIME_PROGRESS] = "{1} de {2} MB, {3} MB/s, pieza {4} de {5}",
     [PW_TEXT_SET_RUNTIME_CHECKING] = "Comprobando lo que ya está instalado",
     [PW_TEXT_SET_RUNTIME_KEEP] = "Puedes dejar la consola en esta pantalla. Cerrar MihawkOS detiene la instalación; la próxima vez sigue donde se quedó.",
@@ -1301,7 +1301,7 @@ static const char *const text_es[PW_TEXT_COUNT] = {
     [PW_TEXT_SET_MUSIC_PLAYING] = "Sonando: {1}",
     [PW_TEXT_SET_MUSIC_NOW] = "Música: {1}",
     [PW_TEXT_SET_MUSIC_OFF] = "Música apagada",
-    [PW_TEXT_SET_SETUP_BODY] = "Repite la visita del primer inicio: tu idioma, la instalación del runtime de Windows y el primer inicio de Mihawk OS. Lo que ya está instalado se conserva.",
+    [PW_TEXT_SET_SETUP_BODY] = "Repite la visita del primer inicio: tu idioma, la instalación del runtime de MihawkOS y el primer inicio de Mihawk OS. Lo que ya está instalado se conserva.",
     [PW_TEXT_SET_UPDATES_TITLE] = "Actualizaciones",
     [PW_TEXT_SET_UPDATES_BODY] = "MihawkOS busca una versión más reciente en GitHub por sí solo al abrirse, como mucho una vez por hora (Búsqueda automática de actualizaciones) y cuando se lo pides, y la descarga en segundo plano. Una versión solo se instala si está firmada con la clave de MihawkOS; entra en uso cuando reinicias o la próxima vez que se inicia MihawkOS.",
     [PW_TEXT_SET_UPDATES_PROGRESS] = "{1} de {2} MB",
@@ -1310,7 +1310,7 @@ static const char *const text_es[PW_TEXT_COUNT] = {
     [PW_TEXT_SET_LOG_MORE] = "Las sesiones escriben más mientras está activado: desactívalo cuando termines. Se guardan las 5 carpetas más recientes, de 96 MB como máximo cada una.",
     [PW_TEXT_SET_WEBUI_CONNECT] = "Conecta la PS5 a tu red: la Web UI se abrirá aquí, con su dirección y un código para escanear.",
     [PW_TEXT_SET_WEBUI_BODY] = "Escanea el código con tu móvil o escribe la dirección en un navegador de tu red doméstica. Te guía para añadir un juego desde tu ordenador, da a cada juego su imagen y sus propios ajustes, pone juegos en la pantalla de inicio de la PS5, hace copia de tus partidas guardadas y cambia estos ajustes.",
-    [PW_TEXT_SET_PAD_BODY] = "El mando que ven los juegos de Windows y Steam. Tu DualSense se les presenta como un solo mando, para que los menús muestren un solo juego de botones.",
+    [PW_TEXT_SET_PAD_BODY] = "El mando que ven los juegos de PC y Steam. Tu DualSense se les presenta como un solo mando, para que los menús muestren un solo juego de botones.",
     [PW_TEXT_SET_PAD_XBOX] = "Xbox 360 o Xbox One: todos los juegos compatibles con mando lo ven. Steam muestra botones de Xbox.",
     [PW_TEXT_SET_PAD_DUALSENSE] = "DualSense: Steam y los juegos hechos para él muestran botones de PlayStation. Los juegos que solo conocen mandos de Xbox no ven ninguno.",
     [PW_TEXT_SET_MOUSE_TITLE] = "Controles del ratón",
@@ -1452,22 +1452,22 @@ static const char *const text_es[PW_TEXT_COUNT] = {
 
 static const char *const text_de[PW_TEXT_COUNT] = {
     [PW_TEXT_WELCOME_TITLE] = "Willkommen bei MihawkOS",
-    [PW_TEXT_WELCOME_BODY] = "Machen wir deine PS5 bereit für Windows-Spiele. Das dauert etwa zehn Minuten.",
+    [PW_TEXT_WELCOME_BODY] = "Machen wir deine PS5 bereit für PC-Spiele. Das dauert etwa zehn Minuten.",
     [PW_TEXT_GET_STARTED] = "Los geht’s",
     [PW_TEXT_LANGUAGE_TITLE] = "Wähle deine Sprache",
-    [PW_TEXT_LANGUAGE_BODY] = "Deine Windows-Spiele verwenden sie auch, samt Tastaturlayout. Der Desktop von Mihawk OS "
+    [PW_TEXT_LANGUAGE_BODY] = "Deine PC-Spiele verwenden sie auch, samt Tastaturlayout. Der Desktop von Mihawk OS "
         "bleibt auf Englisch.",
     [PW_TEXT_CONTINUE] = "Weiter",
     [PW_TEXT_RETRY] = "Erneut versuchen",
-    [PW_TEXT_ERR_NO_PIECES] = "Diese Kopie von MihawkOS hat keine Windows-Laufzeitumgebung in ihrem Ordner. Kopiere "
+    [PW_TEXT_ERR_NO_PIECES] = "Diese Kopie von MihawkOS hat keine MihawkOS-Laufzeitumgebung in ihrem Ordner. Kopiere "
         "den ganzen Ordner PPSA99170 der Version noch einmal nach /data/homebrew und versuche es erneut.",
-    [PW_TEXT_ERR_PARTIAL] = "Der Ordner PPSA99170 enthält {1} von {2} Teilen der Windows-Laufzeitumgebung. Kopiere "
+    [PW_TEXT_ERR_PARTIAL] = "Der Ordner PPSA99170 enthält {1} von {2} Teilen der MihawkOS-Laufzeitumgebung. Kopiere "
         "den ganzen Ordner noch einmal und versuche es erneut.",
-    [PW_TEXT_ERR_READ] = "Ein Teil der Windows-Laufzeitumgebung im Ordner PPSA99170 konnte nicht gelesen werden. "
+    [PW_TEXT_ERR_READ] = "Ein Teil der MihawkOS-Laufzeitumgebung im Ordner PPSA99170 konnte nicht gelesen werden. "
         "Kopiere den Ordner noch einmal und versuche es erneut. Bereits Installiertes bleibt erhalten.",
-    [PW_TEXT_ERR_DAMAGED] = "Ein Teil der Windows-Laufzeitumgebung im Ordner PPSA99170 ist beschädigt oder stammt "
+    [PW_TEXT_ERR_DAMAGED] = "Ein Teil der MihawkOS-Laufzeitumgebung im Ordner PPSA99170 ist beschädigt oder stammt "
         "aus einer anderen Version. Kopiere den ganzen Ordner noch einmal und versuche es erneut.",
-    [PW_TEXT_INSTALLING_BODY] = "MihawkOS kopiert seine Windows-Laufzeitumgebung aus dem eigenen Ordner und prüft "
+    [PW_TEXT_INSTALLING_BODY] = "MihawkOS kopiert seine MihawkOS-Laufzeitumgebung aus dem eigenen Ordner und prüft "
         "jede Datei. Das dauert etwa eine Minute.",
     [PW_TEXT_ERR_NO_SPACE] = "Deine PS5 braucht {1} freien Speicher und hat {2}. Lösche etwas und versuche es erneut.",
     [PW_TEXT_ERR_FULL] = "Der Speicher deiner PS5 ist voll. Lösche etwas und versuche es erneut. Bereits Installiertes "
@@ -1475,29 +1475,29 @@ static const char *const text_de[PW_TEXT_COUNT] = {
     [PW_TEXT_ERR_WRITE] = "Der Speicher deiner PS5 hat einen Schreibvorgang abgelehnt. Versuche es erneut; passiert es "
         "wieder, starte die PS5 neu.",
     [PW_TEXT_ERR_CANCELLED] = "Die Installation wurde gestoppt. Bereits Installiertes bleibt erhalten.",
-    [PW_TEXT_ERR_BUILD] = "Diese Kopie von MihawkOS kann keine Windows-Laufzeitumgebung installieren. Installiere MihawkOS "
+    [PW_TEXT_ERR_BUILD] = "Diese Kopie von MihawkOS kann keine MihawkOS-Laufzeitumgebung installieren. Installiere MihawkOS "
         "neu.",
-    [PW_TEXT_INSTALLING_TITLE] = "Windows-Laufzeitumgebung wird installiert",
+    [PW_TEXT_INSTALLING_TITLE] = "MihawkOS-Laufzeitumgebung wird installiert",
     [PW_TEXT_INSTALLING_CHECKING] = "Bereits Installiertes wird geprüft…",
     [PW_TEXT_INSTALLING_STATS] = "{1} von {2} MB · {3} MB/s",
     [PW_TEXT_INSTALLED] = "Installiert.",
     [PW_TEXT_STOP] = "Stoppen",
     [PW_TEXT_PREPARE_TITLE] = "Mihawk OS wird vorbereitet",
-    [PW_TEXT_PREPARE_BODY] = "Der erste Start legt dein Windows-Laufwerk an. Das dauert ein paar Minuten, und der Bildschirm "
+    [PW_TEXT_PREPARE_BODY] = "Der erste Start legt dein MihawkOS-Laufwerk an. Das dauert ein paar Minuten, und der Bildschirm "
         "kann eine Weile stillstehen. Er endet von selbst und kehrt hierher zurück.",
     [PW_TEXT_PREPARE_NOTE] = "Beim ersten Start funktioniert der Controller in Spielen nicht. Deshalb beendet MihawkOS "
         "ihn, sobald das Laufwerk bereit ist.",
     [PW_TEXT_PREPARE_START] = "Starten",
     [PW_TEXT_PREPARE_FAILED] = "Der erste Start wurde nicht abgeschlossen. Versuche es erneut: Er macht dort weiter, wo "
         "er aufgehört hat.",
-    [PW_TEXT_BUILD_TITLE] = "Dein Windows-Laufwerk wird angelegt",
+    [PW_TEXT_BUILD_TITLE] = "Dein MihawkOS-Laufwerk wird angelegt",
     [PW_TEXT_BUILD_BODY] = "Das dauert etwa eine Minute. Sobald das Laufwerk bereit ist, kehrt MihawkOS von selbst "
         "zur Einrichtung zurück.",
-    [PW_TEXT_BUILD_SETTINGS] = "Windows wird eingerichtet",
+    [PW_TEXT_BUILD_SETTINGS] = "MihawkOS wird eingerichtet",
     [PW_TEXT_BUILD_DOTNET] = ".NET-Unterstützung wird installiert",
     [PW_TEXT_BUILD_FINISHING] = "Wird abgeschlossen",
     [PW_TEXT_LIMITS_TITLE] = "Bevor du spielst",
-    [PW_TEXT_LIMITS_BODY] = "MihawkOS ist eine Kompatibilitätsschicht, mit der Windows-PC-Spiele auf deiner PS5 "
+    [PW_TEXT_LIMITS_BODY] = "MihawkOS ist eine Kompatibilitätsschicht, mit der PC-PC-Spiele auf deiner PS5 "
         "laufen. Es ist eine Alpha-Version, daher funktionieren manche Spiele vielleicht noch nicht.",
     [PW_TEXT_LIMITS_NOTE_TITLE] = "Diese Spiele werden nicht unterstützt",
     [PW_TEXT_LIMITS_DRM] = "Spiele mit DRM, etwa Denuvo",
@@ -1523,7 +1523,7 @@ static const char *const text_de[PW_TEXT_COUNT] = {
     [PW_TEXT_STEAM_STEP_DOWNLOAD] = "Herunterladen",
     [PW_TEXT_STEAM_STEP_DOWNLOAD_BODY] = "Der Steam-Installer kommt direkt von den Servern von Valve.",
     [PW_TEXT_STEAM_STEP_INSTALL] = "Installieren",
-    [PW_TEXT_STEAM_STEP_INSTALL_BODY] = "MihawkOS installiert Steam in unter einer Minute auf deinem Windows-Laufwerk.",
+    [PW_TEXT_STEAM_STEP_INSTALL_BODY] = "MihawkOS installiert Steam in unter einer Minute auf deinem MihawkOS-Laufwerk.",
     [PW_TEXT_STEAM_STEP_UPDATE] = "Erster Start",
     [PW_TEXT_STEAM_STEP_UPDATE_BODY] = "Steam aktualisiert sich selbst. Das dauert etwa 5 Minuten.",
     [PW_TEXT_STEAM_STEP_SIGNIN] = "Anmelden",
@@ -1555,7 +1555,7 @@ static const char *const text_de[PW_TEXT_COUNT] = {
         "stattdessen den QR-Code: Tippe in der Steam-App auf deinem Handy auf das Schild und scanne den Code.",
     [PW_TEXT_STEAM_ERR_ENDED] = "Steam wurde vor der Anmeldung geschlossen. Versuche es erneut.",
     [PW_TEXT_STEAM_INSTALLING_TITLE] = "Steam wird installiert",
-    [PW_TEXT_STEAM_INSTALLING_BODY] = "Der Installer von Valve richtet Steam auf deinem Windows-Laufwerk ein. Das "
+    [PW_TEXT_STEAM_INSTALLING_BODY] = "Der Installer von Valve richtet Steam auf deinem MihawkOS-Laufwerk ein. Das "
         "dauert weniger als eine Minute.",
     [PW_TEXT_STEAM_UPDATING_TITLE] = "Steam aktualisiert sich",
     [PW_TEXT_STEAM_UPDATING_BODY] = "Beim ersten Start lädt Steam seine neueste Version. Das dauert etwa 5 Minuten, "
@@ -1599,7 +1599,7 @@ static const char *const text_de[PW_TEXT_COUNT] = {
     [PW_TEXT_HOME_GAMES] = "Spiele: {1}",
     [PW_TEXT_HOME_PAGE] = "Seite {1} von {2}",
     [PW_TEXT_HOME_DATE] = "{1}.{2}.",
-    [PW_TEXT_HOME_MIHAWK_BODY] = "Dein Windows-Desktop und alles darauf",
+    [PW_TEXT_HOME_MIHAWK_BODY] = "Dein MihawkOS-Desktop und alles darauf",
     [PW_TEXT_HOME_START] = "Starten",
     [PW_TEXT_HOME_NEEDS_DATA] = "Braucht Zugriff auf /data",
     [PW_TEXT_HOME_UNAVAILABLE] = "NICHT VERFÜGBAR",
@@ -1758,11 +1758,11 @@ static const char *const text_de[PW_TEXT_COUNT] = {
     [PW_TEXT_SET_HZ_BODY_OFF] = "Aus: Der Bildschirm bleibt bei 60 Hz. Nutze es, wenn dein Fernseher kein Bild zeigt oder flimmert, wenn ein Spiel startet. Das ist eine Einstellung für alle Spiele.",
     [PW_TEXT_SET_ABOUT_COPYRIGHT] = "MihawkOS. Copyright (C) 2026 Mihawk und die in NOTICE.md genannten Autoren.",
     [PW_TEXT_SET_ABOUT_LICENCE] = "Dieses Programm ist freie Software unter der GNU General Public License, Version 3 oder später. Es kommt OHNE JEGLICHE GEWÄHRLEISTUNG. Du darfst es nach den Bedingungen dieser Lizenz weitergeben und ändern.",
-    [PW_TEXT_SET_ABOUT_TEXTS] = "Lizenztexte: {1} (dieser Titel) und {2} (die Windows-Runtime).",
+    [PW_TEXT_SET_ABOUT_TEXTS] = "Lizenztexte: {1} (dieser Titel) und {2} (die MihawkOS-Runtime).",
     [PW_TEXT_SET_ABOUT_SOURCE] = "Quellcode: {1}",
     [PW_TEXT_SET_ABOUT_AFFILIATION] = "Nicht verbunden mit Sony, Microsoft oder Valve.",
     [PW_TEXT_SET_RUNTIME_TITLE] = "Runtime",
-    [PW_TEXT_SET_RUNTIME_BODY] = "Windows-Programme laufen auf einer Wine-Runtime von etwa 1,2 GB. Installiere oder repariere sie aus ihren Teilen in {1} oder in einem Ordner mihawkos auf einem USB-Stick.",
+    [PW_TEXT_SET_RUNTIME_BODY] = "PC-Programme laufen auf einer Wine-Runtime von etwa 1,2 GB. Installiere oder repariere sie aus ihren Teilen in {1} oder in einem Ordner mihawkos auf einem USB-Stick.",
     [PW_TEXT_SET_RUNTIME_PROGRESS] = "{1} von {2} MB, {3} MB/s, Teil {4} von {5}",
     [PW_TEXT_SET_RUNTIME_CHECKING] = "Prüfe, was schon installiert ist",
     [PW_TEXT_SET_RUNTIME_KEEP] = "Du kannst die Konsole auf diesem Bildschirm lassen. Wenn du MihawkOS schließt, stoppt die Installation; beim nächsten Mal geht sie dort weiter, wo sie aufgehört hat.",
@@ -1771,7 +1771,7 @@ static const char *const text_de[PW_TEXT_COUNT] = {
     [PW_TEXT_SET_MUSIC_PLAYING] = "Läuft: {1}",
     [PW_TEXT_SET_MUSIC_NOW] = "Musik: {1}",
     [PW_TEXT_SET_MUSIC_OFF] = "Musik aus",
-    [PW_TEXT_SET_SETUP_BODY] = "Starte die Tour des ersten Starts noch einmal: deine Sprache, die Installation der Windows-Runtime und den ersten Start von Mihawk OS. Was schon installiert ist, bleibt erhalten.",
+    [PW_TEXT_SET_SETUP_BODY] = "Starte die Tour des ersten Starts noch einmal: deine Sprache, die Installation der MihawkOS-Runtime und den ersten Start von Mihawk OS. Was schon installiert ist, bleibt erhalten.",
     [PW_TEXT_SET_UPDATES_TITLE] = "Updates",
     [PW_TEXT_SET_UPDATES_BODY] = "MihawkOS sucht beim Öffnen von selbst, höchstens einmal pro Stunde, auf GitHub nach einer neueren Version (Automatische Update-Suche) und wenn du es willst, und lädt sie im Hintergrund herunter. Eine Version wird nur installiert, wenn sie mit dem Schlüssel von MihawkOS signiert ist; sie wird aktiv, wenn du neu startest, oder beim nächsten Start von MihawkOS.",
     [PW_TEXT_SET_UPDATES_PROGRESS] = "{1} von {2} MB",
@@ -1780,7 +1780,7 @@ static const char *const text_de[PW_TEXT_COUNT] = {
     [PW_TEXT_SET_LOG_MORE] = "Sitzungen schreiben mehr, solange es an ist: Schalte es aus, wenn du fertig bist. Die 5 neuesten Ordner werden behalten, je höchstens 96 MB.",
     [PW_TEXT_SET_WEBUI_CONNECT] = "Verbinde die PS5 mit deinem Netzwerk: Dann öffnet sich hier die Web UI, mit ihrer Adresse und einem Code zum Scannen.",
     [PW_TEXT_SET_WEBUI_BODY] = "Scanne den Code mit deinem Handy oder gib die Adresse in einem Browser in deinem Heimnetz ein. Sie führt dich durch das Hinzufügen eines Spiels von deinem Computer, gibt jedem Spiel sein Bild und eigene Einstellungen, legt Spiele auf den Startbildschirm der PS5, sichert deine Spielstände und ändert diese Einstellungen.",
-    [PW_TEXT_SET_PAD_BODY] = "Welchen Controller Windows-Spiele und Steam sehen. Dein DualSense wird ihnen als ein Controller gezeigt, damit Menüs nur eine Tastenbelegung zeigen.",
+    [PW_TEXT_SET_PAD_BODY] = "Welchen Controller PC-Spiele und Steam sehen. Dein DualSense wird ihnen als ein Controller gezeigt, damit Menüs nur eine Tastenbelegung zeigen.",
     [PW_TEXT_SET_PAD_XBOX] = "Xbox 360 oder Xbox One: Jedes Spiel, das einen Controller unterstützt, sieht ihn. Steam zeigt Xbox-Tasten.",
     [PW_TEXT_SET_PAD_DUALSENSE] = "DualSense: Steam und Spiele, die dafür gemacht sind, zeigen PlayStation-Tasten. Spiele, die nur Xbox-Controller kennen, sehen keinen.",
     [PW_TEXT_SET_MOUSE_TITLE] = "Maussteuerung",
@@ -1922,48 +1922,48 @@ static const char *const text_de[PW_TEXT_COUNT] = {
 
 static const char *const text_it[PW_TEXT_COUNT] = {
     [PW_TEXT_WELCOME_TITLE] = "Benvenuto in MihawkOS",
-    [PW_TEXT_WELCOME_BODY] = "Prepariamo la tua PS5 per i giochi Windows. Ci vogliono circa dieci minuti.",
+    [PW_TEXT_WELCOME_BODY] = "Prepariamo la tua PS5 per i giochi PC. Ci vogliono circa dieci minuti.",
     [PW_TEXT_GET_STARTED] = "Inizia",
     [PW_TEXT_LANGUAGE_TITLE] = "Scegli la lingua",
-    [PW_TEXT_LANGUAGE_BODY] = "Anche i tuoi giochi Windows la useranno, con il suo layout di tastiera. Il desktop di Mihawk "
+    [PW_TEXT_LANGUAGE_BODY] = "Anche i tuoi giochi PC la useranno, con il suo layout di tastiera. Il desktop di Mihawk "
         "OS resta in inglese.",
     [PW_TEXT_CONTINUE] = "Continua",
     [PW_TEXT_RETRY] = "Riprova",
-    [PW_TEXT_ERR_NO_PIECES] = "Questa copia di MihawkOS non ha l’ambiente Windows nella sua cartella. Copia di nuovo "
+    [PW_TEXT_ERR_NO_PIECES] = "Questa copia di MihawkOS non ha l’ambiente MihawkOS nella sua cartella. Copia di nuovo "
         "l’intera cartella PPSA99170 della versione in /data/homebrew e riprova.",
-    [PW_TEXT_ERR_PARTIAL] = "La cartella PPSA99170 contiene {1} parti dell’ambiente Windows su {2}. Copia di nuovo "
+    [PW_TEXT_ERR_PARTIAL] = "La cartella PPSA99170 contiene {1} parti dell’ambiente MihawkOS su {2}. Copia di nuovo "
         "l’intera cartella e riprova.",
-    [PW_TEXT_ERR_READ] = "Impossibile leggere una parte dell’ambiente Windows nella cartella PPSA99170. Copia di "
+    [PW_TEXT_ERR_READ] = "Impossibile leggere una parte dell’ambiente MihawkOS nella cartella PPSA99170. Copia di "
         "nuovo la cartella e riprova. Ciò che è già installato viene conservato.",
-    [PW_TEXT_ERR_DAMAGED] = "Una parte dell’ambiente Windows nella cartella PPSA99170 è danneggiata o di un’altra "
+    [PW_TEXT_ERR_DAMAGED] = "Una parte dell’ambiente MihawkOS nella cartella PPSA99170 è danneggiata o di un’altra "
         "versione. Copia di nuovo l’intera cartella e riprova.",
-    [PW_TEXT_INSTALLING_BODY] = "MihawkOS sta copiando il suo ambiente Windows dalla propria cartella e controlla "
+    [PW_TEXT_INSTALLING_BODY] = "MihawkOS sta copiando il suo ambiente MihawkOS dalla propria cartella e controlla "
         "ogni file. Ci vuole circa un minuto.",
     [PW_TEXT_ERR_NO_SPACE] = "La PS5 ha bisogno di {1} liberi e ne ha {2}. Elimina qualcosa e riprova.",
     [PW_TEXT_ERR_FULL] = "La memoria della PS5 è piena. Elimina qualcosa e riprova. Ciò che è già installato viene conservato.",
     [PW_TEXT_ERR_WRITE] = "La memoria della PS5 ha rifiutato una scrittura. Riprova; se succede di nuovo, riavvia la PS5.",
     [PW_TEXT_ERR_CANCELLED] = "Installazione interrotta. Ciò che è già installato viene conservato.",
-    [PW_TEXT_ERR_BUILD] = "Questa copia di MihawkOS non può installare un ambiente Windows. Reinstalla MihawkOS.",
-    [PW_TEXT_INSTALLING_TITLE] = "Installazione dell’ambiente Windows",
+    [PW_TEXT_ERR_BUILD] = "Questa copia di MihawkOS non può installare un ambiente MihawkOS. Reinstalla MihawkOS.",
+    [PW_TEXT_INSTALLING_TITLE] = "Installazione dell’ambiente MihawkOS",
     [PW_TEXT_INSTALLING_CHECKING] = "Controllo di ciò che è già installato…",
     [PW_TEXT_INSTALLING_STATS] = "{1} di {2} MB · {3} MB/s",
     [PW_TEXT_INSTALLED] = "Installato.",
     [PW_TEXT_STOP] = "Interrompi",
     [PW_TEXT_PREPARE_TITLE] = "Preparazione di Mihawk OS",
-    [PW_TEXT_PREPARE_BODY] = "Il primo avvio crea il tuo disco Windows. Ci vogliono alcuni minuti e lo schermo può restare "
+    [PW_TEXT_PREPARE_BODY] = "Il primo avvio crea il tuo disco MihawkOS. Ci vogliono alcuni minuti e lo schermo può restare "
         "fermo per un po’. Termina da solo e torna qui.",
     [PW_TEXT_PREPARE_NOTE] = "Durante questo primo avvio il controller non funziona nei giochi, quindi MihawkOS lo termina "
         "appena il disco è pronto.",
     [PW_TEXT_PREPARE_START] = "Avvia",
     [PW_TEXT_PREPARE_FAILED] = "Il primo avvio non è terminato. Riprova: riprende da dove si era fermato.",
-    [PW_TEXT_BUILD_TITLE] = "Creazione del tuo disco Windows",
+    [PW_TEXT_BUILD_TITLE] = "Creazione del tuo disco MihawkOS",
     [PW_TEXT_BUILD_BODY] = "Ci vuole circa un minuto. Quando il disco è pronto, MihawkOS torna da solo alla "
         "configurazione.",
-    [PW_TEXT_BUILD_SETTINGS] = "Configurazione di Windows",
+    [PW_TEXT_BUILD_SETTINGS] = "Configurazione di MihawkOS",
     [PW_TEXT_BUILD_DOTNET] = "Installazione del supporto .NET",
     [PW_TEXT_BUILD_FINISHING] = "Completamento",
     [PW_TEXT_LIMITS_TITLE] = "Prima di giocare",
-    [PW_TEXT_LIMITS_BODY] = "MihawkOS è un livello di compatibilità che fa funzionare i giochi PC per Windows sulla "
+    [PW_TEXT_LIMITS_BODY] = "MihawkOS è un livello di compatibilità che fa funzionare i giochi PC per PC sulla "
         "tua PS5. È una versione alpha, quindi alcuni giochi potrebbero non funzionare ancora.",
     [PW_TEXT_LIMITS_NOTE_TITLE] = "Questi giochi non sono supportati",
     [PW_TEXT_LIMITS_DRM] = "Giochi con DRM, come Denuvo",
@@ -1990,7 +1990,7 @@ static const char *const text_it[PW_TEXT_COUNT] = {
     [PW_TEXT_STEAM_STEP_DOWNLOAD_BODY] = "Il programma di installazione di Steam arriva direttamente dai server di "
         "Valve.",
     [PW_TEXT_STEAM_STEP_INSTALL] = "Installazione",
-    [PW_TEXT_STEAM_STEP_INSTALL_BODY] = "MihawkOS lo installa sul tuo disco Windows in meno di un minuto.",
+    [PW_TEXT_STEAM_STEP_INSTALL_BODY] = "MihawkOS lo installa sul tuo disco MihawkOS in meno di un minuto.",
     [PW_TEXT_STEAM_STEP_UPDATE] = "Primo avvio",
     [PW_TEXT_STEAM_STEP_UPDATE_BODY] = "Steam si aggiorna da solo. Ci vogliono circa 5 minuti.",
     [PW_TEXT_STEAM_STEP_SIGNIN] = "Accesso",
@@ -2021,7 +2021,7 @@ static const char *const text_it[PW_TEXT_COUNT] = {
     [PW_TEXT_STEAM_ERR_ENDED] = "Steam si è chiuso prima dell’accesso. Riprova.",
     [PW_TEXT_STEAM_INSTALLING_TITLE] = "Installazione di Steam",
     [PW_TEXT_STEAM_INSTALLING_BODY] = "Il programma di installazione di Valve sta mettendo Steam sul tuo disco "
-        "Windows. Ci vuole meno di un minuto.",
+        "MihawkOS. Ci vuole meno di un minuto.",
     [PW_TEXT_STEAM_UPDATING_TITLE] = "Steam si sta aggiornando",
     [PW_TEXT_STEAM_UPDATING_BODY] = "Il primo avvio scarica l’ultima versione di Steam. Ci vogliono circa 5 minuti e "
         "lo schermo può restare fermo per un po’: è normale.",
@@ -2063,7 +2063,7 @@ static const char *const text_it[PW_TEXT_COUNT] = {
     [PW_TEXT_HOME_GAMES] = "Giochi: {1}",
     [PW_TEXT_HOME_PAGE] = "Pagina {1} di {2}",
     [PW_TEXT_HOME_DATE] = "{1}/{2}",
-    [PW_TEXT_HOME_MIHAWK_BODY] = "Il tuo desktop Windows e tutto ciò che contiene",
+    [PW_TEXT_HOME_MIHAWK_BODY] = "Il tuo desktop MihawkOS e tutto ciò che contiene",
     [PW_TEXT_HOME_START] = "Avvia",
     [PW_TEXT_HOME_NEEDS_DATA] = "Richiede l’accesso a /data",
     [PW_TEXT_HOME_UNAVAILABLE] = "NON DISPONIBILE",
@@ -2222,11 +2222,11 @@ static const char *const text_it[PW_TEXT_COUNT] = {
     [PW_TEXT_SET_HZ_BODY_OFF] = "Disattiva: lo schermo resta a 60 Hz. Usala se la TV non mostra immagini o sfarfalla all’avvio di un gioco. È un’unica impostazione per tutti i giochi.",
     [PW_TEXT_SET_ABOUT_COPYRIGHT] = "MihawkOS. Copyright (C) 2026 Mihawk e gli autori citati in NOTICE.md.",
     [PW_TEXT_SET_ABOUT_LICENCE] = "Questo programma è software libero secondo la GNU General Public License, versione 3 o successiva. Viene fornito SENZA ALCUNA GARANZIA. Puoi condividerlo e modificarlo secondo i termini di quella licenza.",
-    [PW_TEXT_SET_ABOUT_TEXTS] = "Testi delle licenze: {1} (questo titolo) e {2} (il runtime di Windows).",
+    [PW_TEXT_SET_ABOUT_TEXTS] = "Testi delle licenze: {1} (questo titolo) e {2} (il runtime di MihawkOS).",
     [PW_TEXT_SET_ABOUT_SOURCE] = "Sorgente: {1}",
     [PW_TEXT_SET_ABOUT_AFFILIATION] = "Non affiliato a Sony, Microsoft o Valve.",
     [PW_TEXT_SET_RUNTIME_TITLE] = "Runtime",
-    [PW_TEXT_SET_RUNTIME_BODY] = "I programmi Windows girano su un runtime Wine di circa 1,2 GB. Installalo, o riparalo, dai suoi pezzi in {1} o in una cartella mihawkos su una chiavetta USB.",
+    [PW_TEXT_SET_RUNTIME_BODY] = "I programmi PC girano su un runtime Wine di circa 1,2 GB. Installalo, o riparalo, dai suoi pezzi in {1} o in una cartella mihawkos su una chiavetta USB.",
     [PW_TEXT_SET_RUNTIME_PROGRESS] = "{1} di {2} MB, {3} MB/s, pezzo {4} di {5}",
     [PW_TEXT_SET_RUNTIME_CHECKING] = "Controllo di ciò che è già installato",
     [PW_TEXT_SET_RUNTIME_KEEP] = "Puoi lasciare la console su questa schermata. Chiudere MihawkOS ferma l’installazione; la prossima volta riprende da dove si era fermata.",
@@ -2235,7 +2235,7 @@ static const char *const text_it[PW_TEXT_COUNT] = {
     [PW_TEXT_SET_MUSIC_PLAYING] = "In riproduzione: {1}",
     [PW_TEXT_SET_MUSIC_NOW] = "Musica: {1}",
     [PW_TEXT_SET_MUSIC_OFF] = "Musica spenta",
-    [PW_TEXT_SET_SETUP_BODY] = "Ripeti il tour del primo avvio: la lingua, l’installazione del runtime di Windows e il primo avvio di Mihawk OS. Ciò che è già installato resta.",
+    [PW_TEXT_SET_SETUP_BODY] = "Ripeti il tour del primo avvio: la lingua, l’installazione del runtime di MihawkOS e il primo avvio di Mihawk OS. Ciò che è già installato resta.",
     [PW_TEXT_SET_UPDATES_TITLE] = "Aggiornamenti",
     [PW_TEXT_SET_UPDATES_BODY] = "MihawkOS cerca una versione più recente su GitHub da solo all’apertura, al massimo una volta all’ora (Ricerca automatica degli aggiornamenti) e quando lo chiedi, e la scarica in background. Una versione si installa solo se è firmata con la chiave di MihawkOS; entra in uso quando riavvii, o al prossimo avvio di MihawkOS.",
     [PW_TEXT_SET_UPDATES_PROGRESS] = "{1} di {2} MB",
@@ -2244,7 +2244,7 @@ static const char *const text_it[PW_TEXT_COUNT] = {
     [PW_TEXT_SET_LOG_MORE] = "Le sessioni scrivono di più finché è attivo: disattivalo quando hai finito. Si tengono le 5 cartelle più recenti, di 96 MB al massimo ciascuna.",
     [PW_TEXT_SET_WEBUI_CONNECT] = "Collega la PS5 alla tua rete: la Web UI si aprirà qui, con il suo indirizzo e un codice da inquadrare.",
     [PW_TEXT_SET_WEBUI_BODY] = "Inquadra il codice con il telefono o scrivi l’indirizzo in un browser della tua rete di casa. Ti guida nell’aggiunta di un gioco dal computer, dà a ogni gioco la sua immagine e le sue impostazioni, mette i giochi nella schermata Home della PS5, fa il backup dei salvataggi e cambia queste impostazioni.",
-    [PW_TEXT_SET_PAD_BODY] = "Quale controller vedono i giochi Windows e Steam. Il DualSense viene mostrato loro come un solo controller, così i menu mostrano un solo set di tasti.",
+    [PW_TEXT_SET_PAD_BODY] = "Quale controller vedono i giochi PC e Steam. Il DualSense viene mostrato loro come un solo controller, così i menu mostrano un solo set di tasti.",
     [PW_TEXT_SET_PAD_XBOX] = "Xbox 360 o Xbox One: ogni gioco che supporta un controller lo vede. Steam mostra i tasti Xbox.",
     [PW_TEXT_SET_PAD_DUALSENSE] = "DualSense: Steam e i giochi fatti per lui mostrano i tasti PlayStation. I giochi che conoscono solo i controller Xbox non ne vedono nessuno.",
     [PW_TEXT_SET_MOUSE_TITLE] = "Comandi del mouse",
@@ -2386,47 +2386,47 @@ static const char *const text_it[PW_TEXT_COUNT] = {
 
 static const char *const text_ru[PW_TEXT_COUNT] = {
     [PW_TEXT_WELCOME_TITLE] = "Добро пожаловать в MihawkOS",
-    [PW_TEXT_WELCOME_BODY] = "Подготовим вашу PS5 к играм для Windows. Это займёт около десяти минут.",
+    [PW_TEXT_WELCOME_BODY] = "Подготовим вашу PS5 к играм для PC. Это займёт около десяти минут.",
     [PW_TEXT_GET_STARTED] = "Начать",
     [PW_TEXT_LANGUAGE_TITLE] = "Выберите язык",
-    [PW_TEXT_LANGUAGE_BODY] = "Ваши игры для Windows тоже будут его использовать вместе с раскладкой клавиатуры. Рабочий "
+    [PW_TEXT_LANGUAGE_BODY] = "Ваши игры для PC тоже будут его использовать вместе с раскладкой клавиатуры. Рабочий "
         "стол Mihawk OS останется на английском.",
     [PW_TEXT_CONTINUE] = "Продолжить",
     [PW_TEXT_RETRY] = "Повторить",
-    [PW_TEXT_ERR_NO_PIECES] = "В папке этой копии MihawkOS нет среды Windows. Скопируйте всю папку PPSA99170 из "
+    [PW_TEXT_ERR_NO_PIECES] = "В папке этой копии MihawkOS нет среды MihawkOS. Скопируйте всю папку PPSA99170 из "
         "выпуска в /data/homebrew заново и повторите попытку.",
-    [PW_TEXT_ERR_PARTIAL] = "В папке PPSA99170 частей среды Windows: {1} из {2}. Скопируйте всю папку заново и "
+    [PW_TEXT_ERR_PARTIAL] = "В папке PPSA99170 частей среды MihawkOS: {1} из {2}. Скопируйте всю папку заново и "
         "повторите попытку.",
-    [PW_TEXT_ERR_READ] = "Не удалось прочитать часть среды Windows в папке PPSA99170. Скопируйте папку заново и "
+    [PW_TEXT_ERR_READ] = "Не удалось прочитать часть среды MihawkOS в папке PPSA99170. Скопируйте папку заново и "
         "повторите попытку. Уже установленное сохранится.",
-    [PW_TEXT_ERR_DAMAGED] = "Часть среды Windows в папке PPSA99170 повреждена или от другой версии. Скопируйте всю "
+    [PW_TEXT_ERR_DAMAGED] = "Часть среды MihawkOS в папке PPSA99170 повреждена или от другой версии. Скопируйте всю "
         "папку заново и повторите попытку.",
-    [PW_TEXT_INSTALLING_BODY] = "MihawkOS копирует среду Windows из своей папки и проверяет каждый файл. Это займёт "
+    [PW_TEXT_INSTALLING_BODY] = "MihawkOS копирует среду MihawkOS из своей папки и проверяет каждый файл. Это займёт "
         "около минуты.",
     [PW_TEXT_ERR_NO_SPACE] = "PS5 нужно {1} свободного места, а доступно {2}. Удалите что-нибудь и повторите попытку.",
     [PW_TEXT_ERR_FULL] = "Хранилище PS5 заполнено. Удалите что-нибудь и повторите попытку. Уже установленное сохранится.",
     [PW_TEXT_ERR_WRITE] = "Хранилище PS5 отказало в записи. Повторите попытку; если это повторится, перезапустите PS5.",
     [PW_TEXT_ERR_CANCELLED] = "Установка остановлена. Уже установленное сохранится.",
-    [PW_TEXT_ERR_BUILD] = "Эта копия MihawkOS не может установить среду Windows. Переустановите MihawkOS.",
-    [PW_TEXT_INSTALLING_TITLE] = "Установка среды Windows",
+    [PW_TEXT_ERR_BUILD] = "Эта копия MihawkOS не может установить среду MihawkOS. Переустановите MihawkOS.",
+    [PW_TEXT_INSTALLING_TITLE] = "Установка среды MihawkOS",
     [PW_TEXT_INSTALLING_CHECKING] = "Проверка уже установленного…",
     [PW_TEXT_INSTALLING_STATS] = "{1} из {2} МБ · {3} МБ/с",
     [PW_TEXT_INSTALLED] = "Установлено.",
     [PW_TEXT_STOP] = "Остановить",
     [PW_TEXT_PREPARE_TITLE] = "Подготовка Mihawk OS",
-    [PW_TEXT_PREPARE_BODY] = "При первом запуске создаётся ваш диск Windows. Это займёт несколько минут, и экран может "
+    [PW_TEXT_PREPARE_BODY] = "При первом запуске создаётся ваш диск MihawkOS. Это займёт несколько минут, и экран может "
         "какое-то время не меняться. Запуск завершится сам и вернётся сюда.",
     [PW_TEXT_PREPARE_NOTE] = "Во время первого запуска контроллер не работает в играх, поэтому MihawkOS завершает его, "
         "как только диск готов.",
     [PW_TEXT_PREPARE_START] = "Запустить",
     [PW_TEXT_PREPARE_FAILED] = "Первый запуск не завершился. Повторите попытку: он продолжится с того места, где остановился.",
-    [PW_TEXT_BUILD_TITLE] = "Создание вашего диска Windows",
+    [PW_TEXT_BUILD_TITLE] = "Создание вашего диска MihawkOS",
     [PW_TEXT_BUILD_BODY] = "Это займёт около минуты. Когда диск будет готов, MihawkOS сам вернётся к настройке.",
-    [PW_TEXT_BUILD_SETTINGS] = "Настройка Windows",
+    [PW_TEXT_BUILD_SETTINGS] = "Настройка MihawkOS",
     [PW_TEXT_BUILD_DOTNET] = "Установка поддержки .NET",
     [PW_TEXT_BUILD_FINISHING] = "Завершение",
     [PW_TEXT_LIMITS_TITLE] = "Перед игрой",
-    [PW_TEXT_LIMITS_BODY] = "MihawkOS — это слой совместимости, который запускает игры для Windows на вашей PS5. Это "
+    [PW_TEXT_LIMITS_BODY] = "MihawkOS — это слой совместимости, который запускает игры для PC на вашей PS5. Это "
         "альфа-версия, поэтому некоторые игры могут пока не работать.",
     [PW_TEXT_LIMITS_NOTE_TITLE] = "Эти игры не поддерживаются",
     [PW_TEXT_LIMITS_DRM] = "Игры с DRM, например Denuvo",
@@ -2451,7 +2451,7 @@ static const char *const text_ru[PW_TEXT_COUNT] = {
     [PW_TEXT_STEAM_STEP_DOWNLOAD] = "Загрузка",
     [PW_TEXT_STEAM_STEP_DOWNLOAD_BODY] = "Установщик Steam загружается прямо с серверов Valve.",
     [PW_TEXT_STEAM_STEP_INSTALL] = "Установка",
-    [PW_TEXT_STEAM_STEP_INSTALL_BODY] = "MihawkOS устанавливает Steam на ваш диск Windows меньше чем за минуту.",
+    [PW_TEXT_STEAM_STEP_INSTALL_BODY] = "MihawkOS устанавливает Steam на ваш диск MihawkOS меньше чем за минуту.",
     [PW_TEXT_STEAM_STEP_UPDATE] = "Первый запуск",
     [PW_TEXT_STEAM_STEP_UPDATE_BODY] = "Steam обновляется сам. Это занимает около 5 минут.",
     [PW_TEXT_STEAM_STEP_SIGNIN] = "Вход",
@@ -2480,7 +2480,7 @@ static const char *const text_ru[PW_TEXT_COUNT] = {
         "Steam на телефоне нажмите на щит и отсканируйте код.",
     [PW_TEXT_STEAM_ERR_ENDED] = "Steam закрылся до входа. Повторите попытку.",
     [PW_TEXT_STEAM_INSTALLING_TITLE] = "Установка Steam",
-    [PW_TEXT_STEAM_INSTALLING_BODY] = "Установщик Valve устанавливает Steam на ваш диск Windows. Это занимает меньше "
+    [PW_TEXT_STEAM_INSTALLING_BODY] = "Установщик Valve устанавливает Steam на ваш диск MihawkOS. Это занимает меньше "
         "минуты.",
     [PW_TEXT_STEAM_UPDATING_TITLE] = "Steam обновляется",
     [PW_TEXT_STEAM_UPDATING_BODY] = "При первом запуске загружается последняя версия Steam. Это занимает около 5 "
@@ -2523,7 +2523,7 @@ static const char *const text_ru[PW_TEXT_COUNT] = {
     [PW_TEXT_HOME_GAMES] = "Игры: {1}",
     [PW_TEXT_HOME_PAGE] = "Страница {1} из {2}",
     [PW_TEXT_HOME_DATE] = "{1}.{2}",
-    [PW_TEXT_HOME_MIHAWK_BODY] = "Ваш рабочий стол Windows и всё, что на нём",
+    [PW_TEXT_HOME_MIHAWK_BODY] = "Ваш рабочий стол MihawkOS и всё, что на нём",
     [PW_TEXT_HOME_START] = "Запустить",
     [PW_TEXT_HOME_NEEDS_DATA] = "Нужен доступ к /data",
     [PW_TEXT_HOME_UNAVAILABLE] = "НЕДОСТУПНО",
@@ -2682,11 +2682,11 @@ static const char *const text_ru[PW_TEXT_COUNT] = {
     [PW_TEXT_SET_HZ_BODY_OFF] = "Выкл.: экран остаётся на 60 Гц. Используйте, если телевизор не показывает изображение или мерцает при запуске игры. Это одна настройка для всех игр.",
     [PW_TEXT_SET_ABOUT_COPYRIGHT] = "MihawkOS. Copyright (C) 2026 Mihawk и авторы, указанные в NOTICE.md.",
     [PW_TEXT_SET_ABOUT_LICENCE] = "Эта программа — свободное ПО под лицензией GNU General Public License версии 3 или более поздней. Она предоставляется БЕЗ КАКИХ-ЛИБО ГАРАНТИЙ. Вы можете распространять и изменять её на условиях этой лицензии.",
-    [PW_TEXT_SET_ABOUT_TEXTS] = "Тексты лицензий: {1} (этот продукт) и {2} (среда Windows).",
+    [PW_TEXT_SET_ABOUT_TEXTS] = "Тексты лицензий: {1} (этот продукт) и {2} (среда MihawkOS).",
     [PW_TEXT_SET_ABOUT_SOURCE] = "Исходный код: {1}",
     [PW_TEXT_SET_ABOUT_AFFILIATION] = "Не связано с Sony, Microsoft или Valve.",
     [PW_TEXT_SET_RUNTIME_TITLE] = "Среда",
-    [PW_TEXT_SET_RUNTIME_BODY] = "Программы Windows работают в среде Wine объёмом около 1,2 ГБ. Установите или восстановите её из частей в {1} или в папке mihawkos на USB-накопителе.",
+    [PW_TEXT_SET_RUNTIME_BODY] = "Программы PC работают в среде Wine объёмом около 1,2 ГБ. Установите или восстановите её из частей в {1} или в папке mihawkos на USB-накопителе.",
     [PW_TEXT_SET_RUNTIME_PROGRESS] = "{1} из {2} МБ, {3} МБ/с, часть {4} из {5}",
     [PW_TEXT_SET_RUNTIME_CHECKING] = "Проверяется, что уже установлено",
     [PW_TEXT_SET_RUNTIME_KEEP] = "Можно оставить консоль на этом экране. Если закрыть MihawkOS, установка остановится; в следующий раз она продолжится с того же места.",
@@ -2695,7 +2695,7 @@ static const char *const text_ru[PW_TEXT_COUNT] = {
     [PW_TEXT_SET_MUSIC_PLAYING] = "Играет: {1}",
     [PW_TEXT_SET_MUSIC_NOW] = "Музыка: {1}",
     [PW_TEXT_SET_MUSIC_OFF] = "Музыка выкл.",
-    [PW_TEXT_SET_SETUP_BODY] = "Пройдите первый запуск ещё раз: язык, установка среды Windows и первый запуск Mihawk OS. Уже установленное сохраняется.",
+    [PW_TEXT_SET_SETUP_BODY] = "Пройдите первый запуск ещё раз: язык, установка среды MihawkOS и первый запуск Mihawk OS. Уже установленное сохраняется.",
     [PW_TEXT_SET_UPDATES_TITLE] = "Обновления",
     [PW_TEXT_SET_UPDATES_BODY] = "MihawkOS сам при открытии, не чаще раза в час, ищет более новую версию на GitHub («Автопроверка обновлений») и когда вы просите, и скачивает её в фоне. Версия устанавливается, только если подписана ключом MihawkOS; она начинает работать после перезапуска или при следующем запуске MihawkOS.",
     [PW_TEXT_SET_UPDATES_PROGRESS] = "{1} из {2} МБ",
@@ -2704,7 +2704,7 @@ static const char *const text_ru[PW_TEXT_COUNT] = {
     [PW_TEXT_SET_LOG_MORE] = "Пока это включено, сеансы пишут больше: выключите, когда закончите. Хранятся 5 последних папок, не более 96 МБ каждая.",
     [PW_TEXT_SET_WEBUI_CONNECT] = "Подключите PS5 к своей сети: тогда здесь откроется Web UI с адресом и кодом для сканирования.",
     [PW_TEXT_SET_WEBUI_BODY] = "Отсканируйте код телефоном или введите адрес в браузере в домашней сети. Она проведёт вас через добавление игры с компьютера, даст каждой игре картинку и собственные настройки, поместит игры на главный экран PS5, сохранит резервные копии сохранений и изменит эти настройки.",
-    [PW_TEXT_SET_PAD_BODY] = "Какой контроллер видят игры Windows и Steam. DualSense показывается им как один контроллер, чтобы меню показывали один набор кнопок.",
+    [PW_TEXT_SET_PAD_BODY] = "Какой контроллер видят игры PC и Steam. DualSense показывается им как один контроллер, чтобы меню показывали один набор кнопок.",
     [PW_TEXT_SET_PAD_XBOX] = "Xbox 360 или Xbox One: его видит любая игра с поддержкой контроллера. Steam показывает кнопки Xbox.",
     [PW_TEXT_SET_PAD_DUALSENSE] = "DualSense: Steam и игры, сделанные для него, показывают кнопки PlayStation. Игры, которые знают только контроллеры Xbox, не видят ни одного.",
     [PW_TEXT_SET_MOUSE_TITLE] = "Управление мышью",
@@ -2846,39 +2846,39 @@ static const char *const text_ru[PW_TEXT_COUNT] = {
 
 static const char *const text_zh[PW_TEXT_COUNT] = {
     [PW_TEXT_WELCOME_TITLE] = "欢迎使用 MihawkOS",
-    [PW_TEXT_WELCOME_BODY] = "让我们为 Windows 游戏准备好你的 PS5。大约需要十分钟。",
+    [PW_TEXT_WELCOME_BODY] = "让我们为 PC 游戏准备好你的 PS5。大约需要十分钟。",
     [PW_TEXT_GET_STARTED] = "开始",
     [PW_TEXT_LANGUAGE_TITLE] = "选择语言",
-    [PW_TEXT_LANGUAGE_BODY] = "你的 Windows 游戏也会使用该语言及其键盘布局。Mihawk OS 桌面仍为英文。",
+    [PW_TEXT_LANGUAGE_BODY] = "你的 PC 游戏也会使用该语言及其键盘布局。Mihawk OS 桌面仍为英文。",
     [PW_TEXT_CONTINUE] = "继续",
     [PW_TEXT_RETRY] = "重试",
-    [PW_TEXT_ERR_NO_PIECES] = "此 MihawkOS 副本的文件夹中没有 Windows 运行环境。请将发布包中的整个 PPSA99170 文件夹重新复制到 /data/homebrew，然后重试。",
-    [PW_TEXT_ERR_PARTIAL] = "PPSA99170 文件夹中只有 {1}/{2} 个 Windows 运行环境部分。请重新复制整个文件夹后重试。",
-    [PW_TEXT_ERR_READ] = "无法读取 PPSA99170 文件夹中的某个 Windows 运行环境部分。请重新复制该文件夹后重试。已安装的内容会保留。",
-    [PW_TEXT_ERR_DAMAGED] = "PPSA99170 文件夹中的某个 Windows 运行环境部分已损坏或来自其他版本。请重新复制整个文件夹后重试。",
-    [PW_TEXT_INSTALLING_BODY] = "MihawkOS 正在从自己的文件夹复制 Windows 运行环境，并检查每个文件。大约需要一分钟。",
+    [PW_TEXT_ERR_NO_PIECES] = "此 MihawkOS 副本的文件夹中没有 MihawkOS 运行环境。请将发布包中的整个 PPSA99170 文件夹重新复制到 /data/homebrew，然后重试。",
+    [PW_TEXT_ERR_PARTIAL] = "PPSA99170 文件夹中只有 {1}/{2} 个 MihawkOS 运行环境部分。请重新复制整个文件夹后重试。",
+    [PW_TEXT_ERR_READ] = "无法读取 PPSA99170 文件夹中的某个 MihawkOS 运行环境部分。请重新复制该文件夹后重试。已安装的内容会保留。",
+    [PW_TEXT_ERR_DAMAGED] = "PPSA99170 文件夹中的某个 MihawkOS 运行环境部分已损坏或来自其他版本。请重新复制整个文件夹后重试。",
+    [PW_TEXT_INSTALLING_BODY] = "MihawkOS 正在从自己的文件夹复制 MihawkOS 运行环境，并检查每个文件。大约需要一分钟。",
     [PW_TEXT_ERR_NO_SPACE] = "PS5 需要 {1} 可用空间，当前只有 {2}。请删除一些内容后重试。",
     [PW_TEXT_ERR_FULL] = "PS5 存储空间已满。请删除一些内容后重试。已安装的内容会保留。",
     [PW_TEXT_ERR_WRITE] = "PS5 存储拒绝了一次写入。请重试；如果再次发生，请重启 PS5。",
     [PW_TEXT_ERR_CANCELLED] = "安装已停止。已安装的内容会保留。",
-    [PW_TEXT_ERR_BUILD] = "此 MihawkOS 副本无法安装 Windows 运行环境。请重新安装 MihawkOS。",
-    [PW_TEXT_INSTALLING_TITLE] = "正在安装 Windows 运行环境",
+    [PW_TEXT_ERR_BUILD] = "此 MihawkOS 副本无法安装 MihawkOS 运行环境。请重新安装 MihawkOS。",
+    [PW_TEXT_INSTALLING_TITLE] = "正在安装 MihawkOS 运行环境",
     [PW_TEXT_INSTALLING_CHECKING] = "正在检查已安装的内容…",
     [PW_TEXT_INSTALLING_STATS] = "{1} / {2} MB · {3} MB/s",
     [PW_TEXT_INSTALLED] = "已安装。",
     [PW_TEXT_STOP] = "停止",
     [PW_TEXT_PREPARE_TITLE] = "正在准备 Mihawk OS",
-    [PW_TEXT_PREPARE_BODY] = "首次启动会创建你的 Windows 磁盘。这需要几分钟，期间画面可能会静止一段时间。完成后会自动结束并返回这里。",
+    [PW_TEXT_PREPARE_BODY] = "首次启动会创建你的 MihawkOS 磁盘。这需要几分钟，期间画面可能会静止一段时间。完成后会自动结束并返回这里。",
     [PW_TEXT_PREPARE_NOTE] = "首次启动期间，手柄在游戏中无法使用，因此磁盘准备就绪后 MihawkOS 会立即结束本次启动。",
     [PW_TEXT_PREPARE_START] = "启动",
     [PW_TEXT_PREPARE_FAILED] = "首次启动未完成。请重试：它会从中断的地方继续。",
-    [PW_TEXT_BUILD_TITLE] = "正在创建你的 Windows 磁盘",
+    [PW_TEXT_BUILD_TITLE] = "正在创建你的 MihawkOS 磁盘",
     [PW_TEXT_BUILD_BODY] = "大约需要一分钟。磁盘准备就绪后，MihawkOS 会自动返回设置。",
-    [PW_TEXT_BUILD_SETTINGS] = "正在设置 Windows",
+    [PW_TEXT_BUILD_SETTINGS] = "正在设置 MihawkOS",
     [PW_TEXT_BUILD_DOTNET] = "正在安装 .NET 支持",
     [PW_TEXT_BUILD_FINISHING] = "即将完成",
     [PW_TEXT_LIMITS_TITLE] = "开始游戏前",
-    [PW_TEXT_LIMITS_BODY] = "MihawkOS 是一个兼容层，可以在你的 PS5 上运行 Windows 电脑游戏。它目前是 alpha 测试版，部分游戏可能暂时无法运行。",
+    [PW_TEXT_LIMITS_BODY] = "MihawkOS 是一个兼容层，可以在你的 PS5 上运行 PC 电脑游戏。它目前是 alpha 测试版，部分游戏可能暂时无法运行。",
     [PW_TEXT_LIMITS_NOTE_TITLE] = "以下游戏不受支持",
     [PW_TEXT_LIMITS_DRM] = "带有 DRM 的游戏，例如 Denuvo",
     [PW_TEXT_LIMITS_ANTICHEAT] = "带有反作弊或内核级保护的游戏，例如 Easy Anti-Cheat 或 BattlEye",
@@ -2901,7 +2901,7 @@ static const char *const text_zh[PW_TEXT_COUNT] = {
     [PW_TEXT_STEAM_STEP_DOWNLOAD] = "下载",
     [PW_TEXT_STEAM_STEP_DOWNLOAD_BODY] = "Steam 安装程序直接来自 Valve 的服务器。",
     [PW_TEXT_STEAM_STEP_INSTALL] = "安装",
-    [PW_TEXT_STEAM_STEP_INSTALL_BODY] = "MihawkOS 会把它安装到你的 Windows 磁盘，不到一分钟。",
+    [PW_TEXT_STEAM_STEP_INSTALL_BODY] = "MihawkOS 会把它安装到你的 MihawkOS 磁盘，不到一分钟。",
     [PW_TEXT_STEAM_STEP_UPDATE] = "首次启动",
     [PW_TEXT_STEAM_STEP_UPDATE_BODY] = "Steam 会自行更新，大约需要 5 分钟。",
     [PW_TEXT_STEAM_STEP_SIGNIN] = "登录",
@@ -2924,7 +2924,7 @@ static const char *const text_zh[PW_TEXT_COUNT] = {
     [PW_TEXT_STEAM_ERR_GUARD] = "Steam 要求输入 Steam 令牌验证码。请重试并改用二维码：在手机上的 Steam 应用中点按盾牌图标，然后扫描二维码。",
     [PW_TEXT_STEAM_ERR_ENDED] = "Steam 在你登录前关闭了。请重试。",
     [PW_TEXT_STEAM_INSTALLING_TITLE] = "正在安装 Steam",
-    [PW_TEXT_STEAM_INSTALLING_BODY] = "Valve 的安装程序正在把 Steam 安装到你的 Windows 磁盘，不到一分钟。",
+    [PW_TEXT_STEAM_INSTALLING_BODY] = "Valve 的安装程序正在把 Steam 安装到你的 MihawkOS 磁盘，不到一分钟。",
     [PW_TEXT_STEAM_UPDATING_TITLE] = "Steam 正在自行更新",
     [PW_TEXT_STEAM_UPDATING_BODY] = "首次启动会下载 Steam 的最新版本，大约需要 5 分钟。屏幕可能会静止一段时间，这是正常的。",
     [PW_TEXT_STEAM_DOWNLOADED] = "已下载 {1} MB",
@@ -2962,7 +2962,7 @@ static const char *const text_zh[PW_TEXT_COUNT] = {
     [PW_TEXT_HOME_GAMES] = "游戏：{1}",
     [PW_TEXT_HOME_PAGE] = "第 {1} 页，共 {2} 页",
     [PW_TEXT_HOME_DATE] = "{2}月{1}日",
-    [PW_TEXT_HOME_MIHAWK_BODY] = "你的 Windows 桌面及其中的一切",
+    [PW_TEXT_HOME_MIHAWK_BODY] = "你的 MihawkOS 桌面及其中的一切",
     [PW_TEXT_HOME_START] = "开始",
     [PW_TEXT_HOME_NEEDS_DATA] = "需要访问 /data",
     [PW_TEXT_HOME_UNAVAILABLE] = "不可用",
@@ -3121,11 +3121,11 @@ static const char *const text_zh[PW_TEXT_COUNT] = {
     [PW_TEXT_SET_HZ_BODY_OFF] = "关：屏幕保持 60 Hz。如果游戏启动时电视无画面或闪烁，请使用此项。此设置适用于所有游戏。",
     [PW_TEXT_SET_ABOUT_COPYRIGHT] = "MihawkOS。Copyright (C) 2026 Mihawk 及 NOTICE.md 中列出的作者。",
     [PW_TEXT_SET_ABOUT_LICENCE] = "本程序是依据 GNU 通用公共许可证第 3 版或更高版本发布的自由软件。它不提供任何担保。你可以依照该许可证的条款分享和修改它。",
-    [PW_TEXT_SET_ABOUT_TEXTS] = "许可证文本：{1}（本软件）和 {2}（Windows 运行环境）。",
+    [PW_TEXT_SET_ABOUT_TEXTS] = "许可证文本：{1}（本软件）和 {2}（MihawkOS 运行环境）。",
     [PW_TEXT_SET_ABOUT_SOURCE] = "源代码：{1}",
     [PW_TEXT_SET_ABOUT_AFFILIATION] = "与 Sony、Microsoft 或 Valve 无关。",
     [PW_TEXT_SET_RUNTIME_TITLE] = "运行环境",
-    [PW_TEXT_SET_RUNTIME_BODY] = "Windows 程序运行在约 1.2 GB 的 Wine 运行环境上。可从 {1} 或 U 盘上 mihawkos 文件夹中的组件安装或修复它。",
+    [PW_TEXT_SET_RUNTIME_BODY] = "PC 程序运行在约 1.2 GB 的 Wine 运行环境上。可从 {1} 或 U 盘上 mihawkos 文件夹中的组件安装或修复它。",
     [PW_TEXT_SET_RUNTIME_PROGRESS] = "{1} / {2} MB，{3} MB/s，第 {4} 个组件，共 {5} 个",
     [PW_TEXT_SET_RUNTIME_CHECKING] = "正在检查已安装的内容",
     [PW_TEXT_SET_RUNTIME_KEEP] = "主机可以停留在此画面。关闭 MihawkOS 会停止安装；下次会从停止的地方继续。",
@@ -3134,7 +3134,7 @@ static const char *const text_zh[PW_TEXT_COUNT] = {
     [PW_TEXT_SET_MUSIC_PLAYING] = "正在播放：{1}",
     [PW_TEXT_SET_MUSIC_NOW] = "音乐：{1}",
     [PW_TEXT_SET_MUSIC_OFF] = "音乐已关闭",
-    [PW_TEXT_SET_SETUP_BODY] = "再次进行首次启动导览：选择语言、安装 Windows 运行环境，以及 Mihawk OS 的首次启动。已安装的内容会保留。",
+    [PW_TEXT_SET_SETUP_BODY] = "再次进行首次启动导览：选择语言、安装 MihawkOS 运行环境，以及 Mihawk OS 的首次启动。已安装的内容会保留。",
     [PW_TEXT_SET_UPDATES_TITLE] = "更新",
     [PW_TEXT_SET_UPDATES_BODY] = "MihawkOS 打开时会自动在 GitHub 上查找新版本（每小时最多一次，自动检查更新），你要求时也会查找，并在后台下载。只有用 MihawkOS 的密钥签名的版本才会安装；它会在你重启时，或下次 MihawkOS 启动时生效。",
     [PW_TEXT_SET_UPDATES_PROGRESS] = "{1} / {2} MB",
@@ -3143,7 +3143,7 @@ static const char *const text_zh[PW_TEXT_COUNT] = {
     [PW_TEXT_SET_LOG_MORE] = "开启期间会话会写入更多内容：用完后请关闭。保留最新的 5 个文件夹，每个最多 96 MB。",
     [PW_TEXT_SET_WEBUI_CONNECT] = "将 PS5 连接到你的网络后，Web UI 会在这里打开，并显示它的地址和可扫描的二维码。",
     [PW_TEXT_SET_WEBUI_BODY] = "用手机扫描二维码，或在家庭网络中的浏览器里输入地址。它会引导你从电脑添加游戏，为每个游戏设置图片和专属设置，把游戏放到 PS5 主屏幕，备份你的存档，并更改这些设置。",
-    [PW_TEXT_SET_PAD_BODY] = "Windows 游戏和 Steam 看到的控制器。你的 DualSense 会作为一个控制器呈现给它们，因此菜单只显示一套按键。",
+    [PW_TEXT_SET_PAD_BODY] = "PC 游戏和 Steam 看到的控制器。你的 DualSense 会作为一个控制器呈现给它们，因此菜单只显示一套按键。",
     [PW_TEXT_SET_PAD_XBOX] = "Xbox 360 或 Xbox One：所有支持控制器的游戏都能看到它。Steam 显示 Xbox 按键。",
     [PW_TEXT_SET_PAD_DUALSENSE] = "DualSense：Steam 和为它设计的游戏显示 PlayStation 按键。只认识 Xbox 控制器的游戏将看不到任何控制器。",
     [PW_TEXT_SET_MOUSE_TITLE] = "鼠标控制",
@@ -3285,40 +3285,40 @@ static const char *const text_zh[PW_TEXT_COUNT] = {
 
 static const char *const text_ja[PW_TEXT_COUNT] = {
     [PW_TEXT_WELCOME_TITLE] = "MihawkOS へようこそ",
-    [PW_TEXT_WELCOME_BODY] = "PS5 で Windows のゲームを遊ぶ準備をしましょう。所要時間は約 10 分です。",
+    [PW_TEXT_WELCOME_BODY] = "PS5 で PC のゲームを遊ぶ準備をしましょう。所要時間は約 10 分です。",
     [PW_TEXT_GET_STARTED] = "はじめる",
     [PW_TEXT_LANGUAGE_TITLE] = "言語を選択",
-    [PW_TEXT_LANGUAGE_BODY] = "Windows のゲームでもこの言語とそのキーボード配列が使われます。Mihawk OS のデスクトップは英語のままです。",
+    [PW_TEXT_LANGUAGE_BODY] = "PC のゲームでもこの言語とそのキーボード配列が使われます。Mihawk OS のデスクトップは英語のままです。",
     [PW_TEXT_CONTINUE] = "続ける",
     [PW_TEXT_RETRY] = "再試行",
-    [PW_TEXT_ERR_NO_PIECES] = "この MihawkOS のフォルダーには Windows 実行環境が入っていません。リリースの PPSA99170 フォルダー全体を /data/homebrew "
+    [PW_TEXT_ERR_NO_PIECES] = "この MihawkOS のフォルダーには MihawkOS 実行環境が入っていません。リリースの PPSA99170 フォルダー全体を /data/homebrew "
         "にコピーし直してから、もう一度お試しください。",
-    [PW_TEXT_ERR_PARTIAL] = "PPSA99170 フォルダーの Windows 実行環境が不完全です（{2} 個中 {1} 個）。フォルダー全体をコピーし直してから、もう一度お試しください。",
-    [PW_TEXT_ERR_READ] = "PPSA99170 フォルダーの Windows 実行環境の一部を読み取れません。フォルダーをコピーし直してから、もう一度お試しください。インストール済みの内容は保持されます。",
-    [PW_TEXT_ERR_DAMAGED] = "PPSA99170 フォルダーの Windows 実行環境の一部が壊れているか、別のバージョンのものです。フォルダー全体をコピーし直してから、もう一度お試しください。",
-    [PW_TEXT_INSTALLING_BODY] = "MihawkOS が自分のフォルダーから Windows 実行環境をコピーし、すべてのファイルを確認しています。約 1 分かかります。",
+    [PW_TEXT_ERR_PARTIAL] = "PPSA99170 フォルダーの MihawkOS 実行環境が不完全です（{2} 個中 {1} 個）。フォルダー全体をコピーし直してから、もう一度お試しください。",
+    [PW_TEXT_ERR_READ] = "PPSA99170 フォルダーの MihawkOS 実行環境の一部を読み取れません。フォルダーをコピーし直してから、もう一度お試しください。インストール済みの内容は保持されます。",
+    [PW_TEXT_ERR_DAMAGED] = "PPSA99170 フォルダーの MihawkOS 実行環境の一部が壊れているか、別のバージョンのものです。フォルダー全体をコピーし直してから、もう一度お試しください。",
+    [PW_TEXT_INSTALLING_BODY] = "MihawkOS が自分のフォルダーから MihawkOS 実行環境をコピーし、すべてのファイルを確認しています。約 1 分かかります。",
     [PW_TEXT_ERR_NO_SPACE] = "PS5 に {1} の空き容量が必要ですが、{2} しかありません。不要なデータを削除してから、もう一度お試しください。",
     [PW_TEXT_ERR_FULL] = "PS5 のストレージがいっぱいです。不要なデータを削除してから、もう一度お試しください。インストール済みの内容は保持されます。",
     [PW_TEXT_ERR_WRITE] = "PS5 のストレージへの書き込みが拒否されました。もう一度お試しください。繰り返し起こる場合は PS5 を再起動してください。",
     [PW_TEXT_ERR_CANCELLED] = "インストールを停止しました。インストール済みの内容は保持されます。",
-    [PW_TEXT_ERR_BUILD] = "この MihawkOS では Windows 実行環境をインストールできません。MihawkOS を入れ直してください。",
-    [PW_TEXT_INSTALLING_TITLE] = "Windows 実行環境をインストール中",
+    [PW_TEXT_ERR_BUILD] = "この MihawkOS では MihawkOS 実行環境をインストールできません。MihawkOS を入れ直してください。",
+    [PW_TEXT_INSTALLING_TITLE] = "MihawkOS 実行環境をインストール中",
     [PW_TEXT_INSTALLING_CHECKING] = "インストール済みの内容を確認しています…",
     [PW_TEXT_INSTALLING_STATS] = "{1} / {2} MB · {3} MB/s",
     [PW_TEXT_INSTALLED] = "インストールしました。",
     [PW_TEXT_STOP] = "停止",
     [PW_TEXT_PREPARE_TITLE] = "Mihawk OS を準備しています",
-    [PW_TEXT_PREPARE_BODY] = "初回の起動で Windows ドライブを作成します。数分かかり、しばらく画面が止まって見えることがあります。完了すると自動で終了し、この画面に戻ります。",
+    [PW_TEXT_PREPARE_BODY] = "初回の起動で MihawkOS ドライブを作成します。数分かかり、しばらく画面が止まって見えることがあります。完了すると自動で終了し、この画面に戻ります。",
     [PW_TEXT_PREPARE_NOTE] = "初回の起動中はゲームでコントローラーが使えないため、ドライブの準備ができしだい MihawkOS が起動を終了します。",
     [PW_TEXT_PREPARE_START] = "起動",
     [PW_TEXT_PREPARE_FAILED] = "初回の起動が完了しませんでした。もう一度お試しください。中断したところから再開します。",
-    [PW_TEXT_BUILD_TITLE] = "Windows ドライブを作成しています",
+    [PW_TEXT_BUILD_TITLE] = "MihawkOS ドライブを作成しています",
     [PW_TEXT_BUILD_BODY] = "約 1 分かかります。準備ができると、MihawkOS が自動でセットアップに戻ります。",
-    [PW_TEXT_BUILD_SETTINGS] = "Windows を設定しています",
+    [PW_TEXT_BUILD_SETTINGS] = "MihawkOS を設定しています",
     [PW_TEXT_BUILD_DOTNET] = ".NET サポートをインストールしています",
     [PW_TEXT_BUILD_FINISHING] = "仕上げています",
     [PW_TEXT_LIMITS_TITLE] = "プレイする前に",
-    [PW_TEXT_LIMITS_BODY] = "MihawkOS は、Windows 用 PC ゲームを PS5 で動かす互換レイヤーです。アルファ版のため、まだ動かないゲームもあります。",
+    [PW_TEXT_LIMITS_BODY] = "MihawkOS は、PC 用 PC ゲームを PS5 で動かす互換レイヤーです。アルファ版のため、まだ動かないゲームもあります。",
     [PW_TEXT_LIMITS_NOTE_TITLE] = "次のゲームには対応していません",
     [PW_TEXT_LIMITS_DRM] = "DRM が使われているゲーム。例：Denuvo",
     [PW_TEXT_LIMITS_ANTICHEAT] = "アンチチートやカーネルレベルの保護があるゲーム。例：Easy Anti-Cheat、BattlEye",
@@ -3341,7 +3341,7 @@ static const char *const text_ja[PW_TEXT_COUNT] = {
     [PW_TEXT_STEAM_STEP_DOWNLOAD] = "ダウンロード",
     [PW_TEXT_STEAM_STEP_DOWNLOAD_BODY] = "Steam のインストーラーを Valve のサーバーから直接取得します。",
     [PW_TEXT_STEAM_STEP_INSTALL] = "インストール",
-    [PW_TEXT_STEAM_STEP_INSTALL_BODY] = "MihawkOS が Windows ドライブにインストールします。1 分かかりません。",
+    [PW_TEXT_STEAM_STEP_INSTALL_BODY] = "MihawkOS が MihawkOS ドライブにインストールします。1 分かかりません。",
     [PW_TEXT_STEAM_STEP_UPDATE] = "初回起動",
     [PW_TEXT_STEAM_STEP_UPDATE_BODY] = "Steam が自動でアップデートします。約 5 分かかります。",
     [PW_TEXT_STEAM_STEP_SIGNIN] = "サインイン",
@@ -3366,7 +3366,7 @@ static const char *const text_ja[PW_TEXT_COUNT] = {
         "アプリで盾のアイコンをタップし、コードを読み取ります。",
     [PW_TEXT_STEAM_ERR_ENDED] = "サインインの前に Steam が終了しました。もう一度お試しください。",
     [PW_TEXT_STEAM_INSTALLING_TITLE] = "Steam をインストール中",
-    [PW_TEXT_STEAM_INSTALLING_BODY] = "Valve のインストーラーが Steam を Windows ドライブに入れています。1 分かかりません。",
+    [PW_TEXT_STEAM_INSTALLING_BODY] = "Valve のインストーラーが Steam を MihawkOS ドライブに入れています。1 分かかりません。",
     [PW_TEXT_STEAM_UPDATING_TITLE] = "Steam をアップデート中",
     [PW_TEXT_STEAM_UPDATING_BODY] = "初回起動では Steam の最新版をダウンロードします。約 5 分かかり、しばらく画面が止まって見えることがありますが、問題ありません。",
     [PW_TEXT_STEAM_DOWNLOADED] = "{1} MB ダウンロード済み",
@@ -3406,7 +3406,7 @@ static const char *const text_ja[PW_TEXT_COUNT] = {
     [PW_TEXT_HOME_GAMES] = "ゲーム：{1}",
     [PW_TEXT_HOME_PAGE] = "{1} / {2} ページ",
     [PW_TEXT_HOME_DATE] = "{2}月{1}日",
-    [PW_TEXT_HOME_MIHAWK_BODY] = "Windows デスクトップとそのすべて",
+    [PW_TEXT_HOME_MIHAWK_BODY] = "MihawkOS デスクトップとそのすべて",
     [PW_TEXT_HOME_START] = "スタート",
     [PW_TEXT_HOME_NEEDS_DATA] = "/data へのアクセスが必要です",
     [PW_TEXT_HOME_UNAVAILABLE] = "利用不可",
@@ -3565,11 +3565,11 @@ static const char *const text_ja[PW_TEXT_COUNT] = {
     [PW_TEXT_SET_HZ_BODY_OFF] = "オフ：画面は 60 Hz のままです。ゲームの起動時にテレビが映らない、またはちらつくときに使ってください。すべてのゲームに共通の設定です。",
     [PW_TEXT_SET_ABOUT_COPYRIGHT] = "MihawkOS。Copyright (C) 2026 Mihawk および NOTICE.md に記載の作者。",
     [PW_TEXT_SET_ABOUT_LICENCE] = "このプログラムは GNU 一般公衆利用許諾書バージョン 3 以降に基づくフリーソフトウェアです。一切の保証はありません。そのライセンスの条件に従って共有・改変できます。",
-    [PW_TEXT_SET_ABOUT_TEXTS] = "ライセンス文書：{1}（このソフト）と {2}（Windows ランタイム）。",
+    [PW_TEXT_SET_ABOUT_TEXTS] = "ライセンス文書：{1}（このソフト）と {2}（MihawkOS ランタイム）。",
     [PW_TEXT_SET_ABOUT_SOURCE] = "ソースコード：{1}",
     [PW_TEXT_SET_ABOUT_AFFILIATION] = "Sony、Microsoft、Valve とは関係ありません。",
     [PW_TEXT_SET_RUNTIME_TITLE] = "ランタイム",
-    [PW_TEXT_SET_RUNTIME_BODY] = "Windows のプログラムは約 1.2 GB の Wine ランタイムで動きます。{1} か USB メモリーの mihawkos フォルダーにある部品から、インストールまたは修復します。",
+    [PW_TEXT_SET_RUNTIME_BODY] = "PC のプログラムは約 1.2 GB の Wine ランタイムで動きます。{1} か USB メモリーの mihawkos フォルダーにある部品から、インストールまたは修復します。",
     [PW_TEXT_SET_RUNTIME_PROGRESS] = "{1} / {2} MB、{3} MB/秒、部品 {4} / {5}",
     [PW_TEXT_SET_RUNTIME_CHECKING] = "インストール済みのものを確認しています",
     [PW_TEXT_SET_RUNTIME_KEEP] = "コンソールはこの画面のままで構いません。MihawkOS を閉じるとインストールは止まり、次回は止まったところから続きます。",
@@ -3578,7 +3578,7 @@ static const char *const text_ja[PW_TEXT_COUNT] = {
     [PW_TEXT_SET_MUSIC_PLAYING] = "再生中：{1}",
     [PW_TEXT_SET_MUSIC_NOW] = "音楽：{1}",
     [PW_TEXT_SET_MUSIC_OFF] = "音楽オフ",
-    [PW_TEXT_SET_SETUP_BODY] = "初回起動のツアーをもう一度：言語、Windows ランタイムのインストール、Mihawk OS の初回起動。インストール済みのものはそのまま残ります。",
+    [PW_TEXT_SET_SETUP_BODY] = "初回起動のツアーをもう一度：言語、MihawkOS ランタイムのインストール、Mihawk OS の初回起動。インストール済みのものはそのまま残ります。",
     [PW_TEXT_SET_UPDATES_TITLE] = "アップデート",
     [PW_TEXT_SET_UPDATES_BODY] = "MihawkOS は開いたときに自動で（1 時間に 1 回まで、アップデートの自動確認）、また頼まれたときに GitHub で新しいリリースを探し、バックグラウンドでダウンロードします。MihawkOS の鍵で署名されたリリースだけがインストールされ、再起動したとき、または次に MihawkOS を起動したときに切り替わります。",
     [PW_TEXT_SET_UPDATES_PROGRESS] = "{1} / {2} MB",
@@ -3587,7 +3587,7 @@ static const char *const text_ja[PW_TEXT_COUNT] = {
     [PW_TEXT_SET_LOG_MORE] = "オンの間はセッションが多く書き込みます。終わったらオフにしてください。新しい 5 フォルダーまで、各 96 MB まで残します。",
     [PW_TEXT_SET_WEBUI_CONNECT] = "PS5 をネットワークに接続すると、ここで Web UI が開き、アドレスとスキャン用のコードが表示されます。",
     [PW_TEXT_SET_WEBUI_BODY] = "スマートフォンでコードをスキャンするか、家庭内ネットワークのブラウザーでアドレスを入力してください。コンピューターからのゲームの追加を案内し、ゲームごとに画像と設定を付け、PS5 のホーム画面にゲームを置き、セーブデータをバックアップし、これらの設定を変更できます。",
-    [PW_TEXT_SET_PAD_BODY] = "Windows のゲームと Steam から見えるコントローラー。DualSense は 1 台のコントローラーとして見えるので、メニューに表示されるボタンは 1 種類です。",
+    [PW_TEXT_SET_PAD_BODY] = "PC のゲームと Steam から見えるコントローラー。DualSense は 1 台のコントローラーとして見えるので、メニューに表示されるボタンは 1 種類です。",
     [PW_TEXT_SET_PAD_XBOX] = "Xbox 360 または Xbox One：コントローラー対応のゲームなら必ず認識します。Steam は Xbox のボタンを表示します。",
     [PW_TEXT_SET_PAD_DUALSENSE] = "DualSense：Steam と DualSense 対応のゲームは PlayStation のボタンを表示します。Xbox コントローラーしか知らないゲームには何も見えません。",
     [PW_TEXT_SET_MOUSE_TITLE] = "マウス操作",
@@ -3729,22 +3729,22 @@ static const char *const text_ja[PW_TEXT_COUNT] = {
 
 static const char *const text_pt[PW_TEXT_COUNT] = {
     [PW_TEXT_WELCOME_TITLE] = "Boas-vindas ao MihawkOS",
-    [PW_TEXT_WELCOME_BODY] = "Vamos preparar seu PS5 para jogos do Windows. Leva cerca de dez minutos.",
+    [PW_TEXT_WELCOME_BODY] = "Vamos preparar seu PS5 para jogos do PC. Leva cerca de dez minutos.",
     [PW_TEXT_GET_STARTED] = "Começar",
     [PW_TEXT_LANGUAGE_TITLE] = "Escolha seu idioma",
-    [PW_TEXT_LANGUAGE_BODY] = "Seus jogos do Windows também vão usá-lo, com o layout de teclado dele. A área de trabalho "
+    [PW_TEXT_LANGUAGE_BODY] = "Seus jogos do PC também vão usá-lo, com o layout de teclado dele. A área de trabalho "
         "do Mihawk OS continua em inglês.",
     [PW_TEXT_CONTINUE] = "Continuar",
     [PW_TEXT_RETRY] = "Tentar de novo",
-    [PW_TEXT_ERR_NO_PIECES] = "Esta cópia do MihawkOS não tem o ambiente Windows na pasta dela. Copie de novo a "
+    [PW_TEXT_ERR_NO_PIECES] = "Esta cópia do MihawkOS não tem o ambiente MihawkOS na pasta dela. Copie de novo a "
         "pasta PPSA99170 inteira da versão para /data/homebrew e tente outra vez.",
-    [PW_TEXT_ERR_PARTIAL] = "A pasta PPSA99170 tem {1} de {2} partes do ambiente Windows. Copie a pasta inteira de "
+    [PW_TEXT_ERR_PARTIAL] = "A pasta PPSA99170 tem {1} de {2} partes do ambiente MihawkOS. Copie a pasta inteira de "
         "novo e tente outra vez.",
-    [PW_TEXT_ERR_READ] = "Não foi possível ler uma parte do ambiente Windows na pasta PPSA99170. Copie a pasta de "
+    [PW_TEXT_ERR_READ] = "Não foi possível ler uma parte do ambiente MihawkOS na pasta PPSA99170. Copie a pasta de "
         "novo e tente outra vez. O que já foi instalado é mantido.",
-    [PW_TEXT_ERR_DAMAGED] = "Uma parte do ambiente Windows na pasta PPSA99170 está danificada ou é de outra versão. "
+    [PW_TEXT_ERR_DAMAGED] = "Uma parte do ambiente MihawkOS na pasta PPSA99170 está danificada ou é de outra versão. "
         "Copie a pasta inteira de novo e tente outra vez.",
-    [PW_TEXT_INSTALLING_BODY] = "O MihawkOS está copiando o ambiente Windows da própria pasta e verificando cada "
+    [PW_TEXT_INSTALLING_BODY] = "O MihawkOS está copiando o ambiente MihawkOS da própria pasta e verificando cada "
         "arquivo. Leva cerca de um minuto.",
     [PW_TEXT_ERR_NO_SPACE] = "Seu PS5 precisa de {1} livres e tem {2}. Apague algo e tente de novo.",
     [PW_TEXT_ERR_FULL] = "O armazenamento do seu PS5 está cheio. Apague algo e tente de novo. O que já foi instalado é "
@@ -3752,27 +3752,27 @@ static const char *const text_pt[PW_TEXT_COUNT] = {
     [PW_TEXT_ERR_WRITE] = "O armazenamento do seu PS5 recusou uma gravação. Tente de novo; se acontecer outra vez, reinicie "
         "o PS5.",
     [PW_TEXT_ERR_CANCELLED] = "A instalação parou. O que já foi instalado é mantido.",
-    [PW_TEXT_ERR_BUILD] = "Esta cópia do MihawkOS não pode instalar um ambiente Windows. Reinstale o MihawkOS.",
-    [PW_TEXT_INSTALLING_TITLE] = "Instalando o ambiente Windows",
+    [PW_TEXT_ERR_BUILD] = "Esta cópia do MihawkOS não pode instalar um ambiente MihawkOS. Reinstale o MihawkOS.",
+    [PW_TEXT_INSTALLING_TITLE] = "Instalando o ambiente MihawkOS",
     [PW_TEXT_INSTALLING_CHECKING] = "Verificando o que já está instalado…",
     [PW_TEXT_INSTALLING_STATS] = "{1} de {2} MB · {3} MB/s",
     [PW_TEXT_INSTALLED] = "Instalado.",
     [PW_TEXT_STOP] = "Parar",
     [PW_TEXT_PREPARE_TITLE] = "Preparando o Mihawk OS",
-    [PW_TEXT_PREPARE_BODY] = "A primeira inicialização cria seu disco do Windows. Leva alguns minutos, e a tela pode ficar "
+    [PW_TEXT_PREPARE_BODY] = "A primeira inicialização cria seu disco do MihawkOS. Leva alguns minutos, e a tela pode ficar "
         "parada por um tempo. Ela termina sozinha e volta para cá.",
     [PW_TEXT_PREPARE_NOTE] = "Durante esta primeira inicialização o controle não funciona nos jogos, por isso o MihawkOS "
         "a encerra assim que o disco fica pronto.",
     [PW_TEXT_PREPARE_START] = "Iniciar",
     [PW_TEXT_PREPARE_FAILED] = "A primeira inicialização não terminou. Tente de novo: ela continua de onde parou.",
-    [PW_TEXT_BUILD_TITLE] = "Criando seu disco do Windows",
+    [PW_TEXT_BUILD_TITLE] = "Criando seu disco do MihawkOS",
     [PW_TEXT_BUILD_BODY] = "Leva cerca de um minuto. Quando o disco estiver pronto, o MihawkOS volta sozinho para a "
         "configuração.",
-    [PW_TEXT_BUILD_SETTINGS] = "Configurando o Windows",
+    [PW_TEXT_BUILD_SETTINGS] = "Configurando o MihawkOS",
     [PW_TEXT_BUILD_DOTNET] = "Instalando o suporte a .NET",
     [PW_TEXT_BUILD_FINISHING] = "Finalizando",
     [PW_TEXT_LIMITS_TITLE] = "Antes de jogar",
-    [PW_TEXT_LIMITS_BODY] = "O MihawkOS é uma camada de compatibilidade que roda jogos de PC para Windows no seu "
+    [PW_TEXT_LIMITS_BODY] = "O MihawkOS é uma camada de compatibilidade que roda jogos de PC para PC no seu "
         "PS5. É uma versão alfa, então alguns jogos podem ainda não funcionar.",
     [PW_TEXT_LIMITS_NOTE_TITLE] = "Estes jogos não são compatíveis",
     [PW_TEXT_LIMITS_DRM] = "Jogos com DRM, como o Denuvo",
@@ -3798,7 +3798,7 @@ static const char *const text_pt[PW_TEXT_COUNT] = {
     [PW_TEXT_STEAM_STEP_DOWNLOAD] = "Download",
     [PW_TEXT_STEAM_STEP_DOWNLOAD_BODY] = "O instalador do Steam vem direto dos servidores da Valve.",
     [PW_TEXT_STEAM_STEP_INSTALL] = "Instalação",
-    [PW_TEXT_STEAM_STEP_INSTALL_BODY] = "O MihawkOS o instala no seu disco do Windows em menos de um minuto.",
+    [PW_TEXT_STEAM_STEP_INSTALL_BODY] = "O MihawkOS o instala no seu disco do MihawkOS em menos de um minuto.",
     [PW_TEXT_STEAM_STEP_UPDATE] = "Primeira abertura",
     [PW_TEXT_STEAM_STEP_UPDATE_BODY] = "O Steam se atualiza sozinho. Leva cerca de 5 minutos.",
     [PW_TEXT_STEAM_STEP_SIGNIN] = "Login",
@@ -3829,7 +3829,7 @@ static const char *const text_pt[PW_TEXT_COUNT] = {
         "Steam no seu celular, toque no escudo e leia o código.",
     [PW_TEXT_STEAM_ERR_ENDED] = "O Steam fechou antes do login. Tente de novo.",
     [PW_TEXT_STEAM_INSTALLING_TITLE] = "Instalando o Steam",
-    [PW_TEXT_STEAM_INSTALLING_BODY] = "O instalador da Valve está colocando o Steam no seu disco do Windows. Leva "
+    [PW_TEXT_STEAM_INSTALLING_BODY] = "O instalador da Valve está colocando o Steam no seu disco do MihawkOS. Leva "
         "menos de um minuto.",
     [PW_TEXT_STEAM_UPDATING_TITLE] = "O Steam está se atualizando",
     [PW_TEXT_STEAM_UPDATING_BODY] = "A primeira abertura baixa a versão mais recente do Steam. Leva cerca de 5 "
@@ -3872,7 +3872,7 @@ static const char *const text_pt[PW_TEXT_COUNT] = {
     [PW_TEXT_HOME_GAMES] = "Jogos: {1}",
     [PW_TEXT_HOME_PAGE] = "Página {1} de {2}",
     [PW_TEXT_HOME_DATE] = "{1}/{2}",
-    [PW_TEXT_HOME_MIHAWK_BODY] = "Sua área de trabalho do Windows e tudo o que há nela",
+    [PW_TEXT_HOME_MIHAWK_BODY] = "Sua área de trabalho do MihawkOS e tudo o que há nela",
     [PW_TEXT_HOME_START] = "Iniciar",
     [PW_TEXT_HOME_NEEDS_DATA] = "Precisa de acesso a /data",
     [PW_TEXT_HOME_UNAVAILABLE] = "INDISPONÍVEL",
@@ -4031,11 +4031,11 @@ static const char *const text_pt[PW_TEXT_COUNT] = {
     [PW_TEXT_SET_HZ_BODY_OFF] = "Desligado: a tela fica em 60 Hz. Use se a TV ficar sem imagem ou piscar quando um jogo inicia. É uma configuração para todos os jogos.",
     [PW_TEXT_SET_ABOUT_COPYRIGHT] = "MihawkOS. Copyright (C) 2026 Mihawk e os autores citados em NOTICE.md.",
     [PW_TEXT_SET_ABOUT_LICENCE] = "Este programa é software livre sob a Licença Pública Geral GNU, versão 3 ou posterior. Ele vem SEM NENHUMA GARANTIA. Você pode compartilhá-lo e modificá-lo nos termos dessa licença.",
-    [PW_TEXT_SET_ABOUT_TEXTS] = "Textos das licenças: {1} (este título) e {2} (o runtime do Windows).",
+    [PW_TEXT_SET_ABOUT_TEXTS] = "Textos das licenças: {1} (este título) e {2} (o runtime do MihawkOS).",
     [PW_TEXT_SET_ABOUT_SOURCE] = "Código-fonte: {1}",
     [PW_TEXT_SET_ABOUT_AFFILIATION] = "Sem vínculo com Sony, Microsoft ou Valve.",
     [PW_TEXT_SET_RUNTIME_TITLE] = "Runtime",
-    [PW_TEXT_SET_RUNTIME_BODY] = "Os programas do Windows rodam em um runtime Wine de cerca de 1,2 GB. Instale-o, ou repare-o, a partir das peças em {1} ou em uma pasta mihawkos em um pendrive.",
+    [PW_TEXT_SET_RUNTIME_BODY] = "Os programas do PC rodam em um runtime Wine de cerca de 1,2 GB. Instale-o, ou repare-o, a partir das peças em {1} ou em uma pasta mihawkos em um pendrive.",
     [PW_TEXT_SET_RUNTIME_PROGRESS] = "{1} de {2} MB, {3} MB/s, peça {4} de {5}",
     [PW_TEXT_SET_RUNTIME_CHECKING] = "Verificando o que já está instalado",
     [PW_TEXT_SET_RUNTIME_KEEP] = "Você pode deixar o console nesta tela. Fechar o MihawkOS interrompe a instalação; da próxima vez ela continua de onde parou.",
@@ -4044,7 +4044,7 @@ static const char *const text_pt[PW_TEXT_COUNT] = {
     [PW_TEXT_SET_MUSIC_PLAYING] = "Tocando: {1}",
     [PW_TEXT_SET_MUSIC_NOW] = "Música: {1}",
     [PW_TEXT_SET_MUSIC_OFF] = "Música desligada",
-    [PW_TEXT_SET_SETUP_BODY] = "Refaça o tour da primeira inicialização: seu idioma, a instalação do runtime do Windows e a primeira inicialização do Mihawk OS. O que já está instalado é mantido.",
+    [PW_TEXT_SET_SETUP_BODY] = "Refaça o tour da primeira inicialização: seu idioma, a instalação do runtime do MihawkOS e a primeira inicialização do Mihawk OS. O que já está instalado é mantido.",
     [PW_TEXT_SET_UPDATES_TITLE] = "Atualizações",
     [PW_TEXT_SET_UPDATES_BODY] = "O MihawkOS procura uma versão mais nova no GitHub sozinho ao abrir, no máximo uma vez por hora (Busca automática de atualizações) e quando você pede, e a baixa em segundo plano. Uma versão só é instalada se estiver assinada com a chave do MihawkOS; ela entra em uso quando você reinicia, ou na próxima vez que o MihawkOS iniciar.",
     [PW_TEXT_SET_UPDATES_PROGRESS] = "{1} de {2} MB",
@@ -4053,7 +4053,7 @@ static const char *const text_pt[PW_TEXT_COUNT] = {
     [PW_TEXT_SET_LOG_MORE] = "As sessões gravam mais enquanto está ligado: desligue quando terminar. As 5 pastas mais recentes são mantidas, com no máximo 96 MB cada.",
     [PW_TEXT_SET_WEBUI_CONNECT] = "Conecte o PS5 à sua rede: a Web UI abre aqui, com o endereço e um código para escanear.",
     [PW_TEXT_SET_WEBUI_BODY] = "Escaneie o código com o celular ou digite o endereço em um navegador da sua rede doméstica. Ela guia você para adicionar um jogo do computador, dá a cada jogo sua imagem e suas próprias configurações, coloca jogos na tela inicial do PS5, faz backup dos seus jogos salvos e muda estas configurações.",
-    [PW_TEXT_SET_PAD_BODY] = "Qual controle os jogos do Windows e a Steam veem. Seu DualSense aparece para eles como um só controle, para os menus mostrarem um só conjunto de botões.",
+    [PW_TEXT_SET_PAD_BODY] = "Qual controle os jogos do PC e a Steam veem. Seu DualSense aparece para eles como um só controle, para os menus mostrarem um só conjunto de botões.",
     [PW_TEXT_SET_PAD_XBOX] = "Xbox 360 ou Xbox One: todo jogo que suporta controle o vê. A Steam mostra botões do Xbox.",
     [PW_TEXT_SET_PAD_DUALSENSE] = "DualSense: a Steam e os jogos feitos para ele mostram botões do PlayStation. Jogos que só conhecem controles do Xbox não veem nenhum.",
     [PW_TEXT_SET_MOUSE_TITLE] = "Controles do mouse",
@@ -4199,22 +4199,22 @@ static const char *const text_pt[PW_TEXT_COUNT] = {
 /* Polski. */
 static const char *const text_pl[PW_TEXT_COUNT] = {
     [PW_TEXT_WELCOME_TITLE] = "Witaj w MihawkOS",
-    [PW_TEXT_WELCOME_BODY] = "Przygotujmy Twoją PS5 do gier z Windows. Zajmie to około dziesięciu minut.",
+    [PW_TEXT_WELCOME_BODY] = "Przygotujmy Twoją PS5 do gier z PC. Zajmie to około dziesięciu minut.",
     [PW_TEXT_GET_STARTED] = "Zaczynamy",
     [PW_TEXT_LANGUAGE_TITLE] = "Wybierz język",
-    [PW_TEXT_LANGUAGE_BODY] = "Twoje gry z Windows też będą go używać, razem z układem klawiatury. Pulpit Mihawk OS "
+    [PW_TEXT_LANGUAGE_BODY] = "Twoje gry z PC też będą go używać, razem z układem klawiatury. Pulpit Mihawk OS "
         "pozostaje po angielsku.",
     [PW_TEXT_CONTINUE] = "Dalej",
     [PW_TEXT_RETRY] = "Spróbuj ponownie",
-    [PW_TEXT_ERR_NO_PIECES] = "Ta kopia MihawkOS nie ma w swoim folderze środowiska Windows. Skopiuj jeszcze raz "
+    [PW_TEXT_ERR_NO_PIECES] = "Ta kopia MihawkOS nie ma w swoim folderze środowiska MihawkOS. Skopiuj jeszcze raz "
         "cały folder PPSA99170 z wydania do /data/homebrew i spróbuj ponownie.",
-    [PW_TEXT_ERR_PARTIAL] = "Folder PPSA99170 zawiera {1} z {2} części środowiska Windows. Skopiuj jeszcze raz cały "
+    [PW_TEXT_ERR_PARTIAL] = "Folder PPSA99170 zawiera {1} z {2} części środowiska MihawkOS. Skopiuj jeszcze raz cały "
         "folder i spróbuj ponownie.",
-    [PW_TEXT_ERR_READ] = "Nie można odczytać części środowiska Windows w folderze PPSA99170. Skopiuj folder jeszcze "
+    [PW_TEXT_ERR_READ] = "Nie można odczytać części środowiska MihawkOS w folderze PPSA99170. Skopiuj folder jeszcze "
         "raz i spróbuj ponownie. To, co już zainstalowano, zostaje.",
-    [PW_TEXT_ERR_DAMAGED] = "Część środowiska Windows w folderze PPSA99170 jest uszkodzona lub pochodzi z innej "
+    [PW_TEXT_ERR_DAMAGED] = "Część środowiska MihawkOS w folderze PPSA99170 jest uszkodzona lub pochodzi z innej "
         "wersji. Skopiuj jeszcze raz cały folder i spróbuj ponownie.",
-    [PW_TEXT_INSTALLING_BODY] = "MihawkOS kopiuje środowisko Windows z własnego folderu i sprawdza każdy plik. "
+    [PW_TEXT_INSTALLING_BODY] = "MihawkOS kopiuje środowisko MihawkOS z własnego folderu i sprawdza każdy plik. "
         "Zajmuje to około minuty.",
     [PW_TEXT_ERR_NO_SPACE] = "Twoja PS5 potrzebuje {1} wolnego miejsca, a ma {2}. Usuń coś i spróbuj ponownie.",
     [PW_TEXT_ERR_FULL] = "Pamięć masowa Twojej PS5 jest pełna. Usuń coś i spróbuj ponownie. To, co już zainstalowano, "
@@ -4222,27 +4222,27 @@ static const char *const text_pl[PW_TEXT_COUNT] = {
     [PW_TEXT_ERR_WRITE] = "Pamięć masowa Twojej PS5 odrzuciła zapis. Spróbuj ponownie; jeśli to się powtórzy, uruchom "
         "PS5 ponownie.",
     [PW_TEXT_ERR_CANCELLED] = "Instalacja została zatrzymana. To, co już zainstalowano, zostaje.",
-    [PW_TEXT_ERR_BUILD] = "Ta kopia MihawkOS nie może zainstalować środowiska Windows. Zainstaluj MihawkOS ponownie.",
-    [PW_TEXT_INSTALLING_TITLE] = "Instalowanie środowiska Windows",
+    [PW_TEXT_ERR_BUILD] = "Ta kopia MihawkOS nie może zainstalować środowiska MihawkOS. Zainstaluj MihawkOS ponownie.",
+    [PW_TEXT_INSTALLING_TITLE] = "Instalowanie środowiska MihawkOS",
     [PW_TEXT_INSTALLING_CHECKING] = "Sprawdzanie, co jest już zainstalowane…",
     [PW_TEXT_INSTALLING_STATS] = "{1} z {2} MB · {3} MB/s",
     [PW_TEXT_INSTALLED] = "Zainstalowano.",
     [PW_TEXT_STOP] = "Zatrzymaj",
     [PW_TEXT_PREPARE_TITLE] = "Przygotowywanie Mihawk OS",
-    [PW_TEXT_PREPARE_BODY] = "Pierwsze uruchomienie tworzy Twój dysk Windows. Trwa to kilka minut, a obraz może się "
+    [PW_TEXT_PREPARE_BODY] = "Pierwsze uruchomienie tworzy Twój dysk MihawkOS. Trwa to kilka minut, a obraz może się "
         "przez chwilę nie zmieniać. Kończy się samo i wraca tutaj.",
     [PW_TEXT_PREPARE_NOTE] = "Podczas tego pierwszego uruchomienia kontroler nie działa w grach, dlatego MihawkOS "
         "kończy je, gdy tylko dysk jest gotowy.",
     [PW_TEXT_PREPARE_START] = "Uruchom",
     [PW_TEXT_PREPARE_FAILED] = "Pierwsze uruchomienie się nie zakończyło. Spróbuj ponownie: będzie kontynuowane od "
         "miejsca, w którym się zatrzymało.",
-    [PW_TEXT_BUILD_TITLE] = "Tworzenie dysku Windows",
+    [PW_TEXT_BUILD_TITLE] = "Tworzenie dysku MihawkOS",
     [PW_TEXT_BUILD_BODY] = "Zajmuje to około minuty. Gdy dysk będzie gotowy, MihawkOS sam wróci do konfiguracji.",
-    [PW_TEXT_BUILD_SETTINGS] = "Konfigurowanie Windows",
+    [PW_TEXT_BUILD_SETTINGS] = "Konfigurowanie MihawkOS",
     [PW_TEXT_BUILD_DOTNET] = "Instalowanie obsługi .NET",
     [PW_TEXT_BUILD_FINISHING] = "Kończenie",
     [PW_TEXT_LIMITS_TITLE] = "Zanim zagrasz",
-    [PW_TEXT_LIMITS_BODY] = "MihawkOS to warstwa zgodności, dzięki której gry na PC z systemem Windows działają na "
+    [PW_TEXT_LIMITS_BODY] = "MihawkOS to warstwa zgodności, dzięki której gry na PC z systemem PC działają na "
         "Twojej PS5. To wersja alfa, więc niektóre gry mogą jeszcze nie działać.",
     [PW_TEXT_LIMITS_NOTE_TITLE] = "Te gry nie są obsługiwane",
     [PW_TEXT_LIMITS_DRM] = "Gry z DRM, takim jak Denuvo",
@@ -4269,7 +4269,7 @@ static const char *const text_pl[PW_TEXT_COUNT] = {
     [PW_TEXT_STEAM_STEP_DOWNLOAD] = "Pobieranie",
     [PW_TEXT_STEAM_STEP_DOWNLOAD_BODY] = "Instalator Steam pochodzi prosto z serwerów Valve.",
     [PW_TEXT_STEAM_STEP_INSTALL] = "Instalacja",
-    [PW_TEXT_STEAM_STEP_INSTALL_BODY] = "MihawkOS instaluje go na Twoim dysku Windows w niecałą minutę.",
+    [PW_TEXT_STEAM_STEP_INSTALL_BODY] = "MihawkOS instaluje go na Twoim dysku MihawkOS w niecałą minutę.",
     [PW_TEXT_STEAM_STEP_UPDATE] = "Pierwsze uruchomienie",
     [PW_TEXT_STEAM_STEP_UPDATE_BODY] = "Steam sam się aktualizuje. Trwa to około 5 minut.",
     [PW_TEXT_STEAM_STEP_SIGNIN] = "Logowanie",
@@ -4300,7 +4300,7 @@ static const char *const text_pl[PW_TEXT_COUNT] = {
         "aplikacji Steam na telefonie dotknij tarczy, a potem zeskanuj kod.",
     [PW_TEXT_STEAM_ERR_ENDED] = "Steam zamknął się przed zalogowaniem. Spróbuj ponownie.",
     [PW_TEXT_STEAM_INSTALLING_TITLE] = "Instalowanie Steam",
-    [PW_TEXT_STEAM_INSTALLING_BODY] = "Instalator Valve umieszcza Steam na Twoim dysku Windows. Trwa to niecałą "
+    [PW_TEXT_STEAM_INSTALLING_BODY] = "Instalator Valve umieszcza Steam na Twoim dysku MihawkOS. Trwa to niecałą "
         "minutę.",
     [PW_TEXT_STEAM_UPDATING_TITLE] = "Steam się aktualizuje",
     [PW_TEXT_STEAM_UPDATING_BODY] = "Przy pierwszym uruchomieniu Steam pobiera swoją najnowszą wersję. Trwa to około "
@@ -4343,7 +4343,7 @@ static const char *const text_pl[PW_TEXT_COUNT] = {
     [PW_TEXT_HOME_GAMES] = "Gry: {1}",
     [PW_TEXT_HOME_PAGE] = "Strona {1} z {2}",
     [PW_TEXT_HOME_DATE] = "{1}.{2}",
-    [PW_TEXT_HOME_MIHAWK_BODY] = "Twój pulpit Windows i wszystko, co na nim jest",
+    [PW_TEXT_HOME_MIHAWK_BODY] = "Twój pulpit MihawkOS i wszystko, co na nim jest",
     [PW_TEXT_HOME_START] = "Uruchom",
     [PW_TEXT_HOME_NEEDS_DATA] = "Wymaga dostępu do /data",
     [PW_TEXT_HOME_UNAVAILABLE] = "NIEDOSTĘPNE",
@@ -4502,11 +4502,11 @@ static const char *const text_pl[PW_TEXT_COUNT] = {
     [PW_TEXT_SET_HZ_BODY_OFF] = "Wył.: ekran pozostaje przy 60 Hz. Użyj tego, jeśli telewizor nie pokazuje obrazu lub migocze przy uruchomieniu gry. To jedno ustawienie dla wszystkich gier.",
     [PW_TEXT_SET_ABOUT_COPYRIGHT] = "MihawkOS. Copyright (C) 2026 Mihawk i autorzy wymienieni w NOTICE.md.",
     [PW_TEXT_SET_ABOUT_LICENCE] = "Ten program jest wolnym oprogramowaniem na licencji GNU General Public License w wersji 3 lub późniejszej. Jest dostarczany BEZ JAKIEJKOLWIEK GWARANCJI. Możesz go udostępniać i zmieniać na warunkach tej licencji.",
-    [PW_TEXT_SET_ABOUT_TEXTS] = "Teksty licencji: {1} (ten tytuł) i {2} (środowisko Windows).",
+    [PW_TEXT_SET_ABOUT_TEXTS] = "Teksty licencji: {1} (ten tytuł) i {2} (środowisko MihawkOS).",
     [PW_TEXT_SET_ABOUT_SOURCE] = "Kod źródłowy: {1}",
     [PW_TEXT_SET_ABOUT_AFFILIATION] = "Niezwiązany z Sony, Microsoft ani Valve.",
     [PW_TEXT_SET_RUNTIME_TITLE] = "Środowisko",
-    [PW_TEXT_SET_RUNTIME_BODY] = "Programy Windows działają w środowisku Wine o rozmiarze około 1,2 GB. Zainstaluj je lub napraw z jego części w {1} albo w folderze mihawkos na pendrivie.",
+    [PW_TEXT_SET_RUNTIME_BODY] = "Programy PC działają w środowisku Wine o rozmiarze około 1,2 GB. Zainstaluj je lub napraw z jego części w {1} albo w folderze mihawkos na pendrivie.",
     [PW_TEXT_SET_RUNTIME_PROGRESS] = "{1} z {2} MB, {3} MB/s, część {4} z {5}",
     [PW_TEXT_SET_RUNTIME_CHECKING] = "Sprawdzanie, co jest już zainstalowane",
     [PW_TEXT_SET_RUNTIME_KEEP] = "Możesz zostawić konsolę na tym ekranie. Zamknięcie MihawkOS zatrzymuje instalację; następnym razem wznowi się ona od miejsca, w którym stanęła.",
@@ -4515,7 +4515,7 @@ static const char *const text_pl[PW_TEXT_COUNT] = {
     [PW_TEXT_SET_MUSIC_PLAYING] = "Odtwarzanie: {1}",
     [PW_TEXT_SET_MUSIC_NOW] = "Muzyka: {1}",
     [PW_TEXT_SET_MUSIC_OFF] = "Muzyka wyłączona",
-    [PW_TEXT_SET_SETUP_BODY] = "Przejdź ponownie przez pierwsze uruchomienie: język, instalację środowiska Windows i pierwsze uruchomienie Mihawk OS. To, co już zainstalowane, zostaje.",
+    [PW_TEXT_SET_SETUP_BODY] = "Przejdź ponownie przez pierwsze uruchomienie: język, instalację środowiska MihawkOS i pierwsze uruchomienie Mihawk OS. To, co już zainstalowane, zostaje.",
     [PW_TEXT_SET_UPDATES_TITLE] = "Aktualizacje",
     [PW_TEXT_SET_UPDATES_BODY] = "MihawkOS sam przy otwarciu, najwyżej raz na godzinę, szuka nowszej wersji na GitHubie (Automatyczne sprawdzanie aktualizacji) oraz na twoją prośbę i pobiera ją w tle. Wersja jest instalowana tylko wtedy, gdy jest podpisana kluczem MihawkOS; zaczyna działać po ponownym uruchomieniu albo przy następnym starcie MihawkOS.",
     [PW_TEXT_SET_UPDATES_PROGRESS] = "{1} z {2} MB",
@@ -4524,7 +4524,7 @@ static const char *const text_pl[PW_TEXT_COUNT] = {
     [PW_TEXT_SET_LOG_MORE] = "Gdy to jest włączone, sesje zapisują więcej: wyłącz po skończeniu. Zachowywanych jest 5 najnowszych folderów, każdy najwyżej 96 MB.",
     [PW_TEXT_SET_WEBUI_CONNECT] = "Połącz PS5 ze swoją siecią: wtedy otworzy się tu Web UI z adresem i kodem do zeskanowania.",
     [PW_TEXT_SET_WEBUI_BODY] = "Zeskanuj kod telefonem albo wpisz adres w przeglądarce w sieci domowej. Przeprowadzi cię przez dodanie gry z komputera, nada każdej grze obraz i własne ustawienia, umieści gry na ekranie głównym PS5, zrobi kopię zapasową zapisów i zmieni te ustawienia.",
-    [PW_TEXT_SET_PAD_BODY] = "Który kontroler widzą gry Windows i Steam. Twój DualSense jest im pokazywany jako jeden kontroler, więc menu pokazują jeden zestaw przycisków.",
+    [PW_TEXT_SET_PAD_BODY] = "Który kontroler widzą gry PC i Steam. Twój DualSense jest im pokazywany jako jeden kontroler, więc menu pokazują jeden zestaw przycisków.",
     [PW_TEXT_SET_PAD_XBOX] = "Xbox 360 lub Xbox One: widzi go każda gra obsługująca kontroler. Steam pokazuje przyciski Xbox.",
     [PW_TEXT_SET_PAD_DUALSENSE] = "DualSense: Steam i gry stworzone dla niego pokazują przyciski PlayStation. Gry, które znają tylko kontrolery Xbox, nie widzą żadnego.",
     [PW_TEXT_SET_MOUSE_TITLE] = "Sterowanie myszą",

@@ -124,6 +124,9 @@ CASES = [
     ('theme-notify64', ['--exe','theme-notify64-probe.exe','--marker','PS5_PROTON_THEME_NOTIFY_PROBE']),
     ('proton-ui32', ['--exe', 'proton-ui32-probe.exe', '--marker', 'PS5_PROTON_UI_PROBE'] + LAUNCHER),
     ('proton-ui64', ['--exe', 'proton-ui64-probe.exe', '--marker', 'PS5_PROTON_UI_PROBE'] + LAUNCHER),
+    # Every shortcut shows the right icon, never Wine's default for one it can find (patch 2499; tests/shortcut-icons-probe.c).
+    ('shortcut-icons32', ['--exe', 'shortcut-icons32-probe.exe', '--marker', 'PS5_PROTON_SHORTCUT_ICONS']),
+    ('shortcut-icons64', ['--exe', 'shortcut-icons64-probe.exe', '--marker', 'PS5_PROTON_SHORTCUT_ICONS']),
     # No 12 s holds: nothing here reads the census samples they are for (tests/memory-class-probe.c).
     ('memory-classes', ['--exe', 'memory-class-probe.exe', '--marker', 'PS5_PROTON_OWNER_BOOTSTRAP',
                         '--args=--hold-ms=0'] + LAUNCHER),
@@ -499,6 +502,8 @@ CASES = [
     ('desktop-stop', ['--path', r'C:\windows\system32\mihawk.exe', '--seconds', '30', '--env', 'MIHAWK_DESKTOP=1'] + LAUNCHER),
     # The Mihawk desktop as the shell's folder view: input drives it, the shell's behaviour and its pictures are checked (patches 1100 to 1103).
     ('desktop-view', []),
+    # The player's wallpaper (wallpaper.txt) is the picture the desktop paints: the title copies it before the desktop starts.
+    ('wallpaper-choice', []),
     # MihawkBrowser starts, shows its window, loads a page that needs no network (about:blank, which still takes a renderer
     # process and CEF's whole start-up, V8's 1 TiB reservation included) and closes. alpha-2 shipped a browser that never
     # started on the standard PS5 because no case started it.
@@ -610,7 +615,7 @@ ON_REQUEST = {'vcredist64', 'd3d12-load64-title', 'd3d12-load64', 'section-dmem'
 
 # The gate (tools/gate.py): what every commit of code needs the console to pass first. A new required check is added
 # here, and from then on no code is committed without it.
-GATE_CASES = ['shell32', 'shell64', 'work-area32', 'work-area64', 'wallpaper32', 'wallpaper64', 'cursor-scheme32', 'cursor-scheme64', 'theme-parts32', 'theme-parts64', 'monospace32', 'monospace64', 'gpu-window32', 'gpu-window64', 'dxvk-window32', 'dxvk-window64', 'host-dmem64', 'host-dmem-fallback64', 'window-compose32', 'window-compose64', 'window-effects32', 'window-effects64', 'window-snapshot32', 'window-snapshot64', 'initial-env32', 'initial-env64', 'locale64', 'appearance32', 'appearance64', 'theme-notify32', 'theme-notify64', 'proton-ui32', 'proton-ui64', 'memory-classes', 'graphics-teardown', 'title-games', 'launcher-pair', 'chromium-game', 'dnsapi32', 'dnsapi64', 'mf-video32', 'mf-video64', 'network-adapters32', 'network-adapters64', 'socket-options32', 'socket-options64', 'late-library', 'large-shared-section', 'virtual-query32', 'virtual-query64', 'image-protect32', 'image-protect64', 'shared-section32', 'shared-section64', 'suspend-context64', 'kill-convert', 'stack-limit64', 'remote-memory64', 'system-memory32', 'system-memory64', 'file-write32', 'file-write64', 'relative-dir32', 'relative-dir64', 'umip32', 'umip64', 'manual-stdout', 'redirected-stdout', 'prefix-fresh64', 'prefix-fresh32', 'prefix-fresh-pad32', 'pad-api32', 'pad-api64-one', 'pad-api64-title', 'pad-api64-title-dualsense', 'pad-api32-dualsense',
+GATE_CASES = ['shell32', 'shell64', 'work-area32', 'work-area64', 'wallpaper32', 'wallpaper64', 'cursor-scheme32', 'cursor-scheme64', 'theme-parts32', 'theme-parts64', 'monospace32', 'monospace64', 'gpu-window32', 'gpu-window64', 'dxvk-window32', 'dxvk-window64', 'host-dmem64', 'host-dmem-fallback64', 'window-compose32', 'window-compose64', 'window-effects32', 'window-effects64', 'window-snapshot32', 'window-snapshot64', 'initial-env32', 'initial-env64', 'locale64', 'appearance32', 'appearance64', 'theme-notify32', 'theme-notify64', 'proton-ui32', 'proton-ui64', 'shortcut-icons32', 'shortcut-icons64', 'memory-classes', 'graphics-teardown', 'title-games', 'launcher-pair', 'chromium-game', 'dnsapi32', 'dnsapi64', 'mf-video32', 'mf-video64', 'network-adapters32', 'network-adapters64', 'socket-options32', 'socket-options64', 'late-library', 'large-shared-section', 'virtual-query32', 'virtual-query64', 'image-protect32', 'image-protect64', 'shared-section32', 'shared-section64', 'suspend-context64', 'kill-convert', 'stack-limit64', 'remote-memory64', 'system-memory32', 'system-memory64', 'file-write32', 'file-write64', 'relative-dir32', 'relative-dir64', 'umip32', 'umip64', 'manual-stdout', 'redirected-stdout', 'prefix-fresh64', 'prefix-fresh32', 'prefix-fresh-pad32', 'pad-api32', 'pad-api64-one', 'pad-api64-title', 'pad-api64-title-dualsense', 'pad-api32-dualsense',
               'pe64', 'payload-eight', 'payload-memory', 'payload-vm', 'descendants', 'launcher-render', 'launcher-tls',
               'sync64', 'intitle-stall64-title', 'shell-open64',
               # A write tracker's truth on 16 KiB host pages (patch 1134): no write reported that did not happen,
@@ -618,7 +623,7 @@ GATE_CASES = ['shell32', 'shell64', 'work-area32', 'work-area64', 'wallpaper32',
               'vm-truth32', 'vm-truth64',
               # The touchpad's pointer and clicks reaching a window in a helper: the person at the console found
               # the pointer frozen in the triangle test and over a game launcher's desktop (2026-10-07), where it had worked.
-              'launcher-desktop', 'desktop-overlap', 'desktop-session', 'desktop-stop', 'desktop-view', 'mihawk-browser', 'game-mode64', 'game-mode-dxvk64', 'mouse-controls',
+              'launcher-desktop', 'desktop-overlap', 'desktop-session', 'desktop-stop', 'desktop-view', 'wallpaper-choice', 'mihawk-browser', 'game-mode64', 'game-mode-dxvk64', 'mouse-controls',
               'controls-menu', 'launcher-ended', 'games-autodetect', 'detailed-logs', 'setup-tour',
               'steam-guide-pages', 'steam-guide-screens',
               # A game whose helpers fill the console's system memory is closed before the console swaps itself to a
@@ -653,8 +658,8 @@ GROUPS = {
     # No graphics. Each probe puts back what it changes in the probe prefix (work area, wallpaper, theme, pointer scheme).
     'probes': ['work-area32', 'work-area64', 'wallpaper32', 'wallpaper64', 'theme-notify32', 'theme-notify64',
                'cursor-scheme32', 'cursor-scheme64', 'theme-parts32', 'theme-parts64', 'monospace32', 'monospace64',
-               'proton-ui32', 'proton-ui64', 'dnsapi32', 'dnsapi64', 'mf-video32', 'mf-video64',
-               'network-adapters32', 'network-adapters64',
+               'proton-ui32', 'proton-ui64', 'shortcut-icons32', 'shortcut-icons64', 'dnsapi32', 'dnsapi64', 'mf-video32',
+               'mf-video64', 'network-adapters32', 'network-adapters64',
                'socket-options32', 'socket-options64', 'virtual-query32', 'virtual-query64', 'file-write32',
                'file-write64', 'relative-dir32', 'relative-dir64', 'system-memory32', 'system-memory64', 'image-protect32', 'image-protect64', 'shared-section32', 'shared-section64',
                'suspend-context64', 'kill-convert', 'stack-limit64', 'remote-memory64', 'late-library', 'pe64', 'pe32', 'fixed-base32', 'wow64', 'input32',
@@ -905,6 +910,7 @@ def runner_of(name):
             'run-desktop-overlap.py' if name == 'desktop-overlap' else
             'run-desktop-session.py' if name == 'desktop-session' else
             'run-desktop-view.py' if name == 'desktop-view' else
+            'run-wallpaper.py' if name == 'wallpaper-choice' else
             'run-browser.py' if name == 'mihawk-browser' else
             'run-game-mode.py' if name.startswith('game-mode') else
             'run-desktop-input.py' if name == 'launcher-desktop' else

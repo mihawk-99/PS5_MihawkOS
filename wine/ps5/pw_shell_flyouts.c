@@ -72,7 +72,7 @@ static void pw_flyout_network(struct pw_flyout *f)
 }
 static void pw_flyout_place(struct pw_flyout *f)
 {
-    RECT area; int height = f->kind == PW_FLYOUT_QUICK ? 152 : f->kind == PW_FLYOUT_CENTRE ? 150 : f->collapsed ? 50 : 390;
+    RECT area; int height = f->kind == PW_FLYOUT_QUICK ? 440 : f->kind == PW_FLYOUT_CENTRE ? 150 : f->collapsed ? 50 : 390;
     if (!SystemParametersInfoW(SPI_GETWORKAREA, 0, &area, 0)) return;
     int bottom = area.bottom - 12;
     /* the centre stands 12 px above the calendar */
@@ -135,15 +135,49 @@ static void pw_flyout_paint(struct pw_flyout *f, HDC dc, HPAINTBUFFER glass)
     GetClientRect(f->window, &client);
     if (f->kind == PW_FLYOUT_QUICK)
     {
-        /* .qs-tiles: 24 px in; the tile's 48 px buttons, its 12 px label 6 px below */
-        pw_taskbar_sprite(dc, dark, f->connected ? PW_SPRITE_FLYOUT_TILE_ON : PW_SPRITE_FLYOUT_TILE_OFF, 25, 25);
-        /* Wi-Fi's glyph for a wireless adapter, the prototype's globe for a wired one */
-        pw_taskbar_sprite(dc, dark, !f->connected ? PW_SPRITE_FLYOUT_GLYPH_WIFI_OFF : f->wireless ? PW_SPRITE_FLYOUT_GLYPH_WIFI :
-                          PW_SPRITE_FLYOUT_GLYPH_NETWORK, 47, 41);
-        SetRect(&r, 25, 79, 121, 95);
-        pw_flyout_text(f, glass, dc, f->caption, !f->connected ? L"Not connected" : f->wireless ? L"Wi-Fi" : L"Ethernet",
-                       &r, f->style.text, DT_CENTER | DT_TOP);
+        /* The prototype's eight tiles (js/quicksettings.js TILES order) in its 3 x 3 grid: 24 px in, 95 px columns
+         * with 12 px gaps, 84 px rows; a 48 px button and its 12 px label 6 px below. Plates and glyphs are the
+         * prototype's own pixels; a split tile carries the chevron in its 35 px second button, a page-only tile
+         * inside its one button. The shell reports the adapter it has (a wired one draws the globe), and Bluetooth
+         * is drawn on as the prototype shows it: the console has no radio to report. */
+        static const struct pw_quick_tile
+        {
+            int x, y, glyph_x; unsigned plate, glyph, chevron; const WCHAR *label;
+        } tiles[] = {
+            {25, 25, 22, PW_SPRITE_FLYOUT_PLATE_SPLIT_ON, PW_SPRITE_FLYOUT_GLYPH_WIFI, PW_SPRITE_FLYOUT_GLYPH_CHEVRON, L"Wi-Fi"},
+            {132, 25, 22, PW_SPRITE_FLYOUT_PLATE_SPLIT_ON, PW_SPRITE_FLYOUT_GLYPH_BLUETOOTH, PW_SPRITE_FLYOUT_GLYPH_CHEVRON, L"Bluetooth"},
+            {240, 25, 39, PW_SPRITE_FLYOUT_PLATE_SIMPLE_OFF, PW_SPRITE_FLYOUT_GLYPH_AIRPLANE, 0, L"Airplane mode"},
+            {25, 109, 40, PW_SPRITE_FLYOUT_PLATE_SIMPLE_OFF, PW_SPRITE_FLYOUT_GLYPH_BATTERY_SAVER, 0, L"Energy saver"},
+            {132, 109, 40, PW_SPRITE_FLYOUT_PLATE_SIMPLE_OFF, PW_SPRITE_FLYOUT_GLYPH_MOON, 0, L"Night light"},
+            {240, 109, 39, PW_SPRITE_FLYOUT_PLATE_SIMPLE_OFF, PW_SPRITE_FLYOUT_GLYPH_ACCESSIBILITY, PW_SPRITE_FLYOUT_GLYPH_CHEVRON,
+             L"Accessibility"},
+            {25, 193, 40, PW_SPRITE_FLYOUT_PLATE_SIMPLE_OFF, PW_SPRITE_FLYOUT_GLYPH_CAST, PW_SPRITE_FLYOUT_GLYPH_CHEVRON, L"Cast"},
+            {132, 193, 40, PW_SPRITE_FLYOUT_PLATE_SIMPLE_OFF, PW_SPRITE_FLYOUT_GLYPH_PHONE, 0, L"Mobile hotspot"},
+        };
+        for (unsigned i = 0; i < ARRAY_SIZE(tiles); ++i)
+        {
+            /* the shell's own network state: a connected wireless adapter is the prototype's Wi-Fi tile, a wired one
+               the globe, none the off plate; its label is the adapter it reports, not the prototype's demo network */
+            unsigned plate = tiles[i].plate, glyph = tiles[i].glyph;
+            const WCHAR *label = tiles[i].label;
+            if (i == 0)
+            {
+                plate = !f->connected ? PW_SPRITE_FLYOUT_TILE_OFF : PW_SPRITE_FLYOUT_PLATE_SPLIT_ON;
+                glyph = !f->connected ? PW_SPRITE_FLYOUT_GLYPH_WIFI_OFF : f->wireless ? PW_SPRITE_FLYOUT_GLYPH_WIFI : PW_SPRITE_FLYOUT_GLYPH_NETWORK;
+                label = !f->connected ? L"Not connected" : f->wireless ? L"Wi-Fi" : L"Ethernet";
+            }
+            pw_taskbar_sprite(dc, dark, plate, tiles[i].x, tiles[i].y);
+            pw_taskbar_sprite(dc, dark, glyph, tiles[i].x + tiles[i].glyph_x, tiles[i].y + 16);
+            if (tiles[i].chevron) pw_taskbar_sprite(dc, dark, tiles[i].chevron, tiles[i].x + 70, tiles[i].y + 16);
+            SetRect(&r, tiles[i].x, tiles[i].y + 54, tiles[i].x + 95, tiles[i].y + 70);
+            pw_flyout_text(f, glass, dc, f->caption, label, &r, f->style.text, DT_CENTER | DT_TOP);
+        }
+        /* the bright and loud rows as the prototype drew them (its capture's 100% and 62%), then the footer */
+        pw_taskbar_sprite(dc, dark, PW_SPRITE_FLYOUT_SLIDER_BRIGHTNESS, 13, 285);
+        pw_taskbar_sprite(dc, dark, PW_SPRITE_FLYOUT_SLIDER_VOLUME, 13, 329);
         pw_taskbar_sprite(dc, dark, PW_SPRITE_FLYOUT_FOOTER, 1, client.bottom - 49);
+        pw_taskbar_sprite(dc, dark, PW_SPRITE_FLYOUT_BATTERY, 13, client.bottom - 42);
+        pw_taskbar_sprite(dc, dark, PW_SPRITE_FLYOUT_EDIT, 263, client.bottom - 42);
         return;
     }
     if (f->kind == PW_FLYOUT_CENTRE)
@@ -175,7 +209,7 @@ static void pw_flyout_paint(struct pw_flyout *f, HDC dc, HPAINTBUFFER glass)
         /* cells are 334/7 px wide: the column's edges rounded */
         r.left = 13 + (column * 334 + 3) / 7; r.right = 13 + ((column + 1) * 334 + 3) / 7;
         r.top = 137 + row * 40; r.bottom = r.top + 40;
-        if (today) pw_flyout_disc(dc, (r.left + r.right) / 2, r.top + 20, dark ? PW_APPEARANCE_DARK_ACCENT : PW_APPEARANCE_LIGHT_ACCENT);
+        if (today) pw_flyout_disc(dc, (r.left + r.right) / 2, r.top + 20, f->style.accent);
         wsprintfW(text, L"%d", shown);
         pw_flyout_text(f, glass, dc, today ? f->strong : f->body, text, &r,
                        today ? (dark ? RGB(0, 0, 0) : RGB(255, 255, 255)) : other ? secondary : f->style.text, DT_CENTER | DT_VCENTER);
@@ -247,7 +281,7 @@ static LRESULT CALLBACK pw_flyout_proc(HWND hwnd, UINT msg, WPARAM w, LPARAM l)
         case PW_FLYOUT_SETTINGS:
         {
             WCHAR path[MAX_PATH]; SHELLEXECUTEINFOW execute = {sizeof(execute)};
-            GetSystemDirectoryW(path, MAX_PATH); PathAppendW(path, L"mihawk-appearance.exe");
+            GetSystemDirectoryW(path, MAX_PATH); PathAppendW(path, L"mihawk-settings.exe");
             execute.hwnd = hwnd; execute.lpFile = path; execute.nShow = SW_SHOWNORMAL;
             pw_flyout_close(f); ShellExecuteExW(&execute);
             return 0;
@@ -321,7 +355,7 @@ void pw_shell_quick_settings(HWND owner)
     pw_flyout_open[PW_FLYOUT_QUICK] = f->window;
     pw_flyout_network(f); pw_flyout_place(f);
     /* the footer's Settings button: 40 x 36, 6.5 px down the 48 px footer (rounded as the prototype's box) */
-    pw_flyout_button(f, L"All settings", PW_FLYOUT_SETTINGS, 307, 152 - 49 + 7, 40, 36);
+    pw_flyout_button(f, L"All settings", PW_FLYOUT_SETTINGS, 307, 440 - 49 + 7, 40, 36);
     pw_flyout_run(f, NULL);
     pw_flyout_open[PW_FLYOUT_QUICK] = NULL; pw_flyout_free(f);
 }

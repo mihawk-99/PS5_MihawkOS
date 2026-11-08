@@ -192,7 +192,7 @@ PwWebuiResponse library(const PwWebuiContext &context)
     return reply(200, json{{"games", games}});
 }
 
-// A Windows path the launcher accepts: C:\... or Z:\..., printable, no "..".
+// A MihawkOS drive path (the C:\ of the Mihawk OS prefix) the launcher accepts: C:\... or Z:\..., printable, no "..".
 bool windows_path(const std::string &path)
 {
     return path.size() >= 3 && path.size() <= 260 && printable(path, 260) &&
@@ -229,8 +229,8 @@ PwWebuiResponse save_game(const PwWebuiContext &context, const PwWebuiRequest &r
         !text("arguments", arguments, 1024) || !text("directory", directory, 260) || !text("prefix", prefix, 64))
         return fail(400, "A field is too long or holds a control character.");
     if (name.empty()) return fail(400, "The entry needs a name.");
-    if (!windows_path(executable)) return fail(400, "The program must be a Windows path such as C:\\Games\\Name\\Game.exe.");
-    if (!directory.empty() && !windows_path(directory)) return fail(400, "Start in must be a Windows path, or empty.");
+    if (!windows_path(executable)) return fail(400, "The program must be a MihawkOS path such as C:\\Games\\Name\\Game.exe.");
+    if (!directory.empty() && !windows_path(directory)) return fail(400, "Start in must be a MihawkOS path, or empty.");
     if (!prefix.empty() && !pw_webui_id(prefix)) return fail(400, "The prefix takes 1 to 64 letters, digits, - and _.");
     std::vector<std::string> env;
     if (body.count("env")) {

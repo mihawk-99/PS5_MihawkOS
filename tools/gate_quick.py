@@ -60,6 +60,7 @@ RULES = [
     ('tests/initial-environment-probe.c', ['initial-env32', 'initial-env64']),
     ('tests/nt-relative-dir-probe.c', ['relative-dir32', 'relative-dir64']),
     ('tests/game-mode-probe.c', ['game-mode64', 'game-mode-dxvk64']),
+    ('tests/wallpaper-choice-probe.c', ['wallpaper-choice']),
     # The runners of the grouped cases.
     ('tests/gate-sequence-probe.c', GROUPED),
     ('tests/wt-session.c', GROUPED),
@@ -73,6 +74,9 @@ RULES = [
     ('src/pw_detailed_logs.*', ['detailed-logs']),
     ('src/pw_controls.*', ['controls-menu', 'mouse-controls']),
     ('src/pw_game_mode.*', ['game-mode64', 'game-mode-dxvk64']),
+    ('src/pw_wallpaper.*', ['wallpaper-choice']),
+    ('src/pw_shortcut.h', ['desktop-view']),   # File Explorer's and the desktop's Create shortcut: the desktop-view probe makes one
+    ('wine/ps5/pw_shell_shortcut.h', ['desktop-view']),
     ('src/pw_browser*', ['mihawk-browser']),
     ('src/pw_memory_guard.*', ['memory-guard']),
     ('src/pw_umip.*', ['umip32', 'umip64']),   # ntdll's UMIP emulation (patch 2102), reached only on those instructions

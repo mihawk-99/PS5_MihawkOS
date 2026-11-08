@@ -10,8 +10,11 @@ import io
 import importlib.util
 import json
 import re
+import shutil
 import struct
 import subprocess
+import sys
+import tempfile
 from pathlib import Path
 import pefile
 from PIL import Image
@@ -96,6 +99,21 @@ def appearance_ini(text, palette, metrics, classic):
             line = 'CaptionBarHeight = ' + str(metrics['caption_height']) + '\nCaptionBarWidth = ' + str(metrics['caption_button_width'])
         lines.append(line)
     return '; Managed metrics schema 2: nonclient font sizes are points.\n' + '\n'.join(lines) + '\n'
+
+
+def mihawk_light(light_ini):
+    """MihawkLight::<class> sections: every class of the light variant again under the application name MihawkLight, for
+    both variants. A window the prototype keeps light in the dark theme (the message box and the task dialog) selects it
+    with SetWindowTheme(hwnd, L"MihawkLight", NULL); uxtheme falls back to the plain class for one not listed. Wine gives
+    an application's class no values of its base class (msstyles.c MSSTYLES_ParseThemeIni), so each copy is whole."""
+    out, keep = [], False
+    for line in light_ini.splitlines():
+        if line.startswith('['):
+            name = line.strip()[1:-1]
+            keep = '::' not in name and name.lower() not in ('globals', 'sysmetrics', 'documentation')
+            if keep: line = '[MihawkLight::' + name + ']'
+        if keep: out.append(line)
+    return '\n'.join(out) + '\n'
 
 
 GLYPH_FILES = (13, 19, 23, 26, 32, 39, 52)  # the theme's ImageFile1-7 names, for MinDpi 96 to 384
@@ -272,6 +290,9 @@ def main():
     light_ini = appearance_ini(ini, appearance['light'], appearance['metrics'], appearance['classic']['light'])
     dark_ini = appearance_ini(ini, appearance['dark'], appearance['metrics'], appearance['classic']['dark'])
     dark_ini = re.sub(r'((?:ImageFile\d*|GlyphImageFile)\s*=\s*)blue_', r'\1dark_', dark_ini)
+    light_classes = mihawk_light(light_ini)
+    light_ini += light_classes
+    dark_ini += light_classes
     dark_resources = []
     for item in list(manifest):
         if item['type'] == 2:
@@ -361,6 +382,41 @@ def main():
         with Image.open(picture) as image:
             meadow.stamp(image.convert('RGB').resize((1920, 1080), Image.Resampling.LANCZOS), note).save(destination)
         stamp.write_text(want + '\n')
+    # Settings > Wallpaper (src/pw_wallpaper.h): every shipped picture as <id>.bmp beside proton.bmp, with the same corner
+    # note; the title copies the player's choice over proton.bmp before the desktop starts. bubble-city.bmp is proton.bmp.
+    shutil.copyfile(destination, OUTPUT / 'bubble-city.bmp')
+    scenes = ROOT / 'tools/make-aero-wallpapers.py'
+    others = OUTPUT / 'wallpapers-aero.sha256'
+    want_others = hashlib.sha256(scenes.read_bytes() + generator.read_bytes() + '\n'.join(note).encode()).hexdigest()
+    names = ('bubble-earth', 'glass-city', 'aqua-world')
+    if not all((OUTPUT / f'{n}.bmp').is_file() for n in names) or not others.is_file() or others.read_text().strip() != want_others:
+        spec = importlib.util.spec_from_file_location('mihawk_wallpaper', generator)
+        meadow = importlib.util.module_from_spec(spec)
+        spec.loader.exec_module(meadow)
+        with tempfile.TemporaryDirectory() as scratch:
+            subprocess.run([sys.executable, str(scenes), scratch], check=True, stdout=subprocess.DEVNULL)
+            for n in names:
+                with Image.open(Path(scratch) / f'{n}.png') as image:
+                    meadow.stamp(image.convert('RGB').resize((1920, 1080), Image.Resampling.LANCZOS), note).save(OUTPUT / f'{n}.bmp')
+        others.write_text(want_others + '\n')
+    # Settings' six themes (src/pw_settings.c, the prototype's js/apps/settings.js THEMES): Aero Meadow by day and by night,
+    # drawn by tools/make-mihawk-wallpaper.py (the prototype's own local/wallpaper*.png), and its four gradients as Chromium
+    # draws them (themes/windows11/wallpapers/theme-*.png, tools/render-theme-gradients.mjs); each with the corner note.
+    themes = OUTPUT / 'wallpapers-themes.sha256'
+    gradients = ('glow', 'captured-motion', 'sunrise', 'flow')
+    sources = b''.join((ROOT / f'themes/windows11/wallpapers/theme-{g}.png').read_bytes() for g in gradients)
+    want_themes = hashlib.sha256(sources + generator.read_bytes() + '\n'.join(note).encode()).hexdigest()
+    theme_names = ('aero-meadow', 'aero-meadow-night') + tuple(f'theme-{g}' for g in gradients)
+    if not all((OUTPUT / f'{n}.bmp').is_file() for n in theme_names) or not themes.is_file() or themes.read_text().strip() != want_themes:
+        spec = importlib.util.spec_from_file_location('mihawk_wallpaper', generator)
+        meadow = importlib.util.module_from_spec(spec)
+        spec.loader.exec_module(meadow)
+        meadow.stamp(meadow.wallpaper(1920, 1080, 'light'), note).save(OUTPUT / 'aero-meadow.bmp')
+        meadow.stamp(meadow.wallpaper(1920, 1080, 'dark'), note).save(OUTPUT / 'aero-meadow-night.bmp')
+        for g in gradients:
+            with Image.open(ROOT / f'themes/windows11/wallpapers/theme-{g}.png') as image:
+                meadow.stamp(image.convert('RGB'), note).save(OUTPUT / f'theme-{g}.bmp')
+        themes.write_text(want_themes + '\n')
     print(json.dumps(record,indent=1))
 
 

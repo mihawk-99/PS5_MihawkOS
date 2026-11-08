@@ -17,6 +17,7 @@
 #include "pw_shell_glyphs.h"
 #include "pw_taskbar_layout.h"
 #include "pw_taskbar_logo.h"
+#include "pw_accent.h"   /* the applied theme's accent: the active pill */
 
 #define PW_TASKBAR_PINS 5
 
@@ -31,7 +32,7 @@ static const struct pw_taskbar_pin_app
     unsigned sprite;
 } pw_taskbar_pin_apps[PW_TASKBAR_PINS] = {
     {L"File Explorer", L"explorer.exe", NULL, L"explorer.exe", CSIDL_WINDOWS, PW_SPRITE_EXPLORER},
-    {L"Settings", L"mihawk-appearance.exe", NULL, L"mihawk-appearance.exe", CSIDL_SYSTEM, PW_SPRITE_SETTINGS},
+    {L"Settings", L"mihawk-settings.exe", NULL, L"mihawk-settings.exe", CSIDL_SYSTEM, PW_SPRITE_SETTINGS},
     {L"Notepad", L"notepad.exe", NULL, L"notepad.exe", CSIDL_SYSTEM, PW_SPRITE_NOTEPAD},
     {L"Terminal", L"cmd.exe", L"conhost.exe", L"cmd.exe", CSIDL_SYSTEM, PW_SPRITE_TERMINAL},
     {L"MihawkBrowser", L"MihawkBrowser.exe", NULL, L"MihawkBrowser.lnk", CSIDL_COMMON_DESKTOPDIRECTORY, PW_SPRITE_BROWSER},
@@ -114,10 +115,36 @@ static inline void pw_taskbar_logo_draw(HDC dc, int x, int y, int extent)
 }
 
 /* The running pill centred at the button's foot, as .tb-pill sits (bottom 0 inside the 1 px border). */
+/* The running mark under a button: the prototype's pill. The active one is in the applied theme's accent (src/pw_accent.h,
+ * as Settings stored it): its pixels' coverage with that colour, where the sprite holds the default accent. */
 static inline void pw_taskbar_pill(HDC dc, BOOL dark, BOOL active, int button_width)
 {
     unsigned sprite = active ? PW_SPRITE_PILL_ACTIVE : PW_SPRITE_PILL_RUNNING;
-    pw_taskbar_sprite(dc, dark, sprite, (button_width - pw_shell_sprites[!!dark][sprite].width) / 2, 36);
+    const struct pw_shell_sprite *s = &pw_shell_sprites[!!dark][sprite];
+    int x = (button_width - s->width) / 2;
+    unsigned accent = pw_accent_fill(pw_accent_current(), dark), *bits = NULL;
+    BITMAPINFO info = {{sizeof(BITMAPINFOHEADER), s->width, -s->height, 1, 32, BI_RGB}};
+    BLENDFUNCTION blend = {AC_SRC_OVER, 0, 255, AC_SRC_ALPHA};
+    HBITMAP bitmap; HDC source; HGDIOBJ prior;
+    if (!active || accent == pw_accent_fill(PW_ACCENT_DEFAULT, dark) ||
+        !(bitmap = CreateDIBSection(NULL, &info, DIB_RGB_COLORS, (void **)&bits, NULL, 0)) || !bits)
+    {
+        pw_taskbar_sprite(dc, dark, sprite, x, 36);
+        return;
+    }
+    for (int i = 0; i < s->width * s->height; ++i)
+    {
+        unsigned a = s->bgra[i] >> 24;   /* premultiplied: the accent scaled by the pixel's coverage */
+        bits[i] = a << 24 | (((accent >> 16) & 255) * a / 255) << 16 | (((accent >> 8) & 255) * a / 255) << 8 |
+                  (accent & 255) * a / 255;
+    }
+    if ((source = CreateCompatibleDC(dc)))
+    {
+        prior = SelectObject(source, bitmap);
+        GdiAlphaBlend(dc, x, 36, s->width, s->height, source, 0, 0, s->width, s->height, blend);
+        SelectObject(source, prior); DeleteDC(source);
+    }
+    DeleteObject(bitmap);
 }
 
 /* The pin a process image belongs to, or -1. */

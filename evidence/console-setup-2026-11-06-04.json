@@ -1,0 +1,94 @@
+{
+ "run": "console-setup-2026-11-06-04",
+ "result": "ready",
+ "stopped_at": null,
+ "steps": {
+  "S0": {
+   "step": "host",
+   "state": "done",
+   "seconds": 0.7,
+   "detail": "dist and the staged runtime are there"
+  },
+  "S1": {
+   "step": "reach",
+   "state": "done",
+   "seconds": 0.0,
+   "detail": "ftpsrv and websrv answer; klog stream open"
+  },
+  "S2": {
+   "step": "guard",
+   "state": "done",
+   "seconds": 0.0,
+   "detail": "no drop, no storage block"
+  },
+  "S3": {
+   "step": "control",
+   "state": "done",
+   "seconds": 1.4,
+   "detail": "ps5vkctl pid 102, no title running, firmware 10010000"
+  },
+  "S4": {
+   "step": "klog",
+   "state": "done",
+   "seconds": 0.6,
+   "detail": "141 lines, no storage damage, no OnionHEN"
+  },
+  "S5": {
+   "step": "salvage",
+   "state": "done",
+   "seconds": 0.0,
+   "detail": "salvaged once this boot"
+  },
+  "S6": {
+   "step": "dev.conf",
+   "state": "done",
+   "seconds": 0.0,
+   "detail": "loopback 8080"
+  },
+  "S7": {
+   "step": "title",
+   "state": "did",
+   "seconds": 18.6,
+   "detail": "2 of 178 files sent"
+  },
+  "S8": {
+   "step": "runtime",
+   "state": "did",
+   "seconds": 9.3,
+   "detail": "Uploaded and verified 9 files; prefix probe: preserved existing state"
+  },
+  "S9": {
+   "step": "prefix",
+   "state": "done",
+   "seconds": 1.5,
+   "detail": "prefix ready, firmware 10010000"
+  },
+  "S10": {
+   "step": "read-back",
+   "state": "done",
+   "seconds": 282.0,
+   "detail": "4258 files match"
+  }
+ },
+ "klog": {
+  "connections": 1,
+  "lines": 232,
+  "storage_damage": 0,
+  "onionhen": 0
+ },
+ "build": {
+  "matches_tree": true,
+  "head": "ed5cd48aa390",
+  "time": "2026-11-06T18:44:10-0500"
+ },
+ "title_files": 178,
+ "runtime": "Uploaded and verified 9 files; prefix probe: preserved existing state",
+ "prefix_session": null,
+ "firmware": "10010000",
+ "read_back": {
+  "files": 4258,
+  "mismatches": 0
+ },
+ "last_console_write": 1794008717.707029,
+ "sync": "err usage: sync needs a nine-character title id; this ps5vkctl has no sync: tool"
+}

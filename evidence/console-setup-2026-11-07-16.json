@@ -1,0 +1,94 @@
+{
+ "run": "console-setup-2026-11-07-16",
+ "result": "stopped",
+ "stopped_at": "S10",
+ "steps": {
+  "S0": {
+   "step": "host",
+   "state": "done",
+   "seconds": 1.3,
+   "detail": "dist and the staged runtime are there"
+  },
+  "S1": {
+   "step": "reach",
+   "state": "done",
+   "seconds": 0.0,
+   "detail": "ftpsrv and websrv answer; klog stream open"
+  },
+  "S2": {
+   "step": "guard",
+   "state": "done",
+   "seconds": 0.0,
+   "detail": "no drop, no storage block"
+  },
+  "S3": {
+   "step": "control",
+   "state": "done",
+   "seconds": 0.4,
+   "detail": "ps5vkctl pid 103, no title running, firmware 13600007"
+  },
+  "S4": {
+   "step": "klog",
+   "state": "done",
+   "seconds": 2.4,
+   "detail": "35 lines, no storage damage, no OnionHEN"
+  },
+  "S5": {
+   "step": "salvage",
+   "state": "did",
+   "seconds": 7.8,
+   "detail": "367 log files"
+  },
+  "S6": {
+   "step": "dev.conf",
+   "state": "done",
+   "seconds": 0.0,
+   "detail": "loopback 8080"
+  },
+  "S7": {
+   "step": "title",
+   "state": "done",
+   "seconds": 6.3,
+   "detail": "178 files equal"
+  },
+  "S8": {
+   "step": "runtime",
+   "state": "done",
+   "seconds": 0.1,
+   "detail": "the deploy manifest is the staged runtime"
+  },
+  "S9": {
+   "step": "prefix",
+   "state": "done",
+   "seconds": 0.3,
+   "detail": "prefix ready, firmware 13600007"
+  },
+  "S10": {
+   "step": "read-back",
+   "state": "stopped",
+   "seconds": 206.8,
+   "detail": "12 of 4271 files do not match their manifests by sha256 (SELF off): the storage may be failing; a person must look before any launch"
+  }
+ },
+ "klog": {
+  "connections": 1,
+  "lines": 153,
+  "storage_damage": 0,
+  "onionhen": 0
+ },
+ "build": {
+  "matches_tree": true,
+  "head": "6d074cc4f989",
+  "time": "2026-11-07T11:20:38-0500"
+ },
+ "title_files": 178,
+ "runtime": null,
+ "prefix_session": null,
+ "firmware": "13600007",
+ "read_back": {
+  "files": 4271,
+  "mismatches": 12
+ },
+ "last_console_write": null,
+ "sync": null
+}

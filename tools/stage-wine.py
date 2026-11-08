@@ -131,6 +131,7 @@ def stage_prefix_baseline(runtime, prefix):
     shutil.copy2(runtime / 'lib/wine/x86_64-windows/explorer.exe', bundle / 'explorer.exe')
     # C:\windows\system32\mihawk.exe is the desktop session's entry, run by the title itself (src/pw_desktop_session.h).
     shutil.copy2(DEPS / 'probes/mihawk-appearance.exe', bundle / 'system32/mihawk-appearance.exe')
+    shutil.copy2(DEPS / 'probes/mihawk-settings.exe', bundle / 'system32/mihawk-settings.exe')
     # Stream the large archive once. Wine's fonts take precedence over Proton's
     # duplicate names, independent of archive order. Per-game alternatives stay out.
     wine_fonts = set()
@@ -301,6 +302,20 @@ def stamp_inf(runtime, patched_inf):
         raise SystemExit('wine.inf does not name the builtins the runtime ships')
 
 
+def inf_skipped(inf_text):
+    """The modules wine.inf marks "11,,name,-" (Wine Mono's .NET stand-ins, comctl32_v6.dll): wineboot deletes them
+    when it updates a prefix, so a template copy is gone after the first update and the deep read-back called the 12
+    of them damaged (console-setup-2026-11-07-16). {folder: names}: [FakeDlls] is system32, [FakeDllsWow64] syswow64."""
+    folders, skipped, folder = {'fakedlls': 'system32', 'fakedllswow64': 'syswow64'}, {}, None
+    for line in inf_text.splitlines():
+        line = line.strip()
+        if line.startswith('['):
+            folder = folders.get(line.strip('[]').lower())
+        elif folder and (match := re.fullmatch(r'11,,([^,*\\]+),-', line)):
+            skipped.setdefault(folder, set()).add(match.group(1).lower())
+    return skipped
+
+
 def pe_image(path):
     """A PE image, which llvm-strip reads. A fresh host wineboot writes 16-bit placeholders that are MZ alone (the probe
     prefix's 255-byte windows/rundll.exe), and llvm-strip refuses those."""
@@ -457,6 +472,11 @@ def main():
         shutil.copy2(source, prefix / 'drive_c/windows/syswow64' / source.name)
     for source in patched_vkd3d_modules('i386-windows'):   # over GE's prebuilt d3d12 of the same revision
         shutil.copy2(source, prefix / 'drive_c/windows/syswow64' / source.name)
+    # Not what wineboot leaves after an update: the modules wine.inf deletes there.
+    for folder, names in inf_skipped(patched_inf.decode('utf-8', 'replace')).items():
+        for path in (prefix / 'drive_c/windows' / folder).iterdir():
+            if path.is_file() and path.name.lower() in names:
+                path.unlink()
     # Mesa's WGL over Zink: OpenGL for programs in helper processes, which cannot use the console's OpenGL. The title
     # copies these into a prefix's system32 for the launcher layout (native/proton_wine.cpp); "version" names them.
     mesa = DEPS / 'mesa-foundation-wgl'
@@ -483,6 +503,13 @@ def main():
             shutil.copy2(module, mesa32_target / name)
         (mesa32_target / 'version').write_text('mesa %s %s %s\n' % (mesa32_manifest['mesa_revision'],
             mesa32_manifest['files']['opengl32.dll'][:16], mesa32_manifest['files']['libgallium_wgl.dll'][:16]))
+    # Settings > Wallpaper's pictures (src/pw_wallpaper.h): once, in the runtime, so a prefix made before this release has
+    # them too; the title copies the chosen one over the prefix's proton.bmp before the desktop starts.
+    pictures = runtime / 'share/mihawk/wallpapers'
+    pictures.mkdir(parents=True)
+    for name in ('bubble-city', 'bubble-earth', 'glass-city', 'aqua-world', 'aero-meadow', 'aero-meadow-night',
+                 'theme-glow', 'theme-captured-motion', 'theme-sunrise', 'theme-flow'):
+        shutil.copy2(DEPS / 'windows11-theme' / f'{name}.bmp', pictures / f'{name}.bmp')
     # MihawkBrowser (docs/MIHAWK_BROWSER.md §3.6): once, read-only, in the runtime and outside every prefix (a prefix
     # copy would put its 316 MB in each one), reached as Z:\data\ps5proton\runtime\ge11-7\lib\mihawk-browser.
     browser = DEPS / 'mihawk-browser/app'
@@ -525,6 +552,7 @@ def main():
                  'input-message32-probe.exe', 'input-message64-probe.exe',
                  'prefix-baseline32-probe.exe', 'prefix-baseline64-probe.exe',
                  'proton-ui32-probe.exe', 'proton-ui64-probe.exe',
+                 'shortcut-icons32-probe.exe', 'shortcut-icons64-probe.exe',
                  'appearance32-probe.exe', 'appearance64-probe.exe',
                  'theme-notify32-probe.exe', 'theme-notify64-probe.exe',
                  'initial-env32-probe.exe', 'initial-env64-probe.exe',
@@ -539,7 +567,7 @@ def main():
                  'monospace32-probe.exe', 'monospace64-probe.exe',
                  'work-area32-probe.exe', 'work-area64-probe.exe',
                  'shell32-probe.exe', 'shell64-probe.exe',
-                 'desktop-session32-probe.exe', 'desktop-session64-probe.exe', 'shell-surfaces64-probe.exe', 'shell-scorecard64-probe.exe', 'frame-pacing64-probe.exe', 'desktop-view64-probe.exe', 'agent-permissions64-probe.exe', 'desktop-items64-probe.exe', 'memory-cap64-probe.exe', 'game-mode64-probe.exe',
+                 'desktop-session32-probe.exe', 'desktop-session64-probe.exe', 'shell-surfaces64-probe.exe', 'shell-scorecard64-probe.exe', 'frame-pacing64-probe.exe', 'desktop-view64-probe.exe', 'wallpaper-choice64-probe.exe', 'agent-permissions64-probe.exe', 'desktop-items64-probe.exe', 'memory-cap64-probe.exe', 'game-mode64-probe.exe',
                  'game-focus64-probe.exe', 'hid-enum64-probe.exe', 'umip32-probe.exe', 'umip64-probe.exe', 'gate-sequence.exe'):
         shutil.copy2(DEPS / 'probes' / name, prefix / 'drive_c' / name)
     for test in sorted((DEPS / 'wine-tests/exe').glob('*.exe')):  # tools/build-wine-tests.sh and tools/fetch-vkd3d-tests.sh

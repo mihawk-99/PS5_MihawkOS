@@ -53,6 +53,8 @@ declare -A sources=(
     [test_pw_osk]="src/pw_osk.c src/pw_vkbd.c native/pw_osk_ps5.c"
     [test_pw_usb_input]="src/pw_usb_input.c"
     [test_pw_game_mode]="src/pw_game_mode.c"
+    [test_pw_wallpaper]="src/pw_wallpaper.c"
+    [test_pw_shortcut]=""
     [test_pw_high_refresh]="src/pw_high_refresh.c"
     [test_pw_controller]="src/pw_controller.c"
     [test_pw_setup]="src/pw_setup.c"
@@ -64,6 +66,7 @@ declare -A sources=(
     [test_pw_loading_art]="src/pw_loading_art.c"
     [test_pw_taskbar_layout]=""
     [test_pw_text_glyphs]=""
+    [test_pw_accent]=""
     [test_pw_desktop_icons]=""
     [test_pw_tooltip]=""
     [test_pw_explorer_layout]=""
@@ -331,7 +334,7 @@ if (( $# == 0 )) || [[ "$*" == *console_guard* ]]; then
     for test in console_guard battery_runner gate_quick shell_capture window_compose_runner appearance_runner profile_report \
             desktop_session_runner desktop_input_runner tls_fixture telemetry_teardown \
             window_material_tokens window_effects_runner frame_pacing_runner deploy_folder console_setup sched_watch run_console_verdicts \
-            placed_unmap_order module_wiring helper_opengl privacy_check dll_overrides prx_exports taskbar_logo stage_licences publication_check title_icon pack_runtime pw_https mihawk_wallpaper aero_wallpapers mihawk_music browser_lines sign_release update_rehearsal package_install check_title_imports carrier_image_probe payload_firmware lapy_patches memory_breakdown run_shared_charge webui_http webui_i18n deploy_wine_retire stage_wine_inf vcruntime_records start_stages wineboot_install_sentinel build_stamp pw_foreign_process pw_command_line; do
+            placed_unmap_order module_wiring helper_opengl privacy_check dll_overrides prx_exports taskbar_logo stage_licences publication_check title_icon pack_runtime pw_https mihawk_wallpaper aero_wallpapers mihawk_music browser_lines sign_release update_rehearsal package_install check_title_imports carrier_image_probe payload_firmware lapy_patches memory_breakdown run_shared_charge webui_http webui_i18n deploy_wine_retire stage_wine_inf vcruntime_records start_stages wineboot_install_sentinel build_stamp pw_foreign_process pw_command_line no_windows_wording guide_title_start; do
         python3 "$root/tests/test_$test.py"
         ran=$((ran + 1))
     done

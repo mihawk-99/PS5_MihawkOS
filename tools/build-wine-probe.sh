@@ -8,12 +8,31 @@ wine=$root/.deps/wine-runtime
 mkdir -p "$root/.deps/probes"
 python3 "$root/tools/build-mihawk-icons.py"
 python3 "$root/tools/build-wine-theme.py"
+python3 "$root/tools/build-settings-sprites.py"
 python3 "$root/tools/build-cursors.py"
 for bits in 32 64; do
     if [[ $bits == 32 ]]; then target=i686-windows arch=i386-windows resource_target=i686; else target=x86_64-windows arch=x86_64-windows resource_target=x86_64; fi
     printf '1 24 "%s/src/pw_appearance.manifest"\n' "$root" > "$root/.deps/probes/appearance.rc"
     "$root/.deps/llvm-mingw/bin/$resource_target-w64-mingw32-windres" \
         "$root/.deps/probes/appearance.rc" "$root/.deps/probes/appearance$bits.o"
+    printf '1 24 "%s/src/pw_settings.manifest"\n' "$root" > "$root/.deps/probes/settings.rc"
+    "$root/.deps/llvm-mingw/bin/$resource_target-w64-mingw32-windres" \
+        "$root/.deps/probes/settings.rc" "$root/.deps/probes/settings$bits.o"
+    clang --target=$target --no-default-config -fuse-ld=lld -Wl,/timestamp:0 -nostdlib -O2 -Wall -Wextra -Werror \
+        -I"$wine/source/include" -I"$wine/build/include" -I"$wine/source/include/msvcrt" \
+        -I"$root/.deps/windows11-theme" -I"$root/.deps/mihawk-icons" \
+        -Wl,/entry:mainCRTStartup -Wl,/subsystem:windows \
+        "$root/src/pw_settings.c" "$root/.deps/probes/settings$bits.o" "$wine/build/dlls/kernel32/$arch/libkernel32.a" \
+        "$wine/build/dlls/user32/$arch/libuser32.a" "$wine/build/dlls/gdi32/$arch/libgdi32.a" \
+        "$wine/build/dlls/comdlg32/$arch/libcomdlg32.a" \
+        "$wine/build/dlls/shell32/$arch/libshell32.a" \
+        "$wine/build/dlls/shlwapi/$arch/libshlwapi.a" "$wine/build/dlls/comctl32/$arch/libcomctl32.a" \
+        "$wine/build/dlls/uxtheme/$arch/libuxtheme.a" "$wine/build/dlls/ntdll/$arch/libntdll.a" \
+        "$wine/build/dlls/dwmapi/$arch/libdwmapi.a" "$wine/build/dlls/iphlpapi/$arch/libiphlpapi.a" \
+        "$wine/build/dlls/advapi32/$arch/libadvapi32.a" \
+        "$wine/build/libs/compiler-rt/$arch/libcompiler-rt.a" \
+        "$wine/build/dlls/msvcrt/$arch/libmsvcrt.a" \
+        -o "$root/.deps/probes/settings$bits-probe.exe"
     clang --target=$target --no-default-config -fuse-ld=lld -Wl,/timestamp:0 -nostdlib -O2 -Wall -Wextra -Werror \
         -I"$wine/source/include" -I"$wine/build/include" -I"$wine/source/include/msvcrt" \
         -I"$root/.deps/windows11-theme" -I"$root/.deps/mihawk-icons" \
@@ -110,6 +129,7 @@ for bits in 32 64; do
         -o "$root/.deps/probes/monospace$bits-probe.exe"
 done
 cp "$root/.deps/probes/appearance64-probe.exe" "$root/.deps/probes/mihawk-appearance.exe"
+cp "$root/.deps/probes/settings64-probe.exe" "$root/.deps/probes/mihawk-settings.exe"
 # No Windows mihawk.exe: the title runs the desktop session itself (src/pw_desktop_session.h).
 rm -f "$root/.deps/probes/mihawk.exe"
 for bits in 32 64; do
@@ -156,6 +176,18 @@ for bits in 32 64; do
         "$root/tests/proton-ui-probe.c" "$wine/build/dlls/kernel32/$arch/libkernel32.a" \
         "$wine/build/dlls/user32/$arch/libuser32.a" "$wine/build/dlls/gdi32/$arch/libgdi32.a" \
         -o "$root/.deps/probes/proton-ui$bits-probe.exe"
+done
+for bits in 32 64; do
+    if [[ $bits == 32 ]]; then target=i686-windows arch=i386-windows; else target=x86_64-windows arch=x86_64-windows; fi
+    clang --target=$target --no-default-config -fuse-ld=lld -Wl,/timestamp:0 -nostdlib -O2 -Wall -Wextra -Werror \
+        -I"$wine/source/include" -I"$wine/build/include" -I"$wine/source/include/msvcrt" \
+        -Wl,/entry:mainCRTStartup -Wl,/subsystem:console \
+        "$root/tests/shortcut-icons-probe.c" "$wine/build/dlls/kernel32/$arch/libkernel32.a" \
+        "$wine/build/dlls/user32/$arch/libuser32.a" "$wine/build/dlls/gdi32/$arch/libgdi32.a" \
+        "$wine/build/dlls/shell32/$arch/libshell32.a" "$wine/build/dlls/ole32/$arch/libole32.a" \
+        "$wine/build/dlls/shlwapi/$arch/libshlwapi.a" "$wine/build/dlls/advapi32/$arch/libadvapi32.a" \
+        "$wine/build/dlls/comctl32/$arch/libcomctl32.a" "$wine/build/dlls/msvcrt/$arch/libmsvcrt.a" \
+        -o "$root/.deps/probes/shortcut-icons$bits-probe.exe"
 done
 clang --target=x86_64-windows --no-default-config -fuse-ld=lld -Wl,/timestamp:0 -nostdlib -O2 -Wall -Wextra -Werror \
     -I"$wine/source/include" -I"$wine/build/include" -I"$wine/source/include/msvcrt" \
@@ -319,14 +351,21 @@ clang --target=x86_64-windows --no-default-config -fuse-ld=lld -Wl,/timestamp:0 
     "$wine/build/dlls/advapi32/x86_64-windows/libadvapi32.a" \
     -o "$root/.deps/probes/agent-permissions64-probe.exe"
 clang --target=x86_64-windows --no-default-config -fuse-ld=lld -Wl,/timestamp:0 -nostdlib -O2 -Wall -Wextra -Werror \
-    -I"$wine/source/include" -I"$wine/build/include" -I"$wine/source/include/msvcrt" \
+    -I"$wine/source/include" -I"$wine/build/include" -I"$wine/source/include/msvcrt" -I"$root/src" -I"$root/wine/ps5" \
     -Wl,/entry:mainCRTStartup -Wl,/subsystem:console \
     "$root/tests/desktop-view-probe.c" \
     "$wine/build/dlls/kernel32/x86_64-windows/libkernel32.a" "$wine/build/dlls/user32/x86_64-windows/libuser32.a" \
     "$wine/build/dlls/shell32/x86_64-windows/libshell32.a" "$wine/build/dlls/advapi32/x86_64-windows/libadvapi32.a" \
     "$wine/build/dlls/ole32/x86_64-windows/libole32.a" "$wine/build/dlls/shlwapi/x86_64-windows/libshlwapi.a" \
-    "$wine/build/dlls/gdi32/x86_64-windows/libgdi32.a" \
+    "$wine/build/dlls/gdi32/x86_64-windows/libgdi32.a" "$wine/build/dlls/msvcrt/x86_64-windows/libmsvcrt.a" \
     -o "$root/.deps/probes/desktop-view64-probe.exe"
+clang --target=x86_64-windows --no-default-config -fuse-ld=lld -Wl,/timestamp:0 -nostdlib -O2 -Wall -Wextra -Werror \
+    -I"$wine/source/include" -I"$wine/build/include" -I"$wine/source/include/msvcrt" \
+    -Wl,/entry:mainCRTStartup -Wl,/subsystem:console \
+    "$root/tests/wallpaper-choice-probe.c" \
+    "$wine/build/dlls/kernel32/x86_64-windows/libkernel32.a" "$wine/build/dlls/user32/x86_64-windows/libuser32.a" \
+    "$wine/build/dlls/advapi32/x86_64-windows/libadvapi32.a" "$wine/build/dlls/msvcrt/x86_64-windows/libmsvcrt.a" \
+    -o "$root/.deps/probes/wallpaper-choice64-probe.exe"
 clang --target=x86_64-windows --no-default-config -fuse-ld=lld -Wl,/timestamp:0 -nostdlib \
     -I"$wine/source/include" -I"$wine/build/include" -I"$wine/source/include/msvcrt" \
     -Wl,/entry:mainCRTStartup -Wl,/subsystem:console \

@@ -50,6 +50,7 @@ extern "C" {
 #include "../src/pw_desktop_session.h"
 #include "../src/pw_app_environment.h"
 #include "../src/pw_shell_link.h"
+#include "../src/pw_wallpaper.h"
 #include "../src/pw_game_folders.h"
 #include "../src/pw_wine_profile.h"
 #include "../src/pw_pe_arch.h"
@@ -1232,6 +1233,19 @@ void sync_desktop_shortcuts(const std::vector<ProtonGame> &catalog, const std::s
         error ? " at " : "", error && result.first_error_step ? result.first_error_step : "");
 }
 
+// The desktop's picture: the player's choice (Settings > Wallpaper, src/pw_wallpaper.h) becomes the managed proton.bmp
+// before Explorer starts, so a new choice shows from the next MihawkOS start; a missing picture leaves the one there.
+void apply_wallpaper(const std::string &prefix)
+{
+    char id[PW_WALLPAPER_ID_MAX + 1];
+    const int loaded = pw_wallpaper_load(id, sizeof(id), proton_wallpaper_path().c_str());
+    int changed = 0;
+    const int error = pw_wallpaper_apply((prefix + "/drive_c/windows/web/wallpaper").c_str(),
+        PROTON_DATA_ROOT "/runtime/ge11-7/share/mihawk/wallpapers", id, &changed);
+    say("Mihawk: wallpaper %s (setting %s): %s%s", id, loaded ? (loaded == ENOENT ? "not set" : "unreadable") : "read",
+        error ? "not applied: " : changed ? "applied" : "already there", error ? strerror(error) : "");
+}
+
 uint64_t monotonic_ms()
 {
     timespec now{};
@@ -1787,6 +1801,11 @@ int start_title_client(int server_fd,const struct pw_child_bootstrap *boot)
     title_client_flips=proton_gpu_broker_flips();
     if(pw_wine_start_run(&wine,&config,&ops)) { errno=EIO;return -1; }   // claimed for good: the environment is set
     say("Wine: %s runs in the title beside the broker",boot->image[0] ? boot->image : "a program");
+    // A program the title takes never reaches title_application_lookup, which feeds the Steam guide; since 8.1 that is
+    // Steam's browser (pw_title_game_steam_browser), so the sign-in session never saw it (browser 0), kept "Steam is
+    // updating itself" up and ended at 600 s with retry, on every try (issue 62, reported and diagnosed by Portablelle).
+    const std::string line(boot->command_line,strnlen(boot->command_line,sizeof(boot->command_line)));
+    guide_process(boot->image,line.c_str());
     return 0;
 }
 
@@ -3160,7 +3179,7 @@ void proton_run_wine()
     else
         say("Mihawk: this runtime has no fixed-base lookup; a 32-bit program fixed at 0x400000 cannot load");
     if (auto set_notice = symbol<void (*)(void (*)(int, int, int))>("pw_ps5_set_child_notice")) set_notice(child_notice);
-    if (desktop_session) sync_desktop_shortcuts(catalog, prefix);
+    if (desktop_session) apply_wallpaper(prefix), sync_desktop_shortcuts(catalog, prefix);
     if (auto set_dns_config = symbol<void (*)(int (*)(struct pw_dns_config *))>("pw_ps5_set_dns_config"))
         set_dns_config(title_dns_config);
     auto set_dualsense = symbol<void (*)(const uint8_t *)>("pw_wine_set_dualsense");

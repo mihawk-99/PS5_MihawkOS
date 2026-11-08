@@ -11,8 +11,10 @@
  * Only 96 DPI is measured.
  * SPDX-License-Identifier: GPL-3.0-or-later */
 #include <math.h>
+#include "pw_shell_shortcut.h"
 #include "pw_explorer_layout.h"
 #include "pw_explorer_sprites.h"
+#include "pw_accent.h"   /* the applied theme's accent: the selection plates */
 
 #define PW_EXPLORER_TIMER 0x4d45
 static IExplorerBrowserEvents *make_explorer_events(explorer_info *info);
@@ -226,11 +228,12 @@ static void pw_explorer_plate(HDC dc, const RECT *r, COLORREF colour, BYTE opaci
     }
     DeleteObject(bitmap);
 }
-/* The prototype's item plates: selected, SystemAccentColor #0078d4 at 16% (23% under the pointer; 30% and 38% in dark);
+/* The prototype's item plates: selected, SystemAccentColor (the theme's accent, #0078d4 by default) at 16% (23% under
+ * the pointer; 30% and 38% in dark);
  * under the pointer, SubtleFillColorSecondary (black 3.73%, white 6.05% in dark). */
 static void pw_explorer_selected_plate(HDC dc, const RECT *r, BOOL dark, BOOL hot)
 {
-    pw_explorer_plate(dc, r, RGB(0, 120, 212), dark ? (hot ? 97 : 77) : (hot ? 59 : 41));
+    pw_explorer_plate(dc, r, pw_accent_colorref(pw_accent_current()), dark ? (hot ? 97 : 77) : (hot ? 59 : 41));
 }
 static void pw_explorer_hover_plate(HDC dc, const RECT *r, BOOL dark)
 {
@@ -1286,6 +1289,47 @@ static HRESULT pw_explorer_set_view(explorer_info *info, UINT mode)
     if (view) IShellView_Release(view);
     return result;
 }
+/* The selected items' paths in the shell view (at most max), as the details pane reads them: each row's pidl joined to the folder's. */
+static int pw_explorer_selected_paths(explorer_info *info, WCHAR (*paths)[MAX_PATH], int max)
+{
+    HWND list = info->ui->home ? NULL : pw_explorer_list(info);
+    int k, count = 0;
+    if (!list || !info->pidl) return 0;
+    for (k = (int)SendMessageW(list, LVM_GETNEXTITEM, -1, LVNI_SELECTED); k >= 0 && count < max;
+         k = (int)SendMessageW(list, LVM_GETNEXTITEM, k, LVNI_SELECTED))
+    {
+        LVITEMW each = {LVIF_PARAM};
+        ITEMIDLIST *full;
+        each.iItem = k;
+        if (!SendMessageW(list, LVM_GETITEMW, 0, (LPARAM)&each) || !each.lParam ||
+            !(full = ILCombine(info->pidl, (ITEMIDLIST *)each.lParam))) continue;
+        if (SHGetPathFromIDListW(full, paths[count])) ++count;
+        ILFree(full);
+    }
+    return count;
+}
+/* Create shortcut and Pin to Start (src/pw_shortcut.h, pw_shell_shortcut.h): one shortcut per selected item. */
+static HRESULT pw_explorer_shortcuts(explorer_info *info, BOOL pin)
+{
+    WCHAR paths[8][MAX_PATH], link[MAX_PATH];
+    int i, count = pw_explorer_selected_paths(info, paths, 8);
+    HRESULT result = count ? S_OK : E_FAIL;
+    for (i = 0; i < count && SUCCEEDED(result); ++i)
+    {
+        result = pw_shell_make_shortcut(paths[i], pin ? PW_SHORTCUT_START : PW_SHORTCUT_DESKTOP, link);
+        if (SUCCEEDED(result) && pin)
+        {
+            int pinned = pw_shell_pin_to_start(link);
+            if (pinned < 0)
+            {
+                MessageBoxW(info->main_window, L"Start has no room for another pinned app. Unpin one first.", L"File Explorer",
+                            MB_OK | MB_ICONINFORMATION);
+                break;
+            }
+        }
+    }
+    return result;
+}
 static void pw_explorer_command(explorer_info *info, int element)
 {
     struct pw_explorer *ui = info->ui; HRESULT result = S_OK;
@@ -1326,8 +1370,9 @@ static void pw_explorer_command(explorer_info *info, int element)
     }
     case PW_EXPLORER_CMD_MORE:
     {
-        static const WCHAR *items[] = {L"Select all", L"Invert selection", NULL, L"Properties"}; static const UINT ids[] = {1, 2, 0, 3};
-        UINT chosen = ui->home || !list ? 0 : pw_explorer_menu(info, element, items, ids, 4);
+        static const WCHAR *items[] = {L"Select all", L"Invert selection", NULL, L"Create shortcut", L"Pin to Start", NULL, L"Properties"};
+        static const UINT ids[] = {1, 2, 0, 4, 5, 0, 3};
+        UINT chosen = ui->home || !list ? 0 : pw_explorer_menu(info, element, items, ids, 7);
         int i, count = list ? (int)SendMessageW(list, LVM_GETITEMCOUNT, 0, 0) : 0;
         LVITEMW item = {0};
         item.stateMask = LVIS_SELECTED;
@@ -1339,6 +1384,7 @@ static void pw_explorer_command(explorer_info *info, int element)
                 SendMessageW(list, LVM_SETITEMSTATE, i, (LPARAM)&item);
             }
         else if (chosen == 3) result = pw_explorer_verb(info, "properties", ui->selected > 0);
+        else if (chosen == 4 || chosen == 5) result = pw_explorer_shortcuts(info, chosen == 5);
         break;
     }
     case PW_EXPLORER_CMD_FILTER:

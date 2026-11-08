@@ -160,6 +160,8 @@ std::string proton_payloads_problem();
 std::string proton_controls_path();
 /* The Game Mode setting (src/pw_game_mode.h), beside controls.txt. */
 std::string proton_game_mode_path();
+/* The wallpaper setting (src/pw_wallpaper.h), beside game-mode.txt. */
+std::string proton_wallpaper_path();
 /* The controller setting (src/pw_controller.h), beside game-mode.txt. */
 std::string proton_controller_path();
 /* The 120 Hz setting (src/pw_high_refresh.h), beside game-mode.txt. */

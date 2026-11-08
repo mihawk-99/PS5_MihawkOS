@@ -107,6 +107,7 @@ NAMES = re.compile(rb'(?i)kyty|hollow ?knight|dead ?cells|stardew|binding of isa
                    rb'PPSA(?!99170|99171|993[0-9]{2}|99130|99008)[0-9]{5}')
 # (path, a line it allows, why): the trademark notices name their marks (LEGAL.md, NOTICE.md, LICENSING.md), and NOTICE.md
 # records the upstream boilerplate's own default title id.
+SPRITE_PIXELS = re.compile(rb'("(?:black|white)":\s*)"[A-Za-z0-9+/=]*"')
 NAMED_LINES = [
     ('LEGAL.md', re.compile(rb'^\| Steam, Proton \| Valve Corporation \|$'), 'the trademark table'),
     ('LICENSING.md', re.compile(rb'(?i)trademark'), 'the trademark notice'),
@@ -266,6 +267,9 @@ def name_lines(findings, path, data, names):
     """Each line of a text file that names a game or launcher (NAMES): allowed when the file is a kept record or a [games]
     file, when the names left once kept records' run names are taken out are only Steam's in a [steam] file, or by
     NAMED_LINES; else a finding."""
+    if path.startswith('themes/') and path.endswith('.json'):
+        # a captured sprite's pixels (tools/measure-prototype-sprites.mjs) are base64, not text: "p3R" in them named a game
+        data = SPRITE_PIXELS.sub(rb'\1""', data)
     for line in data.splitlines():
         if not NAMES.search(line):
             continue

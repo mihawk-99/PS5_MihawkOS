@@ -38,8 +38,16 @@ void mainCRTStartup(void)
         check(GetKerningPairsW(dc,0,NULL)>0,"GDI kerning pairs");
         PatBlt(dc,0,0,720,80,WHITENESS);SetTextColor(dc,RGB(20,20,20));SetBkMode(dc,TRANSPARENT);
         check(TextOutW(dc,4,12,text,ARRAYSIZE(text)-1),"draw text");GdiFlush();
-        unsigned ink=0;for(unsigned n=0;n<720*80;++n)if((((DWORD*)bits)[n]&0xffffff)!=0xffffff)++ink;
+        unsigned ink=0,coloured=0,levels=0;static BYTE seen[256];ZeroMemory(seen,sizeof(seen));
+        for(unsigned n=0;n<720*80;++n){DWORD p=((DWORD*)bits)[n]&0xffffff;if(p==0xffffff)continue;++ink;
+            if((p&0xff)!=((p>>8)&0xff)||(p&0xff)!=((p>>16)&0xff))++coloured;}
         check(ink>100,"raster ink");
+        /* grey smoothing (patch 2498): one glyph alone (no overlap blends twice) shows more than the 17 coverage levels
+           it had, and no pixel has colour (no ClearType fringe) */
+        PatBlt(dc,0,0,720,80,WHITENESS);TextOutW(dc,4,12,L"O",1);GdiFlush();
+        for(unsigned n=0;n<720*80;++n){DWORD p=((DWORD*)bits)[n]&0xffffff;if(p!=0xffffff&&!seen[p&0xff]++)++levels;}
+        check(levels>17,"one glyph has more than 17 grey levels");
+        check(!coloured,"grey only, no colour fringe");
         SelectObject(dc,old);DeleteObject(font);
     }
     SelectObject(dc,old_bitmap);DeleteObject(bmp);DeleteDC(dc);

@@ -17,6 +17,7 @@ const base = process.env.PROTOTYPE_BASE ?? 'http://127.0.0.1:8778/prototypes/win
 const url = `${base}?fresh&${theme}${open === '-' ? '' : `&open=${open}`}`;
 const session = await connect(process.env.CDP_PORT ?? '9333');
 const view = await page(session, url);
+await new Promise((settle) => setTimeout(settle, 250));  // the dialogs open on a timer after the page's load
 // Nothing moves, and the acrylic's noise lies under the chrome, so it belongs to the backdrop, not to a sprite.
 const still = `(() => { const s = document.createElement('style');
   s.textContent = '*{transition:none!important;animation:none!important;caret-color:transparent!important}' +

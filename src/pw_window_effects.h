@@ -103,6 +103,9 @@ static const PwMaterialTint pw_material_tints[7]={
 /* The prototype's own materials: the taskbar's filter chain, and for the flyouts a tint inside the stroke. */
 static inline int pw_window_prototype_backdrop(unsigned backdrop) {return backdrop>=PW_BACKDROP_TASKBAR && backdrop<=PW_BACKDROP_FLYOUT;}
 static inline int pw_window_flyout_backdrop(unsigned backdrop) {return backdrop==PW_BACKDROP_FLYOUT_BASE || backdrop==PW_BACKDROP_FLYOUT;}
+static inline int pw_window_mica_backdrop(unsigned backdrop) {return backdrop==PW_BACKDROP_MICA || backdrop==PW_BACKDROP_MICA_ALT;}
+/* An inactive window's Mica: the caption's solid inactive colour (themes/windows11/appearance.json caption_inactive). */
+enum { PW_MICA_INACTIVE_LIGHT=0xf3f3f3, PW_MICA_INACTIVE_DARK=0x202020 };
 /* What the blurred backdrop goes through before the tint. */
 enum { PW_RECIPE_PLAIN=0, PW_RECIPE_TASKBAR_LIGHT=1, PW_RECIPE_TASKBAR_DARK=2, PW_RECIPE_MICA_ALT_LIGHT=3,
        PW_RECIPE_MICA_ALT_DARK=4 };

@@ -87,6 +87,13 @@ static void tint_for(const PwWindowRow *row,Material *material)
                      !pw_window_prototype_backdrop(row->backdrop) ? PW_RECIPE_PLAIN :
                      row->material==PW_MATERIAL_DARK ? PW_RECIPE_TASKBAR_DARK : PW_RECIPE_TASKBAR_LIGHT;
     material->ring=pw_window_flyout_backdrop(row->backdrop);
+    /* A framed window's Mica shows only while it is the active window: another one's is its solid inactive caption
+     * colour, as Windows 11 and the prototype draw it (#f3f3f3, #202020 dark: themes/windows11/appearance.json
+     * caption_inactive; the reference's windows-active-inactive capture). Glass without a frame (a popup) keeps it. */
+    if(pw_window_mica_backdrop(row->backdrop) && row->shadow==PW_SHADOW_WINDOW && !(row->flags&PW_WINDOW_ACTIVE)) {
+        material->tint=row->material==PW_MATERIAL_DARK ? PW_MICA_INACTIVE_DARK : PW_MICA_INACTIVE_LIGHT;
+        material->amount=255;material->recipe=PW_RECIPE_PLAIN;
+    }
 }
 /* Mica samples the retained desktop root, blurred once per root image. */
 static int prepare_mica(PwWindowEffects *effects,const PwWindowSnapshot *snapshot,const PwWindowImage *images,
@@ -179,7 +186,9 @@ static uint64_t key_bytes(uint64_t key,const void *data,size_t size)
 static uint64_t key_row(uint64_t key,const PwWindowRow *row,int own)
 {
     PwWindowRow seen=*row;
-    if(own || seen.shadow!=PW_SHADOW_WINDOW) {
+    /* a framed Mica window's own backdrop changes with activation (tint_for) */
+    if((own && !(pw_window_mica_backdrop(seen.backdrop) && seen.shadow==PW_SHADOW_WINDOW)) ||
+       (!own && seen.shadow!=PW_SHADOW_WINDOW)) {
         seen.flags&=~PW_WINDOW_ACTIVE;
         if(!(seen.flags&PW_WINDOW_GLASS) && seen.shadow!=PW_SHADOW_WINDOW)seen.material=0;
     }

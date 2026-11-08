@@ -22,6 +22,8 @@ A changed path counts for:
   server/             the in-process wineserver, which the PRX link builds.
   configure.ac,       how the tree is configured; a module a patch adds is found by its own files.
   configure, include/Makefile.in, include/config.h.in
+  po/X.po             a translation: it is compiled into the module whose .rc carries the string, and a patch that
+                      changes a msgid changes that .rc too, which names the module (patches 2494, 2495).
   loader/wine.inf.in  what wineboot installs and registers: tools/build-wine-ps5.sh ships the patched wine.inf.
   a removed module    a deleted file of a directory left with no Makefile.in (winegstreamer, patch 2001): nothing
                       builds it, and the host build made none (no GStreamer) that the console could keep running.
@@ -134,6 +136,8 @@ def classify(tree, changed, unix_modules):
                           if imports & set(v.get('IMPORTS', []) + v.get('DELAYIMPORTS', [])))
         elif parts[0] == 'include' and len(parts) > 1:
             headers.append(path)
+        elif parts[0] == 'po' and len(parts) == 2:
+            continue    # translations: a module's strings change with its own .rc (a patch that edits a msgid edits it too)
         else:
             problems.append(f'{path}: no rule says which modules it changes')
     # A changed header changes the PE sources that include it, directly or through other headers. A module's

@@ -1,0 +1,54 @@
+From 83bb9972ebc17ce082120d3bbed98abc79674560 Mon Sep 17 00:00:00 2001
+From: Mihawk <163614687+mihawk-99@users.noreply.github.com>
+Date: Sat, 7 Nov 2026 18:00:00 -0500
+Subject: [PATCH] explorer: the taskbar's accent is the applied theme's
+
+The taskbar drew its accent (the running program's mark, the pressed and focused buttons) in Windows' default blue
+whatever theme was applied. It now takes the accent Settings stores when a theme is applied (HKCU\Software\Microsoft\
+Windows\DWM AccentColor, PS5_Proton src/pw_accent.h), in the theme's fill shade, and picks up a new one on the
+WM_SETTINGCHANGE that storing it sends, as the theme already did.
+
+- programs/explorer/systray.c: taskbar_refresh_theme's accent from pw_accent_current(); it says on the explorer channel which
+  theme and accent it took, or that the theme was not MihawkOS's and it fell back to the system colours.
+  A settings or theme change repaints the buttons too (child windows), which kept the old accent.
+---
+ programs/explorer/systray.c | 14 +++++++++++---
+ 1 file changed, 11 insertions(+), 3 deletions(-)
+
+diff --git a/programs/explorer/systray.c b/programs/explorer/systray.c
+index e0d01a5..b86fba4 100644
+--- a/programs/explorer/systray.c
++++ b/programs/explorer/systray.c
+@@ -170,10 +170,16 @@ static void taskbar_refresh_theme(void)
+                                                  size, ARRAY_SIZE(size))) && !lstrcmpiW(file, expected);
+     taskbar_dark = managed && !lstrcmpW(colour, L"Dark");
+     if (!managed)
+-    { for (unsigned i = 0; i < ARRAY_SIZE(roles); ++i) taskbar_palette[i] = GetSysColor(roles[i]); return; }
++    {
++        WARN_(explorer)("Mihawk taskbar: theme %s is not MihawkOS's, system colours\n", debugstr_w(file));
++        for (unsigned i = 0; i < ARRAY_SIZE(roles); ++i) taskbar_palette[i] = GetSysColor(roles[i]);
++        return;
++    }
+     taskbar_palette[0] = taskbar_dark ? PW_APPEARANCE_DARK_MICA_FALLBACK : PW_APPEARANCE_LIGHT_MICA_FALLBACK;
+     taskbar_palette[1] = taskbar_dark ? PW_APPEARANCE_DARK_TEXT : PW_APPEARANCE_LIGHT_TEXT;
+-    taskbar_palette[2] = taskbar_dark ? PW_APPEARANCE_DARK_ACCENT : PW_APPEARANCE_LIGHT_ACCENT;
++    /* the applied theme's accent (PS5_Proton src/pw_accent.h through pw_shell_style.h), as Settings stored it */
++    taskbar_palette[2] = pw_accent_colorref(pw_accent_fill(pw_accent_current(), taskbar_dark));
++    WARN_(explorer)("Mihawk taskbar: theme %s, accent %06x\n", taskbar_dark ? "dark" : "light", (unsigned)taskbar_palette[2]);
+     taskbar_palette[3] = taskbar_dark ? PW_APPEARANCE_DARK_LINE : PW_APPEARANCE_LIGHT_LINE;
+     taskbar_palette[4] = taskbar_dark ? PW_APPEARANCE_DARK_HOVER : PW_APPEARANCE_LIGHT_HOVER;
+ }
+@@ -2083,7 +2089,9 @@ static LRESULT WINAPI shell_traywnd_proc( HWND hwnd, UINT msg, WPARAM wparam, LP
+         if (mihawk_taskbar && wparam != SPI_SETWORKAREA)
+         {
+             taskbar_refresh_theme(); taskbar_refresh_font(); taskbar_surfaces();
+-            InvalidateRect(hwnd, NULL, FALSE); InvalidateRect(taskbar_clock, NULL, FALSE);
++            /* the buttons are child windows: a new palette (the theme's accent) repaints them too, or an active
++             * button kept the old accent (shell81-accent-wait-01) */
++            RedrawWindow(hwnd, NULL, NULL, RDW_INVALIDATE | RDW_ALLCHILDREN); InvalidateRect(taskbar_clock, NULL, FALSE);
+             if (taskbar_preview) InvalidateRect(taskbar_preview, NULL, FALSE);
+             taskbar_time[0] = 0; taskbar_update_clock();  /* the locale's time and date formats may have changed */
+             taskbar_forget_placement(); sync_taskbar_buttons();
+-- 
+2.56.0
+

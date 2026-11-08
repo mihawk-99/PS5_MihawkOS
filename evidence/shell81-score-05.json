@@ -1,0 +1,1307 @@
+{
+ "hud": null,
+ "panel": null,
+ "telemetry_hold": null,
+ "launch_readiness": {
+  "ready": true,
+  "seconds": 0.152,
+  "settle_seconds": 0.0,
+  "census_seconds": 0.141,
+  "previous_cleanup_verified": false
+ },
+ "native_close_failures": [],
+ "run": "shell81-score-05",
+ "what": "profile mihawk-os",
+ "env": [
+  "PROTON_STOP_TERMINATE=0"
+ ],
+ "result": "finished",
+ "seconds": 4.2,
+ "probe_verdict": null,
+ "stages": {
+  "launched": 1.02,
+  "title_started": 1.6,
+  "elevated": 1.6,
+  "wine_ended": 1.86,
+  "launcher_started": 3.37,
+  "launcher_ended": 3.65,
+  "closed": 4.19
+ },
+ "clean_owner_restart": false,
+ "launcher_end_status": 0,
+ "initial_status": null,
+ "closed_on_request": false,
+ "child_logs": [],
+ "child_logs_missing": [],
+ "session_logs_status": 0,
+ "storage_errors": 0,
+ "stop_terminate": "0",
+ "injected_fault": null,
+ "exec_protection": null,
+ "code_share": null,
+ "helpers": [],
+ "start_stages": null,
+ "foreign_mappings": null,
+ "helper_sched": null,
+ "helpers_ended": null,
+ "helper_doom": null,
+ "broker_phases": null,
+ "memory_helper_slowest": null,
+ "memory_helper": {
+  "dead": [],
+  "stall_tests": 0,
+  "sections_mib": [],
+  "given_back": 0,
+  "lost": 0,
+  "gave_back_lines": 0
+ },
+ "assertion": false,
+ "chunk_maps": null,
+ "mapped_mib": null,
+ "ask_failures_max": null,
+ "misplaced_max": null,
+ "rep_step_us": null,
+ "exec_rewrites_us": null,
+ "exit_stall": false,
+ "stop_requested": null,
+ "returned_to_launcher": true,
+ "touchpad_touched_at_start": 0,
+ "passed": false,
+ "bench": {},
+ "steady": {},
+ "intervals": {
+  "frames": [],
+  "server": [],
+  "top": []
+ },
+ "shown": {
+  "frames": 0,
+  "per_10s": [],
+  "longest_gap_ms": 0
+ },
+ "broker": null,
+ "pacing": null,
+ "captures": [],
+ "cleanup_verified": false,
+ "hooks_removed": true,
+ "scorecard": {
+  "reference": "ed5cd48a",
+  "states": [
+   {
+    "state": "desktop",
+    "theme": "light",
+    "group": "desktop",
+    "status": "not captured"
+   },
+   {
+    "state": "start",
+    "theme": "light",
+    "group": "start",
+    "status": "not captured"
+   },
+   {
+    "state": "search",
+    "theme": "light",
+    "group": "start",
+    "status": "not captured"
+   },
+   {
+    "state": "quicksettings",
+    "theme": "light",
+    "group": "flyouts",
+    "status": "not captured"
+   },
+   {
+    "state": "quicksettings-wifi",
+    "theme": "light",
+    "group": "flyouts",
+    "status": "no native surface",
+    "reason": "Quick Settings has no Wi-Fi page"
+   },
+   {
+    "state": "notifications",
+    "theme": "light",
+    "group": "flyouts",
+    "status": "not captured"
+   },
+   {
+    "state": "toast",
+    "theme": "light",
+    "group": "flyouts",
+    "status": "no native surface",
+    "reason": "no notification toasts"
+   },
+   {
+    "state": "lock",
+    "theme": "light",
+    "group": "session",
+    "status": "no native surface",
+    "reason": "no lock screen"
+   },
+   {
+    "state": "signin",
+    "theme": "light",
+    "group": "session",
+    "status": "no native surface",
+    "reason": "no sign-in screen"
+   },
+   {
+    "state": "restarting",
+    "theme": "light",
+    "group": "session",
+    "status": "no native surface",
+    "reason": "no restart screen"
+   },
+   {
+    "state": "shutdown-dialog",
+    "theme": "light",
+    "group": "session",
+    "status": "no native surface",
+    "reason": "no shut down dialog"
+   },
+   {
+    "state": "explorer",
+    "theme": "light",
+    "group": "file explorer",
+    "status": "not captured"
+   },
+   {
+    "state": "settings",
+    "theme": "light",
+    "group": "apps",
+    "status": "not captured"
+   },
+   {
+    "state": "settings-taskbar",
+    "theme": "light",
+    "group": "apps",
+    "status": "no native surface",
+    "reason": "Settings has no Taskbar page"
+   },
+   {
+    "state": "settings-clipboard",
+    "theme": "light",
+    "group": "apps",
+    "status": "no native surface",
+    "reason": "Settings has no Clipboard page"
+   },
+   {
+    "state": "notepad",
+    "theme": "light",
+    "group": "apps",
+    "status": "not captured"
+   },
+   {
+    "state": "notepad-save-prompt",
+    "theme": "light",
+    "group": "dialogs",
+    "status": "not captured"
+   },
+   {
+    "state": "calculator",
+    "theme": "light",
+    "group": "apps",
+    "status": "no native surface",
+    "reason": "no Calculator"
+   },
+   {
+    "state": "terminal",
+    "theme": "light",
+    "group": "apps",
+    "status": "not captured"
+   },
+   {
+    "state": "terminal-help",
+    "theme": "light",
+    "group": "apps",
+    "status": "not driven",
+    "reason": "the prototype's terminal is PowerShell's help"
+   },
+   {
+    "state": "taskmgr",
+    "theme": "light",
+    "group": "apps",
+    "status": "not captured"
+   },
+   {
+    "state": "taskmgr-perf",
+    "theme": "light",
+    "group": "apps",
+    "status": "not captured"
+   },
+   {
+    "state": "controls",
+    "theme": "light",
+    "group": "controls",
+    "status": "no native surface",
+    "reason": "no control gallery"
+   },
+   {
+    "state": "controls-buttons",
+    "theme": "light",
+    "group": "controls",
+    "status": "no native surface",
+    "reason": "no control gallery"
+   },
+   {
+    "state": "controls-text",
+    "theme": "light",
+    "group": "controls",
+    "status": "no native surface",
+    "reason": "no control gallery"
+   },
+   {
+    "state": "controls-lists",
+    "theme": "light",
+    "group": "controls",
+    "status": "no native surface",
+    "reason": "no control gallery"
+   },
+   {
+    "state": "controls-ranges",
+    "theme": "light",
+    "group": "controls",
+    "status": "no native surface",
+    "reason": "no control gallery"
+   },
+   {
+    "state": "controls-bars",
+    "theme": "light",
+    "group": "controls",
+    "status": "no native surface",
+    "reason": "no control gallery"
+   },
+   {
+    "state": "controls-dates",
+    "theme": "light",
+    "group": "controls",
+    "status": "no native surface",
+    "reason": "no control gallery"
+   },
+   {
+    "state": "controls-dialog",
+    "theme": "light",
+    "group": "controls",
+    "status": "no native surface",
+    "reason": "no control gallery"
+   },
+   {
+    "state": "snaplayouts",
+    "theme": "light",
+    "group": "snap and switching",
+    "status": "no native surface",
+    "reason": "no Snap Layouts"
+   },
+   {
+    "state": "menu-desktop",
+    "theme": "light",
+    "group": "menus",
+    "status": "not captured"
+   },
+   {
+    "state": "menu-desktop-item",
+    "theme": "light",
+    "group": "menus",
+    "status": "not captured"
+   },
+   {
+    "state": "run",
+    "theme": "light",
+    "group": "dialogs",
+    "status": "not captured"
+   },
+   {
+    "state": "msgbox",
+    "theme": "light",
+    "group": "dialogs",
+    "status": "not captured"
+   },
+   {
+    "state": "msgbox-error",
+    "theme": "light",
+    "group": "dialogs",
+    "status": "not captured"
+   },
+   {
+    "state": "msgbox-info",
+    "theme": "light",
+    "group": "dialogs",
+    "status": "not captured"
+   },
+   {
+    "state": "taskdialog",
+    "theme": "light",
+    "group": "dialogs",
+    "status": "not captured"
+   },
+   {
+    "state": "properties",
+    "theme": "light",
+    "group": "dialogs",
+    "status": "not captured"
+   },
+   {
+    "state": "properties-drive",
+    "theme": "light",
+    "group": "dialogs",
+    "status": "not captured"
+   },
+   {
+    "state": "properties-folder",
+    "theme": "light",
+    "group": "dialogs",
+    "status": "not captured"
+   },
+   {
+    "state": "properties-recycle",
+    "theme": "light",
+    "group": "dialogs",
+    "status": "not driven",
+    "reason": "the Recycle Bin's properties are not opened yet"
+   },
+   {
+    "state": "properties-shortcut",
+    "theme": "light",
+    "group": "dialogs",
+    "status": "not captured"
+   },
+   {
+    "state": "openwith",
+    "theme": "light",
+    "group": "dialogs",
+    "status": "not driven",
+    "reason": "Open with is not opened yet"
+   },
+   {
+    "state": "fileopen",
+    "theme": "light",
+    "group": "dialogs",
+    "status": "not captured"
+   },
+   {
+    "state": "filesave",
+    "theme": "light",
+    "group": "dialogs",
+    "status": "not captured"
+   },
+   {
+    "state": "uac",
+    "theme": "light",
+    "group": "dialogs",
+    "status": "no native surface",
+    "reason": "no elevation prompt"
+   },
+   {
+    "state": "copyprogress",
+    "theme": "light",
+    "group": "dialogs",
+    "status": "not driven",
+    "reason": "needs a copy long enough to show progress"
+   },
+   {
+    "state": "copyprogress-details",
+    "theme": "light",
+    "group": "dialogs",
+    "status": "not driven",
+    "reason": "as copyprogress"
+   },
+   {
+    "state": "conflict",
+    "theme": "light",
+    "group": "dialogs",
+    "status": "not driven",
+    "reason": "needs a copy onto an existing file"
+   },
+   {
+    "state": "osd",
+    "theme": "light",
+    "group": "flyouts",
+    "status": "no native surface",
+    "reason": "no volume indicator"
+   },
+   {
+    "state": "osd-brightness",
+    "theme": "light",
+    "group": "flyouts",
+    "status": "no native surface",
+    "reason": "no brightness indicator"
+   },
+   {
+    "state": "emoji",
+    "theme": "light",
+    "group": "flyouts",
+    "status": "no native surface",
+    "reason": "no emoji panel"
+   },
+   {
+    "state": "clipboard",
+    "theme": "light",
+    "group": "flyouts",
+    "status": "no native surface",
+    "reason": "no clipboard history"
+   },
+   {
+    "state": "taskbar-thumbs",
+    "theme": "light",
+    "group": "taskbar",
+    "status": "not captured"
+   },
+   {
+    "state": "taskbar-tray",
+    "theme": "light",
+    "group": "taskbar",
+    "status": "not captured"
+   },
+   {
+    "state": "taskbar-left",
+    "theme": "light",
+    "group": "taskbar",
+    "status": "no native surface",
+    "reason": "no left-aligned taskbar"
+   },
+   {
+    "state": "taskbar-progress",
+    "theme": "light",
+    "group": "taskbar",
+    "status": "no native surface",
+    "reason": "no button progress"
+   },
+   {
+    "state": "taskbar-flash",
+    "theme": "light",
+    "group": "taskbar",
+    "status": "no native surface",
+    "reason": "no button flashing"
+   },
+   {
+    "state": "hang",
+    "theme": "light",
+    "group": "window chrome",
+    "status": "no native surface",
+    "reason": "no \"not responding\" window"
+   },
+   {
+    "state": "desktop-icon-hover",
+    "theme": "light",
+    "group": "desktop",
+    "status": "not captured"
+   },
+   {
+    "state": "desktop-icon-infotip",
+    "theme": "light",
+    "group": "desktop",
+    "status": "not captured"
+   },
+   {
+    "state": "desktop-icon-selected",
+    "theme": "light",
+    "group": "desktop",
+    "status": "not captured"
+   },
+   {
+    "state": "desktop-rubber-band",
+    "theme": "light",
+    "group": "desktop",
+    "status": "not captured"
+   },
+   {
+    "state": "desktop-multi-selected",
+    "theme": "light",
+    "group": "desktop",
+    "status": "not captured"
+   },
+   {
+    "state": "desktop-icon-drag",
+    "theme": "light",
+    "group": "desktop",
+    "status": "not driven",
+    "reason": "a drag would move and persist a desktop icon"
+   },
+   {
+    "state": "desktop-icon-dropped",
+    "theme": "light",
+    "group": "desktop",
+    "status": "not driven",
+    "reason": "as desktop-icon-drag"
+   },
+   {
+    "state": "taskbar-start-hover",
+    "theme": "light",
+    "group": "taskbar",
+    "status": "not captured"
+   },
+   {
+    "state": "taskbar-start-pressed",
+    "theme": "light",
+    "group": "taskbar",
+    "status": "not captured"
+   },
+   {
+    "state": "start-opened-by-click",
+    "theme": "light",
+    "group": "start",
+    "status": "not captured"
+   },
+   {
+    "state": "taskbar-app-hover",
+    "theme": "light",
+    "group": "taskbar",
+    "status": "not captured"
+   },
+   {
+    "state": "winx",
+    "theme": "light",
+    "group": "taskbar",
+    "status": "no native surface",
+    "reason": "no Start button menu"
+   },
+   {
+    "state": "jumplist",
+    "theme": "light",
+    "group": "taskbar",
+    "status": "no native surface",
+    "reason": "no taskbar button menu"
+   },
+   {
+    "state": "taskbar-menu",
+    "theme": "light",
+    "group": "taskbar",
+    "status": "no native surface",
+    "reason": "no taskbar menu"
+   },
+   {
+    "state": "caption-close-hover",
+    "theme": "light",
+    "group": "window chrome",
+    "status": "not captured"
+   },
+   {
+    "state": "caption-close-pressed",
+    "theme": "light",
+    "group": "window chrome",
+    "status": "not captured"
+   },
+   {
+    "state": "caption-minimize-hover",
+    "theme": "light",
+    "group": "window chrome",
+    "status": "not captured"
+   },
+   {
+    "state": "caption-maximize-hover",
+    "theme": "light",
+    "group": "window chrome",
+    "status": "not captured"
+   },
+   {
+    "state": "windows-active-inactive",
+    "theme": "light",
+    "group": "window chrome",
+    "status": "not captured"
+   },
+   {
+    "state": "snap-preview-left",
+    "theme": "light",
+    "group": "snap and switching",
+    "status": "no native surface",
+    "reason": "no Snap"
+   },
+   {
+    "state": "snap-assist",
+    "theme": "light",
+    "group": "snap and switching",
+    "status": "no native surface",
+    "reason": "no Snap Assist"
+   },
+   {
+    "state": "alttab",
+    "theme": "light",
+    "group": "snap and switching",
+    "status": "no native surface",
+    "reason": "no Alt+Tab switcher"
+   },
+   {
+    "state": "taskview",
+    "theme": "light",
+    "group": "snap and switching",
+    "status": "no native surface",
+    "reason": "no Task View"
+   },
+   {
+    "state": "window-maximized",
+    "theme": "light",
+    "group": "window chrome",
+    "status": "not captured"
+   },
+   {
+    "state": "menu-desktop-view-submenu",
+    "theme": "light",
+    "group": "menus",
+    "status": "not captured"
+   },
+   {
+    "state": "start-pin-hover",
+    "theme": "light",
+    "group": "start",
+    "status": "not captured"
+   },
+   {
+    "state": "desktop",
+    "theme": "dark",
+    "group": "desktop",
+    "status": "not captured"
+   },
+   {
+    "state": "start",
+    "theme": "dark",
+    "group": "start",
+    "status": "not captured"
+   },
+   {
+    "state": "search",
+    "theme": "dark",
+    "group": "start",
+    "status": "not captured"
+   },
+   {
+    "state": "quicksettings",
+    "theme": "dark",
+    "group": "flyouts",
+    "status": "not captured"
+   },
+   {
+    "state": "quicksettings-wifi",
+    "theme": "dark",
+    "group": "flyouts",
+    "status": "no native surface",
+    "reason": "Quick Settings has no Wi-Fi page"
+   },
+   {
+    "state": "notifications",
+    "theme": "dark",
+    "group": "flyouts",
+    "status": "not captured"
+   },
+   {
+    "state": "toast",
+    "theme": "dark",
+    "group": "flyouts",
+    "status": "no native surface",
+    "reason": "no notification toasts"
+   },
+   {
+    "state": "lock",
+    "theme": "dark",
+    "group": "session",
+    "status": "no native surface",
+    "reason": "no lock screen"
+   },
+   {
+    "state": "signin",
+    "theme": "dark",
+    "group": "session",
+    "status": "no native surface",
+    "reason": "no sign-in screen"
+   },
+   {
+    "state": "restarting",
+    "theme": "dark",
+    "group": "session",
+    "status": "no native surface",
+    "reason": "no restart screen"
+   },
+   {
+    "state": "shutdown-dialog",
+    "theme": "dark",
+    "group": "session",
+    "status": "no native surface",
+    "reason": "no shut down dialog"
+   },
+   {
+    "state": "explorer",
+    "theme": "dark",
+    "group": "file explorer",
+    "status": "not captured"
+   },
+   {
+    "state": "settings",
+    "theme": "dark",
+    "group": "apps",
+    "status": "not captured"
+   },
+   {
+    "state": "settings-taskbar",
+    "theme": "dark",
+    "group": "apps",
+    "status": "no native surface",
+    "reason": "Settings has no Taskbar page"
+   },
+   {
+    "state": "settings-clipboard",
+    "theme": "dark",
+    "group": "apps",
+    "status": "no native surface",
+    "reason": "Settings has no Clipboard page"
+   },
+   {
+    "state": "notepad",
+    "theme": "dark",
+    "group": "apps",
+    "status": "not captured"
+   },
+   {
+    "state": "notepad-save-prompt",
+    "theme": "dark",
+    "group": "dialogs",
+    "status": "not captured"
+   },
+   {
+    "state": "calculator",
+    "theme": "dark",
+    "group": "apps",
+    "status": "no native surface",
+    "reason": "no Calculator"
+   },
+   {
+    "state": "terminal",
+    "theme": "dark",
+    "group": "apps",
+    "status": "not captured"
+   },
+   {
+    "state": "terminal-help",
+    "theme": "dark",
+    "group": "apps",
+    "status": "not driven",
+    "reason": "the prototype's terminal is PowerShell's help"
+   },
+   {
+    "state": "taskmgr",
+    "theme": "dark",
+    "group": "apps",
+    "status": "not captured"
+   },
+   {
+    "state": "taskmgr-perf",
+    "theme": "dark",
+    "group": "apps",
+    "status": "not captured"
+   },
+   {
+    "state": "controls",
+    "theme": "dark",
+    "group": "controls",
+    "status": "no native surface",
+    "reason": "no control gallery"
+   },
+   {
+    "state": "controls-buttons",
+    "theme": "dark",
+    "group": "controls",
+    "status": "no native surface",
+    "reason": "no control gallery"
+   },
+   {
+    "state": "controls-text",
+    "theme": "dark",
+    "group": "controls",
+    "status": "no native surface",
+    "reason": "no control gallery"
+   },
+   {
+    "state": "controls-lists",
+    "theme": "dark",
+    "group": "controls",
+    "status": "no native surface",
+    "reason": "no control gallery"
+   },
+   {
+    "state": "controls-ranges",
+    "theme": "dark",
+    "group": "controls",
+    "status": "no native surface",
+    "reason": "no control gallery"
+   },
+   {
+    "state": "controls-bars",
+    "theme": "dark",
+    "group": "controls",
+    "status": "no native surface",
+    "reason": "no control gallery"
+   },
+   {
+    "state": "controls-dates",
+    "theme": "dark",
+    "group": "controls",
+    "status": "no native surface",
+    "reason": "no control gallery"
+   },
+   {
+    "state": "controls-dialog",
+    "theme": "dark",
+    "group": "controls",
+    "status": "no native surface",
+    "reason": "no control gallery"
+   },
+   {
+    "state": "snaplayouts",
+    "theme": "dark",
+    "group": "snap and switching",
+    "status": "no native surface",
+    "reason": "no Snap Layouts"
+   },
+   {
+    "state": "menu-desktop",
+    "theme": "dark",
+    "group": "menus",
+    "status": "not captured"
+   },
+   {
+    "state": "menu-desktop-item",
+    "theme": "dark",
+    "group": "menus",
+    "status": "not captured"
+   },
+   {
+    "state": "run",
+    "theme": "dark",
+    "group": "dialogs",
+    "status": "not captured"
+   },
+   {
+    "state": "msgbox",
+    "theme": "dark",
+    "group": "dialogs",
+    "status": "not captured"
+   },
+   {
+    "state": "msgbox-error",
+    "theme": "dark",
+    "group": "dialogs",
+    "status": "not captured"
+   },
+   {
+    "state": "msgbox-info",
+    "theme": "dark",
+    "group": "dialogs",
+    "status": "not captured"
+   },
+   {
+    "state": "taskdialog",
+    "theme": "dark",
+    "group": "dialogs",
+    "status": "not captured"
+   },
+   {
+    "state": "properties",
+    "theme": "dark",
+    "group": "dialogs",
+    "status": "not captured"
+   },
+   {
+    "state": "properties-drive",
+    "theme": "dark",
+    "group": "dialogs",
+    "status": "not captured"
+   },
+   {
+    "state": "properties-folder",
+    "theme": "dark",
+    "group": "dialogs",
+    "status": "not captured"
+   },
+   {
+    "state": "properties-recycle",
+    "theme": "dark",
+    "group": "dialogs",
+    "status": "not driven",
+    "reason": "the Recycle Bin's properties are not opened yet"
+   },
+   {
+    "state": "properties-shortcut",
+    "theme": "dark",
+    "group": "dialogs",
+    "status": "not captured"
+   },
+   {
+    "state": "openwith",
+    "theme": "dark",
+    "group": "dialogs",
+    "status": "not driven",
+    "reason": "Open with is not opened yet"
+   },
+   {
+    "state": "fileopen",
+    "theme": "dark",
+    "group": "dialogs",
+    "status": "not captured"
+   },
+   {
+    "state": "filesave",
+    "theme": "dark",
+    "group": "dialogs",
+    "status": "not captured"
+   },
+   {
+    "state": "uac",
+    "theme": "dark",
+    "group": "dialogs",
+    "status": "no native surface",
+    "reason": "no elevation prompt"
+   },
+   {
+    "state": "copyprogress",
+    "theme": "dark",
+    "group": "dialogs",
+    "status": "not driven",
+    "reason": "needs a copy long enough to show progress"
+   },
+   {
+    "state": "copyprogress-details",
+    "theme": "dark",
+    "group": "dialogs",
+    "status": "not driven",
+    "reason": "as copyprogress"
+   },
+   {
+    "state": "conflict",
+    "theme": "dark",
+    "group": "dialogs",
+    "status": "not driven",
+    "reason": "needs a copy onto an existing file"
+   },
+   {
+    "state": "osd",
+    "theme": "dark",
+    "group": "flyouts",
+    "status": "no native surface",
+    "reason": "no volume indicator"
+   },
+   {
+    "state": "osd-brightness",
+    "theme": "dark",
+    "group": "flyouts",
+    "status": "no native surface",
+    "reason": "no brightness indicator"
+   },
+   {
+    "state": "emoji",
+    "theme": "dark",
+    "group": "flyouts",
+    "status": "no native surface",
+    "reason": "no emoji panel"
+   },
+   {
+    "state": "clipboard",
+    "theme": "dark",
+    "group": "flyouts",
+    "status": "no native surface",
+    "reason": "no clipboard history"
+   },
+   {
+    "state": "taskbar-thumbs",
+    "theme": "dark",
+    "group": "taskbar",
+    "status": "not captured"
+   },
+   {
+    "state": "taskbar-tray",
+    "theme": "dark",
+    "group": "taskbar",
+    "status": "not captured"
+   },
+   {
+    "state": "taskbar-left",
+    "theme": "dark",
+    "group": "taskbar",
+    "status": "no native surface",
+    "reason": "no left-aligned taskbar"
+   },
+   {
+    "state": "taskbar-progress",
+    "theme": "dark",
+    "group": "taskbar",
+    "status": "no native surface",
+    "reason": "no button progress"
+   },
+   {
+    "state": "taskbar-flash",
+    "theme": "dark",
+    "group": "taskbar",
+    "status": "no native surface",
+    "reason": "no button flashing"
+   },
+   {
+    "state": "hang",
+    "theme": "dark",
+    "group": "window chrome",
+    "status": "no native surface",
+    "reason": "no \"not responding\" window"
+   },
+   {
+    "state": "desktop-icon-hover",
+    "theme": "dark",
+    "group": "desktop",
+    "status": "not captured"
+   },
+   {
+    "state": "desktop-icon-infotip",
+    "theme": "dark",
+    "group": "desktop",
+    "status": "not captured"
+   },
+   {
+    "state": "desktop-icon-selected",
+    "theme": "dark",
+    "group": "desktop",
+    "status": "not captured"
+   },
+   {
+    "state": "desktop-rubber-band",
+    "theme": "dark",
+    "group": "desktop",
+    "status": "not captured"
+   },
+   {
+    "state": "desktop-multi-selected",
+    "theme": "dark",
+    "group": "desktop",
+    "status": "not captured"
+   },
+   {
+    "state": "desktop-icon-drag",
+    "theme": "dark",
+    "group": "desktop",
+    "status": "not driven",
+    "reason": "a drag would move and persist a desktop icon"
+   },
+   {
+    "state": "desktop-icon-dropped",
+    "theme": "dark",
+    "group": "desktop",
+    "status": "not driven",
+    "reason": "as desktop-icon-drag"
+   },
+   {
+    "state": "taskbar-start-hover",
+    "theme": "dark",
+    "group": "taskbar",
+    "status": "not captured"
+   },
+   {
+    "state": "taskbar-start-pressed",
+    "theme": "dark",
+    "group": "taskbar",
+    "status": "not captured"
+   },
+   {
+    "state": "start-opened-by-click",
+    "theme": "dark",
+    "group": "start",
+    "status": "not captured"
+   },
+   {
+    "state": "taskbar-app-hover",
+    "theme": "dark",
+    "group": "taskbar",
+    "status": "not captured"
+   },
+   {
+    "state": "winx",
+    "theme": "dark",
+    "group": "taskbar",
+    "status": "no native surface",
+    "reason": "no Start button menu"
+   },
+   {
+    "state": "jumplist",
+    "theme": "dark",
+    "group": "taskbar",
+    "status": "no native surface",
+    "reason": "no taskbar button menu"
+   },
+   {
+    "state": "taskbar-menu",
+    "theme": "dark",
+    "group": "taskbar",
+    "status": "no native surface",
+    "reason": "no taskbar menu"
+   },
+   {
+    "state": "caption-close-hover",
+    "theme": "dark",
+    "group": "window chrome",
+    "status": "not captured"
+   },
+   {
+    "state": "caption-close-pressed",
+    "theme": "dark",
+    "group": "window chrome",
+    "status": "not captured"
+   },
+   {
+    "state": "caption-minimize-hover",
+    "theme": "dark",
+    "group": "window chrome",
+    "status": "not captured"
+   },
+   {
+    "state": "caption-maximize-hover",
+    "theme": "dark",
+    "group": "window chrome",
+    "status": "not captured"
+   },
+   {
+    "state": "windows-active-inactive",
+    "theme": "dark",
+    "group": "window chrome",
+    "status": "not captured"
+   },
+   {
+    "state": "snap-preview-left",
+    "theme": "dark",
+    "group": "snap and switching",
+    "status": "no native surface",
+    "reason": "no Snap"
+   },
+   {
+    "state": "snap-assist",
+    "theme": "dark",
+    "group": "snap and switching",
+    "status": "no native surface",
+    "reason": "no Snap Assist"
+   },
+   {
+    "state": "alttab",
+    "theme": "dark",
+    "group": "snap and switching",
+    "status": "no native surface",
+    "reason": "no Alt+Tab switcher"
+   },
+   {
+    "state": "taskview",
+    "theme": "dark",
+    "group": "snap and switching",
+    "status": "no native surface",
+    "reason": "no Task View"
+   },
+   {
+    "state": "window-maximized",
+    "theme": "dark",
+    "group": "window chrome",
+    "status": "not captured"
+   },
+   {
+    "state": "menu-desktop-view-submenu",
+    "theme": "dark",
+    "group": "menus",
+    "status": "not captured"
+   },
+   {
+    "state": "start-pin-hover",
+    "theme": "dark",
+    "group": "start",
+    "status": "not captured"
+   }
+  ],
+  "like_prototype": 0.0,
+  "scored_mean": 0.0,
+  "scored": 0,
+  "total": 172,
+  "by_status": {
+   "scored": 0,
+   "did not open": 0,
+   "not driven": 16,
+   "no native surface": 68,
+   "not captured": 88
+  },
+  "groups": {
+   "desktop": {
+    "states": 16,
+    "scored": 0,
+    "like_prototype": 0.0,
+    "scored_mean": 0.0
+   },
+   "taskbar": {
+    "states": 22,
+    "scored": 0,
+    "like_prototype": 0.0,
+    "scored_mean": 0.0
+   },
+   "start": {
+    "states": 8,
+    "scored": 0,
+    "like_prototype": 0.0,
+    "scored_mean": 0.0
+   },
+   "flyouts": {
+    "states": 16,
+    "scored": 0,
+    "like_prototype": 0.0,
+    "scored_mean": 0.0
+   },
+   "menus": {
+    "states": 6,
+    "scored": 0,
+    "like_prototype": 0.0,
+    "scored_mean": 0.0
+   },
+   "window chrome": {
+    "states": 14,
+    "scored": 0,
+    "like_prototype": 0.0,
+    "scored_mean": 0.0
+   },
+   "file explorer": {
+    "states": 2,
+    "scored": 0,
+    "like_prototype": 0.0,
+    "scored_mean": 0.0
+   },
+   "dialogs": {
+    "states": 36,
+    "scored": 0,
+    "like_prototype": 0.0,
+    "scored_mean": 0.0
+   },
+   "apps": {
+    "states": 18,
+    "scored": 0,
+    "like_prototype": 0.0,
+    "scored_mean": 0.0
+   },
+   "controls": {
+    "states": 16,
+    "scored": 0,
+    "like_prototype": 0.0,
+    "scored_mean": 0.0
+   },
+   "snap and switching": {
+    "states": 10,
+    "scored": 0,
+    "like_prototype": 0.0,
+    "scored_mean": 0.0
+   },
+   "session": {
+    "states": 8,
+    "scored": 0,
+    "like_prototype": 0.0,
+    "scored_mean": 0.0
+   }
+  },
+  "backlog": [
+   "dialogs",
+   "taskbar",
+   "apps",
+   "desktop",
+   "flyouts",
+   "controls",
+   "window chrome",
+   "snap and switching",
+   "start",
+   "session",
+   "menus",
+   "file explorer"
+  ]
+ }
+}

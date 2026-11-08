@@ -59,5 +59,18 @@ class BuiltinsDigest(unittest.TestCase):
             self.assertNotEqual(time, inf.stat().st_mtime)
 
 
+    def test_the_template_leaves_out_what_wineboot_deletes(self):
+        """wine.inf's "11,,name,-" modules are gone after a prefix's first update; the template must not hold them, or
+        the deep read-back calls them damaged (console-setup-2026-11-07-16: 12 files)."""
+        text = (
+            '[FakeDllsWow64]\r\n11,,iexplore.exe\r\n11,,mscorwks.dll,-\r\n11,,*\r\n11,,comctl32_v6.dll,-\r\n'
+            '[FakeDlls]\r\n11,gecko\\plugin,npmshtml.dll\r\n11,,fusion.dll,-\r\n12,,*.sys,-\r\n[Other]\r\n11,,x.dll,-\r\n')
+        skipped = tool.inf_skipped(text)
+        self.assertIn('mscorwks.dll', skipped['syswow64'])
+        self.assertIn('comctl32_v6.dll', skipped['syswow64'])
+        self.assertIn('fusion.dll', skipped['system32'])
+        for names in skipped.values():
+            self.assertFalse({'iexplore.exe', 'npmshtml.dll', 'x.dll', '*.sys', '*'} & names)
+
 if __name__ == '__main__':
     unittest.main()

@@ -1,0 +1,6943 @@
+{
+ "hud": null,
+ "panel": null,
+ "telemetry_hold": null,
+ "launch_readiness": {
+  "ready": true,
+  "seconds": 0.277,
+  "settle_seconds": 0.0,
+  "census_seconds": 0.262,
+  "previous_cleanup_verified": false
+ },
+ "native_close_failures": [],
+ "run": "shell81-base-05",
+ "what": "profile mihawk-os",
+ "env": [
+  "PROTON_STOP_TERMINATE=0"
+ ],
+ "result": "finished",
+ "seconds": 295.4,
+ "probe_verdict": null,
+ "stages": {
+  "launched": 1.04,
+  "title_started": 1.57,
+  "elevated": 1.57,
+  "wine_loaded": 1.87,
+  "wineboot_started": 4.45,
+  "wineboot_ended": 19.49,
+  "program_started": 20.34,
+  "program_ended": 290.55,
+  "wine_ended": 292.94,
+  "launcher_started": 294.52,
+  "launcher_ended": 294.88,
+  "closed": 295.42
+ },
+ "clean_owner_restart": true,
+ "launcher_end_status": 0,
+ "initial_status": 0,
+ "closed_on_request": false,
+ "child_logs": [
+  "klog/shell81-base-05-wine-child-2326.log",
+  "klog/shell81-base-05-wine-child-2327.log",
+  "klog/shell81-base-05-wine-child-2328.log",
+  "klog/shell81-base-05-wine-child-2329.log",
+  "klog/shell81-base-05-wine-child-2330.log",
+  "klog/shell81-base-05-wine-child-2331.log",
+  "klog/shell81-base-05-wine-child-2332.log",
+  "klog/shell81-base-05-wine-child-2333.log",
+  "klog/shell81-base-05-wine-child-2334.log",
+  "klog/shell81-base-05-wine-child-2335.log",
+  "klog/shell81-base-05-wine-child-2336.log",
+  "klog/shell81-base-05-wine-child-2337.log",
+  "klog/shell81-base-05-wine-child-2338.log",
+  "klog/shell81-base-05-wine-child-2339.log",
+  "klog/shell81-base-05-wine-child-2340.log",
+  "klog/shell81-base-05-wine-child-2341.log",
+  "klog/shell81-base-05-wine-child-2342.log",
+  "klog/shell81-base-05-wine-child-2343.log",
+  "klog/shell81-base-05-wine-child-2344.log",
+  "klog/shell81-base-05-wine-child-2345.log",
+  "klog/shell81-base-05-wine-child-2346.log",
+  "klog/shell81-base-05-wine-child-2347.log",
+  "klog/shell81-base-05-wine-child-2348.log",
+  "klog/shell81-base-05-wine-child-2349.log",
+  "klog/shell81-base-05-wine-child-2350.log",
+  "klog/shell81-base-05-wine-child-2351.log",
+  "klog/shell81-base-05-wine-child-2352.log",
+  "klog/shell81-base-05-wine-child-2353.log",
+  "klog/shell81-base-05-wine-child-2354.log",
+  "klog/shell81-base-05-wine-child-2355.log",
+  "klog/shell81-base-05-wine-child-2356.log",
+  "klog/shell81-base-05-wine-child-2357.log",
+  "klog/shell81-base-05-wine-child-2358.log",
+  "klog/shell81-base-05-wine-child-2359.log"
+ ],
+ "child_logs_missing": [],
+ "session_logs_status": 0,
+ "storage_errors": 0,
+ "stop_terminate": "0",
+ "injected_fault": null,
+ "exec_protection": {
+  "refused": 0,
+  "conversions": 1179,
+  "converted_kib": 18864,
+  "convert_failed": 0,
+  "exec_refused": 0,
+  "grant_retries": 0,
+  "modules": 0,
+  "sdk_refused": 0
+ },
+ "code_share": {
+  "shared": 4341,
+  "shared_kib": 69456,
+  "offered": 1130,
+  "mismatched": 0,
+  "failed": 0,
+  "private_writes": 0,
+  "private_kib": 0
+ },
+ "helpers": [
+  {
+   "program": null,
+   "libcef": false,
+   "resident_peak_mib": null,
+   "resident_last_mib": null,
+   "images_held_mib": null,
+   "vm_last": null,
+   "exec": null
+  },
+  {
+   "program": null,
+   "libcef": false,
+   "resident_peak_mib": 30,
+   "resident_last_mib": 27,
+   "images_held_mib": 34,
+   "vm_last": {
+    "resident_mib": 18,
+    "direct_resident_mib": 160,
+    "flexible_mib": 40
+   },
+   "exec": {
+    "refused": 0,
+    "conversions": 153,
+    "converted_kib": 2448,
+    "convert_failed": 0,
+    "exec_refused": 0,
+    "grant_retries": 0,
+    "modules": 0,
+    "sdk_refused": 0
+   }
+  },
+  {
+   "program": null,
+   "libcef": false,
+   "resident_peak_mib": 15,
+   "resident_last_mib": 12,
+   "images_held_mib": 6,
+   "vm_last": {
+    "resident_mib": 6,
+    "direct_resident_mib": 37,
+    "flexible_mib": 26
+   },
+   "exec": {
+    "refused": 0,
+    "conversions": 28,
+    "converted_kib": 448,
+    "convert_failed": 0,
+    "exec_refused": 0,
+    "grant_retries": 0,
+    "modules": 0,
+    "sdk_refused": 0
+   }
+  },
+  {
+   "program": null,
+   "libcef": false,
+   "resident_peak_mib": 18,
+   "resident_last_mib": 18,
+   "images_held_mib": 8,
+   "vm_last": {
+    "resident_mib": 13,
+    "direct_resident_mib": 19,
+    "flexible_mib": 29
+   },
+   "exec": {
+    "refused": 0,
+    "conversions": 172,
+    "converted_kib": 2752,
+    "convert_failed": 0,
+    "exec_refused": 0,
+    "grant_retries": 0,
+    "modules": 0,
+    "sdk_refused": 0
+   }
+  },
+  {
+   "program": null,
+   "libcef": false,
+   "resident_peak_mib": 15,
+   "resident_last_mib": 12,
+   "images_held_mib": 7,
+   "vm_last": {
+    "resident_mib": 6,
+    "direct_resident_mib": 31,
+    "flexible_mib": 26
+   },
+   "exec": {
+    "refused": 0,
+    "conversions": 29,
+    "converted_kib": 464,
+    "convert_failed": 0,
+    "exec_refused": 0,
+    "grant_retries": 0,
+    "modules": 0,
+    "sdk_refused": 0
+   }
+  },
+  {
+   "program": null,
+   "libcef": false,
+   "resident_peak_mib": 19,
+   "resident_last_mib": 15,
+   "images_held_mib": 9,
+   "vm_last": {
+    "resident_mib": 10,
+    "direct_resident_mib": 32,
+    "flexible_mib": 29
+   },
+   "exec": {
+    "refused": 0,
+    "conversions": 20,
+    "converted_kib": 320,
+    "convert_failed": 0,
+    "exec_refused": 0,
+    "grant_retries": 0,
+    "modules": 0,
+    "sdk_refused": 0
+   }
+  },
+  {
+   "program": null,
+   "libcef": false,
+   "resident_peak_mib": null,
+   "resident_last_mib": null,
+   "images_held_mib": null,
+   "vm_last": null,
+   "exec": {
+    "refused": 0,
+    "conversions": 32,
+    "converted_kib": 512,
+    "convert_failed": 0,
+    "exec_refused": 0,
+    "grant_retries": 0,
+    "modules": 0,
+    "sdk_refused": 0
+   }
+  },
+  {
+   "program": null,
+   "libcef": false,
+   "resident_peak_mib": null,
+   "resident_last_mib": null,
+   "images_held_mib": null,
+   "vm_last": null,
+   "exec": {
+    "refused": 0,
+    "conversions": 217,
+    "converted_kib": 3472,
+    "convert_failed": 0,
+    "exec_refused": 0,
+    "grant_retries": 0,
+    "modules": 0,
+    "sdk_refused": 0
+   }
+  },
+  {
+   "program": null,
+   "libcef": false,
+   "resident_peak_mib": null,
+   "resident_last_mib": null,
+   "images_held_mib": null,
+   "vm_last": null,
+   "exec": {
+    "refused": 0,
+    "conversions": 6,
+    "converted_kib": 96,
+    "convert_failed": 0,
+    "exec_refused": 0,
+    "grant_retries": 0,
+    "modules": 0,
+    "sdk_refused": 0
+   }
+  },
+  {
+   "program": null,
+   "libcef": false,
+   "resident_peak_mib": 14,
+   "resident_last_mib": 11,
+   "images_held_mib": 6,
+   "vm_last": {
+    "resident_mib": 6,
+    "direct_resident_mib": 20,
+    "flexible_mib": 26
+   },
+   "exec": {
+    "refused": 0,
+    "conversions": 3,
+    "converted_kib": 48,
+    "convert_failed": 0,
+    "exec_refused": 0,
+    "grant_retries": 0,
+    "modules": 0,
+    "sdk_refused": 0
+   }
+  },
+  {
+   "program": null,
+   "libcef": false,
+   "resident_peak_mib": 18,
+   "resident_last_mib": 15,
+   "images_held_mib": 8,
+   "vm_last": {
+    "resident_mib": 9,
+    "direct_resident_mib": 29,
+    "flexible_mib": 29
+   },
+   "exec": {
+    "refused": 0,
+    "conversions": 4,
+    "converted_kib": 64,
+    "convert_failed": 0,
+    "exec_refused": 0,
+    "grant_retries": 0,
+    "modules": 0,
+    "sdk_refused": 0
+   }
+  },
+  {
+   "program": null,
+   "libcef": false,
+   "resident_peak_mib": null,
+   "resident_last_mib": null,
+   "images_held_mib": null,
+   "vm_last": null,
+   "exec": {
+    "refused": 0,
+    "conversions": 365,
+    "converted_kib": 5840,
+    "convert_failed": 0,
+    "exec_refused": 0,
+    "grant_retries": 0,
+    "modules": 0,
+    "sdk_refused": 0
+   }
+  },
+  {
+   "program": null,
+   "libcef": false,
+   "resident_peak_mib": null,
+   "resident_last_mib": null,
+   "images_held_mib": null,
+   "vm_last": null,
+   "exec": {
+    "refused": 0,
+    "conversions": 8,
+    "converted_kib": 128,
+    "convert_failed": 0,
+    "exec_refused": 0,
+    "grant_retries": 0,
+    "modules": 0,
+    "sdk_refused": 0
+   }
+  },
+  {
+   "program": "shell-scorecard64-probe.exe",
+   "libcef": false,
+   "resident_peak_mib": 20,
+   "resident_last_mib": 19,
+   "images_held_mib": 24,
+   "vm_last": {
+    "resident_mib": 11,
+    "direct_resident_mib": 51,
+    "flexible_mib": 35
+   },
+   "exec": {
+    "refused": 0,
+    "conversions": 46,
+    "converted_kib": 736,
+    "convert_failed": 0,
+    "exec_refused": 0,
+    "grant_retries": 0,
+    "modules": 0,
+    "sdk_refused": 0
+   }
+  },
+  {
+   "program": null,
+   "libcef": false,
+   "resident_peak_mib": null,
+   "resident_last_mib": null,
+   "images_held_mib": null,
+   "vm_last": null,
+   "exec": {
+    "refused": 0,
+    "conversions": 0,
+    "converted_kib": 0,
+    "convert_failed": 0,
+    "exec_refused": 0,
+    "grant_retries": 0,
+    "modules": 0,
+    "sdk_refused": 0
+   }
+  },
+  {
+   "program": null,
+   "libcef": false,
+   "resident_peak_mib": 14,
+   "resident_last_mib": 11,
+   "images_held_mib": 6,
+   "vm_last": {
+    "resident_mib": 6,
+    "direct_resident_mib": 28,
+    "flexible_mib": 26
+   },
+   "exec": {
+    "refused": 0,
+    "conversions": 2,
+    "converted_kib": 32,
+    "convert_failed": 0,
+    "exec_refused": 0,
+    "grant_retries": 0,
+    "modules": 0,
+    "sdk_refused": 0
+   }
+  },
+  {
+   "program": null,
+   "libcef": false,
+   "resident_peak_mib": 21,
+   "resident_last_mib": 21,
+   "images_held_mib": 35,
+   "vm_last": {
+    "resident_mib": 13,
+    "direct_resident_mib": 60,
+    "flexible_mib": 32
+   },
+   "exec": {
+    "refused": 0,
+    "conversions": 7,
+    "converted_kib": 112,
+    "convert_failed": 0,
+    "exec_refused": 0,
+    "grant_retries": 0,
+    "modules": 0,
+    "sdk_refused": 0
+   }
+  },
+  {
+   "program": null,
+   "libcef": false,
+   "resident_peak_mib": null,
+   "resident_last_mib": null,
+   "images_held_mib": null,
+   "vm_last": null,
+   "exec": {
+    "refused": 0,
+    "conversions": 7,
+    "converted_kib": 112,
+    "convert_failed": 0,
+    "exec_refused": 0,
+    "grant_retries": 0,
+    "modules": 0,
+    "sdk_refused": 0
+   }
+  },
+  {
+   "program": null,
+   "libcef": false,
+   "resident_peak_mib": null,
+   "resident_last_mib": null,
+   "images_held_mib": null,
+   "vm_last": null,
+   "exec": {
+    "refused": 0,
+    "conversions": 7,
+    "converted_kib": 112,
+    "convert_failed": 0,
+    "exec_refused": 0,
+    "grant_retries": 0,
+    "modules": 0,
+    "sdk_refused": 0
+   }
+  },
+  {
+   "program": null,
+   "libcef": false,
+   "resident_peak_mib": null,
+   "resident_last_mib": null,
+   "images_held_mib": null,
+   "vm_last": null,
+   "exec": {
+    "refused": 0,
+    "conversions": 0,
+    "converted_kib": 0,
+    "convert_failed": 0,
+    "exec_refused": 0,
+    "grant_retries": 0,
+    "modules": 0,
+    "sdk_refused": 0
+   }
+  },
+  {
+   "program": "mihawk-settings.exe",
+   "libcef": false,
+   "resident_peak_mib": null,
+   "resident_last_mib": null,
+   "images_held_mib": null,
+   "vm_last": null,
+   "exec": {
+    "refused": 0,
+    "conversions": 5,
+    "converted_kib": 80,
+    "convert_failed": 0,
+    "exec_refused": 0,
+    "grant_retries": 0,
+    "modules": 0,
+    "sdk_refused": 0
+   }
+  },
+  {
+   "program": null,
+   "libcef": false,
+   "resident_peak_mib": null,
+   "resident_last_mib": null,
+   "images_held_mib": null,
+   "vm_last": null,
+   "exec": {
+    "refused": 0,
+    "conversions": 7,
+    "converted_kib": 112,
+    "convert_failed": 0,
+    "exec_refused": 0,
+    "grant_retries": 0,
+    "modules": 0,
+    "sdk_refused": 0
+   }
+  },
+  {
+   "program": null,
+   "libcef": false,
+   "resident_peak_mib": null,
+   "resident_last_mib": null,
+   "images_held_mib": null,
+   "vm_last": null,
+   "exec": {
+    "refused": 0,
+    "conversions": 7,
+    "converted_kib": 112,
+    "convert_failed": 0,
+    "exec_refused": 0,
+    "grant_retries": 0,
+    "modules": 0,
+    "sdk_refused": 0
+   }
+  },
+  {
+   "program": null,
+   "libcef": false,
+   "resident_peak_mib": null,
+   "resident_last_mib": null,
+   "images_held_mib": null,
+   "vm_last": null,
+   "exec": {
+    "refused": 0,
+    "conversions": 10,
+    "converted_kib": 160,
+    "convert_failed": 0,
+    "exec_refused": 0,
+    "grant_retries": 0,
+    "modules": 0,
+    "sdk_refused": 0
+   }
+  },
+  {
+   "program": null,
+   "libcef": false,
+   "resident_peak_mib": null,
+   "resident_last_mib": null,
+   "images_held_mib": null,
+   "vm_last": null,
+   "exec": {
+    "refused": 0,
+    "conversions": 0,
+    "converted_kib": 0,
+    "convert_failed": 0,
+    "exec_refused": 0,
+    "grant_retries": 0,
+    "modules": 0,
+    "sdk_refused": 0
+   }
+  },
+  {
+   "program": null,
+   "libcef": false,
+   "resident_peak_mib": 18,
+   "resident_last_mib": 18,
+   "images_held_mib": 35,
+   "vm_last": {
+    "resident_mib": 10,
+    "direct_resident_mib": 60,
+    "flexible_mib": 32
+   },
+   "exec": {
+    "refused": 0,
+    "conversions": 5,
+    "converted_kib": 80,
+    "convert_failed": 0,
+    "exec_refused": 0,
+    "grant_retries": 0,
+    "modules": 0,
+    "sdk_refused": 0
+   }
+  },
+  {
+   "program": null,
+   "libcef": false,
+   "resident_peak_mib": null,
+   "resident_last_mib": null,
+   "images_held_mib": null,
+   "vm_last": null,
+   "exec": {
+    "refused": 0,
+    "conversions": 5,
+    "converted_kib": 80,
+    "convert_failed": 0,
+    "exec_refused": 0,
+    "grant_retries": 0,
+    "modules": 0,
+    "sdk_refused": 0
+   }
+  },
+  {
+   "program": null,
+   "libcef": false,
+   "resident_peak_mib": null,
+   "resident_last_mib": null,
+   "images_held_mib": null,
+   "vm_last": null,
+   "exec": {
+    "refused": 0,
+    "conversions": 5,
+    "converted_kib": 80,
+    "convert_failed": 0,
+    "exec_refused": 0,
+    "grant_retries": 0,
+    "modules": 0,
+    "sdk_refused": 0
+   }
+  },
+  {
+   "program": null,
+   "libcef": false,
+   "resident_peak_mib": null,
+   "resident_last_mib": null,
+   "images_held_mib": null,
+   "vm_last": null,
+   "exec": {
+    "refused": 0,
+    "conversions": 0,
+    "converted_kib": 0,
+    "convert_failed": 0,
+    "exec_refused": 0,
+    "grant_retries": 0,
+    "modules": 0,
+    "sdk_refused": 0
+   }
+  },
+  {
+   "program": "mihawk-settings.exe",
+   "libcef": false,
+   "resident_peak_mib": null,
+   "resident_last_mib": null,
+   "images_held_mib": null,
+   "vm_last": null,
+   "exec": {
+    "refused": 0,
+    "conversions": 5,
+    "converted_kib": 80,
+    "convert_failed": 0,
+    "exec_refused": 0,
+    "grant_retries": 0,
+    "modules": 0,
+    "sdk_refused": 0
+   }
+  },
+  {
+   "program": null,
+   "libcef": false,
+   "resident_peak_mib": null,
+   "resident_last_mib": null,
+   "images_held_mib": null,
+   "vm_last": null,
+   "exec": {
+    "refused": 0,
+    "conversions": 7,
+    "converted_kib": 112,
+    "convert_failed": 0,
+    "exec_refused": 0,
+    "grant_retries": 0,
+    "modules": 0,
+    "sdk_refused": 0
+   }
+  },
+  {
+   "program": null,
+   "libcef": false,
+   "resident_peak_mib": null,
+   "resident_last_mib": null,
+   "images_held_mib": null,
+   "vm_last": null,
+   "exec": {
+    "refused": 0,
+    "conversions": 7,
+    "converted_kib": 112,
+    "convert_failed": 0,
+    "exec_refused": 0,
+    "grant_retries": 0,
+    "modules": 0,
+    "sdk_refused": 0
+   }
+  },
+  {
+   "program": null,
+   "libcef": false,
+   "resident_peak_mib": null,
+   "resident_last_mib": null,
+   "images_held_mib": null,
+   "vm_last": null,
+   "exec": {
+    "refused": 0,
+    "conversions": 10,
+    "converted_kib": 160,
+    "convert_failed": 0,
+    "exec_refused": 0,
+    "grant_retries": 0,
+    "modules": 0,
+    "sdk_refused": 0
+   }
+  },
+  {
+   "program": null,
+   "libcef": false,
+   "resident_peak_mib": null,
+   "resident_last_mib": null,
+   "images_held_mib": null,
+   "vm_last": null,
+   "exec": {
+    "refused": 0,
+    "conversions": 0,
+    "converted_kib": 0,
+    "convert_failed": 0,
+    "exec_refused": 0,
+    "grant_retries": 0,
+    "modules": 0,
+    "sdk_refused": 0
+   }
+  }
+ ],
+ "start_stages": {
+  "starts": 28,
+  "warm_starts": 21,
+  "median": {
+   "points": {
+    "answered": 55,
+    "answered-parent": 125.0,
+    "asked": 0.0,
+    "bootstrap": 88,
+    "connected": 71,
+    "control": 71,
+    "ending": 15189,
+    "entry": 83,
+    "exit": 15137,
+    "exit-received": 16825.0,
+    "first-dll": 186,
+    "held": 71,
+    "last-dll": 861,
+    "lock": 71,
+    "main": 69,
+    "ntdll-loaded": 116,
+    "ntdll-loading": 102,
+    "payload-entry": 99,
+    "read": 1,
+    "ready": 123,
+    "received": 0.0,
+    "replied": 125.0,
+    "sent": 71,
+    "wine-main": 124
+   },
+   "steps": {
+    "answered": 54,
+    "answered-parent": 0.0,
+    "asked": 0,
+    "bootstrap": 6,
+    "connected": 0,
+    "control": 0,
+    "ending": 52,
+    "entry": 14,
+    "exit": 0,
+    "exit-received": 4024.5,
+    "first-dll": 59,
+    "held": 0,
+    "last-dll": 675,
+    "lock": 2,
+    "main": 13,
+    "ntdll-loaded": 11,
+    "ntdll-loading": 4,
+    "payload-entry": 10,
+    "read": 1,
+    "ready": 8,
+    "received": 0.0,
+    "replied": 0.0,
+    "sent": 0,
+    "wine-main": 1
+   },
+   "life": {
+    "code_round_calls": 273,
+    "code_round_ms": 7,
+    "convert_calls": 194,
+    "convert_ms": 27,
+    "dl_found_calls": 4,
+    "dl_found_ms": 34,
+    "dl_missed_calls": 27,
+    "dl_missed_ms": 2,
+    "file_attributes_ms": 6,
+    "file_information_ms": 0,
+    "file_open_calls": 98,
+    "file_open_ms": 10,
+    "file_read_calls": 8,
+    "file_read_ms": 0,
+    "fonts_cache_us": 3718.5,
+    "fonts_files_us": 22127.5,
+    "fonts_freetype_us": 9443.5,
+    "fonts_us": 35230.0,
+    "image_read_calls": 0,
+    "image_read_ms": 0,
+    "section_fault_calls": 21,
+    "section_fault_ms": 0,
+    "section_map_calls": 21,
+    "section_map_ms": 0,
+    "server_calls": 4790,
+    "server_ms": 116
+   }
+  },
+  "median_warm": {
+   "points": {
+    "answered-parent": 35,
+    "asked": 0,
+    "bootstrap": 2,
+    "control": -2501,
+    "ending": 4152.5,
+    "entry": -2485,
+    "exit": 4126,
+    "exit-received": 2753,
+    "first-dll": 91,
+    "last-dll": 297,
+    "lock": 1,
+    "main": -2504,
+    "ntdll-loaded": 28,
+    "ntdll-loading": 16,
+    "payload-entry": 13,
+    "ready": 35,
+    "received": 0,
+    "replied": 35,
+    "sent": 1,
+    "wine-main": 37
+   },
+   "steps": {
+    "answered-parent": 0,
+    "asked": 0.0,
+    "bootstrap": 1,
+    "ending": 73.5,
+    "exit": 2173,
+    "exit-received": 134,
+    "first-dll": 53,
+    "last-dll": 209,
+    "lock": 1,
+    "ntdll-loaded": 12,
+    "ntdll-loading": 4,
+    "payload-entry": 10,
+    "ready": 7,
+    "received": 0.0,
+    "replied": 0,
+    "sent": 0,
+    "wine-main": 2
+   },
+   "life": {
+    "code_round_calls": 174.5,
+    "code_round_ms": 4.0,
+    "convert_calls": 158.5,
+    "convert_ms": 16.5,
+    "dl_found_calls": 2.0,
+    "dl_found_ms": 19.0,
+    "dl_missed_calls": 20.0,
+    "dl_missed_ms": 1.0,
+    "file_attributes_ms": 3.0,
+    "file_information_ms": 0.0,
+    "file_open_calls": 17.0,
+    "file_open_ms": 1.5,
+    "file_read_calls": 10.0,
+    "file_read_ms": 1.0,
+    "fonts_cache_us": 3638.5,
+    "fonts_files_us": 22371.0,
+    "fonts_freetype_us": 9693.0,
+    "fonts_us": 35663.0,
+    "image_read_calls": 0.0,
+    "image_read_ms": 0.0,
+    "section_fault_calls": 16.0,
+    "section_fault_ms": 0.5,
+    "section_map_calls": 14.0,
+    "section_map_ms": 0.5,
+    "server_calls": 2573.0,
+    "server_ms": 59.0
+   }
+  },
+  "chain": [
+   {
+    "parent": 2328,
+    "previous": 2330,
+    "next": 2331
+   },
+   {
+    "parent": 2329,
+    "previous": 2328,
+    "next": 2332
+   },
+   {
+    "parent": 2329,
+    "previous": 2332,
+    "next": 2333,
+    "from_exit_ms": 10,
+    "from_exit_received_ms": 9
+   },
+   {
+    "parent": 2328,
+    "previous": 2331,
+    "next": 2335
+   },
+   {
+    "parent": 2328,
+    "previous": 2335,
+    "next": 2336
+   },
+   {
+    "parent": 2329,
+    "previous": 2333,
+    "next": 2337,
+    "from_exit_ms": 12,
+    "from_exit_received_ms": 12
+   },
+   {
+    "parent": 2327,
+    "previous": 2329,
+    "next": 2339,
+    "from_exit_ms": 1909,
+    "from_exit_received_ms": 1909,
+    "from_end_ms": 1857
+   },
+   {
+    "parent": 2328,
+    "previous": 2336,
+    "next": 2341
+   },
+   {
+    "parent": 2339,
+    "previous": 2342,
+    "next": 2343
+   },
+   {
+    "parent": 2339,
+    "previous": 2343,
+    "next": 2344,
+    "from_exit_ms": 627,
+    "from_exit_received_ms": 626,
+    "from_end_ms": 574
+   },
+   {
+    "parent": 2339,
+    "previous": 2344,
+    "next": 2346,
+    "from_exit_ms": 43745,
+    "from_exit_received_ms": 43744,
+    "from_end_ms": 43662
+   },
+   {
+    "parent": 2339,
+    "previous": 2346,
+    "next": 2347,
+    "from_exit_ms": 328,
+    "from_exit_received_ms": 328,
+    "from_end_ms": 238
+   },
+   {
+    "parent": 2339,
+    "previous": 2347,
+    "next": 2349,
+    "from_exit_ms": 325,
+    "from_exit_received_ms": 325,
+    "from_end_ms": 221
+   },
+   {
+    "parent": 2339,
+    "previous": 2349,
+    "next": 2351,
+    "from_exit_ms": 50856,
+    "from_exit_received_ms": 50855,
+    "from_end_ms": 50821
+   },
+   {
+    "parent": 2339,
+    "previous": 2351,
+    "next": 2352
+   },
+   {
+    "parent": 2339,
+    "previous": 2352,
+    "next": 2353,
+    "from_exit_ms": 625,
+    "from_exit_received_ms": 624,
+    "from_end_ms": 598
+   },
+   {
+    "parent": 2339,
+    "previous": 2353,
+    "next": 2355,
+    "from_exit_received_ms": 43609,
+    "from_end_ms": 43590
+   },
+   {
+    "parent": 2339,
+    "previous": 2355,
+    "next": 2356,
+    "from_exit_ms": 324,
+    "from_exit_received_ms": 324,
+    "from_end_ms": 295
+   },
+   {
+    "parent": 2339,
+    "previous": 2356,
+    "next": 2358,
+    "from_exit_received_ms": 331,
+    "from_end_ms": 314
+   }
+  ],
+  "median_chain": {
+   "from_end_ms": 586.0,
+   "from_exit_ms": 476.5,
+   "from_exit_received_ms": 477.5
+  },
+  "helpers": {
+   "2327": {
+    "warm": false,
+    "attempts": 5,
+    "points": {
+     "read": 1,
+     "answered": 55,
+     "main": 69,
+     "lock": 71,
+     "connected": 71,
+     "held": 71,
+     "sent": 71,
+     "control": 71,
+     "entry": 81,
+     "bootstrap": 87,
+     "payload-entry": 99,
+     "ntdll-loading": 102,
+     "ntdll-loaded": 114,
+     "ready": 122,
+     "wine-main": 123,
+     "first-dll": 16167,
+     "last-dll": 34621,
+     "exit": 286344,
+     "exit-received": 286368,
+     "ending": 286451
+    },
+    "steps": {
+     "read": 1,
+     "answered": 54,
+     "main": 14,
+     "lock": 2,
+     "connected": 0,
+     "held": 0,
+     "sent": 0,
+     "control": 0,
+     "entry": 10,
+     "bootstrap": 6,
+     "payload-entry": 12,
+     "ntdll-loading": 3,
+     "ntdll-loaded": 12,
+     "ready": 8,
+     "wine-main": 1,
+     "first-dll": 16044,
+     "last-dll": 18454,
+     "exit": 251723,
+     "exit-received": 24,
+     "ending": 83
+    },
+    "life": {
+     "server_calls": 123116,
+     "server_ms": 2897,
+     "file_read_calls": 1602,
+     "file_read_ms": 21,
+     "file_open_calls": 250,
+     "file_open_ms": 26,
+     "file_attributes_ms": 214,
+     "file_information_ms": 119,
+     "section_map_calls": 11465,
+     "section_map_ms": 93,
+     "section_fault_calls": 11465,
+     "section_fault_ms": 130,
+     "convert_calls": 294,
+     "convert_ms": 45,
+     "image_read_calls": 0,
+     "image_read_ms": 0,
+     "code_round_calls": 445,
+     "code_round_ms": 10,
+     "dl_found_calls": 5,
+     "dl_found_ms": 78,
+     "dl_missed_calls": 27,
+     "dl_missed_ms": 2,
+     "fonts_us": 34352,
+     "fonts_freetype_us": 9351,
+     "fonts_files_us": 21548,
+     "fonts_cache_us": 3453
+    }
+   },
+   "2328": {
+    "warm": true,
+    "attempts": 0,
+    "points": {
+     "main": -287,
+     "control": -282,
+     "entry": -263,
+     "received": -1,
+     "asked": -1,
+     "lock": 0,
+     "sent": 0,
+     "bootstrap": 2,
+     "payload-entry": 11,
+     "ntdll-loading": 15,
+     "ntdll-loaded": 26,
+     "ready": 34,
+     "replied": 34,
+     "answered-parent": 34,
+     "wine-main": 36,
+     "first-dll": 92,
+     "last-dll": 130,
+     "exit-received": 285891,
+     "exit": 285891,
+     "ending": 285960
+    },
+    "steps": {
+     "lock": 0,
+     "sent": 0,
+     "bootstrap": 2,
+     "payload-entry": 9,
+     "ntdll-loading": 4,
+     "ntdll-loaded": 11,
+     "ready": 8,
+     "replied": 0,
+     "answered-parent": 0,
+     "wine-main": 2,
+     "first-dll": 56,
+     "last-dll": 38,
+     "exit-received": 285761,
+     "exit": 0,
+     "ending": 69
+    },
+    "life": {
+     "server_calls": 5534,
+     "server_ms": 131,
+     "file_read_calls": 593,
+     "file_read_ms": 26,
+     "file_open_calls": 65,
+     "file_open_ms": 6,
+     "file_attributes_ms": 1,
+     "file_information_ms": 0,
+     "section_map_calls": 0,
+     "section_map_ms": 0,
+     "section_fault_calls": 1,
+     "section_fault_ms": 0,
+     "convert_calls": 131,
+     "convert_ms": 13,
+     "image_read_calls": 0,
+     "image_read_ms": 0,
+     "code_round_calls": 155,
+     "code_round_ms": 3,
+     "dl_found_calls": 0,
+     "dl_found_ms": 0,
+     "dl_missed_calls": 19,
+     "dl_missed_ms": 3
+    }
+   },
+   "2329": {
+    "warm": false,
+    "attempts": 5,
+    "points": {
+     "asked": -1,
+     "received": 0,
+     "read": 1,
+     "answered": 93,
+     "main": 106,
+     "lock": 109,
+     "connected": 109,
+     "held": 109,
+     "sent": 109,
+     "control": 109,
+     "entry": 120,
+     "bootstrap": 126,
+     "payload-entry": 136,
+     "ntdll-loading": 140,
+     "ntdll-loaded": 151,
+     "ready": 158,
+     "replied": 158,
+     "answered-parent": 158,
+     "wine-main": 160,
+     "first-dll": 210,
+     "last-dll": 15131,
+     "exit-received": 15137,
+     "exit": 15137,
+     "ending": 15189
+    },
+    "steps": {
+     "received": 0,
+     "read": 1,
+     "answered": 92,
+     "main": 13,
+     "lock": 3,
+     "connected": 0,
+     "held": 0,
+     "sent": 0,
+     "control": 0,
+     "entry": 11,
+     "bootstrap": 6,
+     "payload-entry": 10,
+     "ntdll-loading": 4,
+     "ntdll-loaded": 11,
+     "ready": 7,
+     "replied": 0,
+     "answered-parent": 0,
+     "wine-main": 2,
+     "first-dll": 50,
+     "last-dll": 14921,
+     "exit-received": 6,
+     "exit": 0,
+     "ending": 52
+    },
+    "life": {
+     "server_calls": 4842,
+     "server_ms": 138,
+     "file_read_calls": 8,
+     "file_read_ms": 0,
+     "file_open_calls": 153,
+     "file_open_ms": 14,
+     "file_attributes_ms": 1,
+     "file_information_ms": 0,
+     "section_map_calls": 0,
+     "section_map_ms": 0,
+     "section_fault_calls": 0,
+     "section_fault_ms": 0,
+     "convert_calls": 194,
+     "convert_ms": 30,
+     "image_read_calls": 0,
+     "image_read_ms": 0,
+     "code_round_calls": 364,
+     "code_round_ms": 7,
+     "dl_found_calls": 10,
+     "dl_found_ms": 69,
+     "dl_missed_calls": 61,
+     "dl_missed_ms": 4,
+     "fonts_us": 36824,
+     "fonts_freetype_us": 9579,
+     "fonts_files_us": 23021,
+     "fonts_cache_us": 4224
+    }
+   },
+   "2330": {
+    "warm": true,
+    "attempts": 0,
+    "points": {
+     "main": -69,
+     "control": -67,
+     "entry": -54,
+     "received": 0,
+     "asked": 0,
+     "lock": 2,
+     "sent": 2,
+     "bootstrap": 3,
+     "payload-entry": 13,
+     "ntdll-loading": 17,
+     "ntdll-loaded": 28,
+     "ready": 35,
+     "replied": 35,
+     "answered-parent": 35,
+     "wine-main": 36,
+     "first-dll": 87,
+     "last-dll": 222,
+     "ending": 285772
+    },
+    "steps": {
+     "received": 0,
+     "asked": 0,
+     "lock": 2,
+     "sent": 0,
+     "bootstrap": 1,
+     "payload-entry": 10,
+     "ntdll-loading": 4,
+     "ntdll-loaded": 11,
+     "ready": 7,
+     "replied": 0,
+     "answered-parent": 0,
+     "wine-main": 1,
+     "first-dll": 51,
+     "last-dll": 135,
+     "ending": 285550
+    },
+    "life": null
+   },
+   "2331": {
+    "warm": true,
+    "attempts": 0,
+    "points": {
+     "main": -123,
+     "control": -120,
+     "entry": -110,
+     "received": 0,
+     "asked": 0,
+     "lock": 1,
+     "sent": 1,
+     "bootstrap": 2,
+     "payload-entry": 12,
+     "ntdll-loading": 16,
+     "ntdll-loaded": 32,
+     "ready": 39,
+     "replied": 39,
+     "answered-parent": 39,
+     "wine-main": 40,
+     "first-dll": 92,
+     "last-dll": 270,
+     "ending": 285556
+    },
+    "steps": {
+     "received": 0,
+     "asked": 0,
+     "lock": 1,
+     "sent": 0,
+     "bootstrap": 1,
+     "payload-entry": 10,
+     "ntdll-loading": 4,
+     "ntdll-loaded": 16,
+     "ready": 7,
+     "replied": 0,
+     "answered-parent": 0,
+     "wine-main": 1,
+     "first-dll": 52,
+     "last-dll": 178,
+     "ending": 285286
+    },
+    "life": {
+     "server_calls": 2698,
+     "server_ms": 71,
+     "file_read_calls": 105,
+     "file_read_ms": 285283,
+     "file_open_calls": 28,
+     "file_open_ms": 3,
+     "file_attributes_ms": 0,
+     "file_information_ms": 0,
+     "section_map_calls": 0,
+     "section_map_ms": 0,
+     "section_fault_calls": 0,
+     "section_fault_ms": 0,
+     "convert_calls": 149,
+     "convert_ms": 15,
+     "image_read_calls": 0,
+     "image_read_ms": 0,
+     "code_round_calls": 167,
+     "code_round_ms": 4,
+     "dl_found_calls": 3,
+     "dl_found_ms": 27,
+     "dl_missed_calls": 20,
+     "dl_missed_ms": 1,
+     "fonts_us": 40577,
+     "fonts_freetype_us": 10357,
+     "fonts_files_us": 26454,
+     "fonts_cache_us": 3766
+    }
+   },
+   "2332": {
+    "warm": true,
+    "attempts": 0,
+    "points": {
+     "main": -80,
+     "control": -75,
+     "entry": -64,
+     "received": 0,
+     "asked": 0,
+     "lock": 1,
+     "sent": 1,
+     "bootstrap": 2,
+     "payload-entry": 12,
+     "ntdll-loading": 16,
+     "ntdll-loaded": 27,
+     "ready": 34,
+     "replied": 35,
+     "answered-parent": 35,
+     "wine-main": 36,
+     "first-dll": 91,
+     "last-dll": 346,
+     "exit": 363,
+     "exit-received": 364,
+     "ending": 448
+    },
+    "steps": {
+     "received": 0,
+     "asked": 0,
+     "lock": 1,
+     "sent": 0,
+     "bootstrap": 1,
+     "payload-entry": 10,
+     "ntdll-loading": 4,
+     "ntdll-loaded": 11,
+     "ready": 7,
+     "replied": 1,
+     "answered-parent": 0,
+     "wine-main": 1,
+     "first-dll": 55,
+     "last-dll": 255,
+     "exit": 17,
+     "exit-received": 1,
+     "ending": 84
+    },
+    "life": {
+     "server_calls": 2624,
+     "server_ms": 0,
+     "file_read_calls": 35,
+     "file_read_ms": 2,
+     "file_open_calls": 25,
+     "file_open_ms": 3,
+     "file_attributes_ms": 6,
+     "file_information_ms": 0,
+     "section_map_calls": 14,
+     "section_map_ms": 3,
+     "section_fault_calls": 14,
+     "section_fault_ms": 3,
+     "convert_calls": 164,
+     "convert_ms": 19,
+     "image_read_calls": 0,
+     "image_read_ms": 0,
+     "code_round_calls": 194,
+     "code_round_ms": 5,
+     "dl_found_calls": 3,
+     "dl_found_ms": 54,
+     "dl_missed_calls": 20,
+     "dl_missed_ms": 1,
+     "fonts_us": 34812,
+     "fonts_freetype_us": 9240,
+     "fonts_files_us": 22013,
+     "fonts_cache_us": 3559
+    }
+   },
+   "2333": {
+    "warm": true,
+    "attempts": 0,
+    "points": {
+     "main": -251,
+     "control": -249,
+     "entry": -226,
+     "received": -1,
+     "asked": -1,
+     "lock": 1,
+     "sent": 1,
+     "bootstrap": 2,
+     "payload-entry": 13,
+     "ntdll-loading": 16,
+     "ntdll-loaded": 28,
+     "ready": 35,
+     "replied": 35,
+     "answered-parent": 35,
+     "wine-main": 36,
+     "first-dll": 91,
+     "last-dll": 5783,
+     "exit-received": 6273,
+     "exit": 6273,
+     "ending": 6355
+    },
+    "steps": {
+     "lock": 1,
+     "sent": 0,
+     "bootstrap": 1,
+     "payload-entry": 11,
+     "ntdll-loading": 3,
+     "ntdll-loaded": 12,
+     "ready": 7,
+     "replied": 0,
+     "answered-parent": 0,
+     "wine-main": 1,
+     "first-dll": 55,
+     "last-dll": 5692,
+     "exit-received": 490,
+     "exit": 0,
+     "ending": 82
+    },
+    "life": {
+     "server_calls": 67365,
+     "server_ms": 2258,
+     "file_read_calls": 4316,
+     "file_read_ms": 996,
+     "file_open_calls": 300,
+     "file_open_ms": 31,
+     "file_attributes_ms": 134,
+     "file_information_ms": 61,
+     "section_map_calls": 14,
+     "section_map_ms": 0,
+     "section_fault_calls": 16,
+     "section_fault_ms": 0,
+     "convert_calls": 364,
+     "convert_ms": 51,
+     "image_read_calls": 0,
+     "image_read_ms": 0,
+     "code_round_calls": 577,
+     "code_round_ms": 13,
+     "dl_found_calls": 9,
+     "dl_found_ms": 104,
+     "dl_missed_calls": 94,
+     "dl_missed_ms": 6,
+     "fonts_us": 35707,
+     "fonts_freetype_us": 9478,
+     "fonts_files_us": 22589,
+     "fonts_cache_us": 3640
+    }
+   },
+   "2334": {
+    "warm": true,
+    "attempts": 0,
+    "points": {
+     "main": -5179,
+     "control": -5177,
+     "entry": -5166,
+     "lock": 0,
+     "sent": 0,
+     "received": 0,
+     "asked": 0,
+     "bootstrap": 2,
+     "payload-entry": 20,
+     "ntdll-loading": 24,
+     "ntdll-loaded": 36,
+     "ready": 43,
+     "replied": 43,
+     "answered-parent": 43,
+     "wine-main": 45,
+     "first-dll": 96,
+     "last-dll": 315,
+     "exit-received": 449,
+     "ending": 466
+    },
+    "steps": {
+     "lock": 0,
+     "sent": 0,
+     "received": 0,
+     "asked": 0,
+     "bootstrap": 2,
+     "payload-entry": 18,
+     "ntdll-loading": 4,
+     "ntdll-loaded": 12,
+     "ready": 7,
+     "replied": 0,
+     "answered-parent": 0,
+     "wine-main": 2,
+     "first-dll": 51,
+     "last-dll": 219,
+     "exit-received": 134,
+     "ending": 17
+    },
+    "life": {
+     "fonts_us": 36520,
+     "fonts_freetype_us": 9770,
+     "fonts_files_us": 23125,
+     "fonts_cache_us": 3625
+    }
+   },
+   "2335": {
+    "warm": true,
+    "attempts": 0,
+    "points": {
+     "main": -416,
+     "control": -413,
+     "entry": -402,
+     "received": 0,
+     "asked": 0,
+     "lock": 1,
+     "sent": 1,
+     "bootstrap": 2,
+     "payload-entry": 13,
+     "ntdll-loading": 22,
+     "ntdll-loaded": 34,
+     "ready": 41,
+     "replied": 41,
+     "answered-parent": 41,
+     "wine-main": 42,
+     "first-dll": 96,
+     "last-dll": 148,
+     "exit": 279071,
+     "ending": 279149
+    },
+    "steps": {
+     "received": 0,
+     "asked": 0,
+     "lock": 1,
+     "sent": 0,
+     "bootstrap": 1,
+     "payload-entry": 11,
+     "ntdll-loading": 9,
+     "ntdll-loaded": 12,
+     "ready": 7,
+     "replied": 0,
+     "answered-parent": 0,
+     "wine-main": 1,
+     "first-dll": 54,
+     "last-dll": 52,
+     "exit": 278923,
+     "ending": 78
+    },
+    "life": {
+     "server_calls": 826,
+     "server_ms": 23,
+     "file_read_calls": 19,
+     "file_read_ms": 278887,
+     "file_open_calls": 13,
+     "file_open_ms": 1,
+     "file_attributes_ms": 0,
+     "file_information_ms": 0,
+     "section_map_calls": 0,
+     "section_map_ms": 0,
+     "section_fault_calls": 0,
+     "section_fault_ms": 0,
+     "convert_calls": 114,
+     "convert_ms": 10,
+     "image_read_calls": 0,
+     "image_read_ms": 0,
+     "code_round_calls": 113,
+     "code_round_ms": 2,
+     "dl_found_calls": 0,
+     "dl_found_ms": 0,
+     "dl_missed_calls": 12,
+     "dl_missed_ms": 0
+    }
+   },
+   "2336": {
+    "warm": true,
+    "attempts": 0,
+    "points": {
+     "main": -70,
+     "control": -68,
+     "entry": -54,
+     "received": 0,
+     "asked": 0,
+     "lock": 1,
+     "sent": 1,
+     "bootstrap": 2,
+     "payload-entry": 12,
+     "ntdll-loading": 15,
+     "ntdll-loaded": 27,
+     "ready": 34,
+     "replied": 34,
+     "answered-parent": 34,
+     "wine-main": 36,
+     "first-dll": 86,
+     "last-dll": 198,
+     "exit": 278886,
+     "ending": 278945
+    },
+    "steps": {
+     "received": 0,
+     "asked": 0,
+     "lock": 1,
+     "sent": 0,
+     "bootstrap": 1,
+     "payload-entry": 10,
+     "ntdll-loading": 3,
+     "ntdll-loaded": 12,
+     "ready": 7,
+     "replied": 0,
+     "answered-parent": 0,
+     "wine-main": 2,
+     "first-dll": 50,
+     "last-dll": 112,
+     "exit": 278688,
+     "ending": 59
+    },
+    "life": {
+     "server_calls": 1621,
+     "server_ms": 39,
+     "file_read_calls": 54,
+     "file_read_ms": 278645,
+     "file_open_calls": 18,
+     "file_open_ms": 2,
+     "file_attributes_ms": 0,
+     "file_information_ms": 0,
+     "section_map_calls": 0,
+     "section_map_ms": 0,
+     "section_fault_calls": 0,
+     "section_fault_ms": 0,
+     "convert_calls": 128,
+     "convert_ms": 12,
+     "image_read_calls": 0,
+     "image_read_ms": 0,
+     "code_round_calls": 130,
+     "code_round_ms": 3,
+     "dl_found_calls": 2,
+     "dl_found_ms": 19,
+     "dl_missed_calls": 14,
+     "dl_missed_ms": 1,
+     "fonts_us": 35619,
+     "fonts_freetype_us": 9705,
+     "fonts_files_us": 22433,
+     "fonts_cache_us": 3481
+    }
+   },
+   "2337": {
+    "warm": true,
+    "attempts": 0,
+    "points": {
+     "main": -129,
+     "control": -128,
+     "entry": -113,
+     "received": -1,
+     "asked": -1,
+     "lock": 1,
+     "sent": 1,
+     "bootstrap": 2,
+     "payload-entry": 12,
+     "ntdll-loading": 16,
+     "ntdll-loaded": 28,
+     "ready": 35,
+     "replied": 35,
+     "answered-parent": 35,
+     "wine-main": 37,
+     "first-dll": 110,
+     "last-dll": 7293,
+     "exit": 7310,
+     "exit-received": 7311,
+     "ending": 7355
+    },
+    "steps": {
+     "lock": 1,
+     "sent": 0,
+     "bootstrap": 1,
+     "payload-entry": 10,
+     "ntdll-loading": 4,
+     "ntdll-loaded": 12,
+     "ready": 7,
+     "replied": 0,
+     "answered-parent": 0,
+     "wine-main": 2,
+     "first-dll": 73,
+     "last-dll": 7183,
+     "exit": 17,
+     "exit-received": 1,
+     "ending": 44
+    },
+    "life": {
+     "server_calls": 66227,
+     "server_ms": 2487,
+     "file_read_calls": 4073,
+     "file_read_ms": 1386,
+     "file_open_calls": 295,
+     "file_open_ms": 30,
+     "file_attributes_ms": 150,
+     "file_information_ms": 82,
+     "section_map_calls": 14,
+     "section_map_ms": 0,
+     "section_fault_calls": 16,
+     "section_fault_ms": 0,
+     "convert_calls": 390,
+     "convert_ms": 66,
+     "image_read_calls": 0,
+     "image_read_ms": 0,
+     "code_round_calls": 747,
+     "code_round_ms": 16,
+     "dl_found_calls": 12,
+     "dl_found_ms": 129,
+     "dl_missed_calls": 95,
+     "dl_missed_ms": 6,
+     "fonts_us": 36074,
+     "fonts_freetype_us": 9994,
+     "fonts_files_us": 22541,
+     "fonts_cache_us": 3539
+    }
+   },
+   "2338": {
+    "warm": true,
+    "attempts": 0,
+    "points": {
+     "main": -6712,
+     "control": -6709,
+     "entry": -6695,
+     "asked": -1,
+     "received": 0,
+     "lock": 1,
+     "sent": 1,
+     "bootstrap": 2,
+     "payload-entry": 13,
+     "ntdll-loading": 16,
+     "ntdll-loaded": 27,
+     "ready": 34,
+     "replied": 34,
+     "answered-parent": 34,
+     "wine-main": 36,
+     "first-dll": 101,
+     "last-dll": 391,
+     "exit-received": 433
+    },
+    "steps": {
+     "received": 0,
+     "lock": 1,
+     "sent": 0,
+     "bootstrap": 1,
+     "payload-entry": 11,
+     "ntdll-loading": 3,
+     "ntdll-loaded": 11,
+     "ready": 7,
+     "replied": 0,
+     "answered-parent": 0,
+     "wine-main": 2,
+     "first-dll": 65,
+     "last-dll": 290,
+     "exit-received": 42
+    },
+    "life": {
+     "fonts_us": 34977,
+     "fonts_freetype_us": 9116,
+     "fonts_files_us": 22309,
+     "fonts_cache_us": 3552
+    }
+   },
+   "2339": {
+    "warm": true,
+    "attempts": 0,
+    "points": {
+     "main": -2504,
+     "control": -2501,
+     "entry": -2485,
+     "received": 0,
+     "asked": 0,
+     "lock": 1,
+     "sent": 1,
+     "bootstrap": 3,
+     "payload-entry": 18,
+     "ntdll-loading": 22,
+     "ntdll-loaded": 34,
+     "ready": 41,
+     "replied": 41,
+     "answered-parent": 41,
+     "wine-main": 42,
+     "first-dll": 94,
+     "last-dll": 83039,
+     "exit-received": 269113
+    },
+    "steps": {
+     "received": 0,
+     "asked": 0,
+     "lock": 1,
+     "sent": 0,
+     "bootstrap": 2,
+     "payload-entry": 15,
+     "ntdll-loading": 4,
+     "ntdll-loaded": 12,
+     "ready": 7,
+     "replied": 0,
+     "answered-parent": 0,
+     "wine-main": 1,
+     "first-dll": 52,
+     "last-dll": 82945,
+     "exit-received": 186074
+    },
+    "life": {
+     "fonts_us": 39117,
+     "fonts_freetype_us": 11989,
+     "fonts_files_us": 22931,
+     "fonts_cache_us": 4197
+    }
+   },
+   "2341": {
+    "warm": false,
+    "attempts": 5,
+    "points": {
+     "received": 0,
+     "asked": 0,
+     "read": 1,
+     "answered": 58,
+     "main": 71,
+     "lock": 74,
+     "connected": 74,
+     "held": 74,
+     "sent": 74,
+     "control": 74,
+     "entry": 88,
+     "bootstrap": 94,
+     "payload-entry": 104,
+     "ntdll-loading": 107,
+     "ntdll-loaded": 119,
+     "ready": 127,
+     "replied": 127,
+     "answered-parent": 127,
+     "wine-main": 128,
+     "first-dll": 178,
+     "last-dll": 203
+    },
+    "steps": {
+     "received": 0,
+     "asked": 0,
+     "read": 1,
+     "answered": 57,
+     "main": 13,
+     "lock": 3,
+     "connected": 0,
+     "held": 0,
+     "sent": 0,
+     "control": 0,
+     "entry": 14,
+     "bootstrap": 6,
+     "payload-entry": 10,
+     "ntdll-loading": 3,
+     "ntdll-loaded": 12,
+     "ready": 8,
+     "replied": 0,
+     "answered-parent": 0,
+     "wine-main": 1,
+     "first-dll": 50,
+     "last-dll": 25
+    },
+    "life": null
+   },
+   "2342": {
+    "warm": false,
+    "attempts": 5,
+    "points": {
+     "received": 0,
+     "asked": 0,
+     "read": 1,
+     "answered": 53,
+     "main": 65,
+     "connected": 68,
+     "lock": 69,
+     "held": 69,
+     "sent": 69,
+     "control": 69,
+     "entry": 81,
+     "bootstrap": 87,
+     "payload-entry": 97,
+     "ntdll-loading": 100,
+     "ntdll-loaded": 111,
+     "ready": 119,
+     "replied": 119,
+     "answered-parent": 119,
+     "wine-main": 120,
+     "first-dll": 184,
+     "last-dll": 885,
+     "exit-received": 18513,
+     "ending": 18558
+    },
+    "steps": {
+     "received": 0,
+     "asked": 0,
+     "read": 1,
+     "answered": 52,
+     "main": 12,
+     "connected": 3,
+     "lock": 1,
+     "held": 0,
+     "sent": 0,
+     "control": 0,
+     "entry": 12,
+     "bootstrap": 6,
+     "payload-entry": 10,
+     "ntdll-loading": 3,
+     "ntdll-loaded": 11,
+     "ready": 8,
+     "replied": 0,
+     "answered-parent": 0,
+     "wine-main": 1,
+     "first-dll": 64,
+     "last-dll": 701,
+     "exit-received": 17628,
+     "ending": 45
+    },
+    "life": {
+     "fonts_us": 35294,
+     "fonts_freetype_us": 9404,
+     "fonts_files_us": 22345,
+     "fonts_cache_us": 3545
+    }
+   },
+   "2343": {
+    "warm": true,
+    "attempts": 0,
+    "points": {
+     "main": -16236,
+     "control": -16234,
+     "entry": -16220,
+     "asked": -1,
+     "received": 0,
+     "lock": 1,
+     "sent": 1,
+     "bootstrap": 2,
+     "payload-entry": 12,
+     "ntdll-loading": 16,
+     "ntdll-loaded": 26,
+     "ready": 34,
+     "replied": 34,
+     "answered-parent": 34,
+     "wine-main": 35,
+     "first-dll": 88,
+     "last-dll": 293,
+     "exit": 4099,
+     "exit-received": 4100,
+     "ending": 4152
+    },
+    "steps": {
+     "received": 0,
+     "lock": 1,
+     "sent": 0,
+     "bootstrap": 1,
+     "payload-entry": 10,
+     "ntdll-loading": 4,
+     "ntdll-loaded": 10,
+     "ready": 8,
+     "replied": 0,
+     "answered-parent": 0,
+     "wine-main": 1,
+     "first-dll": 53,
+     "last-dll": 205,
+     "exit": 3806,
+     "exit-received": 1,
+     "ending": 52
+    },
+    "life": {
+     "server_calls": 2522,
+     "server_ms": 61,
+     "file_read_calls": 1,
+     "file_read_ms": 0,
+     "file_open_calls": 16,
+     "file_open_ms": 1,
+     "file_attributes_ms": 3,
+     "file_information_ms": 0,
+     "section_map_calls": 27,
+     "section_map_ms": 5,
+     "section_fault_calls": 27,
+     "section_fault_ms": 5,
+     "convert_calls": 181,
+     "convert_ms": 18,
+     "image_read_calls": 0,
+     "image_read_ms": 0,
+     "code_round_calls": 184,
+     "code_round_ms": 4,
+     "dl_found_calls": 2,
+     "dl_found_ms": 18,
+     "dl_missed_calls": 25,
+     "dl_missed_ms": 1,
+     "fonts_us": 34778,
+     "fonts_freetype_us": 9125,
+     "fonts_files_us": 22014,
+     "fonts_cache_us": 3639
+    }
+   },
+   "2344": {
+    "warm": true,
+    "attempts": 0,
+    "points": {
+     "main": -4610,
+     "control": -4609,
+     "entry": -4596,
+     "received": -1,
+     "asked": -1,
+     "lock": 1,
+     "sent": 1,
+     "bootstrap": 2,
+     "payload-entry": 12,
+     "ntdll-loading": 16,
+     "ntdll-loaded": 27,
+     "ready": 34,
+     "replied": 34,
+     "answered-parent": 34,
+     "wine-main": 36,
+     "first-dll": 87,
+     "last-dll": 295,
+     "exit": 2468,
+     "exit-received": 2469,
+     "ending": 2551
+    },
+    "steps": {
+     "lock": 1,
+     "sent": 0,
+     "bootstrap": 1,
+     "payload-entry": 10,
+     "ntdll-loading": 4,
+     "ntdll-loaded": 11,
+     "ready": 7,
+     "replied": 0,
+     "answered-parent": 0,
+     "wine-main": 2,
+     "first-dll": 51,
+     "last-dll": 208,
+     "exit": 2173,
+     "exit-received": 1,
+     "ending": 82
+    },
+    "life": {
+     "server_calls": 3368,
+     "server_ms": 77,
+     "file_read_calls": 0,
+     "file_read_ms": 0,
+     "file_open_calls": 15,
+     "file_open_ms": 1,
+     "file_attributes_ms": 4,
+     "file_information_ms": 0,
+     "section_map_calls": 27,
+     "section_map_ms": 1,
+     "section_fault_calls": 27,
+     "section_fault_ms": 1,
+     "convert_calls": 184,
+     "convert_ms": 19,
+     "image_read_calls": 0,
+     "image_read_ms": 0,
+     "code_round_calls": 187,
+     "code_round_ms": 5,
+     "dl_found_calls": 2,
+     "dl_found_ms": 18,
+     "dl_missed_calls": 25,
+     "dl_missed_ms": 1,
+     "fonts_us": 34852,
+     "fonts_freetype_us": 9199,
+     "fonts_files_us": 21857,
+     "fonts_cache_us": 3796
+    }
+   },
+   "2346": {
+    "warm": false,
+    "attempts": 5,
+    "points": {
+     "received": 0,
+     "asked": 0,
+     "read": 2,
+     "answered": 53,
+     "main": 65,
+     "connected": 68,
+     "lock": 69,
+     "held": 69,
+     "sent": 69,
+     "control": 69,
+     "entry": 83,
+     "bootstrap": 88,
+     "payload-entry": 98,
+     "ntdll-loading": 102,
+     "ntdll-loaded": 113,
+     "ready": 120,
+     "replied": 120,
+     "answered-parent": 120,
+     "wine-main": 122,
+     "first-dll": 177,
+     "last-dll": 409,
+     "exit-received": 4549,
+     "exit": 4549,
+     "ending": 4639
+    },
+    "steps": {
+     "received": 0,
+     "asked": 0,
+     "read": 2,
+     "answered": 51,
+     "main": 12,
+     "connected": 3,
+     "lock": 1,
+     "held": 0,
+     "sent": 0,
+     "control": 0,
+     "entry": 14,
+     "bootstrap": 5,
+     "payload-entry": 10,
+     "ntdll-loading": 4,
+     "ntdll-loaded": 11,
+     "ready": 7,
+     "replied": 0,
+     "answered-parent": 0,
+     "wine-main": 2,
+     "first-dll": 55,
+     "last-dll": 232,
+     "exit-received": 4140,
+     "exit": 0,
+     "ending": 90
+    },
+    "life": {
+     "server_calls": 2311,
+     "server_ms": 55,
+     "file_read_calls": 1,
+     "file_read_ms": 0,
+     "file_open_calls": 21,
+     "file_open_ms": 2,
+     "file_attributes_ms": 6,
+     "file_information_ms": 0,
+     "section_map_calls": 22,
+     "section_map_ms": 1,
+     "section_fault_calls": 22,
+     "section_fault_ms": 1,
+     "convert_calls": 188,
+     "convert_ms": 18,
+     "image_read_calls": 0,
+     "image_read_ms": 0,
+     "code_round_calls": 189,
+     "code_round_ms": 4,
+     "dl_found_calls": 4,
+     "dl_found_ms": 34,
+     "dl_missed_calls": 27,
+     "dl_missed_ms": 2,
+     "fonts_us": 35164,
+     "fonts_freetype_us": 9483,
+     "fonts_files_us": 21839,
+     "fonts_cache_us": 3842
+    }
+   },
+   "2347": {
+    "warm": true,
+    "attempts": 0,
+    "points": {
+     "main": -4670,
+     "control": -4667,
+     "entry": -4654,
+     "received": 0,
+     "asked": 0,
+     "lock": 1,
+     "sent": 1,
+     "bootstrap": 2,
+     "payload-entry": 18,
+     "ntdll-loading": 22,
+     "ntdll-loaded": 33,
+     "ready": 40,
+     "replied": 40,
+     "answered-parent": 40,
+     "wine-main": 42,
+     "first-dll": 95,
+     "last-dll": 329,
+     "exit-received": 2753,
+     "exit": 2753,
+     "ending": 2857
+    },
+    "steps": {
+     "received": 0,
+     "asked": 0,
+     "lock": 1,
+     "sent": 0,
+     "bootstrap": 1,
+     "payload-entry": 16,
+     "ntdll-loading": 4,
+     "ntdll-loaded": 11,
+     "ready": 7,
+     "replied": 0,
+     "answered-parent": 0,
+     "wine-main": 2,
+     "first-dll": 53,
+     "last-dll": 234,
+     "exit-received": 2424,
+     "exit": 0,
+     "ending": 104
+    },
+    "life": {
+     "server_calls": 1615,
+     "server_ms": 40,
+     "file_read_calls": 0,
+     "file_read_ms": 0,
+     "file_open_calls": 18,
+     "file_open_ms": 2,
+     "file_attributes_ms": 0,
+     "file_information_ms": 0,
+     "section_map_calls": 0,
+     "section_map_ms": 0,
+     "section_fault_calls": 2,
+     "section_fault_ms": 0,
+     "convert_calls": 121,
+     "convert_ms": 12,
+     "image_read_calls": 0,
+     "image_read_ms": 0,
+     "code_round_calls": 126,
+     "code_round_ms": 3,
+     "dl_found_calls": 2,
+     "dl_found_ms": 19,
+     "dl_missed_calls": 17,
+     "dl_missed_ms": 1,
+     "fonts_us": 38528,
+     "fonts_freetype_us": 10195,
+     "fonts_files_us": 24043,
+     "fonts_cache_us": 4290
+    }
+   },
+   "2348": {
+    "warm": true,
+    "attempts": 0,
+    "points": {
+     "main": -50,
+     "control": -47,
+     "entry": -33,
+     "received": 0,
+     "asked": 0,
+     "lock": 1,
+     "sent": 1,
+     "bootstrap": 3,
+     "payload-entry": 13,
+     "ntdll-loading": 16,
+     "ntdll-loaded": 28,
+     "ready": 36,
+     "replied": 36,
+     "answered-parent": 36,
+     "wine-main": 40,
+     "first-dll": 94,
+     "last-dll": 276,
+     "exit": 2571,
+     "exit-received": 2573,
+     "ending": 2654
+    },
+    "steps": {
+     "received": 0,
+     "asked": 0,
+     "lock": 1,
+     "sent": 0,
+     "bootstrap": 2,
+     "payload-entry": 10,
+     "ntdll-loading": 3,
+     "ntdll-loaded": 12,
+     "ready": 8,
+     "replied": 0,
+     "answered-parent": 0,
+     "wine-main": 4,
+     "first-dll": 54,
+     "last-dll": 182,
+     "exit": 2295,
+     "exit-received": 2,
+     "ending": 81
+    },
+    "life": {
+     "server_calls": 1984,
+     "server_ms": 47,
+     "file_read_calls": 0,
+     "file_read_ms": 0,
+     "file_open_calls": 12,
+     "file_open_ms": 1,
+     "file_attributes_ms": 3,
+     "file_information_ms": 0,
+     "section_map_calls": 28,
+     "section_map_ms": 1,
+     "section_fault_calls": 28,
+     "section_fault_ms": 1,
+     "convert_calls": 153,
+     "convert_ms": 15,
+     "image_read_calls": 0,
+     "image_read_ms": 0,
+     "code_round_calls": 156,
+     "code_round_ms": 4,
+     "dl_found_calls": 2,
+     "dl_found_ms": 23,
+     "dl_missed_calls": 19,
+     "dl_missed_ms": 1,
+     "fonts_us": 36570,
+     "fonts_freetype_us": 10921,
+     "fonts_files_us": 22004,
+     "fonts_cache_us": 3645
+    }
+   },
+   "2349": {
+    "warm": true,
+    "attempts": 0,
+    "points": {
+     "main": -2782,
+     "control": -2780,
+     "entry": -2766,
+     "received": 0,
+     "asked": 0,
+     "lock": 1,
+     "sent": 1,
+     "bootstrap": 3,
+     "payload-entry": 13,
+     "ntdll-loading": 17,
+     "ntdll-loaded": 28,
+     "ready": 35,
+     "replied": 35,
+     "answered-parent": 35,
+     "wine-main": 37,
+     "first-dll": 90,
+     "last-dll": 376,
+     "exit": 5820,
+     "exit-received": 5821,
+     "ending": 5855
+    },
+    "steps": {
+     "received": 0,
+     "asked": 0,
+     "lock": 1,
+     "sent": 0,
+     "bootstrap": 2,
+     "payload-entry": 10,
+     "ntdll-loading": 4,
+     "ntdll-loaded": 11,
+     "ready": 7,
+     "replied": 0,
+     "answered-parent": 0,
+     "wine-main": 2,
+     "first-dll": 53,
+     "last-dll": 286,
+     "exit": 5444,
+     "exit-received": 1,
+     "ending": 34
+    },
+    "life": {
+     "server_calls": 7788,
+     "server_ms": 173,
+     "file_read_calls": 0,
+     "file_read_ms": 0,
+     "file_open_calls": 13,
+     "file_open_ms": 1,
+     "file_attributes_ms": 3,
+     "file_information_ms": 0,
+     "section_map_calls": 28,
+     "section_map_ms": 3,
+     "section_fault_calls": 28,
+     "section_fault_ms": 3,
+     "convert_calls": 199,
+     "convert_ms": 21,
+     "image_read_calls": 0,
+     "image_read_ms": 0,
+     "code_round_calls": 205,
+     "code_round_ms": 5,
+     "dl_found_calls": 2,
+     "dl_found_ms": 19,
+     "dl_missed_calls": 24,
+     "dl_missed_ms": 1,
+     "fonts_us": 34707,
+     "fonts_freetype_us": 9448,
+     "fonts_files_us": 21647,
+     "fonts_cache_us": 3612
+    }
+   },
+   "2351": {
+    "warm": false,
+    "attempts": 5,
+    "points": {
+     "received": 0,
+     "asked": 0,
+     "read": 1,
+     "answered": 55,
+     "main": 69,
+     "lock": 71,
+     "connected": 71,
+     "held": 71,
+     "sent": 71,
+     "control": 71,
+     "entry": 85,
+     "bootstrap": 91,
+     "payload-entry": 101,
+     "ntdll-loading": 105,
+     "ntdll-loaded": 116,
+     "ready": 123,
+     "replied": 123,
+     "answered-parent": 123,
+     "wine-main": 124,
+     "first-dll": 186,
+     "last-dll": 861,
+     "exit-received": 18529,
+     "exit": 18529
+    },
+    "steps": {
+     "received": 0,
+     "asked": 0,
+     "read": 1,
+     "answered": 54,
+     "main": 14,
+     "lock": 2,
+     "connected": 0,
+     "held": 0,
+     "sent": 0,
+     "control": 0,
+     "entry": 14,
+     "bootstrap": 6,
+     "payload-entry": 10,
+     "ntdll-loading": 4,
+     "ntdll-loaded": 11,
+     "ready": 7,
+     "replied": 0,
+     "answered-parent": 0,
+     "wine-main": 1,
+     "first-dll": 62,
+     "last-dll": 675,
+     "exit-received": 17668,
+     "exit": 0
+    },
+    "life": {
+     "server_calls": 4790,
+     "server_ms": 116,
+     "file_read_calls": 47,
+     "file_read_ms": 2,
+     "file_open_calls": 98,
+     "file_open_ms": 10,
+     "file_attributes_ms": 4,
+     "file_information_ms": 0,
+     "section_map_calls": 14,
+     "section_map_ms": 0,
+     "section_fault_calls": 14,
+     "section_fault_ms": 0,
+     "convert_calls": 270,
+     "convert_ms": 27,
+     "image_read_calls": 0,
+     "image_read_ms": 0,
+     "code_round_calls": 273,
+     "code_round_ms": 7,
+     "dl_found_calls": 3,
+     "dl_found_ms": 26,
+     "dl_missed_calls": 31,
+     "dl_missed_ms": 2,
+     "fonts_us": 35769,
+     "fonts_freetype_us": 9863,
+     "fonts_files_us": 22172,
+     "fonts_cache_us": 3734
+    }
+   },
+   "2352": {
+    "warm": true,
+    "attempts": 0,
+    "points": {
+     "main": -16252,
+     "control": -16249,
+     "entry": -16236,
+     "asked": -2,
+     "received": -1,
+     "lock": 0,
+     "sent": 0,
+     "bootstrap": 2,
+     "payload-entry": 12,
+     "ntdll-loading": 15,
+     "ntdll-loaded": 27,
+     "ready": 34,
+     "replied": 34,
+     "answered-parent": 35,
+     "wine-main": 36,
+     "first-dll": 88,
+     "last-dll": 297,
+     "exit": 4126,
+     "exit-received": 4127,
+     "ending": 4153
+    },
+    "steps": {
+     "lock": 0,
+     "sent": 0,
+     "bootstrap": 2,
+     "payload-entry": 10,
+     "ntdll-loading": 3,
+     "ntdll-loaded": 12,
+     "ready": 7,
+     "replied": 0,
+     "answered-parent": 1,
+     "wine-main": 1,
+     "first-dll": 52,
+     "last-dll": 209,
+     "exit": 3829,
+     "exit-received": 1,
+     "ending": 26
+    },
+    "life": {
+     "server_calls": 2490,
+     "server_ms": 57,
+     "file_read_calls": 1,
+     "file_read_ms": 0,
+     "file_open_calls": 16,
+     "file_open_ms": 1,
+     "file_attributes_ms": 3,
+     "file_information_ms": 0,
+     "section_map_calls": 26,
+     "section_map_ms": 3,
+     "section_fault_calls": 26,
+     "section_fault_ms": 3,
+     "convert_calls": 181,
+     "convert_ms": 18,
+     "image_read_calls": 0,
+     "image_read_ms": 0,
+     "code_round_calls": 182,
+     "code_round_ms": 4,
+     "dl_found_calls": 2,
+     "dl_found_ms": 24,
+     "dl_missed_calls": 25,
+     "dl_missed_ms": 1,
+     "fonts_us": 34821,
+     "fonts_freetype_us": 9228,
+     "fonts_files_us": 21933,
+     "fonts_cache_us": 3660
+    }
+   },
+   "2353": {
+    "warm": true,
+    "attempts": 0,
+    "points": {
+     "main": -4631,
+     "control": -4629,
+     "entry": -4614,
+     "received": 0,
+     "asked": 0,
+     "lock": 2,
+     "sent": 2,
+     "bootstrap": 2,
+     "payload-entry": 12,
+     "ntdll-loading": 16,
+     "ntdll-loaded": 27,
+     "ready": 34,
+     "replied": 34,
+     "answered-parent": 34,
+     "wine-main": 36,
+     "first-dll": 88,
+     "last-dll": 292,
+     "exit-received": 2535,
+     "ending": 2554
+    },
+    "steps": {
+     "received": 0,
+     "asked": 0,
+     "lock": 2,
+     "sent": 0,
+     "bootstrap": 0,
+     "payload-entry": 10,
+     "ntdll-loading": 4,
+     "ntdll-loaded": 11,
+     "ready": 7,
+     "replied": 0,
+     "answered-parent": 0,
+     "wine-main": 2,
+     "first-dll": 52,
+     "last-dll": 204,
+     "exit-received": 2243,
+     "ending": 19
+    },
+    "life": {
+     "fonts_us": 35919,
+     "fonts_freetype_us": 9865,
+     "fonts_files_us": 22493,
+     "fonts_cache_us": 3561
+    }
+   },
+   "2355": {
+    "warm": false,
+    "attempts": 5,
+    "points": {
+     "received": 0,
+     "asked": 0,
+     "read": 1,
+     "answered": 52,
+     "lock": 68,
+     "connected": 68,
+     "held": 68,
+     "sent": 68,
+     "main": 68,
+     "control": 68,
+     "entry": 82,
+     "bootstrap": 88,
+     "payload-entry": 98,
+     "ntdll-loading": 102,
+     "ntdll-loaded": 119,
+     "ready": 127,
+     "replied": 127,
+     "answered-parent": 127,
+     "wine-main": 128,
+     "first-dll": 187,
+     "last-dll": 407,
+     "exit-received": 4316,
+     "exit": 4316,
+     "ending": 4345
+    },
+    "steps": {
+     "received": 0,
+     "asked": 0,
+     "read": 1,
+     "answered": 51,
+     "lock": 16,
+     "connected": 0,
+     "held": 0,
+     "sent": 0,
+     "main": 0,
+     "control": 0,
+     "entry": 14,
+     "bootstrap": 6,
+     "payload-entry": 10,
+     "ntdll-loading": 4,
+     "ntdll-loaded": 17,
+     "ready": 8,
+     "replied": 0,
+     "answered-parent": 0,
+     "wine-main": 1,
+     "first-dll": 59,
+     "last-dll": 220,
+     "exit-received": 3909,
+     "exit": 0,
+     "ending": 29
+    },
+    "life": {
+     "server_calls": 2280,
+     "server_ms": 52,
+     "file_read_calls": 1,
+     "file_read_ms": 0,
+     "file_open_calls": 21,
+     "file_open_ms": 2,
+     "file_attributes_ms": 6,
+     "file_information_ms": 0,
+     "section_map_calls": 21,
+     "section_map_ms": 0,
+     "section_fault_calls": 21,
+     "section_fault_ms": 0,
+     "convert_calls": 188,
+     "convert_ms": 18,
+     "image_read_calls": 0,
+     "image_read_ms": 0,
+     "code_round_calls": 189,
+     "code_round_ms": 4,
+     "dl_found_calls": 4,
+     "dl_found_ms": 33,
+     "dl_missed_calls": 27,
+     "dl_missed_ms": 1,
+     "fonts_us": 35166,
+     "fonts_freetype_us": 9380,
+     "fonts_files_us": 22083,
+     "fonts_cache_us": 3703
+    }
+   },
+   "2356": {
+    "warm": true,
+    "attempts": 0,
+    "points": {
+     "main": -4428,
+     "control": -4425,
+     "entry": -4410,
+     "received": 0,
+     "asked": 0,
+     "lock": 1,
+     "sent": 1,
+     "bootstrap": 2,
+     "payload-entry": 13,
+     "ntdll-loading": 16,
+     "ntdll-loaded": 28,
+     "ready": 36,
+     "replied": 36,
+     "answered-parent": 36,
+     "wine-main": 37,
+     "first-dll": 91,
+     "last-dll": 327,
+     "exit-received": 2740,
+     "ending": 2757
+    },
+    "steps": {
+     "received": 0,
+     "asked": 0,
+     "lock": 1,
+     "sent": 0,
+     "bootstrap": 1,
+     "payload-entry": 11,
+     "ntdll-loading": 3,
+     "ntdll-loaded": 12,
+     "ready": 8,
+     "replied": 0,
+     "answered-parent": 0,
+     "wine-main": 1,
+     "first-dll": 54,
+     "last-dll": 236,
+     "exit-received": 2413,
+     "ending": 17
+    },
+    "life": {
+     "fonts_us": 38248,
+     "fonts_freetype_us": 9977,
+     "fonts_files_us": 24813,
+     "fonts_cache_us": 3458
+    }
+   },
+   "2357": {
+    "warm": true,
+    "attempts": 0,
+    "points": {
+     "main": -58,
+     "control": -55,
+     "entry": -41,
+     "received": 0,
+     "asked": 0,
+     "lock": 1,
+     "sent": 1,
+     "bootstrap": 2,
+     "payload-entry": 12,
+     "ntdll-loading": 16,
+     "ntdll-loaded": 27,
+     "ready": 34,
+     "replied": 34,
+     "answered-parent": 34,
+     "wine-main": 38,
+     "first-dll": 91,
+     "last-dll": 265,
+     "exit-received": 2557,
+     "exit": 2557,
+     "ending": 2650
+    },
+    "steps": {
+     "received": 0,
+     "asked": 0,
+     "lock": 1,
+     "sent": 0,
+     "bootstrap": 1,
+     "payload-entry": 10,
+     "ntdll-loading": 4,
+     "ntdll-loaded": 11,
+     "ready": 7,
+     "replied": 0,
+     "answered-parent": 0,
+     "wine-main": 4,
+     "first-dll": 53,
+     "last-dll": 174,
+     "exit-received": 2292,
+     "exit": 0,
+     "ending": 93
+    },
+    "life": {
+     "server_calls": 1953,
+     "server_ms": 46,
+     "file_read_calls": 0,
+     "file_read_ms": 0,
+     "file_open_calls": 12,
+     "file_open_ms": 1,
+     "file_attributes_ms": 3,
+     "file_information_ms": 0,
+     "section_map_calls": 26,
+     "section_map_ms": 2,
+     "section_fault_calls": 26,
+     "section_fault_ms": 2,
+     "convert_calls": 153,
+     "convert_ms": 15,
+     "image_read_calls": 0,
+     "image_read_ms": 0,
+     "code_round_calls": 156,
+     "code_round_ms": 4,
+     "dl_found_calls": 2,
+     "dl_found_ms": 18,
+     "dl_missed_calls": 19,
+     "dl_missed_ms": 1,
+     "fonts_us": 34422,
+     "fonts_freetype_us": 9369,
+     "fonts_files_us": 21402,
+     "fonts_cache_us": 3651
+    }
+   },
+   "2358": {
+    "warm": true,
+    "attempts": 0,
+    "points": {
+     "main": -2776,
+     "control": -2773,
+     "entry": -2760,
+     "received": 0,
+     "asked": 0,
+     "lock": 1,
+     "sent": 1,
+     "bootstrap": 2,
+     "payload-entry": 14,
+     "ntdll-loading": 17,
+     "ntdll-loaded": 29,
+     "ready": 41,
+     "replied": 41,
+     "answered-parent": 41,
+     "wine-main": 43,
+     "first-dll": 98,
+     "last-dll": 381,
+     "exit-received": 5844
+    },
+    "steps": {
+     "received": 0,
+     "asked": 0,
+     "lock": 1,
+     "sent": 0,
+     "bootstrap": 1,
+     "payload-entry": 12,
+     "ntdll-loading": 3,
+     "ntdll-loaded": 12,
+     "ready": 12,
+     "replied": 0,
+     "answered-parent": 0,
+     "wine-main": 2,
+     "first-dll": 55,
+     "last-dll": 283,
+     "exit-received": 5463
+    },
+    "life": {
+     "fonts_us": 35286,
+     "fonts_freetype_us": 9681,
+     "fonts_files_us": 21967,
+     "fonts_cache_us": 3638
+    }
+   }
+  }
+ },
+ "foreign_mappings": {
+  "found": 0,
+  "skipped_unmaps": 0,
+  "refused_maps": 0,
+  "query_failed": 0,
+  "holes": 0,
+  "hole_list": []
+ },
+ "helper_sched": {
+  "helpers": [
+   {
+    "kind": "memory",
+    "mode": "rr",
+    "main_tid": "102339",
+    "entry": "1/700",
+    "entry_kernel": "10/700",
+    "entry_cpus": "0xea00",
+    "plain": "1/700",
+    "plain_kernel": "10/700",
+    "plain_cpus": "0xea00",
+    "service": "700",
+    "program": "767",
+    "program_cpus": "0",
+    "census": "0",
+    "error": "0",
+    "service_status": "0",
+    "now": "3/700",
+    "now_kernel": "2/700"
+   },
+   {
+    "kind": "program",
+    "mode": "rr",
+    "main_tid": "101659",
+    "entry": "1/700",
+    "entry_kernel": "10/700",
+    "entry_cpus": "0xffff",
+    "plain": "1/700",
+    "plain_kernel": "10/700",
+    "plain_cpus": "0xffff",
+    "service": "700",
+    "program": "767",
+    "program_cpus": "0",
+    "census": "0",
+    "error": "0",
+    "service_status": "0",
+    "now": "3/700",
+    "now_kernel": "2/700"
+   },
+   {
+    "kind": "program",
+    "mode": "rr",
+    "main_tid": "100301",
+    "entry": "1/700",
+    "entry_kernel": "10/700",
+    "entry_cpus": "0xffff",
+    "plain": "1/700",
+    "plain_kernel": "10/700",
+    "plain_cpus": "0xffff",
+    "service": "700",
+    "program": "767",
+    "program_cpus": "0",
+    "census": "0",
+    "error": "0",
+    "service_status": "0",
+    "now": "3/700",
+    "now_kernel": "2/700"
+   },
+   {
+    "kind": "program",
+    "mode": "rr",
+    "main_tid": "101634",
+    "entry": "1/700",
+    "entry_kernel": "10/700",
+    "entry_cpus": "0xffff",
+    "plain": "1/700",
+    "plain_kernel": "10/700",
+    "plain_cpus": "0xffff",
+    "service": "700",
+    "program": "767",
+    "program_cpus": "0",
+    "census": "0",
+    "error": "0",
+    "service_status": "0",
+    "now": "3/700",
+    "now_kernel": "2/700"
+   },
+   {
+    "kind": "program",
+    "mode": "rr",
+    "main_tid": "101647",
+    "entry": "1/700",
+    "entry_kernel": "10/700",
+    "entry_cpus": "0xffff",
+    "plain": "1/700",
+    "plain_kernel": "10/700",
+    "plain_cpus": "0xffff",
+    "service": "700",
+    "program": "767",
+    "program_cpus": "0",
+    "census": "0",
+    "error": "0",
+    "service_status": "0",
+    "now": "3/700",
+    "now_kernel": "2/700"
+   },
+   {
+    "kind": "program",
+    "mode": "rr",
+    "main_tid": "101563",
+    "entry": "1/700",
+    "entry_kernel": "10/700",
+    "entry_cpus": "0xffff",
+    "plain": "1/700",
+    "plain_kernel": "10/700",
+    "plain_cpus": "0xffff",
+    "service": "700",
+    "program": "767",
+    "program_cpus": "0",
+    "census": "0",
+    "error": "0",
+    "service_status": "0",
+    "now": "3/700",
+    "now_kernel": "2/700"
+   },
+   {
+    "kind": "program",
+    "mode": "rr",
+    "main_tid": "101635",
+    "entry": "1/700",
+    "entry_kernel": "10/700",
+    "entry_cpus": "0xffff",
+    "plain": "1/700",
+    "plain_kernel": "10/700",
+    "plain_cpus": "0xffff",
+    "service": "700",
+    "program": "767",
+    "program_cpus": "0",
+    "census": "0",
+    "error": "0",
+    "service_status": "0",
+    "now": "3/700",
+    "now_kernel": "2/700"
+   },
+   {
+    "kind": "program",
+    "mode": "rr",
+    "main_tid": "101888",
+    "entry": "1/700",
+    "entry_kernel": "10/700",
+    "entry_cpus": "0xffff",
+    "plain": "1/700",
+    "plain_kernel": "10/700",
+    "plain_cpus": "0xffff",
+    "service": "700",
+    "program": "767",
+    "program_cpus": "0",
+    "census": "0",
+    "error": "0",
+    "service_status": "0",
+    "now": "3/700",
+    "now_kernel": "2/700"
+   },
+   {
+    "kind": "program",
+    "mode": "rr",
+    "main_tid": "101656",
+    "entry": "1/700",
+    "entry_kernel": "10/700",
+    "entry_cpus": "0xffff",
+    "plain": "1/700",
+    "plain_kernel": "10/700",
+    "plain_cpus": "0xffff",
+    "service": "700",
+    "program": "767",
+    "program_cpus": "0",
+    "census": "0",
+    "error": "0",
+    "service_status": "0",
+    "now": "3/700",
+    "now_kernel": "2/700"
+   },
+   {
+    "kind": "program",
+    "mode": "rr",
+    "main_tid": "101635",
+    "entry": "1/700",
+    "entry_kernel": "10/700",
+    "entry_cpus": "0xffff",
+    "plain": "1/700",
+    "plain_kernel": "10/700",
+    "plain_cpus": "0xffff",
+    "service": "700",
+    "program": "767",
+    "program_cpus": "0",
+    "census": "0",
+    "error": "0",
+    "service_status": "0",
+    "now": "3/700",
+    "now_kernel": "2/700"
+   },
+   {
+    "kind": "program",
+    "mode": "rr",
+    "main_tid": "102141",
+    "entry": "1/700",
+    "entry_kernel": "10/700",
+    "entry_cpus": "0xffff",
+    "plain": "1/700",
+    "plain_kernel": "10/700",
+    "plain_cpus": "0xffff",
+    "service": "700",
+    "program": "767",
+    "program_cpus": "0",
+    "census": "0",
+    "error": "0",
+    "service_status": "0",
+    "now": "3/700",
+    "now_kernel": "2/700"
+   },
+   {
+    "kind": "program",
+    "mode": "rr",
+    "main_tid": "101653",
+    "entry": "1/700",
+    "entry_kernel": "10/700",
+    "entry_cpus": "0xffff",
+    "plain": "1/700",
+    "plain_kernel": "10/700",
+    "plain_cpus": "0xffff",
+    "service": "700",
+    "program": "767",
+    "program_cpus": "0",
+    "census": "0",
+    "error": "0",
+    "service_status": "0",
+    "now": "3/700",
+    "now_kernel": "2/700"
+   },
+   {
+    "kind": "program",
+    "mode": "rr",
+    "main_tid": "102039",
+    "entry": "1/700",
+    "entry_kernel": "10/700",
+    "entry_cpus": "0xffff",
+    "plain": "1/700",
+    "plain_kernel": "10/700",
+    "plain_cpus": "0xffff",
+    "service": "700",
+    "program": "767",
+    "program_cpus": "0",
+    "census": "0",
+    "error": "0",
+    "service_status": "0",
+    "now": "3/700",
+    "now_kernel": "2/700"
+   },
+   {
+    "kind": "program",
+    "mode": "rr",
+    "main_tid": "102388",
+    "entry": "1/700",
+    "entry_kernel": "10/700",
+    "entry_cpus": "0xffff",
+    "plain": "1/700",
+    "plain_kernel": "10/700",
+    "plain_cpus": "0xffff",
+    "service": "700",
+    "program": "767",
+    "program_cpus": "0",
+    "census": "0",
+    "error": "0",
+    "service_status": "0",
+    "now": "3/700",
+    "now_kernel": "2/700"
+   },
+   {
+    "kind": "program",
+    "mode": "rr",
+    "main_tid": "101602",
+    "entry": "1/700",
+    "entry_kernel": "10/700",
+    "entry_cpus": "0xffff",
+    "plain": "1/700",
+    "plain_kernel": "10/700",
+    "plain_cpus": "0xffff",
+    "service": "700",
+    "program": "767",
+    "program_cpus": "0",
+    "census": "0",
+    "error": "0",
+    "service_status": "0",
+    "now": "3/700",
+    "now_kernel": "2/700"
+   },
+   {
+    "kind": "program",
+    "mode": "rr",
+    "main_tid": "102406",
+    "entry": "1/700",
+    "entry_kernel": "10/700",
+    "entry_cpus": "0xffff",
+    "plain": "1/700",
+    "plain_kernel": "10/700",
+    "plain_cpus": "0xffff",
+    "service": "700",
+    "program": "767",
+    "program_cpus": "0",
+    "census": "0",
+    "error": "0",
+    "service_status": "0",
+    "now": "3/700",
+    "now_kernel": "2/700"
+   },
+   {
+    "kind": "program",
+    "mode": "rr",
+    "main_tid": "101610",
+    "entry": "1/700",
+    "entry_kernel": "10/700",
+    "entry_cpus": "0xffff",
+    "plain": "1/700",
+    "plain_kernel": "10/700",
+    "plain_cpus": "0xffff",
+    "service": "700",
+    "program": "767",
+    "program_cpus": "0",
+    "census": "0",
+    "error": "0",
+    "service_status": "0",
+    "now": "3/700",
+    "now_kernel": "2/700"
+   },
+   {
+    "kind": "program",
+    "mode": "rr",
+    "main_tid": "101666",
+    "entry": "1/700",
+    "entry_kernel": "10/700",
+    "entry_cpus": "0xffff",
+    "plain": "1/700",
+    "plain_kernel": "10/700",
+    "plain_cpus": "0xffff",
+    "service": "700",
+    "program": "767",
+    "program_cpus": "0",
+    "census": "0",
+    "error": "0",
+    "service_status": "0",
+    "now": "3/700",
+    "now_kernel": "2/700"
+   },
+   {
+    "kind": "program",
+    "mode": "rr",
+    "main_tid": "102055",
+    "entry": "1/700",
+    "entry_kernel": "10/700",
+    "entry_cpus": "0xffff",
+    "plain": "1/700",
+    "plain_kernel": "10/700",
+    "plain_cpus": "0xffff",
+    "service": "700",
+    "program": "767",
+    "program_cpus": "0",
+    "census": "0",
+    "error": "0",
+    "service_status": "0",
+    "now": "3/700",
+    "now_kernel": "2/700"
+   },
+   {
+    "kind": "program",
+    "mode": "rr",
+    "main_tid": "101653",
+    "entry": "1/700",
+    "entry_kernel": "10/700",
+    "entry_cpus": "0xffff",
+    "plain": "1/700",
+    "plain_kernel": "10/700",
+    "plain_cpus": "0xffff",
+    "service": "700",
+    "program": "767",
+    "program_cpus": "0",
+    "census": "0",
+    "error": "0",
+    "service_status": "0",
+    "now": "3/700",
+    "now_kernel": "2/700"
+   },
+   {
+    "kind": "program",
+    "mode": "rr",
+    "main_tid": "101634",
+    "entry": "1/700",
+    "entry_kernel": "10/700",
+    "entry_cpus": "0xffff",
+    "plain": "1/700",
+    "plain_kernel": "10/700",
+    "plain_cpus": "0xffff",
+    "service": "700",
+    "program": "767",
+    "program_cpus": "0",
+    "census": "0",
+    "error": "0",
+    "service_status": "0",
+    "now": "3/700",
+    "now_kernel": "2/700"
+   },
+   {
+    "kind": "program",
+    "mode": "rr",
+    "main_tid": "101584",
+    "entry": "1/700",
+    "entry_kernel": "10/700",
+    "entry_cpus": "0xffff",
+    "plain": "1/700",
+    "plain_kernel": "10/700",
+    "plain_cpus": "0xffff",
+    "service": "700",
+    "program": "767",
+    "program_cpus": "0",
+    "census": "0",
+    "error": "0",
+    "service_status": "0",
+    "now": "3/700",
+    "now_kernel": "2/700"
+   },
+   {
+    "kind": "program",
+    "mode": "rr",
+    "main_tid": "102406",
+    "entry": "1/700",
+    "entry_kernel": "10/700",
+    "entry_cpus": "0xffff",
+    "plain": "1/700",
+    "plain_kernel": "10/700",
+    "plain_cpus": "0xffff",
+    "service": "700",
+    "program": "767",
+    "program_cpus": "0",
+    "census": "0",
+    "error": "0",
+    "service_status": "0",
+    "now": "3/700",
+    "now_kernel": "2/700"
+   },
+   {
+    "kind": "program",
+    "mode": "rr",
+    "main_tid": "102321",
+    "entry": "1/700",
+    "entry_kernel": "10/700",
+    "entry_cpus": "0xffff",
+    "plain": "1/700",
+    "plain_kernel": "10/700",
+    "plain_cpus": "0xffff",
+    "service": "700",
+    "program": "767",
+    "program_cpus": "0",
+    "census": "0",
+    "error": "0",
+    "service_status": "0",
+    "now": "3/700",
+    "now_kernel": "2/700"
+   },
+   {
+    "kind": "program",
+    "mode": "rr",
+    "main_tid": "102259",
+    "entry": "1/700",
+    "entry_kernel": "10/700",
+    "entry_cpus": "0xffff",
+    "plain": "1/700",
+    "plain_kernel": "10/700",
+    "plain_cpus": "0xffff",
+    "service": "700",
+    "program": "767",
+    "program_cpus": "0",
+    "census": "0",
+    "error": "0",
+    "service_status": "0",
+    "now": "3/700",
+    "now_kernel": "2/700"
+   },
+   {
+    "kind": "program",
+    "mode": "rr",
+    "main_tid": "102259",
+    "entry": "1/700",
+    "entry_kernel": "10/700",
+    "entry_cpus": "0xffff",
+    "plain": "1/700",
+    "plain_kernel": "10/700",
+    "plain_cpus": "0xffff",
+    "service": "700",
+    "program": "767",
+    "program_cpus": "0",
+    "census": "0",
+    "error": "0",
+    "service_status": "0",
+    "now": "3/700",
+    "now_kernel": "2/700"
+   },
+   {
+    "kind": "program",
+    "mode": "rr",
+    "main_tid": "102355",
+    "entry": "1/700",
+    "entry_kernel": "10/700",
+    "entry_cpus": "0xffff",
+    "plain": "1/700",
+    "plain_kernel": "10/700",
+    "plain_cpus": "0xffff",
+    "service": "700",
+    "program": "767",
+    "program_cpus": "0",
+    "census": "0",
+    "error": "0",
+    "service_status": "0",
+    "now": "3/700",
+    "now_kernel": "2/700"
+   },
+   {
+    "kind": "program",
+    "mode": "rr",
+    "main_tid": "101666",
+    "entry": "1/700",
+    "entry_kernel": "10/700",
+    "entry_cpus": "0xffff",
+    "plain": "1/700",
+    "plain_kernel": "10/700",
+    "plain_cpus": "0xffff",
+    "service": "700",
+    "program": "767",
+    "program_cpus": "0",
+    "census": "0",
+    "error": "0",
+    "service_status": "0",
+    "now": "3/700",
+    "now_kernel": "2/700"
+   },
+   {
+    "kind": "program",
+    "mode": "rr",
+    "main_tid": "101715",
+    "entry": "1/700",
+    "entry_kernel": "10/700",
+    "entry_cpus": "0xffff",
+    "plain": "1/700",
+    "plain_kernel": "10/700",
+    "plain_cpus": "0xffff",
+    "service": "700",
+    "program": "767",
+    "program_cpus": "0",
+    "census": "0",
+    "error": "0",
+    "service_status": "0",
+    "now": "3/700",
+    "now_kernel": "2/700"
+   }
+  ],
+  "workers": [
+   {
+    "worker": "3/767",
+    "worker_kernel": "2/767",
+    "worker_cpus": "0xffff",
+    "status": "0",
+    "inherit": "3/767",
+    "inherit_kernel": "2/767",
+    "inherit_cpus": "0xffff"
+   },
+   {
+    "worker": "3/767",
+    "worker_kernel": "2/767",
+    "worker_cpus": "0xffff",
+    "status": "0",
+    "inherit": "3/767",
+    "inherit_kernel": "2/767",
+    "inherit_cpus": "0xffff"
+   },
+   {
+    "worker": "3/767",
+    "worker_kernel": "2/767",
+    "worker_cpus": "0xffff",
+    "status": "0",
+    "inherit": "3/767",
+    "inherit_kernel": "2/767",
+    "inherit_cpus": "0xffff"
+   },
+   {
+    "worker": "3/767",
+    "worker_kernel": "2/767",
+    "worker_cpus": "0xffff",
+    "status": "0",
+    "inherit": "3/767",
+    "inherit_kernel": "2/767",
+    "inherit_cpus": "0xffff"
+   },
+   {
+    "worker": "3/767",
+    "worker_kernel": "2/767",
+    "worker_cpus": "0xffff",
+    "status": "0",
+    "inherit": "3/767",
+    "inherit_kernel": "2/767",
+    "inherit_cpus": "0xffff"
+   },
+   {
+    "worker": "3/767",
+    "worker_kernel": "2/767",
+    "worker_cpus": "0xffff",
+    "status": "0",
+    "inherit": "3/767",
+    "inherit_kernel": "2/767",
+    "inherit_cpus": "0xffff"
+   },
+   {
+    "worker": "3/767",
+    "worker_kernel": "2/767",
+    "worker_cpus": "0xffff",
+    "status": "0",
+    "inherit": "3/767",
+    "inherit_kernel": "2/767",
+    "inherit_cpus": "0xffff"
+   },
+   {
+    "worker": "3/767",
+    "worker_kernel": "2/767",
+    "worker_cpus": "0xffff",
+    "status": "0",
+    "inherit": "3/767",
+    "inherit_kernel": "2/767",
+    "inherit_cpus": "0xffff"
+   },
+   {
+    "worker": "3/767",
+    "worker_kernel": "2/767",
+    "worker_cpus": "0xffff",
+    "status": "0",
+    "inherit": "3/767",
+    "inherit_kernel": "2/767",
+    "inherit_cpus": "0xffff"
+   },
+   {
+    "worker": "3/767",
+    "worker_kernel": "2/767",
+    "worker_cpus": "0xffff",
+    "status": "0",
+    "inherit": "3/767",
+    "inherit_kernel": "2/767",
+    "inherit_cpus": "0xffff"
+   },
+   {
+    "worker": "3/767",
+    "worker_kernel": "2/767",
+    "worker_cpus": "0xffff",
+    "status": "0",
+    "inherit": "3/767",
+    "inherit_kernel": "2/767",
+    "inherit_cpus": "0xffff"
+   },
+   {
+    "worker": "3/767",
+    "worker_kernel": "2/767",
+    "worker_cpus": "0xffff",
+    "status": "0",
+    "inherit": "3/767",
+    "inherit_kernel": "2/767",
+    "inherit_cpus": "0xffff"
+   },
+   {
+    "worker": "3/767",
+    "worker_kernel": "2/767",
+    "worker_cpus": "0xffff",
+    "status": "0",
+    "inherit": "3/767",
+    "inherit_kernel": "2/767",
+    "inherit_cpus": "0xffff"
+   },
+   {
+    "worker": "3/767",
+    "worker_kernel": "2/767",
+    "worker_cpus": "0xffff",
+    "status": "0",
+    "inherit": "3/767",
+    "inherit_kernel": "2/767",
+    "inherit_cpus": "0xffff"
+   },
+   {
+    "worker": "3/767",
+    "worker_kernel": "2/767",
+    "worker_cpus": "0xffff",
+    "status": "0",
+    "inherit": "3/767",
+    "inherit_kernel": "2/767",
+    "inherit_cpus": "0xffff"
+   },
+   {
+    "worker": "3/767",
+    "worker_kernel": "2/767",
+    "worker_cpus": "0xffff",
+    "status": "0",
+    "inherit": "3/767",
+    "inherit_kernel": "2/767",
+    "inherit_cpus": "0xffff"
+   },
+   {
+    "worker": "3/767",
+    "worker_kernel": "2/767",
+    "worker_cpus": "0xffff",
+    "status": "0",
+    "inherit": "3/767",
+    "inherit_kernel": "2/767",
+    "inherit_cpus": "0xffff"
+   },
+   {
+    "worker": "3/767",
+    "worker_kernel": "2/767",
+    "worker_cpus": "0xffff",
+    "status": "0",
+    "inherit": "3/767",
+    "inherit_kernel": "2/767",
+    "inherit_cpus": "0xffff"
+   },
+   {
+    "worker": "3/767",
+    "worker_kernel": "2/767",
+    "worker_cpus": "0xffff",
+    "status": "0",
+    "inherit": "3/767",
+    "inherit_kernel": "2/767",
+    "inherit_cpus": "0xffff"
+   },
+   {
+    "worker": "3/767",
+    "worker_kernel": "2/767",
+    "worker_cpus": "0xffff",
+    "status": "0",
+    "inherit": "3/767",
+    "inherit_kernel": "2/767",
+    "inherit_cpus": "0xffff"
+   },
+   {
+    "worker": "3/767",
+    "worker_kernel": "2/767",
+    "worker_cpus": "0xffff",
+    "status": "0",
+    "inherit": "3/767",
+    "inherit_kernel": "2/767",
+    "inherit_cpus": "0xffff"
+   },
+   {
+    "worker": "3/767",
+    "worker_kernel": "2/767",
+    "worker_cpus": "0xffff",
+    "status": "0",
+    "inherit": "3/767",
+    "inherit_kernel": "2/767",
+    "inherit_cpus": "0xffff"
+   },
+   {
+    "worker": "3/767",
+    "worker_kernel": "2/767",
+    "worker_cpus": "0xffff",
+    "status": "0",
+    "inherit": "3/767",
+    "inherit_kernel": "2/767",
+    "inherit_cpus": "0xffff"
+   },
+   {
+    "worker": "3/767",
+    "worker_kernel": "2/767",
+    "worker_cpus": "0xffff",
+    "status": "0",
+    "inherit": "3/767",
+    "inherit_kernel": "2/767",
+    "inherit_cpus": "0xffff"
+   },
+   {
+    "worker": "3/767",
+    "worker_kernel": "2/767",
+    "worker_cpus": "0xffff",
+    "status": "0",
+    "inherit": "3/767",
+    "inherit_kernel": "2/767",
+    "inherit_cpus": "0xffff"
+   },
+   {
+    "worker": "3/767",
+    "worker_kernel": "2/767",
+    "worker_cpus": "0xffff",
+    "status": "0",
+    "inherit": "3/767",
+    "inherit_kernel": "2/767",
+    "inherit_cpus": "0xffff"
+   },
+   {
+    "worker": "3/767",
+    "worker_kernel": "2/767",
+    "worker_cpus": "0xffff",
+    "status": "0",
+    "inherit": "3/767",
+    "inherit_kernel": "2/767",
+    "inherit_cpus": "0xffff"
+   },
+   {
+    "worker": "3/767",
+    "worker_kernel": "2/767",
+    "worker_cpus": "0xffff",
+    "status": "0",
+    "inherit": "3/767",
+    "inherit_kernel": "2/767",
+    "inherit_cpus": "0xffff"
+   }
+  ],
+  "program_threads": {
+   "set": 28,
+   "failed": 0
+  },
+  "census": null,
+  "census_processes": 0,
+  "row": null,
+  "scheduled": {
+   "ok": true,
+   "reasons": []
+  }
+ },
+ "helpers_ended": {
+  "why": null,
+  "count": 0,
+  "signals": {},
+  "gone_ms": {},
+  "still_there": [],
+  "after_kill": null,
+  "stalled": null,
+  "wedge_s": null,
+  "recorder_rows": "process rows from kern.proc (the title's own: state=3 pri=10/0 cpu=13 threads=25)"
+ },
+ "helper_doom": [
+  {
+   "seen": [
+    "exit"
+   ],
+   "doomed": null,
+   "stamped_ms_ago": null,
+   "ended": true
+  },
+  {
+   "seen": [
+    "exit"
+   ],
+   "doomed": null,
+   "stamped_ms_ago": null,
+   "ended": true
+  },
+  {
+   "seen": [
+    "exit"
+   ],
+   "doomed": null,
+   "stamped_ms_ago": null,
+   "ended": true
+  },
+  {
+   "seen": [
+    "exit"
+   ],
+   "doomed": null,
+   "stamped_ms_ago": null,
+   "ended": true
+  },
+  {
+   "seen": [
+    "exit"
+   ],
+   "doomed": null,
+   "stamped_ms_ago": null,
+   "ended": true
+  },
+  {
+   "seen": [
+    "exit"
+   ],
+   "doomed": null,
+   "stamped_ms_ago": null,
+   "ended": true
+  },
+  {
+   "seen": [
+    "exit"
+   ],
+   "doomed": null,
+   "stamped_ms_ago": null,
+   "ended": true
+  },
+  {
+   "seen": [
+    "exit"
+   ],
+   "doomed": null,
+   "stamped_ms_ago": null,
+   "ended": true
+  },
+  {
+   "seen": [
+    "exit"
+   ],
+   "doomed": null,
+   "stamped_ms_ago": null,
+   "ended": true
+  },
+  {
+   "seen": [
+    "exit"
+   ],
+   "doomed": null,
+   "stamped_ms_ago": null,
+   "ended": true
+  },
+  {
+   "seen": [
+    "exit"
+   ],
+   "doomed": null,
+   "stamped_ms_ago": null,
+   "ended": true
+  },
+  {
+   "seen": [
+    "exit"
+   ],
+   "doomed": null,
+   "stamped_ms_ago": null,
+   "ended": true
+  },
+  {
+   "seen": [
+    "exit"
+   ],
+   "doomed": null,
+   "stamped_ms_ago": null,
+   "ended": true
+  },
+  {
+   "seen": [
+    "exit"
+   ],
+   "doomed": null,
+   "stamped_ms_ago": null,
+   "ended": true
+  },
+  {
+   "seen": [
+    "exit"
+   ],
+   "doomed": null,
+   "stamped_ms_ago": null,
+   "ended": true
+  },
+  {
+   "seen": [
+    "exit"
+   ],
+   "doomed": null,
+   "stamped_ms_ago": null,
+   "ended": true
+  },
+  {
+   "seen": [
+    "exit"
+   ],
+   "doomed": null,
+   "stamped_ms_ago": null,
+   "ended": true
+  },
+  {
+   "seen": [
+    "exit"
+   ],
+   "doomed": null,
+   "stamped_ms_ago": null,
+   "ended": true
+  },
+  {
+   "seen": [
+    "exit"
+   ],
+   "doomed": null,
+   "stamped_ms_ago": null,
+   "ended": true
+  },
+  {
+   "seen": [
+    "exit"
+   ],
+   "doomed": null,
+   "stamped_ms_ago": null,
+   "ended": true
+  },
+  {
+   "seen": [
+    "exit"
+   ],
+   "doomed": null,
+   "stamped_ms_ago": null,
+   "ended": true
+  },
+  {
+   "seen": [
+    "exit"
+   ],
+   "doomed": null,
+   "stamped_ms_ago": null,
+   "ended": true
+  },
+  {
+   "seen": [
+    "exit"
+   ],
+   "doomed": null,
+   "stamped_ms_ago": null,
+   "ended": true
+  },
+  {
+   "seen": [
+    "exit"
+   ],
+   "doomed": null,
+   "stamped_ms_ago": null,
+   "ended": true
+  },
+  {
+   "seen": [
+    "exit"
+   ],
+   "doomed": null,
+   "stamped_ms_ago": null,
+   "ended": true
+  }
+ ],
+ "broker_phases": null,
+ "memory_helper_slowest": {
+  "census": 2,
+  "alloc": 1,
+  "shared": 0,
+  "touch": 3,
+  "dmem": 1,
+  "grant": 0,
+  "free": 0,
+  "stall": 0
+ },
+ "memory_helper": {
+  "dead": [],
+  "stall_tests": 0,
+  "sections_mib": [],
+  "given_back": 0,
+  "lost": 0,
+  "gave_back_lines": 0
+ },
+ "assertion": false,
+ "chunk_maps": null,
+ "mapped_mib": null,
+ "ask_failures_max": null,
+ "misplaced_max": null,
+ "rep_step_us": null,
+ "exec_rewrites_us": null,
+ "exit_stall": false,
+ "stop_requested": null,
+ "returned_to_launcher": true,
+ "touchpad_touched_at_start": 0,
+ "passed": false,
+ "bench": {},
+ "steady": {
+  "server": {
+   "calls": 0.0,
+   "per_s": 0.0,
+   "avg_us": 0.0,
+   "selects": 0.0,
+   "blocked": 0.0,
+   "block_avg_us": 0.0,
+   "waits": 0.0,
+   "handles_avg": 0.0,
+   "wait_all": 0.0,
+   "polled": 0.0,
+   "delays": 0.0,
+   "yields": 0.0,
+   "intervals": 54
+  }
+ },
+ "intervals": {
+  "frames": [],
+  "server": [
+   {
+    "calls": 0.0,
+    "per_s": 0.0,
+    "avg_us": 0.0,
+    "selects": 0.0,
+    "blocked": 0.0,
+    "block_avg_us": 0.0,
+    "waits": 0.0,
+    "handles_avg": 0.0,
+    "wait_all": 0.0,
+    "polled": 0.0,
+    "delays": 0.0,
+    "yields": 0.0
+   },
+   {
+    "calls": 0.0,
+    "per_s": 0.0,
+    "avg_us": 0.0,
+    "selects": 0.0,
+    "blocked": 0.0,
+    "block_avg_us": 0.0,
+    "waits": 0.0,
+    "handles_avg": 0.0,
+    "wait_all": 0.0,
+    "polled": 0.0,
+    "delays": 0.0,
+    "yields": 0.0
+   },
+   {
+    "calls": 0.0,
+    "per_s": 0.0,
+    "avg_us": 0.0,
+    "selects": 0.0,
+    "blocked": 0.0,
+    "block_avg_us": 0.0,
+    "waits": 0.0,
+    "handles_avg": 0.0,
+    "wait_all": 0.0,
+    "polled": 0.0,
+    "delays": 0.0,
+    "yields": 0.0
+   },
+   {
+    "calls": 0.0,
+    "per_s": 0.0,
+    "avg_us": 0.0,
+    "selects": 0.0,
+    "blocked": 0.0,
+    "block_avg_us": 0.0,
+    "waits": 0.0,
+    "handles_avg": 0.0,
+    "wait_all": 0.0,
+    "polled": 0.0,
+    "delays": 0.0,
+    "yields": 0.0
+   },
+   {
+    "calls": 0.0,
+    "per_s": 0.0,
+    "avg_us": 0.0,
+    "selects": 0.0,
+    "blocked": 0.0,
+    "block_avg_us": 0.0,
+    "waits": 0.0,
+    "handles_avg": 0.0,
+    "wait_all": 0.0,
+    "polled": 0.0,
+    "delays": 0.0,
+    "yields": 0.0
+   },
+   {
+    "calls": 0.0,
+    "per_s": 0.0,
+    "avg_us": 0.0,
+    "selects": 0.0,
+    "blocked": 0.0,
+    "block_avg_us": 0.0,
+    "waits": 0.0,
+    "handles_avg": 0.0,
+    "wait_all": 0.0,
+    "polled": 0.0,
+    "delays": 0.0,
+    "yields": 0.0
+   },
+   {
+    "calls": 0.0,
+    "per_s": 0.0,
+    "avg_us": 0.0,
+    "selects": 0.0,
+    "blocked": 0.0,
+    "block_avg_us": 0.0,
+    "waits": 0.0,
+    "handles_avg": 0.0,
+    "wait_all": 0.0,
+    "polled": 0.0,
+    "delays": 0.0,
+    "yields": 0.0
+   },
+   {
+    "calls": 0.0,
+    "per_s": 0.0,
+    "avg_us": 0.0,
+    "selects": 0.0,
+    "blocked": 0.0,
+    "block_avg_us": 0.0,
+    "waits": 0.0,
+    "handles_avg": 0.0,
+    "wait_all": 0.0,
+    "polled": 0.0,
+    "delays": 0.0,
+    "yields": 0.0
+   },
+   {
+    "calls": 0.0,
+    "per_s": 0.0,
+    "avg_us": 0.0,
+    "selects": 0.0,
+    "blocked": 0.0,
+    "block_avg_us": 0.0,
+    "waits": 0.0,
+    "handles_avg": 0.0,
+    "wait_all": 0.0,
+    "polled": 0.0,
+    "delays": 0.0,
+    "yields": 0.0
+   },
+   {
+    "calls": 0.0,
+    "per_s": 0.0,
+    "avg_us": 0.0,
+    "selects": 0.0,
+    "blocked": 0.0,
+    "block_avg_us": 0.0,
+    "waits": 0.0,
+    "handles_avg": 0.0,
+    "wait_all": 0.0,
+    "polled": 0.0,
+    "delays": 0.0,
+    "yields": 0.0
+   },
+   {
+    "calls": 0.0,
+    "per_s": 0.0,
+    "avg_us": 0.0,
+    "selects": 0.0,
+    "blocked": 0.0,
+    "block_avg_us": 0.0,
+    "waits": 0.0,
+    "handles_avg": 0.0,
+    "wait_all": 0.0,
+    "polled": 0.0,
+    "delays": 0.0,
+    "yields": 0.0
+   },
+   {
+    "calls": 0.0,
+    "per_s": 0.0,
+    "avg_us": 0.0,
+    "selects": 0.0,
+    "blocked": 0.0,
+    "block_avg_us": 0.0,
+    "waits": 0.0,
+    "handles_avg": 0.0,
+    "wait_all": 0.0,
+    "polled": 0.0,
+    "delays": 0.0,
+    "yields": 0.0
+   },
+   {
+    "calls": 0.0,
+    "per_s": 0.0,
+    "avg_us": 0.0,
+    "selects": 0.0,
+    "blocked": 0.0,
+    "block_avg_us": 0.0,
+    "waits": 0.0,
+    "handles_avg": 0.0,
+    "wait_all": 0.0,
+    "polled": 0.0,
+    "delays": 0.0,
+    "yields": 0.0
+   },
+   {
+    "calls": 0.0,
+    "per_s": 0.0,
+    "avg_us": 0.0,
+    "selects": 0.0,
+    "blocked": 0.0,
+    "block_avg_us": 0.0,
+    "waits": 0.0,
+    "handles_avg": 0.0,
+    "wait_all": 0.0,
+    "polled": 0.0,
+    "delays": 0.0,
+    "yields": 0.0
+   },
+   {
+    "calls": 0.0,
+    "per_s": 0.0,
+    "avg_us": 0.0,
+    "selects": 0.0,
+    "blocked": 0.0,
+    "block_avg_us": 0.0,
+    "waits": 0.0,
+    "handles_avg": 0.0,
+    "wait_all": 0.0,
+    "polled": 0.0,
+    "delays": 0.0,
+    "yields": 0.0
+   },
+   {
+    "calls": 0.0,
+    "per_s": 0.0,
+    "avg_us": 0.0,
+    "selects": 0.0,
+    "blocked": 0.0,
+    "block_avg_us": 0.0,
+    "waits": 0.0,
+    "handles_avg": 0.0,
+    "wait_all": 0.0,
+    "polled": 0.0,
+    "delays": 0.0,
+    "yields": 0.0
+   },
+   {
+    "calls": 0.0,
+    "per_s": 0.0,
+    "avg_us": 0.0,
+    "selects": 0.0,
+    "blocked": 0.0,
+    "block_avg_us": 0.0,
+    "waits": 0.0,
+    "handles_avg": 0.0,
+    "wait_all": 0.0,
+    "polled": 0.0,
+    "delays": 0.0,
+    "yields": 0.0
+   },
+   {
+    "calls": 0.0,
+    "per_s": 0.0,
+    "avg_us": 0.0,
+    "selects": 0.0,
+    "blocked": 0.0,
+    "block_avg_us": 0.0,
+    "waits": 0.0,
+    "handles_avg": 0.0,
+    "wait_all": 0.0,
+    "polled": 0.0,
+    "delays": 0.0,
+    "yields": 0.0
+   },
+   {
+    "calls": 0.0,
+    "per_s": 0.0,
+    "avg_us": 0.0,
+    "selects": 0.0,
+    "blocked": 0.0,
+    "block_avg_us": 0.0,
+    "waits": 0.0,
+    "handles_avg": 0.0,
+    "wait_all": 0.0,
+    "polled": 0.0,
+    "delays": 0.0,
+    "yields": 0.0
+   },
+   {
+    "calls": 0.0,
+    "per_s": 0.0,
+    "avg_us": 0.0,
+    "selects": 0.0,
+    "blocked": 0.0,
+    "block_avg_us": 0.0,
+    "waits": 0.0,
+    "handles_avg": 0.0,
+    "wait_all": 0.0,
+    "polled": 0.0,
+    "delays": 0.0,
+    "yields": 0.0
+   },
+   {
+    "calls": 0.0,
+    "per_s": 0.0,
+    "avg_us": 0.0,
+    "selects": 0.0,
+    "blocked": 0.0,
+    "block_avg_us": 0.0,
+    "waits": 0.0,
+    "handles_avg": 0.0,
+    "wait_all": 0.0,
+    "polled": 0.0,
+    "delays": 0.0,
+    "yields": 0.0
+   },
+   {
+    "calls": 0.0,
+    "per_s": 0.0,
+    "avg_us": 0.0,
+    "selects": 0.0,
+    "blocked": 0.0,
+    "block_avg_us": 0.0,
+    "waits": 0.0,
+    "handles_avg": 0.0,
+    "wait_all": 0.0,
+    "polled": 0.0,
+    "delays": 0.0,
+    "yields": 0.0
+   },
+   {
+    "calls": 0.0,
+    "per_s": 0.0,
+    "avg_us": 0.0,
+    "selects": 0.0,
+    "blocked": 0.0,
+    "block_avg_us": 0.0,
+    "waits": 0.0,
+    "handles_avg": 0.0,
+    "wait_all": 0.0,
+    "polled": 0.0,
+    "delays": 0.0,
+    "yields": 0.0
+   },
+   {
+    "calls": 0.0,
+    "per_s": 0.0,
+    "avg_us": 0.0,
+    "selects": 0.0,
+    "blocked": 0.0,
+    "block_avg_us": 0.0,
+    "waits": 0.0,
+    "handles_avg": 0.0,
+    "wait_all": 0.0,
+    "polled": 0.0,
+    "delays": 0.0,
+    "yields": 0.0
+   },
+   {
+    "calls": 0.0,
+    "per_s": 0.0,
+    "avg_us": 0.0,
+    "selects": 0.0,
+    "blocked": 0.0,
+    "block_avg_us": 0.0,
+    "waits": 0.0,
+    "handles_avg": 0.0,
+    "wait_all": 0.0,
+    "polled": 0.0,
+    "delays": 0.0,
+    "yields": 0.0
+   },
+   {
+    "calls": 0.0,
+    "per_s": 0.0,
+    "avg_us": 0.0,
+    "selects": 0.0,
+    "blocked": 0.0,
+    "block_avg_us": 0.0,
+    "waits": 0.0,
+    "handles_avg": 0.0,
+    "wait_all": 0.0,
+    "polled": 0.0,
+    "delays": 0.0,
+    "yields": 0.0
+   },
+   {
+    "calls": 0.0,
+    "per_s": 0.0,
+    "avg_us": 0.0,
+    "selects": 0.0,
+    "blocked": 0.0,
+    "block_avg_us": 0.0,
+    "waits": 0.0,
+    "handles_avg": 0.0,
+    "wait_all": 0.0,
+    "polled": 0.0,
+    "delays": 0.0,
+    "yields": 0.0
+   },
+   {
+    "calls": 0.0,
+    "per_s": 0.0,
+    "avg_us": 0.0,
+    "selects": 0.0,
+    "blocked": 0.0,
+    "block_avg_us": 0.0,
+    "waits": 0.0,
+    "handles_avg": 0.0,
+    "wait_all": 0.0,
+    "polled": 0.0,
+    "delays": 0.0,
+    "yields": 0.0
+   },
+   {
+    "calls": 0.0,
+    "per_s": 0.0,
+    "avg_us": 0.0,
+    "selects": 0.0,
+    "blocked": 0.0,
+    "block_avg_us": 0.0,
+    "waits": 0.0,
+    "handles_avg": 0.0,
+    "wait_all": 0.0,
+    "polled": 0.0,
+    "delays": 0.0,
+    "yields": 0.0
+   },
+   {
+    "calls": 0.0,
+    "per_s": 0.0,
+    "avg_us": 0.0,
+    "selects": 0.0,
+    "blocked": 0.0,
+    "block_avg_us": 0.0,
+    "waits": 0.0,
+    "handles_avg": 0.0,
+    "wait_all": 0.0,
+    "polled": 0.0,
+    "delays": 0.0,
+    "yields": 0.0
+   },
+   {
+    "calls": 0.0,
+    "per_s": 0.0,
+    "avg_us": 0.0,
+    "selects": 0.0,
+    "blocked": 0.0,
+    "block_avg_us": 0.0,
+    "waits": 0.0,
+    "handles_avg": 0.0,
+    "wait_all": 0.0,
+    "polled": 0.0,
+    "delays": 0.0,
+    "yields": 0.0
+   },
+   {
+    "calls": 0.0,
+    "per_s": 0.0,
+    "avg_us": 0.0,
+    "selects": 0.0,
+    "blocked": 0.0,
+    "block_avg_us": 0.0,
+    "waits": 0.0,
+    "handles_avg": 0.0,
+    "wait_all": 0.0,
+    "polled": 0.0,
+    "delays": 0.0,
+    "yields": 0.0
+   },
+   {
+    "calls": 0.0,
+    "per_s": 0.0,
+    "avg_us": 0.0,
+    "selects": 0.0,
+    "blocked": 0.0,
+    "block_avg_us": 0.0,
+    "waits": 0.0,
+    "handles_avg": 0.0,
+    "wait_all": 0.0,
+    "polled": 0.0,
+    "delays": 0.0,
+    "yields": 0.0
+   },
+   {
+    "calls": 0.0,
+    "per_s": 0.0,
+    "avg_us": 0.0,
+    "selects": 0.0,
+    "blocked": 0.0,
+    "block_avg_us": 0.0,
+    "waits": 0.0,
+    "handles_avg": 0.0,
+    "wait_all": 0.0,
+    "polled": 0.0,
+    "delays": 0.0,
+    "yields": 0.0
+   },
+   {
+    "calls": 0.0,
+    "per_s": 0.0,
+    "avg_us": 0.0,
+    "selects": 0.0,
+    "blocked": 0.0,
+    "block_avg_us": 0.0,
+    "waits": 0.0,
+    "handles_avg": 0.0,
+    "wait_all": 0.0,
+    "polled": 0.0,
+    "delays": 0.0,
+    "yields": 0.0
+   },
+   {
+    "calls": 0.0,
+    "per_s": 0.0,
+    "avg_us": 0.0,
+    "selects": 0.0,
+    "blocked": 0.0,
+    "block_avg_us": 0.0,
+    "waits": 0.0,
+    "handles_avg": 0.0,
+    "wait_all": 0.0,
+    "polled": 0.0,
+    "delays": 0.0,
+    "yields": 0.0
+   },
+   {
+    "calls": 0.0,
+    "per_s": 0.0,
+    "avg_us": 0.0,
+    "selects": 0.0,
+    "blocked": 0.0,
+    "block_avg_us": 0.0,
+    "waits": 0.0,
+    "handles_avg": 0.0,
+    "wait_all": 0.0,
+    "polled": 0.0,
+    "delays": 0.0,
+    "yields": 0.0
+   },
+   {
+    "calls": 0.0,
+    "per_s": 0.0,
+    "avg_us": 0.0,
+    "selects": 0.0,
+    "blocked": 0.0,
+    "block_avg_us": 0.0,
+    "waits": 0.0,
+    "handles_avg": 0.0,
+    "wait_all": 0.0,
+    "polled": 0.0,
+    "delays": 0.0,
+    "yields": 0.0
+   },
+   {
+    "calls": 0.0,
+    "per_s": 0.0,
+    "avg_us": 0.0,
+    "selects": 0.0,
+    "blocked": 0.0,
+    "block_avg_us": 0.0,
+    "waits": 0.0,
+    "handles_avg": 0.0,
+    "wait_all": 0.0,
+    "polled": 0.0,
+    "delays": 0.0,
+    "yields": 0.0
+   },
+   {
+    "calls": 0.0,
+    "per_s": 0.0,
+    "avg_us": 0.0,
+    "selects": 0.0,
+    "blocked": 0.0,
+    "block_avg_us": 0.0,
+    "waits": 0.0,
+    "handles_avg": 0.0,
+    "wait_all": 0.0,
+    "polled": 0.0,
+    "delays": 0.0,
+    "yields": 0.0
+   },
+   {
+    "calls": 0.0,
+    "per_s": 0.0,
+    "avg_us": 0.0,
+    "selects": 0.0,
+    "blocked": 0.0,
+    "block_avg_us": 0.0,
+    "waits": 0.0,
+    "handles_avg": 0.0,
+    "wait_all": 0.0,
+    "polled": 0.0,
+    "delays": 0.0,
+    "yields": 0.0
+   },
+   {
+    "calls": 0.0,
+    "per_s": 0.0,
+    "avg_us": 0.0,
+    "selects": 0.0,
+    "blocked": 0.0,
+    "block_avg_us": 0.0,
+    "waits": 0.0,
+    "handles_avg": 0.0,
+    "wait_all": 0.0,
+    "polled": 0.0,
+    "delays": 0.0,
+    "yields": 0.0
+   },
+   {
+    "calls": 0.0,
+    "per_s": 0.0,
+    "avg_us": 0.0,
+    "selects": 0.0,
+    "blocked": 0.0,
+    "block_avg_us": 0.0,
+    "waits": 0.0,
+    "handles_avg": 0.0,
+    "wait_all": 0.0,
+    "polled": 0.0,
+    "delays": 0.0,
+    "yields": 0.0
+   },
+   {
+    "calls": 0.0,
+    "per_s": 0.0,
+    "avg_us": 0.0,
+    "selects": 0.0,
+    "blocked": 0.0,
+    "block_avg_us": 0.0,
+    "waits": 0.0,
+    "handles_avg": 0.0,
+    "wait_all": 0.0,
+    "polled": 0.0,
+    "delays": 0.0,
+    "yields": 0.0
+   },
+   {
+    "calls": 0.0,
+    "per_s": 0.0,
+    "avg_us": 0.0,
+    "selects": 0.0,
+    "blocked": 0.0,
+    "block_avg_us": 0.0,
+    "waits": 0.0,
+    "handles_avg": 0.0,
+    "wait_all": 0.0,
+    "polled": 0.0,
+    "delays": 0.0,
+    "yields": 0.0
+   },
+   {
+    "calls": 0.0,
+    "per_s": 0.0,
+    "avg_us": 0.0,
+    "selects": 0.0,
+    "blocked": 0.0,
+    "block_avg_us": 0.0,
+    "waits": 0.0,
+    "handles_avg": 0.0,
+    "wait_all": 0.0,
+    "polled": 0.0,
+    "delays": 0.0,
+    "yields": 0.0
+   },
+   {
+    "calls": 0.0,
+    "per_s": 0.0,
+    "avg_us": 0.0,
+    "selects": 0.0,
+    "blocked": 0.0,
+    "block_avg_us": 0.0,
+    "waits": 0.0,
+    "handles_avg": 0.0,
+    "wait_all": 0.0,
+    "polled": 0.0,
+    "delays": 0.0,
+    "yields": 0.0
+   },
+   {
+    "calls": 0.0,
+    "per_s": 0.0,
+    "avg_us": 0.0,
+    "selects": 0.0,
+    "blocked": 0.0,
+    "block_avg_us": 0.0,
+    "waits": 0.0,
+    "handles_avg": 0.0,
+    "wait_all": 0.0,
+    "polled": 0.0,
+    "delays": 0.0,
+    "yields": 0.0
+   },
+   {
+    "calls": 0.0,
+    "per_s": 0.0,
+    "avg_us": 0.0,
+    "selects": 0.0,
+    "blocked": 0.0,
+    "block_avg_us": 0.0,
+    "waits": 0.0,
+    "handles_avg": 0.0,
+    "wait_all": 0.0,
+    "polled": 0.0,
+    "delays": 0.0,
+    "yields": 0.0
+   },
+   {
+    "calls": 0.0,
+    "per_s": 0.0,
+    "avg_us": 0.0,
+    "selects": 0.0,
+    "blocked": 0.0,
+    "block_avg_us": 0.0,
+    "waits": 0.0,
+    "handles_avg": 0.0,
+    "wait_all": 0.0,
+    "polled": 0.0,
+    "delays": 0.0,
+    "yields": 0.0
+   },
+   {
+    "calls": 0.0,
+    "per_s": 0.0,
+    "avg_us": 0.0,
+    "selects": 0.0,
+    "blocked": 0.0,
+    "block_avg_us": 0.0,
+    "waits": 0.0,
+    "handles_avg": 0.0,
+    "wait_all": 0.0,
+    "polled": 0.0,
+    "delays": 0.0,
+    "yields": 0.0
+   },
+   {
+    "calls": 0.0,
+    "per_s": 0.0,
+    "avg_us": 0.0,
+    "selects": 0.0,
+    "blocked": 0.0,
+    "block_avg_us": 0.0,
+    "waits": 0.0,
+    "handles_avg": 0.0,
+    "wait_all": 0.0,
+    "polled": 0.0,
+    "delays": 0.0,
+    "yields": 0.0
+   },
+   {
+    "calls": 0.0,
+    "per_s": 0.0,
+    "avg_us": 0.0,
+    "selects": 0.0,
+    "blocked": 0.0,
+    "block_avg_us": 0.0,
+    "waits": 0.0,
+    "handles_avg": 0.0,
+    "wait_all": 0.0,
+    "polled": 0.0,
+    "delays": 0.0,
+    "yields": 0.0
+   },
+   {
+    "calls": 0.0,
+    "per_s": 0.0,
+    "avg_us": 0.0,
+    "selects": 0.0,
+    "blocked": 0.0,
+    "block_avg_us": 0.0,
+    "waits": 0.0,
+    "handles_avg": 0.0,
+    "wait_all": 0.0,
+    "polled": 0.0,
+    "delays": 0.0,
+    "yields": 0.0
+   },
+   {
+    "calls": 0.0,
+    "per_s": 0.0,
+    "avg_us": 0.0,
+    "selects": 0.0,
+    "blocked": 0.0,
+    "block_avg_us": 0.0,
+    "waits": 0.0,
+    "handles_avg": 0.0,
+    "wait_all": 0.0,
+    "polled": 0.0,
+    "delays": 0.0,
+    "yields": 0.0
+   }
+  ],
+  "top": []
+ },
+ "shown": {
+  "frames": 973,
+  "per_10s": [
+   1,
+   27,
+   65,
+   43,
+   43,
+   10,
+   43,
+   38,
+   20,
+   48,
+   55,
+   79,
+   0,
+   0,
+   33,
+   71,
+   41,
+   37,
+   9,
+   44,
+   39,
+   20,
+   43,
+   54,
+   75,
+   0,
+   2,
+   33
+  ],
+  "longest_gap_ms": 25622
+ },
+ "broker": {
+  "local_offer": 7436451840,
+  "host_limit": 1073741824,
+  "windows": {
+   "presents": 1055,
+   "effect_bytes": 13509376,
+   "mica_builds": 10,
+   "thumbnail_builds": 0,
+   "compositions": 906,
+   "compose_avg_us": 3528,
+   "compose_max_us": 16264
+  },
+  "refused": [],
+  "refused_count": 0,
+  "clients": [
+   {
+    "pid": 2332,
+    "frames": 0,
+    "submissions": 0
+   },
+   {
+    "pid": -1,
+    "frames": 0,
+    "submissions": 0
+   },
+   {
+    "pid": -1,
+    "frames": 0,
+    "submissions": 0
+   },
+   {
+    "pid": -1,
+    "frames": 0,
+    "submissions": 0
+   },
+   {
+    "pid": -1,
+    "frames": 0,
+    "submissions": 0
+   },
+   {
+    "pid": -1,
+    "frames": 0,
+    "submissions": 0
+   },
+   {
+    "pid": -1,
+    "frames": 0,
+    "submissions": 0
+   },
+   {
+    "pid": -1,
+    "frames": 0,
+    "submissions": 0
+   },
+   {
+    "pid": -1,
+    "frames": 0,
+    "submissions": 0
+   },
+   {
+    "pid": -1,
+    "frames": 0,
+    "submissions": 0
+   },
+   {
+    "pid": -1,
+    "frames": 0,
+    "submissions": 0
+   },
+   {
+    "pid": -1,
+    "frames": 0,
+    "submissions": 0
+   },
+   {
+    "pid": -1,
+    "frames": 0,
+    "submissions": 0
+   },
+   {
+    "pid": -1,
+    "frames": 0,
+    "submissions": 0
+   },
+   {
+    "pid": -1,
+    "frames": 0,
+    "submissions": 0
+   },
+   {
+    "pid": -1,
+    "frames": 0,
+    "submissions": 0
+   },
+   {
+    "pid": -1,
+    "frames": 0,
+    "submissions": 0
+   },
+   {
+    "pid": -1,
+    "frames": 0,
+    "submissions": 0
+   },
+   {
+    "pid": -1,
+    "frames": 0,
+    "submissions": 0
+   },
+   {
+    "pid": -1,
+    "frames": 0,
+    "submissions": 0
+   },
+   {
+    "pid": -1,
+    "frames": 0,
+    "submissions": 0
+   },
+   {
+    "pid": 2327,
+    "frames": 0,
+    "submissions": 0
+   },
+   {
+    "pid": -1,
+    "frames": 0,
+    "submissions": 0
+   },
+   {
+    "pid": -1,
+    "frames": 0,
+    "submissions": 0
+   },
+   {
+    "pid": -1,
+    "frames": 0,
+    "submissions": 0
+   },
+   {
+    "pid": -1,
+    "frames": 0,
+    "submissions": 0
+   },
+   {
+    "pid": -1,
+    "frames": 0,
+    "submissions": 0
+   },
+   {
+    "pid": -1,
+    "frames": 0,
+    "submissions": 0
+   }
+  ],
+  "wedged": false,
+  "failure_reasons": [],
+  "host_peak": 2113536,
+  "local_peak": 0
+ },
+ "pacing": null,
+ "captures": [
+  "klog/shell81-base-05-capture-01.png",
+  "klog/shell81-base-05-capture-02.png",
+  "klog/shell81-base-05-capture-03.png",
+  "klog/shell81-base-05-capture-04.png",
+  "klog/shell81-base-05-capture-05.png",
+  "klog/shell81-base-05-capture-06.png",
+  "klog/shell81-base-05-capture-07.png",
+  "klog/shell81-base-05-capture-08.png",
+  "klog/shell81-base-05-capture-09.png",
+  "klog/shell81-base-05-capture-10.png",
+  "klog/shell81-base-05-capture-11.png",
+  "klog/shell81-base-05-capture-12.png",
+  "klog/shell81-base-05-capture-13.png",
+  "klog/shell81-base-05-capture-14.png",
+  "klog/shell81-base-05-capture-15.png",
+  "klog/shell81-base-05-capture-16.png",
+  "klog/shell81-base-05-capture-17.png",
+  "klog/shell81-base-05-capture-18.png",
+  "klog/shell81-base-05-capture-19.png",
+  "klog/shell81-base-05-capture-20.png",
+  "klog/shell81-base-05-capture-21.png",
+  "klog/shell81-base-05-capture-22.png",
+  "klog/shell81-base-05-capture-23.png",
+  "klog/shell81-base-05-capture-24.png",
+  "klog/shell81-base-05-capture-25.png",
+  "klog/shell81-base-05-capture-26.png",
+  "klog/shell81-base-05-capture-27.png",
+  "klog/shell81-base-05-capture-28.png",
+  "klog/shell81-base-05-capture-29.png",
+  "klog/shell81-base-05-capture-30.png",
+  "klog/shell81-base-05-capture-31.png",
+  "klog/shell81-base-05-capture-32.png",
+  "klog/shell81-base-05-capture-33.png",
+  "klog/shell81-base-05-capture-34.png",
+  "klog/shell81-base-05-capture-35.png",
+  "klog/shell81-base-05-capture-36.png",
+  "klog/shell81-base-05-capture-37.png",
+  "klog/shell81-base-05-capture-38.png",
+  "klog/shell81-base-05-capture-39.png",
+  "klog/shell81-base-05-capture-40.png",
+  "klog/shell81-base-05-capture-41.png",
+  "klog/shell81-base-05-capture-42.png",
+  "klog/shell81-base-05-capture-43.png",
+  "klog/shell81-base-05-capture-44.png",
+  "klog/shell81-base-05-capture-45.png",
+  "klog/shell81-base-05-capture-46.png",
+  "klog/shell81-base-05-capture-47.png",
+  "klog/shell81-base-05-capture-48.png",
+  "klog/shell81-base-05-capture-49.png",
+  "klog/shell81-base-05-capture-50.png",
+  "klog/shell81-base-05-capture-51.png",
+  "klog/shell81-base-05-capture-52.png",
+  "klog/shell81-base-05-capture-53.png",
+  "klog/shell81-base-05-capture-54.png",
+  "klog/shell81-base-05-capture-55.png",
+  "klog/shell81-base-05-capture-56.png",
+  "klog/shell81-base-05-capture-57.png",
+  "klog/shell81-base-05-capture-58.png",
+  "klog/shell81-base-05-capture-59.png",
+  "klog/shell81-base-05-capture-60.png",
+  "klog/shell81-base-05-capture-61.png",
+  "klog/shell81-base-05-capture-62.png",
+  "klog/shell81-base-05-capture-63.png",
+  "klog/shell81-base-05-capture-64.png",
+  "klog/shell81-base-05-capture-65.png",
+  "klog/shell81-base-05-capture-66.png",
+  "klog/shell81-base-05-capture-67.png",
+  "klog/shell81-base-05-capture-68.png",
+  "klog/shell81-base-05-capture-69.png",
+  "klog/shell81-base-05-capture-70.png",
+  "klog/shell81-base-05-capture-71.png",
+  "klog/shell81-base-05-capture-72.png",
+  "klog/shell81-base-05-capture-73.png",
+  "klog/shell81-base-05-capture-74.png",
+  "klog/shell81-base-05-capture-75.png",
+  "klog/shell81-base-05-capture-76.png"
+ ],
+ "cleanup_verified": false,
+ "hooks_removed": true,
+ "scorecard": {
+  "reference": "ed5cd48a",
+  "states": [
+   {
+    "state": "desktop",
+    "theme": "light",
+    "group": "desktop",
+    "status": "scored",
+    "capture": "klog/shell81-base-05-capture-01.png",
+    "pointer": [
+     1910,
+     7
+    ],
+    "compared": 2063696,
+    "within_1": 98.3,
+    "within_2": 98.7,
+    "worst": 255
+   },
+   {
+    "state": "start",
+    "theme": "light",
+    "group": "start",
+    "status": "scored",
+    "capture": "klog/shell81-base-05-capture-06.png",
+    "pointer": [
+     1910,
+     7
+    ],
+    "compared": 391188,
+    "within_1": 90.1,
+    "within_2": 92.5,
+    "worst": 255
+   },
+   {
+    "state": "search",
+    "theme": "light",
+    "group": "start",
+    "status": "scored",
+    "capture": "klog/shell81-base-05-capture-07.png",
+    "pointer": [
+     1910,
+     7
+    ],
+    "compared": 393941,
+    "within_1": 87.9,
+    "within_2": 88.5,
+    "worst": 255
+   },
+   {
+    "state": "quicksettings",
+    "theme": "light",
+    "group": "flyouts",
+    "status": "scored",
+    "capture": "klog/shell81-base-05-capture-08.png",
+    "pointer": [
+     1910,
+     7
+    ],
+    "compared": 184755,
+    "within_1": 93.2,
+    "within_2": 95.4,
+    "worst": 255
+   },
+   {
+    "state": "quicksettings-wifi",
+    "theme": "light",
+    "group": "flyouts",
+    "status": "no native surface",
+    "reason": "Quick Settings has no Wi-Fi page"
+   },
+   {
+    "state": "notifications",
+    "theme": "light",
+    "group": "flyouts",
+    "status": "scored",
+    "capture": "klog/shell81-base-05-capture-09.png",
+    "pointer": [
+     1910,
+     7
+    ],
+    "compared": 63374,
+    "within_1": 33.2,
+    "within_2": 37.9,
+    "worst": 250
+   },
+   {
+    "state": "toast",
+    "theme": "light",
+    "group": "flyouts",
+    "status": "no native surface",
+    "reason": "no notification toasts"
+   },
+   {
+    "state": "lock",
+    "theme": "light",
+    "group": "session",
+    "status": "no native surface",
+    "reason": "no lock screen"
+   },
+   {
+    "state": "signin",
+    "theme": "light",
+    "group": "session",
+    "status": "no native surface",
+    "reason": "no sign-in screen"
+   },
+   {
+    "state": "restarting",
+    "theme": "light",
+    "group": "session",
+    "status": "no native surface",
+    "reason": "no restart screen"
+   },
+   {
+    "state": "shutdown-dialog",
+    "theme": "light",
+    "group": "session",
+    "status": "no native surface",
+    "reason": "no shut down dialog"
+   },
+   {
+    "state": "explorer",
+    "theme": "light",
+    "group": "file explorer",
+    "status": "scored",
+    "capture": "klog/shell81-base-05-capture-18.png",
+    "pointer": [
+     1910,
+     7
+    ],
+    "compared": 693012,
+    "within_1": 100.0,
+    "within_2": 100.0,
+    "worst": 43
+   },
+   {
+    "state": "settings",
+    "theme": "light",
+    "group": "apps",
+    "status": "scored",
+    "capture": "klog/shell81-base-05-capture-34.png",
+    "pointer": [
+     1910,
+     7
+    ],
+    "compared": 1109874,
+    "within_1": 32.6,
+    "within_2": 45.2,
+    "worst": 253
+   },
+   {
+    "state": "settings-taskbar",
+    "theme": "light",
+    "group": "apps",
+    "status": "no native surface",
+    "reason": "Settings has no Taskbar page"
+   },
+   {
+    "state": "settings-clipboard",
+    "theme": "light",
+    "group": "apps",
+    "status": "no native surface",
+    "reason": "Settings has no Clipboard page"
+   },
+   {
+    "state": "notepad",
+    "theme": "light",
+    "group": "apps",
+    "status": "scored",
+    "capture": "klog/shell81-base-05-capture-25.png",
+    "pointer": [
+     1910,
+     7
+    ],
+    "compared": 801687,
+    "within_1": 59.0,
+    "within_2": 60.6,
+    "worst": 255
+   },
+   {
+    "state": "notepad-save-prompt",
+    "theme": "light",
+    "group": "dialogs",
+    "status": "scored",
+    "capture": "klog/shell81-base-05-capture-26.png",
+    "pointer": [
+     1910,
+     7
+    ],
+    "compared": 748752,
+    "within_1": 3.4,
+    "within_2": 4.9,
+    "worst": 255
+   },
+   {
+    "state": "calculator",
+    "theme": "light",
+    "group": "apps",
+    "status": "no native surface",
+    "reason": "no Calculator"
+   },
+   {
+    "state": "terminal",
+    "theme": "light",
+    "group": "apps",
+    "status": "scored",
+    "capture": "klog/shell81-base-05-capture-36.png",
+    "pointer": [
+     1910,
+     7
+    ],
+    "compared": 701823,
+    "within_1": 1.1,
+    "within_2": 3.4,
+    "worst": 249
+   },
+   {
+    "state": "terminal-help",
+    "theme": "light",
+    "group": "apps",
+    "status": "not driven",
+    "reason": "the prototype's terminal is PowerShell's help"
+   },
+   {
+    "state": "taskmgr",
+    "theme": "light",
+    "group": "apps",
+    "status": "scored",
+    "capture": "klog/shell81-base-05-capture-37.png",
+    "pointer": [
+     1910,
+     7
+    ],
+    "compared": 818429,
+    "within_1": 17.8,
+    "within_2": 17.8,
+    "worst": 255
+   },
+   {
+    "state": "taskmgr-perf",
+    "theme": "light",
+    "group": "apps",
+    "status": "scored",
+    "capture": "klog/shell81-base-05-capture-38.png",
+    "pointer": [
+     1910,
+     7
+    ],
+    "compared": 817527,
+    "within_1": 42.4,
+    "within_2": 42.5,
+    "worst": 255
+   },
+   {
+    "state": "controls",
+    "theme": "light",
+    "group": "controls",
+    "status": "no native surface",
+    "reason": "no control gallery"
+   },
+   {
+    "state": "controls-buttons",
+    "theme": "light",
+    "group": "controls",
+    "status": "no native surface",
+    "reason": "no control gallery"
+   },
+   {
+    "state": "controls-text",
+    "theme": "light",
+    "group": "controls",
+    "status": "no native surface",
+    "reason": "no control gallery"
+   },
+   {
+    "state": "controls-lists",
+    "theme": "light",
+    "group": "controls",
+    "status": "no native surface",
+    "reason": "no control gallery"
+   },
+   {
+    "state": "controls-ranges",
+    "theme": "light",
+    "group": "controls",
+    "status": "no native surface",
+    "reason": "no control gallery"
+   },
+   {
+    "state": "controls-bars",
+    "theme": "light",
+    "group": "controls",
+    "status": "no native surface",
+    "reason": "no control gallery"
+   },
+   {
+    "state": "controls-dates",
+    "theme": "light",
+    "group": "controls",
+    "status": "no native surface",
+    "reason": "no control gallery"
+   },
+   {
+    "state": "controls-dialog",
+    "theme": "light",
+    "group": "controls",
+    "status": "no native surface",
+    "reason": "no control gallery"
+   },
+   {
+    "state": "snaplayouts",
+    "theme": "light",
+    "group": "snap and switching",
+    "status": "no native surface",
+    "reason": "no Snap Layouts"
+   },
+   {
+    "state": "menu-desktop",
+    "theme": "light",
+    "group": "menus",
+    "status": "scored",
+    "capture": "klog/shell81-base-05-capture-15.png",
+    "pointer": [
+     1910,
+     7
+    ],
+    "compared": 99637,
+    "within_1": 99.5,
+    "within_2": 99.8,
+    "worst": 35
+   },
+   {
+    "state": "menu-desktop-item",
+    "theme": "light",
+    "group": "menus",
+    "status": "scored",
+    "capture": "klog/shell81-base-05-capture-17.png",
+    "pointer": [
+     1910,
+     7
+    ],
+    "compared": 112988,
+    "within_1": 67.7,
+    "within_2": 71.6,
+    "worst": 242
+   },
+   {
+    "state": "run",
+    "theme": "light",
+    "group": "dialogs",
+    "status": "scored",
+    "capture": "klog/shell81-base-05-capture-31.png",
+    "pointer": [
+     1910,
+     7
+    ],
+    "compared": 118988,
+    "within_1": 19.0,
+    "within_2": 20.5,
+    "worst": 255
+   },
+   {
+    "state": "msgbox",
+    "theme": "light",
+    "group": "dialogs",
+    "status": "scored",
+    "capture": "klog/shell81-base-05-capture-27.png",
+    "pointer": [
+     1910,
+     7
+    ],
+    "compared": 108920,
+    "within_1": 53.3,
+    "within_2": 58.0,
+    "worst": 255
+   },
+   {
+    "state": "msgbox-error",
+    "theme": "light",
+    "group": "dialogs",
+    "status": "scored",
+    "capture": "klog/shell81-base-05-capture-28.png",
+    "pointer": [
+     1910,
+     7
+    ],
+    "compared": 208069,
+    "within_1": 73.3,
+    "within_2": 74.7,
+    "worst": 255
+   },
+   {
+    "state": "msgbox-info",
+    "theme": "light",
+    "group": "dialogs",
+    "status": "scored",
+    "capture": "klog/shell81-base-05-capture-29.png",
+    "pointer": [
+     1910,
+     7
+    ],
+    "compared": 97942,
+    "within_1": 74.7,
+    "within_2": 77.7,
+    "worst": 255
+   },
+   {
+    "state": "taskdialog",
+    "theme": "light",
+    "group": "dialogs",
+    "status": "scored",
+    "capture": "klog/shell81-base-05-capture-30.png",
+    "pointer": [
+     1910,
+     7
+    ],
+    "compared": 208267,
+    "within_1": 14.1,
+    "within_2": 16.3,
+    "worst": 255
+   },
+   {
+    "state": "properties",
+    "theme": "light",
+    "group": "dialogs",
+    "status": "did not open",
+    "reason": "the dialog did not open"
+   },
+   {
+    "state": "properties-drive",
+    "theme": "light",
+    "group": "dialogs",
+    "status": "did not open",
+    "reason": "the dialog did not open"
+   },
+   {
+    "state": "properties-folder",
+    "theme": "light",
+    "group": "dialogs",
+    "status": "did not open",
+    "reason": "the dialog did not open"
+   },
+   {
+    "state": "properties-recycle",
+    "theme": "light",
+    "group": "dialogs",
+    "status": "not driven",
+    "reason": "the Recycle Bin's properties are not opened yet"
+   },
+   {
+    "state": "properties-shortcut",
+    "theme": "light",
+    "group": "dialogs",
+    "status": "did not open",
+    "reason": "the dialog did not open"
+   },
+   {
+    "state": "openwith",
+    "theme": "light",
+    "group": "dialogs",
+    "status": "not driven",
+    "reason": "Open with is not opened yet"
+   },
+   {
+    "state": "fileopen",
+    "theme": "light",
+    "group": "dialogs",
+    "status": "scored",
+    "capture": "klog/shell81-base-05-capture-32.png",
+    "pointer": [
+     1910,
+     7
+    ],
+    "compared": 713274,
+    "within_1": 70.9,
+    "within_2": 70.9,
+    "worst": 255
+   },
+   {
+    "state": "filesave",
+    "theme": "light",
+    "group": "dialogs",
+    "status": "scored",
+    "capture": "klog/shell81-base-05-capture-33.png",
+    "pointer": [
+     1910,
+     7
+    ],
+    "compared": 713315,
+    "within_1": 71.3,
+    "within_2": 71.4,
+    "worst": 255
+   },
+   {
+    "state": "uac",
+    "theme": "light",
+    "group": "dialogs",
+    "status": "no native surface",
+    "reason": "no elevation prompt"
+   },
+   {
+    "state": "copyprogress",
+    "theme": "light",
+    "group": "dialogs",
+    "status": "not driven",
+    "reason": "needs a copy long enough to show progress"
+   },
+   {
+    "state": "copyprogress-details",
+    "theme": "light",
+    "group": "dialogs",
+    "status": "not driven",
+    "reason": "as copyprogress"
+   },
+   {
+    "state": "conflict",
+    "theme": "light",
+    "group": "dialogs",
+    "status": "not driven",
+    "reason": "needs a copy onto an existing file"
+   },
+   {
+    "state": "osd",
+    "theme": "light",
+    "group": "flyouts",
+    "status": "no native surface",
+    "reason": "no volume indicator"
+   },
+   {
+    "state": "osd-brightness",
+    "theme": "light",
+    "group": "flyouts",
+    "status": "no native surface",
+    "reason": "no brightness indicator"
+   },
+   {
+    "state": "emoji",
+    "theme": "light",
+    "group": "flyouts",
+    "status": "no native surface",
+    "reason": "no emoji panel"
+   },
+   {
+    "state": "clipboard",
+    "theme": "light",
+    "group": "flyouts",
+    "status": "no native surface",
+    "reason": "no clipboard history"
+   },
+   {
+    "state": "taskbar-thumbs",
+    "theme": "light",
+    "group": "taskbar",
+    "status": "did not open",
+    "reason": "no preview"
+   },
+   {
+    "state": "taskbar-tray",
+    "theme": "light",
+    "group": "taskbar",
+    "status": "did not open",
+    "reason": "the flyout did not open"
+   },
+   {
+    "state": "taskbar-left",
+    "theme": "light",
+    "group": "taskbar",
+    "status": "no native surface",
+    "reason": "no left-aligned taskbar"
+   },
+   {
+    "state": "taskbar-progress",
+    "theme": "light",
+    "group": "taskbar",
+    "status": "no native surface",
+    "reason": "no button progress"
+   },
+   {
+    "state": "taskbar-flash",
+    "theme": "light",
+    "group": "taskbar",
+    "status": "no native surface",
+    "reason": "no button flashing"
+   },
+   {
+    "state": "hang",
+    "theme": "light",
+    "group": "window chrome",
+    "status": "no native surface",
+    "reason": "no \"not responding\" window"
+   },
+   {
+    "state": "desktop-icon-hover",
+    "theme": "light",
+    "group": "desktop",
+    "status": "scored",
+    "capture": "klog/shell81-base-05-capture-11.png",
+    "pointer": [
+     38,
+     130
+    ],
+    "compared": 3696,
+    "within_1": 88.3,
+    "within_2": 94.0,
+    "worst": 213
+   },
+   {
+    "state": "desktop-icon-infotip",
+    "theme": "light",
+    "group": "desktop",
+    "status": "scored",
+    "capture": "klog/shell81-base-05-capture-10.png",
+    "pointer": [
+     38,
+     130
+    ],
+    "compared": 16326,
+    "within_1": 83.1,
+    "within_2": 87.3,
+    "worst": 224
+   },
+   {
+    "state": "desktop-icon-selected",
+    "theme": "light",
+    "group": "desktop",
+    "status": "scored",
+    "capture": "klog/shell81-base-05-capture-12.png",
+    "pointer": [
+     1910,
+     7
+    ],
+    "compared": 4641,
+    "within_1": 86.5,
+    "within_2": 93.8,
+    "worst": 177
+   },
+   {
+    "state": "desktop-rubber-band",
+    "theme": "light",
+    "group": "desktop",
+    "status": "scored",
+    "capture": "klog/shell81-base-05-capture-13.png",
+    "pointer": [
+     20,
+     330
+    ],
+    "compared": 119693,
+    "within_1": 88.5,
+    "within_2": 89.8,
+    "worst": 219
+   },
+   {
+    "state": "desktop-multi-selected",
+    "theme": "light",
+    "group": "desktop",
+    "status": "scored",
+    "capture": "klog/shell81-base-05-capture-14.png",
+    "pointer": [
+     1910,
+     7
+    ],
+    "compared": 25804,
+    "within_1": 40.9,
+    "within_2": 44.2,
+    "worst": 255
+   },
+   {
+    "state": "desktop-icon-drag",
+    "theme": "light",
+    "group": "desktop",
+    "status": "not driven",
+    "reason": "a drag would move and persist a desktop icon"
+   },
+   {
+    "state": "desktop-icon-dropped",
+    "theme": "light",
+    "group": "desktop",
+    "status": "not driven",
+    "reason": "as desktop-icon-drag"
+   },
+   {
+    "state": "taskbar-start-hover",
+    "theme": "light",
+    "group": "taskbar",
+    "status": "scored",
+    "capture": "klog/shell81-base-05-capture-02.png",
+    "pointer": [
+     716,
+     1056
+    ],
+    "compared": 892,
+    "within_1": 83.7,
+    "within_2": 96.0,
+    "worst": 13
+   },
+   {
+    "state": "taskbar-start-pressed",
+    "theme": "light",
+    "group": "taskbar",
+    "status": "scored",
+    "capture": "klog/shell81-base-05-capture-03.png",
+    "pointer": [
+     716,
+     1056
+    ],
+    "compared": 1108,
+    "within_1": 71.1,
+    "within_2": 71.6,
+    "worst": 180
+   },
+   {
+    "state": "start-opened-by-click",
+    "theme": "light",
+    "group": "start",
+    "status": "scored",
+    "capture": "klog/shell81-base-05-capture-04.png",
+    "pointer": [
+     716,
+     1056
+    ],
+    "compared": 390783,
+    "within_1": 90.2,
+    "within_2": 92.6,
+    "worst": 255
+   },
+   {
+    "state": "taskbar-app-hover",
+    "theme": "light",
+    "group": "taskbar",
+    "status": "scored",
+    "capture": "klog/shell81-base-05-capture-23.png",
+    "pointer": [
+     1072,
+     1056
+    ],
+    "compared": 917679,
+    "within_1": 98.6,
+    "within_2": 98.6,
+    "worst": 228
+   },
+   {
+    "state": "winx",
+    "theme": "light",
+    "group": "taskbar",
+    "status": "no native surface",
+    "reason": "no Start button menu"
+   },
+   {
+    "state": "jumplist",
+    "theme": "light",
+    "group": "taskbar",
+    "status": "no native surface",
+    "reason": "no taskbar button menu"
+   },
+   {
+    "state": "taskbar-menu",
+    "theme": "light",
+    "group": "taskbar",
+    "status": "no native surface",
+    "reason": "no taskbar menu"
+   },
+   {
+    "state": "caption-close-hover",
+    "theme": "light",
+    "group": "window chrome",
+    "status": "scored",
+    "capture": "klog/shell81-base-05-capture-21.png",
+    "pointer": [
+     1486,
+     191
+    ],
+    "compared": 691952,
+    "within_1": 100.0,
+    "within_2": 100.0,
+    "worst": 43
+   },
+   {
+    "state": "caption-close-pressed",
+    "theme": "light",
+    "group": "window chrome",
+    "status": "scored",
+    "capture": "klog/shell81-base-05-capture-22.png",
+    "pointer": [
+     1486,
+     191
+    ],
+    "compared": 691952,
+    "within_1": 100.0,
+    "within_2": 100.0,
+    "worst": 43
+   },
+   {
+    "state": "caption-minimize-hover",
+    "theme": "light",
+    "group": "window chrome",
+    "status": "scored",
+    "capture": "klog/shell81-base-05-capture-19.png",
+    "pointer": [
+     1394,
+     191
+    ],
+    "compared": 691952,
+    "within_1": 99.9,
+    "within_2": 100.0,
+    "worst": 43
+   },
+   {
+    "state": "caption-maximize-hover",
+    "theme": "light",
+    "group": "window chrome",
+    "status": "scored",
+    "capture": "klog/shell81-base-05-capture-20.png",
+    "pointer": [
+     1440,
+     191
+    ],
+    "compared": 691998,
+    "within_1": 99.9,
+    "within_2": 100.0,
+    "worst": 43
+   },
+   {
+    "state": "windows-active-inactive",
+    "theme": "light",
+    "group": "window chrome",
+    "status": "scored",
+    "capture": "klog/shell81-base-05-capture-24.png",
+    "pointer": [
+     1910,
+     7
+    ],
+    "compared": 866669,
+    "within_1": 79.9,
+    "within_2": 80.5,
+    "worst": 255
+   },
+   {
+    "state": "snap-preview-left",
+    "theme": "light",
+    "group": "snap and switching",
+    "status": "no native surface",
+    "reason": "no Snap"
+   },
+   {
+    "state": "snap-assist",
+    "theme": "light",
+    "group": "snap and switching",
+    "status": "no native surface",
+    "reason": "no Snap Assist"
+   },
+   {
+    "state": "alttab",
+    "theme": "light",
+    "group": "snap and switching",
+    "status": "no native surface",
+    "reason": "no Alt+Tab switcher"
+   },
+   {
+    "state": "taskview",
+    "theme": "light",
+    "group": "snap and switching",
+    "status": "no native surface",
+    "reason": "no Task View"
+   },
+   {
+    "state": "window-maximized",
+    "theme": "light",
+    "group": "window chrome",
+    "status": "scored",
+    "capture": "klog/shell81-base-05-capture-35.png",
+    "pointer": [
+     1910,
+     7
+    ],
+    "compared": 1982477,
+    "within_1": 10.4,
+    "within_2": 20.0,
+    "worst": 255
+   },
+   {
+    "state": "menu-desktop-view-submenu",
+    "theme": "light",
+    "group": "menus",
+    "status": "scored",
+    "capture": "klog/shell81-base-05-capture-16.png",
+    "pointer": [
+     833,
+     419
+    ],
+    "compared": 159666,
+    "within_1": 98.7,
+    "within_2": 99.2,
+    "worst": 77
+   },
+   {
+    "state": "start-pin-hover",
+    "theme": "light",
+    "group": "start",
+    "status": "scored",
+    "capture": "klog/shell81-base-05-capture-05.png",
+    "pointer": [
+     733,
+     607
+    ],
+    "compared": 390152,
+    "within_1": 89.1,
+    "within_2": 91.5,
+    "worst": 255
+   },
+   {
+    "state": "desktop",
+    "theme": "dark",
+    "group": "desktop",
+    "status": "scored",
+    "capture": "klog/shell81-base-05-capture-39.png",
+    "pointer": [
+     1910,
+     7
+    ],
+    "compared": 2063696,
+    "within_1": 98.4,
+    "within_2": 98.7,
+    "worst": 255
+   },
+   {
+    "state": "start",
+    "theme": "dark",
+    "group": "start",
+    "status": "scored",
+    "capture": "klog/shell81-base-05-capture-44.png",
+    "pointer": [
+     1910,
+     7
+    ],
+    "compared": 395590,
+    "within_1": 86.0,
+    "within_2": 92.6,
+    "worst": 255
+   },
+   {
+    "state": "search",
+    "theme": "dark",
+    "group": "start",
+    "status": "scored",
+    "capture": "klog/shell81-base-05-capture-45.png",
+    "pointer": [
+     1910,
+     7
+    ],
+    "compared": 398863,
+    "within_1": 83.3,
+    "within_2": 88.6,
+    "worst": 255
+   },
+   {
+    "state": "quicksettings",
+    "theme": "dark",
+    "group": "flyouts",
+    "status": "scored",
+    "capture": "klog/shell81-base-05-capture-46.png",
+    "pointer": [
+     1910,
+     7
+    ],
+    "compared": 186476,
+    "within_1": 92.2,
+    "within_2": 95.7,
+    "worst": 255
+   },
+   {
+    "state": "quicksettings-wifi",
+    "theme": "dark",
+    "group": "flyouts",
+    "status": "no native surface",
+    "reason": "Quick Settings has no Wi-Fi page"
+   },
+   {
+    "state": "notifications",
+    "theme": "dark",
+    "group": "flyouts",
+    "status": "scored",
+    "capture": "klog/shell81-base-05-capture-47.png",
+    "pointer": [
+     1910,
+     7
+    ],
+    "compared": 66024,
+    "within_1": 32.1,
+    "within_2": 35.7,
+    "worst": 255
+   },
+   {
+    "state": "toast",
+    "theme": "dark",
+    "group": "flyouts",
+    "status": "no native surface",
+    "reason": "no notification toasts"
+   },
+   {
+    "state": "lock",
+    "theme": "dark",
+    "group": "session",
+    "status": "no native surface",
+    "reason": "no lock screen"
+   },
+   {
+    "state": "signin",
+    "theme": "dark",
+    "group": "session",
+    "status": "no native surface",
+    "reason": "no sign-in screen"
+   },
+   {
+    "state": "restarting",
+    "theme": "dark",
+    "group": "session",
+    "status": "no native surface",
+    "reason": "no restart screen"
+   },
+   {
+    "state": "shutdown-dialog",
+    "theme": "dark",
+    "group": "session",
+    "status": "no native surface",
+    "reason": "no shut down dialog"
+   },
+   {
+    "state": "explorer",
+    "theme": "dark",
+    "group": "file explorer",
+    "status": "scored",
+    "capture": "klog/shell81-base-05-capture-56.png",
+    "pointer": [
+     1910,
+     7
+    ],
+    "compared": 723349,
+    "within_1": 99.9,
+    "within_2": 100.0,
+    "worst": 25
+   },
+   {
+    "state": "settings",
+    "theme": "dark",
+    "group": "apps",
+    "status": "scored",
+    "capture": "klog/shell81-base-05-capture-72.png",
+    "pointer": [
+     1910,
+     7
+    ],
+    "compared": 1139681,
+    "within_1": 4.0,
+    "within_2": 7.1,
+    "worst": 231
+   },
+   {
+    "state": "settings-taskbar",
+    "theme": "dark",
+    "group": "apps",
+    "status": "no native surface",
+    "reason": "Settings has no Taskbar page"
+   },
+   {
+    "state": "settings-clipboard",
+    "theme": "dark",
+    "group": "apps",
+    "status": "no native surface",
+    "reason": "Settings has no Clipboard page"
+   },
+   {
+    "state": "notepad",
+    "theme": "dark",
+    "group": "apps",
+    "status": "scored",
+    "capture": "klog/shell81-base-05-capture-63.png",
+    "pointer": [
+     1910,
+     7
+    ],
+    "compared": 815472,
+    "within_1": 0.3,
+    "within_2": 1.9,
+    "worst": 255
+   },
+   {
+    "state": "notepad-save-prompt",
+    "theme": "dark",
+    "group": "dialogs",
+    "status": "scored",
+    "capture": "klog/shell81-base-05-capture-64.png",
+    "pointer": [
+     1910,
+     7
+    ],
+    "compared": 773054,
+    "within_1": 0.2,
+    "within_2": 1.7,
+    "worst": 255
+   },
+   {
+    "state": "calculator",
+    "theme": "dark",
+    "group": "apps",
+    "status": "no native surface",
+    "reason": "no Calculator"
+   },
+   {
+    "state": "terminal",
+    "theme": "dark",
+    "group": "apps",
+    "status": "scored",
+    "capture": "klog/shell81-base-05-capture-74.png",
+    "pointer": [
+     1910,
+     7
+    ],
+    "compared": 701806,
+    "within_1": 1.4,
+    "within_2": 4.2,
+    "worst": 255
+   },
+   {
+    "state": "terminal-help",
+    "theme": "dark",
+    "group": "apps",
+    "status": "not driven",
+    "reason": "the prototype's terminal is PowerShell's help"
+   },
+   {
+    "state": "taskmgr",
+    "theme": "dark",
+    "group": "apps",
+    "status": "scored",
+    "capture": "klog/shell81-base-05-capture-75.png",
+    "pointer": [
+     1910,
+     7
+    ],
+    "compared": 843558,
+    "within_1": 2.7,
+    "within_2": 5.5,
+    "worst": 255
+   },
+   {
+    "state": "taskmgr-perf",
+    "theme": "dark",
+    "group": "apps",
+    "status": "scored",
+    "capture": "klog/shell81-base-05-capture-76.png",
+    "pointer": [
+     1910,
+     7
+    ],
+    "compared": 843542,
+    "within_1": 2.7,
+    "within_2": 5.9,
+    "worst": 242
+   },
+   {
+    "state": "controls",
+    "theme": "dark",
+    "group": "controls",
+    "status": "no native surface",
+    "reason": "no control gallery"
+   },
+   {
+    "state": "controls-buttons",
+    "theme": "dark",
+    "group": "controls",
+    "status": "no native surface",
+    "reason": "no control gallery"
+   },
+   {
+    "state": "controls-text",
+    "theme": "dark",
+    "group": "controls",
+    "status": "no native surface",
+    "reason": "no control gallery"
+   },
+   {
+    "state": "controls-lists",
+    "theme": "dark",
+    "group": "controls",
+    "status": "no native surface",
+    "reason": "no control gallery"
+   },
+   {
+    "state": "controls-ranges",
+    "theme": "dark",
+    "group": "controls",
+    "status": "no native surface",
+    "reason": "no control gallery"
+   },
+   {
+    "state": "controls-bars",
+    "theme": "dark",
+    "group": "controls",
+    "status": "no native surface",
+    "reason": "no control gallery"
+   },
+   {
+    "state": "controls-dates",
+    "theme": "dark",
+    "group": "controls",
+    "status": "no native surface",
+    "reason": "no control gallery"
+   },
+   {
+    "state": "controls-dialog",
+    "theme": "dark",
+    "group": "controls",
+    "status": "no native surface",
+    "reason": "no control gallery"
+   },
+   {
+    "state": "snaplayouts",
+    "theme": "dark",
+    "group": "snap and switching",
+    "status": "no native surface",
+    "reason": "no Snap Layouts"
+   },
+   {
+    "state": "menu-desktop",
+    "theme": "dark",
+    "group": "menus",
+    "status": "scored",
+    "capture": "klog/shell81-base-05-capture-53.png",
+    "pointer": [
+     1910,
+     7
+    ],
+    "compared": 103692,
+    "within_1": 98.1,
+    "within_2": 99.4,
+    "worst": 31
+   },
+   {
+    "state": "menu-desktop-item",
+    "theme": "dark",
+    "group": "menus",
+    "status": "scored",
+    "capture": "klog/shell81-base-05-capture-55.png",
+    "pointer": [
+     1910,
+     7
+    ],
+    "compared": 117009,
+    "within_1": 65.5,
+    "within_2": 70.4,
+    "worst": 255
+   },
+   {
+    "state": "run",
+    "theme": "dark",
+    "group": "dialogs",
+    "status": "scored",
+    "capture": "klog/shell81-base-05-capture-69.png",
+    "pointer": [
+     1910,
+     7
+    ],
+    "compared": 120887,
+    "within_1": 8.3,
+    "within_2": 10.7,
+    "worst": 255
+   },
+   {
+    "state": "msgbox",
+    "theme": "dark",
+    "group": "dialogs",
+    "status": "scored",
+    "capture": "klog/shell81-base-05-capture-65.png",
+    "pointer": [
+     1910,
+     7
+    ],
+    "compared": 117734,
+    "within_1": 32.2,
+    "within_2": 37.7,
+    "worst": 255
+   },
+   {
+    "state": "msgbox-error",
+    "theme": "dark",
+    "group": "dialogs",
+    "status": "scored",
+    "capture": "klog/shell81-base-05-capture-66.png",
+    "pointer": [
+     1910,
+     7
+    ],
+    "compared": 222843,
+    "within_1": 43.3,
+    "within_2": 48.0,
+    "worst": 255
+   },
+   {
+    "state": "msgbox-info",
+    "theme": "dark",
+    "group": "dialogs",
+    "status": "scored",
+    "capture": "klog/shell81-base-05-capture-67.png",
+    "pointer": [
+     1910,
+     7
+    ],
+    "compared": 106546,
+    "within_1": 42.4,
+    "within_2": 48.4,
+    "worst": 255
+   },
+   {
+    "state": "taskdialog",
+    "theme": "dark",
+    "group": "dialogs",
+    "status": "scored",
+    "capture": "klog/shell81-base-05-capture-68.png",
+    "pointer": [
+     1910,
+     7
+    ],
+    "compared": 220741,
+    "within_1": 4.9,
+    "within_2": 8.4,
+    "worst": 255
+   },
+   {
+    "state": "properties",
+    "theme": "dark",
+    "group": "dialogs",
+    "status": "did not open",
+    "reason": "the dialog did not open"
+   },
+   {
+    "state": "properties-drive",
+    "theme": "dark",
+    "group": "dialogs",
+    "status": "did not open",
+    "reason": "the dialog did not open"
+   },
+   {
+    "state": "properties-folder",
+    "theme": "dark",
+    "group": "dialogs",
+    "status": "did not open",
+    "reason": "the dialog did not open"
+   },
+   {
+    "state": "properties-recycle",
+    "theme": "dark",
+    "group": "dialogs",
+    "status": "not driven",
+    "reason": "the Recycle Bin's properties are not opened yet"
+   },
+   {
+    "state": "properties-shortcut",
+    "theme": "dark",
+    "group": "dialogs",
+    "status": "did not open",
+    "reason": "the dialog did not open"
+   },
+   {
+    "state": "openwith",
+    "theme": "dark",
+    "group": "dialogs",
+    "status": "not driven",
+    "reason": "Open with is not opened yet"
+   },
+   {
+    "state": "fileopen",
+    "theme": "dark",
+    "group": "dialogs",
+    "status": "scored",
+    "capture": "klog/shell81-base-05-capture-70.png",
+    "pointer": [
+     1910,
+     7
+    ],
+    "compared": 737961,
+    "within_1": 8.6,
+    "within_2": 11.0,
+    "worst": 255
+   },
+   {
+    "state": "filesave",
+    "theme": "dark",
+    "group": "dialogs",
+    "status": "scored",
+    "capture": "klog/shell81-base-05-capture-71.png",
+    "pointer": [
+     1910,
+     7
+    ],
+    "compared": 737960,
+    "within_1": 7.6,
+    "within_2": 10.0,
+    "worst": 255
+   },
+   {
+    "state": "uac",
+    "theme": "dark",
+    "group": "dialogs",
+    "status": "no native surface",
+    "reason": "no elevation prompt"
+   },
+   {
+    "state": "copyprogress",
+    "theme": "dark",
+    "group": "dialogs",
+    "status": "not driven",
+    "reason": "needs a copy long enough to show progress"
+   },
+   {
+    "state": "copyprogress-details",
+    "theme": "dark",
+    "group": "dialogs",
+    "status": "not driven",
+    "reason": "as copyprogress"
+   },
+   {
+    "state": "conflict",
+    "theme": "dark",
+    "group": "dialogs",
+    "status": "not driven",
+    "reason": "needs a copy onto an existing file"
+   },
+   {
+    "state": "osd",
+    "theme": "dark",
+    "group": "flyouts",
+    "status": "no native surface",
+    "reason": "no volume indicator"
+   },
+   {
+    "state": "osd-brightness",
+    "theme": "dark",
+    "group": "flyouts",
+    "status": "no native surface",
+    "reason": "no brightness indicator"
+   },
+   {
+    "state": "emoji",
+    "theme": "dark",
+    "group": "flyouts",
+    "status": "no native surface",
+    "reason": "no emoji panel"
+   },
+   {
+    "state": "clipboard",
+    "theme": "dark",
+    "group": "flyouts",
+    "status": "no native surface",
+    "reason": "no clipboard history"
+   },
+   {
+    "state": "taskbar-thumbs",
+    "theme": "dark",
+    "group": "taskbar",
+    "status": "did not open",
+    "reason": "no preview"
+   },
+   {
+    "state": "taskbar-tray",
+    "theme": "dark",
+    "group": "taskbar",
+    "status": "did not open",
+    "reason": "the flyout did not open"
+   },
+   {
+    "state": "taskbar-left",
+    "theme": "dark",
+    "group": "taskbar",
+    "status": "no native surface",
+    "reason": "no left-aligned taskbar"
+   },
+   {
+    "state": "taskbar-progress",
+    "theme": "dark",
+    "group": "taskbar",
+    "status": "no native surface",
+    "reason": "no button progress"
+   },
+   {
+    "state": "taskbar-flash",
+    "theme": "dark",
+    "group": "taskbar",
+    "status": "no native surface",
+    "reason": "no button flashing"
+   },
+   {
+    "state": "hang",
+    "theme": "dark",
+    "group": "window chrome",
+    "status": "no native surface",
+    "reason": "no \"not responding\" window"
+   },
+   {
+    "state": "desktop-icon-hover",
+    "theme": "dark",
+    "group": "desktop",
+    "status": "scored",
+    "capture": "klog/shell81-base-05-capture-49.png",
+    "pointer": [
+     38,
+     130
+    ],
+    "compared": 3633,
+    "within_1": 88.8,
+    "within_2": 93.9,
+    "worst": 213
+   },
+   {
+    "state": "desktop-icon-infotip",
+    "theme": "dark",
+    "group": "desktop",
+    "status": "scored",
+    "capture": "klog/shell81-base-05-capture-48.png",
+    "pointer": [
+     38,
+     130
+    ],
+    "compared": 16913,
+    "within_1": 72.0,
+    "within_2": 82.0,
+    "worst": 213
+   },
+   {
+    "state": "desktop-icon-selected",
+    "theme": "dark",
+    "group": "desktop",
+    "status": "scored",
+    "capture": "klog/shell81-base-05-capture-50.png",
+    "pointer": [
+     1910,
+     7
+    ],
+    "compared": 4606,
+    "within_1": 86.8,
+    "within_2": 93.8,
+    "worst": 177
+   },
+   {
+    "state": "desktop-rubber-band",
+    "theme": "dark",
+    "group": "desktop",
+    "status": "scored",
+    "capture": "klog/shell81-base-05-capture-51.png",
+    "pointer": [
+     20,
+     330
+    ],
+    "compared": 119658,
+    "within_1": 88.5,
+    "within_2": 89.8,
+    "worst": 219
+   },
+   {
+    "state": "desktop-multi-selected",
+    "theme": "dark",
+    "group": "desktop",
+    "status": "scored",
+    "capture": "klog/shell81-base-05-capture-52.png",
+    "pointer": [
+     1910,
+     7
+    ],
+    "compared": 25769,
+    "within_1": 40.9,
+    "within_2": 44.1,
+    "worst": 255
+   },
+   {
+    "state": "desktop-icon-drag",
+    "theme": "dark",
+    "group": "desktop",
+    "status": "not driven",
+    "reason": "a drag would move and persist a desktop icon"
+   },
+   {
+    "state": "desktop-icon-dropped",
+    "theme": "dark",
+    "group": "desktop",
+    "status": "not driven",
+    "reason": "as desktop-icon-drag"
+   },
+   {
+    "state": "taskbar-start-hover",
+    "theme": "dark",
+    "group": "taskbar",
+    "status": "scored",
+    "capture": "klog/shell81-base-05-capture-40.png",
+    "pointer": [
+     716,
+     1056
+    ],
+    "compared": 892,
+    "within_1": 93.5,
+    "within_2": 93.5,
+    "worst": 41
+   },
+   {
+    "state": "taskbar-start-pressed",
+    "theme": "dark",
+    "group": "taskbar",
+    "status": "scored",
+    "capture": "klog/shell81-base-05-capture-41.png",
+    "pointer": [
+     716,
+     1056
+    ],
+    "compared": 1097,
+    "within_1": 71.1,
+    "within_2": 71.3,
+    "worst": 221
+   },
+   {
+    "state": "start-opened-by-click",
+    "theme": "dark",
+    "group": "start",
+    "status": "scored",
+    "capture": "klog/shell81-base-05-capture-42.png",
+    "pointer": [
+     716,
+     1056
+    ],
+    "compared": 395235,
+    "within_1": 86.1,
+    "within_2": 92.7,
+    "worst": 255
+   },
+   {
+    "state": "taskbar-app-hover",
+    "theme": "dark",
+    "group": "taskbar",
+    "status": "scored",
+    "capture": "klog/shell81-base-05-capture-61.png",
+    "pointer": [
+     1072,
+     1056
+    ],
+    "compared": 949322,
+    "within_1": 98.6,
+    "within_2": 98.7,
+    "worst": 227
+   },
+   {
+    "state": "winx",
+    "theme": "dark",
+    "group": "taskbar",
+    "status": "no native surface",
+    "reason": "no Start button menu"
+   },
+   {
+    "state": "jumplist",
+    "theme": "dark",
+    "group": "taskbar",
+    "status": "no native surface",
+    "reason": "no taskbar button menu"
+   },
+   {
+    "state": "taskbar-menu",
+    "theme": "dark",
+    "group": "taskbar",
+    "status": "no native surface",
+    "reason": "no taskbar menu"
+   },
+   {
+    "state": "caption-close-hover",
+    "theme": "dark",
+    "group": "window chrome",
+    "status": "scored",
+    "capture": "klog/shell81-base-05-capture-59.png",
+    "pointer": [
+     1486,
+     191
+    ],
+    "compared": 722324,
+    "within_1": 99.9,
+    "within_2": 100.0,
+    "worst": 25
+   },
+   {
+    "state": "caption-close-pressed",
+    "theme": "dark",
+    "group": "window chrome",
+    "status": "scored",
+    "capture": "klog/shell81-base-05-capture-60.png",
+    "pointer": [
+     1486,
+     191
+    ],
+    "compared": 722324,
+    "within_1": 99.9,
+    "within_2": 100.0,
+    "worst": 25
+   },
+   {
+    "state": "caption-minimize-hover",
+    "theme": "dark",
+    "group": "window chrome",
+    "status": "scored",
+    "capture": "klog/shell81-base-05-capture-57.png",
+    "pointer": [
+     1394,
+     191
+    ],
+    "compared": 722324,
+    "within_1": 99.9,
+    "within_2": 100.0,
+    "worst": 25
+   },
+   {
+    "state": "caption-maximize-hover",
+    "theme": "dark",
+    "group": "window chrome",
+    "status": "scored",
+    "capture": "klog/shell81-base-05-capture-58.png",
+    "pointer": [
+     1440,
+     191
+    ],
+    "compared": 722311,
+    "within_1": 99.9,
+    "within_2": 100.0,
+    "worst": 25
+   },
+   {
+    "state": "windows-active-inactive",
+    "theme": "dark",
+    "group": "window chrome",
+    "status": "scored",
+    "capture": "klog/shell81-base-05-capture-62.png",
+    "pointer": [
+     1910,
+     7
+    ],
+    "compared": 889735,
+    "within_1": 16.6,
+    "within_2": 19.8,
+    "worst": 230
+   },
+   {
+    "state": "snap-preview-left",
+    "theme": "dark",
+    "group": "snap and switching",
+    "status": "no native surface",
+    "reason": "no Snap"
+   },
+   {
+    "state": "snap-assist",
+    "theme": "dark",
+    "group": "snap and switching",
+    "status": "no native surface",
+    "reason": "no Snap Assist"
+   },
+   {
+    "state": "alttab",
+    "theme": "dark",
+    "group": "snap and switching",
+    "status": "no native surface",
+    "reason": "no Alt+Tab switcher"
+   },
+   {
+    "state": "taskview",
+    "theme": "dark",
+    "group": "snap and switching",
+    "status": "no native surface",
+    "reason": "no Task View"
+   },
+   {
+    "state": "window-maximized",
+    "theme": "dark",
+    "group": "window chrome",
+    "status": "scored",
+    "capture": "klog/shell81-base-05-capture-73.png",
+    "pointer": [
+     1910,
+     7
+    ],
+    "compared": 1982504,
+    "within_1": 0.5,
+    "within_2": 0.5,
+    "worst": 255
+   },
+   {
+    "state": "menu-desktop-view-submenu",
+    "theme": "dark",
+    "group": "menus",
+    "status": "scored",
+    "capture": "klog/shell81-base-05-capture-54.png",
+    "pointer": [
+     833,
+     419
+    ],
+    "compared": 165355,
+    "within_1": 93.2,
+    "within_2": 98.5,
+    "worst": 87
+   },
+   {
+    "state": "start-pin-hover",
+    "theme": "dark",
+    "group": "start",
+    "status": "scored",
+    "capture": "klog/shell81-base-05-capture-43.png",
+    "pointer": [
+     733,
+     607
+    ],
+    "compared": 394564,
+    "within_1": 85.1,
+    "within_2": 91.6,
+    "worst": 255
+   }
+  ],
+  "like_prototype": 27.6,
+  "scored_mean": 62.5,
+  "scored": 76,
+  "total": 172,
+  "by_status": {
+   "scored": 76,
+   "did not open": 12,
+   "not driven": 16,
+   "no native surface": 68,
+   "not captured": 0
+  },
+  "groups": {
+   "desktop": {
+    "states": 16,
+    "scored": 12,
+    "like_prototype": 60.1,
+    "scored_mean": 80.1
+   },
+   "taskbar": {
+    "states": 22,
+    "scored": 6,
+    "like_prototype": 23.5,
+    "scored_mean": 86.1
+   },
+   "start": {
+    "states": 8,
+    "scored": 8,
+    "like_prototype": 87.2,
+    "scored_mean": 87.2
+   },
+   "flyouts": {
+    "states": 16,
+    "scored": 4,
+    "like_prototype": 15.7,
+    "scored_mean": 62.7
+   },
+   "menus": {
+    "states": 6,
+    "scored": 6,
+    "like_prototype": 87.1,
+    "scored_mean": 87.1
+   },
+   "window chrome": {
+    "states": 14,
+    "scored": 12,
+    "like_prototype": 64.8,
+    "scored_mean": 75.6
+   },
+   "file explorer": {
+    "states": 2,
+    "scored": 2,
+    "like_prototype": 100.0,
+    "scored_mean": 100.0
+   },
+   "dialogs": {
+    "states": 36,
+    "scored": 16,
+    "like_prototype": 14.7,
+    "scored_mean": 33.0
+   },
+   "apps": {
+    "states": 18,
+    "scored": 10,
+    "like_prototype": 9.1,
+    "scored_mean": 16.4
+   },
+   "controls": {
+    "states": 16,
+    "scored": 0,
+    "like_prototype": 0.0,
+    "scored_mean": 0.0
+   },
+   "snap and switching": {
+    "states": 10,
+    "scored": 0,
+    "like_prototype": 0.0,
+    "scored_mean": 0.0
+   },
+   "session": {
+    "states": 8,
+    "scored": 0,
+    "like_prototype": 0.0,
+    "scored_mean": 0.0
+   }
+  },
+  "backlog": [
+   "dialogs",
+   "taskbar",
+   "apps",
+   "controls",
+   "flyouts",
+   "snap and switching",
+   "session",
+   "desktop",
+   "window chrome",
+   "start",
+   "menus",
+   "file explorer"
+  ]
+ }
+}

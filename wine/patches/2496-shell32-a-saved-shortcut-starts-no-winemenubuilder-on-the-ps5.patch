@@ -1,0 +1,34 @@
+From 24d884b8faeef4fa2660dee4acabc142a488b6c8 Mon Sep 17 00:00:00 2001
+From: Mihawk <163614687+mihawk-99@users.noreply.github.com>
+Date: Sat, 7 Nov 2026 11:00:00 -0500
+Subject: [PATCH] shell32: a saved shortcut starts no winemenubuilder on the
+ PS5
+
+Saving a .lnk (IPersistFile::Save) started winemenubuilder.exe -w <link> for every shortcut, to mirror it into the host
+desktop's menus. MihawkOS has no host desktop, and on the console each such process is a new helper: in the desktop-view
+probe's run shell81-view-r5-04 twelve were started, and the one after the desktop's Shift+F10 Create shortcut lines up with
+an 11 s stretch without a frame, during which the desktop did not list the new shortcut.
+
+- dlls/shell32/shelllink.c: StartLinkProcessor returns at once, as if the processor had been started; the rest of the
+  function stays as upstream wrote it.
+---
+ dlls/shell32/shelllink.c | 3 +++
+ 1 file changed, 3 insertions(+)
+
+diff --git a/dlls/shell32/shelllink.c b/dlls/shell32/shelllink.c
+index 61d0eaa..feed856 100644
+--- a/dlls/shell32/shelllink.c
++++ b/dlls/shell32/shelllink.c
+@@ -329,6 +329,9 @@ static BOOL StartLinkProcessor( LPCOLESTR szLink )
+     LPWSTR buffer;
+     BOOL ret;
+ 
++    /* PS5 (MihawkOS): there is no host desktop whose menus winemenubuilder could update, and each process it would
++     * start is a console helper that held up the saving thread (the desktop's shortcuts, PS5_Proton patch 2496). */
++    if (TRUE) return TRUE;
+     len = (lstrlenW( szLink ) + 7) * sizeof(WCHAR);
+     buffer = malloc( len );
+     if( !buffer )
+-- 
+2.56.0
+

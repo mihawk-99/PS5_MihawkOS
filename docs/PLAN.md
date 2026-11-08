@@ -1,5 +1,151 @@
 # Plan
 
+## MihawkOS desktop round 4: text, shortcut icons, dialogs, accent, window frame (2026-11-07; base PS5)
+
+The owner's five follow-ups, one gate for all of them. Numbers are in docs/SHELL81_REVIEW.md, "Round 4".
+- Text: grey smoothing at 256 levels with light hinting (patch 2498); proton-ui32/64 check it.
+- Shortcut icons: a shortcut's own icon, else its target's, with paths found inside the prefix (patch 2499); new gate
+  cases shortcut-icons32/64.
+- Dialogs: the message box and the task dialog stay light in the dark theme (patch 2491, the theme's MihawkLight
+  classes); Segoe UI is Proton UI in wine.inf (patch 2493).
+- Accent: a theme's accent is stored as Windows stores it and drawn by Settings, Start, the calendar, File Explorer
+  and the taskbar (src/pw_accent.h, patch 2492); the wallpaper probe checks it.
+- Window frame: an inactive framed window's Mica is its solid inactive caption colour (src/pw_window_compose.c).
+- Open: Quick Settings' "on" tiles keep the default accent; the task dialog's layout is Wine's; a stale frame shows a
+  grey "No" in Cancel after the scorecard moves the message box.
+
+## MihawkOS desktop round 2-3: working Create shortcut, live wallpaper, Settings as the prototype (2026-11-07; base PS5)
+
+The owner found "Create link" doing nothing, asked for the wallpaper to change without a restart, no "Windows" in the
+WebUI and Wine's prompts, and then for Settings to look exactly like the prototype's Home, Personalization and System >
+Display. Account and numbers: `docs/SHELL81_REVIEW.md` (rounds 2 and 3).
+
+- **Create shortcut / Pin to Start** in shell32's item menu (patch 2494; 10 languages) and the desktop's modern menu;
+  the `desktop-view` probe runs both with the Menu key, Shift+F10 and File Explorer's More menu and fails on "Create
+  link". Patch 2496: saving a shortcut no longer starts winemenubuilder (a console helper per link). Patch 2497: a folder
+  view lists only changes in its own folder (a Start menu link had become a ghost desktop icon, `shell81-view-r5-08`).
+- **Live wallpaper**: Settings tells the desktop, which repaints (`shell81-wallpaper-r5-02` 15/15: 3.6 levels from the
+  new picture, 90.8 from the old).
+- **Settings** rewritten to the prototype's geometry with its own pixels for icons and controls; measured by
+  `tools/run-settings-render.py` on the PC (Home 90.0%, Personalization 89.3%, Display 92.2% of pixels within one level)
+  and on the console by `tools/run-wallpaper.py --reference` (89.6 / 83.9 / 92.2; Personalization's preview shows the
+  console's chosen wallpaper, not the prototype's meadow).
+- **Wording**: WebUI (10 languages) and shell32's two prompts (patch 2495) say MihawkOS.
+- **Scorecard** `shell81-base-05`: 27.6% like the prototype, 62.5% mean over 76 scored states (base-02: 27.4 / 62.0);
+  Settings 32.6% light / 4.0% dark (was 15.6 / 1.7; the dark Mica is not measured yet); desktop 98.3% again after the
+  wallpaper painter's 24 px shift (base-03/04: 9.7%) was fixed.
+
+## MihawkOS desktop: the wallpaper picker, Create shortcut and Pin to Start, MihawkOS wording (2026-11-06/07; base PS5; gated)
+
+The owner asked for the desktop's wallpaper picker in **Settings > Personalization > Background** and a way to make
+shortcuts **from File Explorer**, no "Windows" wording, and a look that is similar to the prototype, not pixel-exact.
+Built and proven on the standard PS5 (key 950f10f8671b, firmware 13.60) and gated there. The full account, what was kept
+and parked from the paused agent's work, and what is not done, is `docs/SHELL81_REVIEW.md`.
+
+- **Wallpaper**: four pictures shipped once in the runtime (Bubble City by Skeuoss stays the default and credited);
+  the Settings app chooses by pointer or keys and writes `wallpaper.txt`; the title makes it the desktop's picture before
+  the desktop starts, so it shows from the next start (`src/pw_wallpaper.*`, `tests/test_pw_wallpaper.c`,
+  `tests/wallpaper-choice-probe.c`, gate case `wallpaper-choice`: `shell81-wallpaper-r3-03` 9/9).
+- **Shortcuts**: File Explorer's More menu and the desktop's classic menu make a shortcut on the Desktop or in Start's
+  Programs and pin to Start (`src/pw_shortcut.h`, `wine/ps5/pw_shell_shortcut.h`, `tests/test_pw_shortcut.c`; the
+  `desktop-view` probe drives the real menu: `shell81-view-r3-03` 50/50).
+- **Wording**: `tests/test_no_windows_wording.py`; 20 setup/Settings strings in 10 languages and others reworded.
+  Not done: the WebUI's translations and Wine's own resource strings; non-English text needs a native read.
+- **Gate**: `shell81-gate-01` passed on build 4b2e1e14b4a5410b. Scorecard `shell81-base-02`: 27.4% like the prototype,
+  62.0% mean over 76 scored states (the batch did not move it; the target is resemblance, not a score).
+
+## The shell scorecard's reference is refreshed for the shell's own wallpaper (2026-11-06; host; no console run)
+
+The scorecard compares a native capture with `.impeccable/reference-1920`, which was captured at `4e52ee1`
+with the owner's local Bloom. Since 2026-10-31 the desktop is Bubble City by Skeuoss, and the prototype itself
+gained the Mihawk mark on Start and the MihawkBrowser pin after `4e52ee1`. A run on 8.1 would have scored the
+desktop against a different wallpaper and the taskbar against a different pin set, so the desktop and every glass
+surface (Start, the flyouts, menus, the taskbar's Mica) would have reported a false collapse.
+
+- **The new set.** 172 states captured from the 8.1 prototype (`ed5cd48a`) in headless Chromium at 1920 x 1080,
+  device scale 1, reduced motion, the fixed clock, brightness 100, transparency on; the shell's own desktop image
+  (`proton.bmp`: Bubble City and the version note) is the prototype's `local/wallpaper.png` and
+  `local/wallpaper-dark.png`. The desktop captures equal `proton.bmp` pixel for pixel in every region without
+  furniture (max channel difference 0). The set is local only (`klog/reference-1920-shell81/`, 286 MiB, ignored,
+  never committed); `manifest.json` names the commit, the wallpaper and how each state was made, and
+  `drift-vs-4e52ee1.json` records the per-state comparison with the old set. Through
+  `tools/run-shell-scorecard.py` the set scores 100.0% against itself on all 172 states (the runner's own check).
+- **What moved, and why.** The state footprint is where a state differs from its theme's desktop, so the wallpaper
+  cancels out and a low overlap means the surface moved. 104 of 172 states are unchanged (IoU >= 0.99) and 59 near;
+  9 moved:
+  - `taskbar-start-hover` and `taskbar-start-pressed` (0.17-0.28): the MihawkBrowser pin joined the centred group,
+    so Start moved 22 px left (its plate's x span, dark: 718-757 -> 696-735). Batch4's dark 61.3% on the hover is
+    consistent with this shift rather than a dark colour: both old captures' plate is at median x 737, but the light
+    one's footprint also catches scattered acrylic noise across the whole bar (1,278 pixels against the plate's
+    ~1,200), which diluted the light score's 95.4%. The next run will say which.
+  - `lock` and `signin` (0.07): the old captures had no session image to draw.
+  - `dark desktop-icon-infotip` (0.01): the old dark capture was globally 4-6 levels darker than its own desktop
+    (median 6 over 1.7 M pixels), the cause of batch4's 1.1% against a tooltip; the new capture's footprint is the
+    tip (17,793 px).
+  - `taskbar-left` (0.70-0.71): the browser pin shifts the left-aligned block too.
+  - The near group (0.90-0.96: `osd`, `osd-brightness`, `toast`, the message boxes, `run`) is the shadows' fringes
+    over the new wallpaper and the dialogs' few changed pixels, not a moved surface.
+- **Use it.** `PW_REFERENCE_1920=$PWD/klog/reference-1920-shell81 python3 tools/run-shell-scorecard.py --name <run>`
+  (or `--reference`). Its scores are a new baseline; they are not comparable with batch4's 24.8%.
+- **The wallpaper question for the owner.** The prototype's own default is still Aero Meadow while the shell draws
+  Bubble City (the owner's choice of 2026-10-31, and what this handoff asks to keep). The set is captured with Bubble
+  City so the two desktops compare; if the owner prefers the prototype's Aero Meadow as the reference, the desktop and
+  every glass surface need another capture.
+- **Also verified here (host, offline).** `tools/build-wine-theme.py` rebuilds the theme from HEAD; both
+  `tests/theme-parts-probe.c` binaries, run under the pinned host Wine 11.0 with the built theme as
+  `C:\windows\resources\themes\light\light.msstyles`, pass 13 of 13 checks each: 32/32 caption images light and
+  32/32 dark, 6/6 push buttons and 4/4 edit borders in both variants, 20/20 check boxes, 8/8 radio buttons, the group
+  box, and the progress bar's bar and four fills equal the measured prototype (`theme-parts-host32/64.log`).
+- **Not done.** No console run (the console needs the owner's go for each use), so the refreshed reference has not
+  scored a build yet.
+
+## Windows 11: Quick Settings draws the prototype's whole panel (2026-11-06; console; no gate yet)
+
+`pw_shell_flyouts.c` drew one network tile and the footer; the prototype's eight tiles, its two sliders and its
+footer's battery/edit buttons were absent (the file's own note: nothing behind them). The panel is now the
+prototype's whole surface: the eight tiles in its 3 x 3 grid (Wi-Fi, Bluetooth, Airplane mode, Energy saver,
+Night light, Accessibility, Cast, Mobile hotspot), a plate and a glyph each, the split tiles' chevrons, both
+slider rows and the footer's battery (100%) and edit buttons, at its measured 360 x 440 (the window was 152 tall).
+
+- Pixels are the prototype's: `themes/windows11/flyouts/quicksettings-grid-{light,dark}.json` capture its plates
+  (`plate-split-on` 95 x 48, `plate-simple-off`), the seven glyphs and both slider rows, the battery and edit
+  buttons over black and white (`tools/measure-prototype-sprites.mjs`); `tools/build-shell-sprites.py` compiles
+  them into `pw_shell_sprites.h`. Labels are text in the caption font; the layout offsets are the capture's boxes.
+- The tile states are the prototype's; the shell's own network state replaces the demo one: a wired adapter draws
+  the globe and "Ethernet" where the prototype draws its Wi-Fi glyph and "Mihawk-5G", and Bluetooth is drawn on as
+  the prototype shows it (the console has no radio to report). Tiles do not click yet.
+- **Scorecard** (`shell81-score-06`, build `432dc0ab0af80ed0`, deployed with `tools/console-setup.py`): the Quick
+  Settings states **27.9% -> 93.2%** (light) and **28.9% -> 92.2%** (dark); the card **24.6% -> 25.3% like the
+  prototype, 55.6% -> 57.3% mean**. The residual is the labels' text (80% of their pixels within one level, the
+  native glyphs against Chromium's) and the one-level acrylic at the panel's edge.
+- A deploy that changes the runtime but not the title leaves the console's runtime stamp ahead of the title's pin
+  and the title refuses to start ("another build's"); `tools/console-setup.py` deploys both.
+
+## Windows 11: the scorecard's first run on the refreshed reference, and hover captures without the tip (2026-11-06; console; no gate yet)
+
+The owner's workflow changed: iterate freely, and gate once after all the shell changes. So this is a measured
+starting point, not a passed gate: build `09ee5027deb23a12` (the 8.1 tree, the refreshed reference of the section
+above) deployed to the Pro (firmware 10.01; the shell81 handoff reserves the Pro for ProsperoEden, so every later run is on the base; see docs/SHELL81_REVIEW.md), `shell81-score-01` is the baseline and `shell81-score-04` the same build with the probe
+fix below.
+
+- **The baseline** (`shell81-score-01`): **23.8% like the prototype**, **53.9% mean over the 76 scored states**.
+  File Explorer 100.0%, menus 82.8, Start 85.4, desktop 75.1, window chrome 74.7, taskbar 64.7, flyouts 30.5,
+  dialogs 16.4, apps 14.5; 68 states have no native surface, 12 did not open, 16 are not driven.
+  The refreshed reference is harsher on glass than Bloom was: the taskbar's Mica over Bubble City is 1-2 levels off
+  the prototype's filter chain across the bar (the Start hover's plate alone is 84% within one level), and the
+  same acrylic shows in every flyout. Those are now visible, which is the point.
+- **The probe took its hover captures with the item's tooltip up** (`taskbar-start-hover` 23.4% light / 25.3% dark,
+  `taskbar-start-pressed` 71.1/71.1): the title picks a capture request up only about once a second, so a frame
+  asked for 250 ms after the pointer arrives is drawn after the 500 ms tip delay, while the reference's 250 ms
+  hover has none. `tests/shell-scorecard-probe.c` now pumps past the delay, hides the `tooltips_class32` window
+  (no mouse event follows, so it stays hidden) and only then requests the capture; the tip is still measured by
+  the states that have it (the desktop infotips, the prototype's own tip states).
+  `shell81-score-04`: the Start hover 83.7% light and 93.5% dark, the pressed state 71.1% both (its remaining gap is
+  the Start mark's press: the prototype scales the glyph to 0.9 and the native plate does not). The card 24.6% like
+  the prototype, 55.6% over the 76 scored.
+- **Not done:** no gate ran on any build yet (the owner wants one, after the changes); the probe's own rebuild is not
+  in the deployed build, so the final gate must be made from a tree whose probes are these.
+
 ## Steam warns first when the console's memory leaves it too little room (2026-10-31; host-tested; not on the console)
 
 The owner: "I want for situations like this a warning screen that says something like 'Steam will likely not work under

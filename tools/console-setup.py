@@ -92,7 +92,8 @@ TITLE = 'PPSA99170'
 DATA = '/data/ps5proton'
 DEV_CONF_PATH = '/data/homebrew/dev.conf'
 DEV_CONF = b'DEV_SERVER=127.0.0.1\nDEV_PORT=8080\n'
-FIRMWARE = '10010000'
+FIRMWARE = '10010000'   # the pinned image: the Pro's 10.01
+FIRMWARES = (FIRMWARE, '13600007')   # also the owner's base PS5, firmware 13.60 (2026-11-06)
 WEBSRV = 8080
 DIST = ROOT / 'dist' / TITLE
 STAGED = ROOT / '.deps/staged/manifest.json'
@@ -488,7 +489,7 @@ def lapy_firmware(run):
     """The firmware the Lapy daemon last logged (None before the title first ran on this install); another one stops."""
     found = re.findall(rb'\bfirmware=(\w+)', run.retr(DATA + '/logs/lapy-service.log') or b'')
     firmware = found[-1].decode() if found else None
-    if firmware not in (None, FIRMWARE):
+    if firmware not in (None, *FIRMWARES):
         raise Stop(f'the console runs firmware {firmware}; this setup is pinned to {FIRMWARE} (the 10.01 image): '
                    'reinstall that image, or re-pin FIRMWARE deliberately', final=True)
     return firmware
@@ -500,7 +501,7 @@ def prefix_state(run):
     stamp = run.retr(DATA + '/prefixes/mihawk/.update-timestamp') or b''
     firmware = lapy_firmware(run)
     run.facts['firmware'] = firmware
-    return stamp.strip().endswith(b' wow64') and firmware == FIRMWARE
+    return stamp.strip().endswith(b' wow64') and firmware in FIRMWARES
 
 
 def wait_idle(run):
@@ -514,7 +515,7 @@ def wait_idle(run):
 
 def s9_prefix(run):
     if prefix_state(run):
-        return 'done', f'prefix ready, firmware {FIRMWARE}'
+        return 'done', f'prefix ready, firmware {run.facts.get("firmware") or FIRMWARE}'
     if run.check:
         return 'todo', 'the mihawk prefix is not set up'
     name = next_name('console-setup-prefix')

@@ -14,7 +14,13 @@
 #include <shlobj.h>
 #include <winreg.h>
 #include <shlwapi.h>
+#ifndef ARRAY_SIZE
+#define ARRAY_SIZE(a) (sizeof(a) / sizeof((a)[0]))
+#endif
+#include "pw_explorer_layout.h"   /* where File Explorer's command bar puts its buttons */
+#include "pw_shell_shortcut.h"   /* the shell's Create shortcut and Pin to Start, the code the menus run */
 
+int _fltused;   /* the layout header computes in doubles; no C runtime supplies this marker */
 #define FILES 6
 static unsigned checks, failures;
 static char capture_base[MAX_PATH];
@@ -189,6 +195,41 @@ static HWND find_progman(void)
     return window;
 }
 
+/* The first SysListView32 below a window (File Explorer's items). */
+static BOOL CALLBACK list_proc(HWND window, LPARAM data)
+{
+    WCHAR name[32];
+    if (GetClassNameW(window, name, 32) && !lstrcmpW(name, L"SysListView32") && IsWindowVisible(window)) { *(HWND *)data = window; return FALSE; }
+    return TRUE;
+}
+static HWND find_list_below(HWND window)
+{
+    HWND found = NULL;
+    EnumChildWindows(window, list_proc, (LPARAM)&found);
+    return found;
+}
+
+/* The first visible top-level window of a process, waited for. */
+struct window_of { DWORD pid; HWND window; };
+static BOOL CALLBACK window_of_proc(HWND window, LPARAM data)
+{
+    struct window_of *want = (struct window_of *)data;
+    DWORD pid = 0;
+    GetWindowThreadProcessId(window, &pid);
+    if (pid == want->pid && IsWindowVisible(window) && !GetWindow(window, GW_OWNER)) { want->window = window; return FALSE; }
+    return TRUE;
+}
+static HWND wait_window_of(DWORD pid, DWORD milliseconds)
+{
+    struct window_of want = {pid, NULL};
+    DWORD start = GetTickCount();
+    while (GetTickCount() - start < milliseconds) {
+        EnumWindows(window_of_proc, (LPARAM)&want);
+        if (want.window) return want.window;
+        pump(100);
+    }
+    return NULL;
+}
 static int item_count(HWND list) { return (int)SendMessageW(list, LVM_GETITEMCOUNT, 0, 0); }
 static int selected_count(HWND list) { return (int)SendMessageW(list, LVM_GETSELECTEDCOUNT, 0, 0); }
 
@@ -200,6 +241,27 @@ static BOOL wait_items(HWND list, int wanted, DWORD milliseconds)
         pump(100);
     }
     return item_count(list) >= wanted;
+}
+
+/* A shortcut a menu just made on the Desktop, at a person's pace: the desktop lists it, then it is deleted (as a program
+ * deletes, with no notification) and leaves. Deleting it at once can fall between two polls of the desktop's watch, so its
+ * delete is never seen while the maker's create notice already listed it (a ghost icon, shell81-view-r5-03). Explorer can be
+ * busy for 12 s at such a moment (shell81-view-r5-05: demand faults on a shared view, docs/SHELL81_REVIEW.md), so each
+ * step waits up to 30 s. */
+static void settle_desktop_link(HWND list, int before, const WCHAR *link)
+{
+    char text[160];
+    DWORD start = GetTickCount(), listed, left;
+    BOOL shown = wait_items(list, before + 1, 30000);
+    listed = GetTickCount() - start;
+    if (link[0]) DeleteFileW(link);
+    for (start = GetTickCount(); GetTickCount() - start < 30000 && item_count(list) > before; ) pump(100);
+    left = GetTickCount() - start;
+    /* a person expects a new icon, or a deleted one gone, within a second or two: more than 3 s is a fault, not a pass */
+    wsprintfA(text, "desktop-view note: shortcut listed after %lu ms, left after %lu ms\n", listed, left);
+    line(text);
+    check(shown && listed <= 3000, "the desktop lists the new shortcut within 3 s");
+    check(item_count(list) == before && left <= 3000, "the deleted shortcut leaves the desktop within 3 s");
 }
 
 static BOOL wait_selected(HWND list, int wanted, DWORD milliseconds)
@@ -529,6 +591,71 @@ static BOOL popup_menu_present(void)
     return FindWindowW(L"#32768", NULL) != NULL;
 }
 
+/* The item menu shell32 gives a file (what File Explorer's right-click and the desktop's classic menu show): its strings,
+ * and the two commands run by their menu ids. Nothing may say "Create Link", and each command must make its file. */
+static BOOL item_menu_command(const WCHAR *file, const WCHAR *wanted, BOOL *old_found, BOOL *wanted_found)
+{
+    ITEMIDLIST *full = NULL;
+    IShellFolder *folder = NULL;
+    const ITEMIDLIST *child = NULL;
+    IContextMenu *menu_object = NULL;
+    HMENU menu = CreatePopupMenu();
+    BOOL invoked = FALSE;
+    int count, id = -1;
+
+    *old_found = *wanted_found = FALSE;
+    if (SUCCEEDED(SHParseDisplayName(file, NULL, &full, 0, NULL)) && full &&
+        SUCCEEDED(SHBindToParent(full, &IID_IShellFolder, (void **)&folder, &child)) &&
+        SUCCEEDED(IShellFolder_GetUIObjectOf(folder, NULL, 1, &child, &IID_IContextMenu, NULL, (void **)&menu_object)) &&
+        SUCCEEDED(IContextMenu_QueryContextMenu(menu_object, menu, 0, 1, 0x7fff, CMF_NORMAL | CMF_CANRENAME)))
+    {
+        count = GetMenuItemCount(menu);
+        for (int i = 0; i < count; ++i) {
+            WCHAR text[128] = L"";
+            char note[200];
+            GetMenuStringW(menu, i, text, 128, MF_BYPOSITION);
+            {   /* the access key's & is not part of what a person reads */
+                WCHAR *from = text, *to = text;
+                for (; *from; ++from) if (*from != '&') *to++ = *from;
+                *to = 0;
+            }
+            if (text[0]) {
+                wsprintfA(note, "desktop-view note: item menu %d: %ls\n", i, text);
+                line(note);
+            }
+            if (StrStrIW(text, L"Create Link")) *old_found = TRUE;
+            if (StrStrIW(text, wanted)) { *wanted_found = TRUE; id = (int)GetMenuItemID(menu, i); }
+        }
+        if (id > 0) {
+            CMINVOKECOMMANDINFO info;
+            memset(&info, 0, sizeof(info));
+            info.cbSize = sizeof(info);
+            info.lpVerb = MAKEINTRESOURCEA(id - 1);
+            info.nShow = SW_SHOWNORMAL;
+            invoked = SUCCEEDED(IContextMenu_InvokeCommand(menu_object, &info));
+        }
+    }
+    if (menu_object) IContextMenu_Release(menu_object);
+    if (folder) IShellFolder_Release(folder);
+    if (full) CoTaskMemFree(full);
+    DestroyMenu(menu);
+    return invoked;
+}
+
+/* The first file on a folder that matches a pattern, or an empty string. */
+static BOOL first_match(const WCHAR *folder, const WCHAR *pattern, WCHAR *out)
+{
+    WIN32_FIND_DATAW found;
+    WCHAR mask[MAX_PATH];
+    HANDLE handle;
+    out[0] = 0;
+    wsprintfW(mask, L"%s\\%s", folder, pattern);
+    if ((handle = FindFirstFileW(mask, &found)) == INVALID_HANDLE_VALUE) return FALSE;
+    wsprintfW(out, L"%s\\%s", folder, found.cFileName);
+    FindClose(handle);
+    return TRUE;
+}
+
 void mainCRTStartup(void)
 {
     char command[MAX_PATH * 2];
@@ -593,10 +720,179 @@ void mainCRTStartup(void)
             line(text);
             check(found && file[0] && !StrStrIW(file, L"shell32"), "a shortcut on the Public Desktop has its own icon location");
             icon_extraction_notes(file, index);
-            /* gone again before the counts below, which compare exact totals */
-            DeleteFileW(public_link_path(link));
-            while (GetTickCount() - start < 10000 && item_count(list) > before) pump(100);
+            /* listed, then gone again before the counts below, which compare exact totals (deleting it before the desktop
+             * had listed it let both notices land in the next step's count, shell81-view-r5-10) */
+            (void)start;
+            settle_desktop_link(list, before, public_link_path(link));
         }
+    }
+
+    /* 1c. Create shortcut (pw_shell_shortcut.h): a link on the user's Desktop that the folder view lists, naming its target and
+     * carrying an icon; made again it is "(2)"; on Start it is in Programs and pinned once */
+    {
+        WCHAR target[MAX_PATH], link[MAX_PATH], second[MAX_PATH], loaded[MAX_PATH], icon[MAX_PATH], pin_before[4096];
+        WCHAR *name;
+        DWORD pin_size = sizeof(pin_before), pin_type;
+        const BOOL had_pins = RegGetValueW(HKEY_CURRENT_USER, pw_shortcut_pins_key, L"StartPins", RRF_RT_REG_MULTI_SZ, &pin_type,
+                                           pin_before, &pin_size) == ERROR_SUCCESS;
+        const int before = item_count(list);
+        const DWORD start = GetTickCount();
+        IShellLinkW *shell = NULL;
+        IPersistFile *file = NULL;
+        int index = -1;
+        char text[400];
+
+        GetSystemDirectoryW(target, MAX_PATH);
+        lstrcatW(target, L"\\cmd.exe");
+        check(SUCCEEDED(pw_shell_make_shortcut(target, PW_SHORTCUT_DESKTOP, link)) && link[0], "Create shortcut made a link on the Desktop");
+        name = PathFindFileNameW(link);
+        check(!lstrcmpiW(name, L"cmd - Shortcut.lnk"), "its name is the target's and ' - Shortcut'");
+        check(SUCCEEDED(CoCreateInstance(&CLSID_ShellLink, NULL, CLSCTX_INPROC_SERVER, &IID_IShellLinkW, (void **)&shell)) &&
+              SUCCEEDED(IShellLinkW_QueryInterface(shell, &IID_IPersistFile, (void **)&file)) &&
+              SUCCEEDED(IPersistFile_Load(file, link, STGM_READ)) && SUCCEEDED(IShellLinkW_GetPath(shell, loaded, MAX_PATH, NULL, 0)) &&
+              !lstrcmpiW(loaded, target), "the shortcut points at its target");
+        icon[0] = 0;
+        if (shell) IShellLinkW_GetIconLocation(shell, icon, MAX_PATH, &index);
+        wsprintfA(text, "desktop-view note: made shortcut icon location %ls index %d\n", icon, index);
+        line(text);
+        check(icon[0] != 0, "the shortcut carries an icon, so the desktop keeps it");
+        if (file) IPersistFile_Release(file);
+        if (shell) IShellLinkW_Release(shell);
+        {
+            DWORD wait = GetTickCount();
+            while (GetTickCount() - wait < 10000 && item_count(list) < before + 1) pump(100);
+        }
+        check(item_count(list) == before + 1, "the desktop lists the new shortcut");
+        check(SUCCEEDED(pw_shell_make_shortcut(target, PW_SHORTCUT_DESKTOP, second)) && !lstrcmpiW(PathFindFileNameW(second), L"cmd - Shortcut (2).lnk"),
+              "a second shortcut to it is named (2) and replaces nothing");
+        DeleteFileW(second);
+        check(SUCCEEDED(pw_shell_make_shortcut(target, PW_SHORTCUT_START, second)) && StrStrIW(second, L"Programs") &&
+              GetFileAttributesW(second) != INVALID_FILE_ATTRIBUTES, "on Start the shortcut is in Programs");
+        check(pw_shell_pin_to_start(second) == 1 && pw_shell_pin_to_start(second) == 0, "it is pinned on Start once");
+        {
+            WCHAR pins[4096];
+            DWORD size = sizeof(pins);
+            BOOL listed = RegGetValueW(HKEY_CURRENT_USER, pw_shortcut_pins_key, L"StartPins", RRF_RT_REG_MULTI_SZ, NULL, pins, &size) == ERROR_SUCCESS;
+            WCHAR *p = pins;
+            BOOL found = FALSE;
+            while (listed && *p && p < pins + size / sizeof(WCHAR)) { found |= !lstrcmpiW(p, second); p += lstrlenW(p) + 1; }
+            check(found, "Start's pin list names it");
+        }
+        DeleteFileW(second);
+        if (had_pins) RegSetKeyValueW(HKEY_CURRENT_USER, pw_shortcut_pins_key, L"StartPins", REG_MULTI_SZ, pin_before, pin_size);
+        else RegDeleteKeyValueW(HKEY_CURRENT_USER, pw_shortcut_pins_key, L"StartPins");
+        DeleteFileW(link);   /* gone again before the counts below, which compare exact totals */
+        while (GetTickCount() - start < 20000 && item_count(list) > before) pump(100);
+        check(item_count(list) == before, "the shortcut leaves the desktop when it is deleted");
+    }
+
+    /* 1d. File Explorer's More menu (pw_shell_explorer.h): with an item selected, Create shortcut makes a link on the Desktop and
+     * Pin to Start one in Start's Programs, pinned; driven with the pointer and keys a person has */
+    {
+        WCHAR command[MAX_PATH * 2], item[MAX_PATH], programs[MAX_PATH];
+        STARTUPINFOW startup;
+        PROCESS_INFORMATION process;
+        PwExplorerPlace place;
+        RECT client_rect;
+        POINT origin = {0, 0};
+        HWND explorer_window;
+        char text[300];
+        WCHAR pins[4096];
+        DWORD pins_size = sizeof(pins), pins_type;
+        const BOOL had_pins = RegGetValueW(HKEY_CURRENT_USER, pw_shortcut_pins_key, L"StartPins", RRF_RT_REG_MULTI_SZ, &pins_type,
+                                           pins, &pins_size) == ERROR_SUCCESS;
+        WIN32_FIND_DATAW found;
+        HANDLE handle;
+        WCHAR pattern[MAX_PATH], made[MAX_PATH] = L"", pinned[MAX_PATH] = L"";
+
+        memset(&startup, 0, sizeof(startup));
+        memset(&process, 0, sizeof(process));
+        startup.cb = sizeof(startup);
+        wsprintfW(item, L"%s\\Appearance.lnk", desktop_dir);
+        GetSystemDirectoryW(command, MAX_PATH);
+        wsprintfW(command + lstrlenW(command), L"\\..\\explorer.exe /select,\"%s\"", item);
+        check(CreateProcessW(NULL, command, NULL, NULL, FALSE, 0, NULL, NULL, &startup, &process), "File Explorer started on the Desktop folder");
+        explorer_window = wait_window_of(process.dwProcessId, 20000);
+        check(explorer_window != NULL, "File Explorer's window is showing");
+        if (explorer_window) {
+            SetForegroundWindow(explorer_window);
+            MoveWindow(explorer_window, 410, 166, 1100, 700, TRUE);
+            pump(2500);
+            GetClientRect(explorer_window, &client_rect);
+            ClientToScreen(explorer_window, &origin);
+            pw_explorer_place(&place, client_rect.right, client_rect.bottom, 1, 0);
+            wsprintfA(text, "desktop-view note: Explorer client %ldx%ld at %ld,%ld; More at %d,%d\n", client_rect.right, client_rect.bottom,
+                      origin.x, origin.y, (int)(origin.x + place.command[PW_EXPLORER_CMD_MORE].x + place.command[PW_EXPLORER_CMD_MORE].w / 2),
+                      (int)(origin.y + place.command[PW_EXPLORER_CMD_MORE].y + place.command[PW_EXPLORER_CMD_MORE].h / 2));
+            line(text);
+            {
+                HWND items = find_list_below(explorer_window);
+                RECT content = {(LONG)place.content.x, (LONG)place.content.y, 0, 0};
+                int tries = 0;
+                for (; items && tries < 3 && SendMessageW(items, LVM_GETSELECTEDCOUNT, 0, 0) < 1; ++tries) {
+                    click((int)(origin.x + content.left + 60), (int)(origin.y + content.top + 40 + 30 * tries), FALSE);
+                    pump(400);
+                }
+                wsprintfA(text, "desktop-view note: Explorer list %p: %d items, %d selected after %d clicks\n", (void *)items,
+                          items ? (int)SendMessageW(items, LVM_GETITEMCOUNT, 0, 0) : -1,
+                          items ? (int)SendMessageW(items, LVM_GETSELECTEDCOUNT, 0, 0) : -1, tries);
+                line(text);
+                check(items && SendMessageW(items, LVM_GETSELECTEDCOUNT, 0, 0) >= 1, "an item of the Desktop folder is selected in File Explorer");
+            }
+            for (int which = 0; which < 2; ++which) {   /* 0: Create shortcut, 1: Pin to Start */
+                click((int)(origin.x + place.command[PW_EXPLORER_CMD_MORE].x + place.command[PW_EXPLORER_CMD_MORE].w / 2),
+                      (int)(origin.y + place.command[PW_EXPLORER_CMD_MORE].y + place.command[PW_EXPLORER_CMD_MORE].h / 2), FALSE);
+                pump(500);
+                check(popup_menu_present(), which ? "More opens its menu again" : "More opens its menu");
+                if (!popup_menu_present()) break;
+                for (int down = 0; down < 3 + which; ++down) tap(VK_DOWN);   /* Select all, Invert selection, Create shortcut, Pin to Start */
+                tap(VK_RETURN);
+                pump(1500);
+                {   /* the command's own "unavailable" message box would hold everything after it */
+                    HWND box = FindWindowW(L"#32770", L"File Explorer");
+                    if (box) {
+                        WCHAR said[200] = L"";
+                        HWND label = FindWindowExW(box, NULL, L"Static", NULL);
+                        label = label ? FindWindowExW(box, label, L"Static", NULL) : NULL;
+                        if (label) GetWindowTextW(label, said, 200);
+                        wsprintfA(text, "desktop-view note: File Explorer said '%ls' after item %d\n", said, which);
+                        line(text);
+                        PostMessageW(box, WM_CLOSE, 0, 0);
+                        pump(500);
+                    }
+                }
+            }
+            wsprintfW(pattern, L"%s\\* - Shortcut*.lnk", desktop_dir);
+            if ((handle = FindFirstFileW(pattern, &found)) != INVALID_HANDLE_VALUE) {
+                wsprintfW(made, L"%s\\%s", desktop_dir, found.cFileName);
+                FindClose(handle);
+            }
+            check(made[0] && StrStrIW(made, L"Appearance"), "More > Create shortcut made a shortcut to the selected item on the Desktop");
+            SHGetFolderPathW(NULL, CSIDL_PROGRAMS, NULL, SHGFP_TYPE_CURRENT, programs);
+            wsprintfW(pattern, L"%s\\Appearance - Shortcut*.lnk", programs);
+            if ((handle = FindFirstFileW(pattern, &found)) != INVALID_HANDLE_VALUE) {
+                wsprintfW(pinned, L"%s\\%s", programs, found.cFileName);
+                FindClose(handle);
+            }
+            check(pinned[0], "More > Pin to Start made a shortcut in Start's Programs");
+            {
+                WCHAR list_now[4096], *c;
+                DWORD size = sizeof(list_now);
+                BOOL listed = pinned[0] && RegGetValueW(HKEY_CURRENT_USER, pw_shortcut_pins_key, L"StartPins", RRF_RT_REG_MULTI_SZ, NULL, list_now, &size) == ERROR_SUCCESS;
+                BOOL has = FALSE;
+                for (c = list_now; listed && *c && c < list_now + size / sizeof(WCHAR); c += lstrlenW(c) + 1) has |= !lstrcmpiW(c, pinned);
+                check(has, "Start's pin list names the pinned shortcut");
+            }
+            PostMessageW(explorer_window, WM_CLOSE, 0, 0);
+            pump(800);
+        }
+        if (process.hProcess) { TerminateProcess(process.hProcess, 0); CloseHandle(process.hProcess); }
+        if (process.hThread) CloseHandle(process.hThread);
+        if (made[0]) DeleteFileW(made);
+        if (pinned[0]) DeleteFileW(pinned);
+        if (had_pins) RegSetKeyValueW(HKEY_CURRENT_USER, pw_shortcut_pins_key, L"StartPins", REG_MULTI_SZ, pins, pins_size);
+        else RegDeleteKeyValueW(HKEY_CURRENT_USER, pw_shortcut_pins_key, L"StartPins");
+        pump(1500);
     }
 
     /* 2. a file made by a program that sends no notification appears (the watcher) */
@@ -680,6 +976,66 @@ void mainCRTStartup(void)
     }
     check(GetFileAttributesW(public_path(renamed, 1, TRUE)) != INVALID_FILE_ATTRIBUTES &&
           GetFileAttributesW(public_path(path, 1, FALSE)) == INVALID_FILE_ATTRIBUTES, "the Public Desktop file was renamed on disk");
+
+    /* 5d. the menus a person opens on a file: shell32's item menu (File Explorer's right-click, the desktop's classic menu) has no
+     * "Create Link" and its Create shortcut and Pin to Start make their files; the desktop's own menu (Menu key) and the classic
+     * one (Shift+F10) are opened as a person opens them and pictured, and make a shortcut too */
+    {
+        WCHAR file[MAX_PATH], link[MAX_PATH], programs[MAX_PATH], pin_before[4096];
+        DWORD pin_size = sizeof(pin_before), pin_type;
+        const BOOL had_pins = RegGetValueW(HKEY_CURRENT_USER, pw_shortcut_pins_key, L"StartPins", RRF_RT_REG_MULTI_SZ, &pin_type,
+                                           pin_before, &pin_size) == ERROR_SUCCESS;
+        BOOL old_found, found;
+
+        probe_path(file, 3, TRUE);
+        SHGetFolderPathW(NULL, CSIDL_PROGRAMS, NULL, SHGFP_TYPE_CURRENT, programs);
+        {
+            int before = item_count(list);
+            check(item_menu_command(file, L"Create shortcut", &old_found, &found) && found && !old_found,
+                  "shell32's item menu says Create shortcut, not Create Link, and the command ran");
+            check(first_match(desktop_dir, L"PWProbeRenamed3 - Shortcut*.lnk", link), "its Create shortcut made a shortcut on the Desktop");
+            settle_desktop_link(list, before, link);
+        }
+        check(item_menu_command(file, L"Pin to Start", &old_found, &found) && found && !old_found,
+              "shell32's item menu says Pin to Start and the command ran");
+        check(first_match(programs, L"PWProbeRenamed3 - Shortcut*.lnk", link), "its Pin to Start made a shortcut in Start's Programs");
+        if (link[0]) DeleteFileW(link);
+
+        /* the menus a person opens on the selected file, as the owner did: the Menu key (the desktop's modern menu) and
+         * Shift+F10 (shell32's item menu); in both the access keys S and N run Create shortcut and Pin to Start. No picture is
+         * taken with a keyboard-opened menu up: no frame at all is shown while it is (shell81-view-r5-09, docs/SHELL81_REVIEW.md). */
+        click(1880, 1000, FALSE);
+        tap('P'); tap('W'); tap('P'); tap('R'); tap('O'); tap('B'); tap('E'); tap('R');
+        check(wait_selected(list, 1, 3000), "an item is selected for its menu");
+        for (int pass = 0; pass < 4; ++pass) {   /* the Menu key: S, N; Shift+F10: S, N */
+            BOOL pin = pass & 1, shift = pass >= 2;
+            int before = item_count(list);
+            check(wait_selected(list, 1, 3000), "the item is still selected");
+            if (shift) { key(VK_SHIFT, TRUE); pump(30); tap(VK_F10); key(VK_SHIFT, FALSE); }
+            else tap(VK_APPS);
+            pump(600);
+            check(popup_menu_present(), shift ? "Shift+F10 opens the item's menu" : "the Menu key opens the item's menu");
+            tap(pin ? 'N' : 'S');
+            pump(1500);
+            check(!popup_menu_present(), pin ? "N ran Pin to Start and the menu closed" : "S ran Create shortcut and the menu closed");
+            if (popup_menu_present()) { tap(VK_ESCAPE); pump(400); }
+            wsprintfA(text, "%s's %s made a shortcut %s", shift ? "Shift+F10" : "the Menu key", pin ? "Pin to Start" : "Create shortcut",
+                      pin ? "in Start's Programs" : "on the Desktop");
+            check(first_match(pin ? programs : desktop_dir, L"PWProbeRenamed3 - Shortcut*.lnk", link), text);
+            if (pin) {
+                /* the link is in Start's Programs: the desktop must not list it (patch 2497; shell81-view-r5-08 showed it
+                 * as an icon that then hid the real desktop shortcut of the same name) */
+                pump(2000);
+                check(item_count(list) == before, "Pin to Start puts no icon on the desktop");
+                if (link[0]) DeleteFileW(link);
+            }
+            else settle_desktop_link(list, before, link);
+            pump(600);
+        }
+        if (had_pins) RegSetKeyValueW(HKEY_CURRENT_USER, pw_shortcut_pins_key, L"StartPins", REG_MULTI_SZ, pin_before, pin_size);
+        else RegDeleteKeyValueW(HKEY_CURRENT_USER, pw_shortcut_pins_key, L"StartPins");
+        pump(1200);
+    }
 
     /* 6. a file deleted outside the view leaves it */
     DeleteFileW(probe_path(path, 4, FALSE));

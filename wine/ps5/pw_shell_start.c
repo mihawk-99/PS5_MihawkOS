@@ -142,7 +142,7 @@ static BOOL pw_start_save_pins(struct pw_start_state *s)
 enum { PW_START_TERMINAL = 3, PW_START_BROWSER = 4 };
 static const struct { const WCHAR *image, *name; int folder, resource, sprite; } pw_start_builtins[] = {
     {L"explorer.exe", L"File Explorer", CSIDL_WINDOWS, PW_ICON_ORIGINAL_FOLDER_OPEN, PW_SPRITE_START_ICON_EXPLORER},
-    {L"mihawk-appearance.exe", L"Settings", CSIDL_SYSTEM, PW_ICON_LIGHT_SETTINGS, PW_SPRITE_START_ICON_SETTINGS},
+    {L"mihawk-settings.exe", L"Settings", CSIDL_SYSTEM, PW_ICON_LIGHT_SETTINGS, PW_SPRITE_START_ICON_SETTINGS},
     {L"notepad.exe", L"Notepad", CSIDL_SYSTEM, PW_ICON_LIGHT_NOTEBOOK_PEN, PW_SPRITE_START_ICON_NOTEPAD},
     {L"cmd.exe", L"Terminal", CSIDL_SYSTEM, PW_ICON_LIGHT_TERMINAL, PW_SPRITE_START_ICON_TERMINAL},
     {L"MihawkBrowser.lnk", L"MihawkBrowser", CSIDL_COMMON_DESKTOPDIRECTORY, PW_ICON_ORIGINAL_APP_BROWSER, PW_SPRITE_START_ICON_BROWSER},

@@ -86,7 +86,8 @@ void mainCRTStartup(void)
 {
     HKEY settings,substitutes,console;
     const WCHAR *arguments=GetCommandLineW();
-    for(const WCHAR *p=arguments;*p;p++)if(!lstrcmpW(p,L"--consolas"))ExitProcess(same_file(L"Consolas",L"Cascadia Mono")?0:1);
+    for(const WCHAR *p=arguments;*p;p++)if(!lstrcmpW(p,L"--consolas"))
+        ExitProcess(same_file(L"Consolas",L"Cascadia Mono")&&same_file(L"Segoe UI",L"Proton UI")?0:1);
     if(RegCreateKeyExW(HKEY_CURRENT_USER,L"Software\\MihawkOS",0,NULL,0,KEY_QUERY_VALUE|KEY_SET_VALUE,NULL,&settings,NULL)||
        RegCreateKeyExW(HKEY_LOCAL_MACHINE,L"Software\\Microsoft\\Windows NT\\CurrentVersion\\FontSubstitutes",0,NULL,0,
                        KEY_QUERY_VALUE|KEY_SET_VALUE,NULL,&substitutes,NULL)||
@@ -99,7 +100,15 @@ void mainCRTStartup(void)
     check(value_is(substitutes,L"Consolas",L"Cascadia Mono"),"Consolas is substituted by Cascadia Mono");
     check(value_is(console,L"FaceName",L"Cascadia Mono"),"the console's face is Cascadia Mono");
     /* before this process loads any font: a program that waits on another one's font cache stalls on a host */
-    check(consolas_in_child(),"a program started afterwards gets Cascadia Mono for Consolas");
+    /* Segoe UI, the most common UI face, is Proton UI in the prefix's font replacements (wine.inf, patch 2493), not the
+       Times New Roman Wine named: the message box and every program asking for it drew serif text (shell81-base-08). */
+    {
+        HKEY replacements;
+        check(!RegOpenKeyExW(HKEY_CURRENT_USER,L"Software\\Wine\\Fonts\\Replacements",0,KEY_QUERY_VALUE,&replacements)&&
+              value_is(replacements,L"Segoe UI",L"Proton UI"),"Segoe UI is replaced by Proton UI, not Times New Roman");
+        RegCloseKey(replacements);
+    }
+    check(consolas_in_child(),"a program started afterwards gets Cascadia Mono for Consolas and Proton UI for Segoe UI");
     check(resolves(L"Cascadia Mono",FW_NORMAL)&&resolves(L"Cascadia Mono",FW_BOLD),"Cascadia Mono resolves, fixed pitch, regular and bold");
     RegDeleteValueW(settings,L"MonospaceInitialized");RegDeleteValueW(substitutes,L"Consolas");
     RegSetValueExW(console,L"FaceName",0,REG_SZ,(BYTE *)L"Lucida Console",sizeof(L"Lucida Console"));

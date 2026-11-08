@@ -1,0 +1,35 @@
+From abae54b820ac8fb7482f300e9326fa2b574e73a0 Mon Sep 17 00:00:00 2001
+From: Mihawk <163614687+mihawk-99@users.noreply.github.com>
+Date: Sat, 7 Nov 2026 19:00:00 -0500
+Subject: [PATCH] loader: Segoe UI is Proton UI, not Times New Roman
+
+wine.inf aliased Segoe UI and Segoe UI Semibold to Times New Roman, so every program that asks for Segoe UI, the most
+common UI face, drew serif text; the message box among them (shell81-base-08). Every MihawkOS prefix carries Proton UI
+(PS5_Proton tools/build-proton-ui-font.py, a derivative of OFL Selawik, which is drawn to Segoe UI's metrics) in
+C:\windows\Fonts. Each prefix takes the new aliases at its next update, as wine.inf rewrites them every time.
+
+- loader/wine.inf.in: Segoe UI, Segoe UI Light, Semilight and Semibold replaced by the Proton UI faces.
+---
+ loader/wine.inf.in | 6 ++++--
+ 1 file changed, 4 insertions(+), 2 deletions(-)
+
+diff --git a/loader/wine.inf.in b/loader/wine.inf.in
+index 28a7ef1..ed77323 100644
+--- a/loader/wine.inf.in
++++ b/loader/wine.inf.in
+@@ -562,8 +562,10 @@ HKLM,%FontsNT%,"Webdings (TrueType)",,"webdings.ttf"
+ HKLM,%FontsNT%,"Wingdings (TrueType)",,"wingdings.ttf"
+ HKCU,Software\Wine\Fonts\Replacements,"Palatino Linotype",,"Times New Roman"
+ HKCU,Software\Wine\Fonts\Replacements,"Verdana",,"Times New Roman"
+-HKCU,Software\Wine\Fonts\Replacements,"Segoe UI Semibold",,"Times New Roman"
+-HKCU,Software\Wine\Fonts\Replacements,"Segoe UI",,"Times New Roman"
++HKCU,Software\Wine\Fonts\Replacements,"Segoe UI Semibold",,"Proton UI Semibold"
++HKCU,Software\Wine\Fonts\Replacements,"Segoe UI Semilight",,"Proton UI Semilight"
++HKCU,Software\Wine\Fonts\Replacements,"Segoe UI Light",,"Proton UI Light"
++HKCU,Software\Wine\Fonts\Replacements,"Segoe UI",,"Proton UI"
+ 
+ [MCI]
+ HKLM,%Mci32Str%,"AVIVideo",,"mciavi32.dll"
+-- 
+2.56.0
+

@@ -95,6 +95,17 @@ class PublicationCheck(unittest.TestCase):
         self.assertEqual(code, 0, output)
         self.assertIn('allowed  named game or launcher: 1 in LEGAL.md (the trademark table)', output)
 
+    def test_a_sprite_s_pixels_name_nothing_but_its_text_still_counts(self):
+        # base64 pixels of a captured sprite once held a game's short name (shell81 Settings sprites); its text is still read
+        (self.repo / 'themes').mkdir()
+        (self.repo / 'themes/pixels.json').write_text('{"sprites": {"a": {"black": "x4oW+p3' + 'R/q==", "white": "AAAA"}}}')
+        code, output = self.run_tool('tree')
+        self.assertEqual(code, 0, output)
+        (self.repo / 'themes/text.json').write_text('{"url": "a run of ' + 'Hollow' + ' Knight", "black": "AAAA"}')
+        code, output = self.run_tool('tree')
+        self.assertEqual(code, 1, output)
+        self.assertIn('named game or launcher: 1 in 1 places: themes/text.json', output)
+
     def test_the_store_client_only_in_listed_files_and_records_only_by_name(self):
         # tools/publication-names.txt (2026-10-26): a file of the store client's group names it and nothing else; a [records]
         # file keeps every name, and its run name may be cited anywhere; a name anywhere else is still refused.

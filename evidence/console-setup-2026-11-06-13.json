@@ -1,0 +1,94 @@
+{
+ "run": "console-setup-2026-11-06-13",
+ "result": "ready",
+ "stopped_at": null,
+ "steps": {
+  "S0": {
+   "step": "host",
+   "state": "done",
+   "seconds": 0.7,
+   "detail": "dist and the staged runtime are there"
+  },
+  "S1": {
+   "step": "reach",
+   "state": "done",
+   "seconds": 0.0,
+   "detail": "ftpsrv and websrv answer; klog stream open"
+  },
+  "S2": {
+   "step": "guard",
+   "state": "done",
+   "seconds": 0.0,
+   "detail": "no drop, no storage block"
+  },
+  "S3": {
+   "step": "control",
+   "state": "done",
+   "seconds": 0.2,
+   "detail": "ps5vkctl pid 103, no title running, firmware 13600007"
+  },
+  "S4": {
+   "step": "klog",
+   "state": "done",
+   "seconds": 1.8,
+   "detail": "219 lines, no storage damage, no OnionHEN"
+  },
+  "S5": {
+   "step": "salvage",
+   "state": "done",
+   "seconds": 0.0,
+   "detail": "salvaged once this boot"
+  },
+  "S6": {
+   "step": "dev.conf",
+   "state": "done",
+   "seconds": 0.0,
+   "detail": "loopback 8080"
+  },
+  "S7": {
+   "step": "title",
+   "state": "did",
+   "seconds": 13.1,
+   "detail": "1 of 182 files sent"
+  },
+  "S8": {
+   "step": "runtime",
+   "state": "done",
+   "seconds": 0.1,
+   "detail": "the deploy manifest is the staged runtime"
+  },
+  "S9": {
+   "step": "prefix",
+   "state": "done",
+   "seconds": 0.2,
+   "detail": "prefix ready, firmware 13600007"
+  },
+  "S10": {
+   "step": "read-back",
+   "state": "done",
+   "seconds": 187.4,
+   "detail": "4263 files match"
+  }
+ },
+ "klog": {
+  "connections": 1,
+  "lines": 234,
+  "storage_damage": 0,
+  "onionhen": 0
+ },
+ "build": {
+  "matches_tree": true,
+  "head": "ed5cd48aa390",
+  "time": "2026-11-06T22:27:27-0500"
+ },
+ "title_files": 182,
+ "runtime": null,
+ "prefix_session": null,
+ "firmware": "13600007",
+ "read_back": {
+  "files": 4263,
+  "mismatches": 0
+ },
+ "last_console_write": 1794022057.2761168,
+ "sync": "err usage: sync needs a nine-character title id; this ps5vkctl has no sync: tool"
+}

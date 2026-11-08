@@ -1,0 +1,490 @@
+From 0000000000000000000000000000000000000000 Mon Sep 17 00:00:00 2001
+From: Mihawk <163614687+mihawk-99@users.noreply.github.com>
+Date: Fri, 06 Nov 2026 18:00:00 -0400
+Subject: [PATCH] user32: the message box as the approved prototype draws it.
+
+The message box was Wine's classic one: text and buttons centred, a 16 px icon at the left, no footer, and the
+controls drawn as the classic ones, which the prototype (prototypes/windows11-shell js/dialogs.js D.messageBox,
+css/dialogs.css .dlg-msg) does not. On the shell's scorecard the four message box states (msgbox, msgbox-error,
+msgbox-info, taskdialog) stood at 2% to 12% of their pixels within one level of the prototype's.
+
+- dlls/user32/msgbox.c: the prototype's layout. The body's margins are its 26 px above and below, 24 px left and
+  30 px right; the dialog icon is its 32 px pixels over a 42 px column (MB_USERICON's own stays the static control);
+  the text is 12 px on 16 px lines, measured as the prototype measures it (its longest line unwrapped, never past
+  5/8 of the work area less the body's margins, then wrapped there); the dialog's size is the prototype's formula
+  (the text plus 54 px and the icon's column, at least the footer's buttons, at least the caption's needs, never
+  under 180 px), centred on the work area as before. The footer is its 49 px strip with the buttons right-aligned,
+  26 px tall, 88 px wide at least, 10 px apart and 12 px in from the sides; their style is BS_OWNERDRAW and
+  WM_DRAWITEM paints the prototype's four button looks. The body is its white page and the footer its #f3f3f3
+  strip; the dialog keeps the light palette in the dark theme, as the prototype's classic dialogs do.
+- The pixels: pw_dialog_sprites.h, the prototype's warning, error, info and question icons and its button looks
+  measured by tools/build-dialog-sprites.py from themes/windows11/dialogs/*.json (already in the tree).
+- Not gated yet; the message box states' scores are in docs/SHELL81_REVIEW.md once a build of this tree has run.
+
+The prototype's dialogs keep their light palette; this patch does not yet make the dark theme's *caption* of a
+message box light (the prototype's is), so the dark states' caption bars still follow the app's theme.
+--- a/dlls/user32/msgbox.c
++++ b/dlls/user32/msgbox.c
+@@ -34,6 +34,91 @@
+ WINE_DEFAULT_DEBUG_CHANNEL(dialog);
+ WINE_DECLARE_DEBUG_CHANNEL(msgbox);
+ 
++/* The prototype's message box (prototypes/windows11-shell/js/dialogs.js D.messageBox and css/dialogs.css
++ * .dlg-msg): a white body -- 26 px above and below, 24 px left and 30 px right -- with a 32 px dialog icon over a
++ * 42 px column and 12 px text on 16 px lines, then the footer's 49 px strip with its buttons right-aligned, 26 px
++ * tall, 88 px wide at least and 10 px apart, 12 px in from the sides. The dialog stays light in the dark theme, as
++ * the prototype's classic dialogs do. The icons and the four button looks are the prototype's own pixels
++ * (.deps/windows11-theme/pw_dialog_sprites.h, tools/build-dialog-sprites.py). */
++#include "pw_dialog_sprites.h"
++
++enum { PW_MSG_TOP = 26, PW_MSG_BOTTOM = 26, PW_MSG_LEFT = 24, PW_MSG_RIGHT = 30, PW_MSG_ICON = 32,
++       PW_MSG_ICON_COLUMN = 42, PW_MSG_TEXT_MIN = 32, PW_MSG_FOOT = 49, PW_MSG_BUTTON = 26,
++       PW_MSG_BUTTON_MIN = 88, PW_MSG_BUTTON_GAP = 10, PW_MSG_FOOT_PAD = 12, PW_MSG_MIN_W = 180,
++       PW_MSG_TEXT_LIMIT_MIN = 160 };
++
++#define PW_MSG_PAGE  RGB(0xff, 0xff, 0xff)   /* SolidBackgroundFillColorQuarternary */
++#define PW_MSG_FACE  RGB(0xf3, 0xf3, 0xf3)   /* SolidBackgroundFillColorBase */
++#define PW_MSG_INK   RGB(0x1b, 0x1b, 0x1b)   /* TextFillColorPrimary over the page */
++
++static void pw_msg_fill( HDC dc, const RECT *r, COLORREF colour )
++{
++    HBRUSH brush = CreateSolidBrush( colour );
++    if (brush) { FillRect( dc, r, brush ); DeleteObject( brush ); }
++}
++
++/* One prototype icon or button look, its premultiplied pixels blended where it lies; a button wider than its
++ * measured 88 px repeats the uniform column between the 6 px ends. */
++static void pw_msg_sprite( HDC dc, int index, int x, int y, int width )
++{
++    const struct pw_dialog_sprite *sprite = &pw_dialog_sprites[index];
++    BITMAPINFO info = {{sizeof(BITMAPINFOHEADER), sprite->width, -sprite->height, 1, 32, BI_RGB}};
++    BLENDFUNCTION blend = {AC_SRC_OVER, 0, 255, AC_SRC_ALPHA};
++    void *bits = NULL; HDC source; HGDIOBJ prior;
++    HBITMAP bitmap = CreateDIBSection( dc, &info, DIB_RGB_COLORS, &bits, NULL, 0 );
++
++    if (!bitmap || !bits) { if (bitmap) DeleteObject( bitmap ); return; }
++    memcpy( bits, sprite->bgra, (size_t)sprite->width * sprite->height * 4 );
++    if ((source = CreateCompatibleDC( dc )))
++    {
++        prior = SelectObject( source, bitmap );
++        if (!width || width == sprite->width)
++            GdiAlphaBlend( dc, x, y, sprite->width, sprite->height, source, 0, 0, sprite->width, sprite->height, blend );
++        else
++        {
++            int end = min( width, sprite->width ) / 2;
++            GdiAlphaBlend( dc, x, y, end, sprite->height, source, 0, 0, end, sprite->height, blend );
++            GdiAlphaBlend( dc, x + width - end, y, end, sprite->height, source, sprite->width - end, 0, end, sprite->height, blend );
++            for (int at = end; at < width - end; ++at)
++                GdiAlphaBlend( dc, x + at, y, 1, sprite->height, source, sprite->width / 2, 0, 1, sprite->height, blend );
++        }
++        SelectObject( source, prior ); DeleteDC( source );
++    }
++    DeleteObject( bitmap );
++}
++
++/* The prototype's dialog icon for a message box's style, or -1 (no icon, and MB_USERICON's own stays a static). */
++static int pw_msg_icon( UINT style )
++{
++    switch (style & MB_ICONMASK)
++    {
++    case MB_ICONEXCLAMATION: return PW_DIALOG_ICON_WARNING;
++    case MB_ICONHAND:        return PW_DIALOG_ICON_ERROR;
++    case MB_ICONASTERISK:    return PW_DIALOG_ICON_INFO;
++    case MB_ICONQUESTION:    return PW_DIALOG_ICON_QUESTION;
++    default:                 return -1;
++    }
++}
++
++/* The prototype's text measure: its longest line unwrapped (css/dialogs.css .dlg-msg-text is pre-wrap). */
++static int pw_msg_text_width( HDC dc, const WCHAR *text )
++{
++    RECT line = {0, 0, 0, 0};
++    const WCHAR *start = text, *at;
++    int width = 0;
++
++    for (;;)
++    {
++        for (at = start; *at && *at != '\n'; ++at);
++        line.right = line.bottom = 0;
++        DrawTextW( dc, start, at - start, &line, DT_CALCRECT | DT_SINGLELINE | DT_NOPREFIX );
++        if (line.right > width) width = line.right;
++        if (!*at) break;
++        start = at + 1;
++    }
++    return width;
++}
++
+ struct ThreadWindows
+ {
+     UINT numHandles;
+@@ -60,27 +145,24 @@
+ 
+ static void MSGBOX_OnInit(HWND hwnd, LPMSGBOXPARAMSW lpmb)
+ {
+-    HFONT hPrevFont;
+-    RECT rect;
+-    HWND hItem;
+-    HDC hdc;
+-    int i, buttons;
+-    int bspace, bw, bh, theight, tleft, wwidth, wheight, wleft, wtop, bpos;
+-    int borheight, borwidth, iheight, ileft, iwidth, twidth, tiheight;
+-    NONCLIENTMETRICSW nclm;
+-    HMONITOR monitor;
+-    MONITORINFO mon_info;
+-    LPCWSTR lpszText;
+-    WCHAR *buffer = NULL;
+-    const WCHAR *ptr;
+-
+     /* Index the order the buttons need to appear to an ID* constant */
+     static const int buttonOrder[10] = { IDYES, IDNO, IDOK, IDABORT, IDRETRY,
+                                          IDCANCEL, IDIGNORE, IDTRYAGAIN,
+                                          IDCONTINUE, IDHELP };
+-
+-    nclm.cbSize = sizeof(nclm);
+-    SystemParametersInfoW (SPI_GETNONCLIENTMETRICS, 0, &nclm, 0);
++    WCHAR *buffer = NULL;
++    LPCWSTR lpszText;
++    const WCHAR *ptr;
++    HWND hItem;
++    HDC hdc;
++    HFONT font, prior_font;
++    int i, buttons;
++    RECT rect;
++    MONITORINFO mon_info = {sizeof(mon_info)};
++    HMONITOR monitor;
++    int client_width, client_height, text_width, text_height, text_limit, buttons_width, caption_width;
++    int icon, icon_column;
++    int borwidth, borheight, wwidth, wheight, wleft, wtop;
++    int ids[ARRAY_SIZE(buttonOrder)];
+ 
+     if (!IS_INTRESOURCE(lpmb->lpszCaption)) {
+        SetWindowTextW(hwnd, lpmb->lpszCaption);
+@@ -179,41 +261,27 @@
+ 
+     if (hItem) SetWindowLongW(hItem, GWL_STYLE, GetWindowLongW(hItem, GWL_STYLE) | WS_GROUP);
+ 
+-    /* Set the icon */
+-    switch(lpmb->dwStyle & MB_ICONMASK) {
+-    case MB_ICONEXCLAMATION:
+-	SendDlgItemMessageW(hwnd, MSGBOX_IDICON, STM_SETICON,
+-			    (WPARAM)LoadIconW(0, (LPWSTR)IDI_EXCLAMATION), 0);
+-	break;
+-    case MB_ICONQUESTION:
+-	SendDlgItemMessageW(hwnd, MSGBOX_IDICON, STM_SETICON,
+-			    (WPARAM)LoadIconW(0, (LPWSTR)IDI_QUESTION), 0);
+-	break;
+-    case MB_ICONASTERISK:
+-	SendDlgItemMessageW(hwnd, MSGBOX_IDICON, STM_SETICON,
+-			    (WPARAM)LoadIconW(0, (LPWSTR)IDI_ASTERISK), 0);
+-	break;
+-    case MB_ICONHAND:
+-      SendDlgItemMessageW(hwnd, MSGBOX_IDICON, STM_SETICON,
+-			    (WPARAM)LoadIconW(0, (LPWSTR)IDI_HAND), 0);
+-      break;
+-    case MB_USERICON:
+-      SendDlgItemMessageW(hwnd, MSGBOX_IDICON, STM_SETICON,
+-			  (WPARAM)LoadIconW(lpmb->hInstance, lpmb->lpszIcon), 0);
+-      break;
+-    default:
+-	/* By default, Windows 95/98/NT do not associate an icon to message boxes.
+-         * So wine should do the same.
+-         */
+-	break;
+-    }
+-
+     /* Remove Help button unless MB_HELP supplied */
+     if (!(lpmb->dwStyle & MB_HELP)) {
+         NtUserDestroyWindow(GetDlgItem(hwnd, IDHELP));
+     }
+ 
+-    /* Position everything */
++    /* The message box draws its own 12 px text, so it takes the prototype's font on every control it keeps. */
++    font = CreateFontW( -12, 0, 0, 0, FW_NORMAL, FALSE, FALSE, FALSE, DEFAULT_CHARSET, OUT_DEFAULT_PRECIS,
++                        CLIP_DEFAULT_PRECIS, DEFAULT_QUALITY, DEFAULT_PITCH, L"Segoe UI" );
++    if (!font) font = (HFONT)GetStockObject( DEFAULT_GUI_FONT );
++    SendMessageW( hwnd, WM_SETFONT, (WPARAM)font, FALSE );
++    SetPropW( hwnd, L"pw_msg_font", font );
++    {
++        HWND text = GetDlgItem( hwnd, MSGBOX_IDTEXT );
++        if (text) SendMessageW( text, WM_SETFONT, (WPARAM)font, FALSE );
++        for (i = 0; i < ARRAY_SIZE(buttonOrder); i++)
++        {
++            HWND item = GetDlgItem( hwnd, buttonOrder[i] );
++            if (item) SendMessageW( item, WM_SETFONT, (WPARAM)font, FALSE );
++        }
++    }
++
+     GetWindowRect(hwnd, &rect);
+     borheight = rect.bottom - rect.top;
+     borwidth  = rect.right - rect.left;
+@@ -221,105 +289,141 @@
+     borheight -= rect.bottom - rect.top;
+     borwidth  -= rect.right - rect.left;
+ 
+-    /* Get the icon height */
+-    GetWindowRect(GetDlgItem(hwnd, MSGBOX_IDICON), &rect);
+-    MapWindowPoints(0, hwnd, (LPPOINT)&rect, 2);
+-    if (!(lpmb->dwStyle & MB_ICONMASK))
+-    {
+-        rect.bottom = rect.top;
+-        rect.right = rect.left;
+-    }
+-    iheight = rect.bottom - rect.top;
+-    ileft = rect.left;
+-    iwidth = rect.right - ileft;
+-
+-    hdc = NtUserGetDC(hwnd);
+-    hPrevFont = SelectObject( hdc, (HFONT)SendMessageW( hwnd, WM_GETFONT, 0, 0 ));
+-
+-    /* Get the number of visible buttons and their size */
+-    bh = bw = 1; /* Minimum button sizes */
+-    for (buttons = 0, i = IDOK; i <= IDCONTINUE; i++)
+-    {
+-        if (i == IDCLOSE) continue; /* No CLOSE button */
+-	hItem = GetDlgItem(hwnd, i);
+-	if (GetWindowLongW(hItem, GWL_STYLE) & WS_VISIBLE)
+-	{
+-	    WCHAR buttonText[1024];
+-	    int w, h;
+-	    buttons++;
+-	    if (GetWindowTextW(hItem, buttonText, 1024))
+-	    {
+-		DrawTextW( hdc, buttonText, -1, &rect, DT_LEFT | DT_EXPANDTABS | DT_CALCRECT);
+-		h = rect.bottom - rect.top;
+-		w = rect.right - rect.left;
+-		if (h > bh) bh = h;
+-		if (w > bw)  bw = w ;
+-	    }
+-	}
+-    }
+-    bw = max(bw, bh * 2);
+-    /* Button white space */
+-    bh = bh * 2;
+-    bw = bw * 2;
+-    bspace = bw/3; /* Space between buttons */
+-
+-    /* Get the text size */
+-    GetClientRect(GetDlgItem(hwnd, MSGBOX_IDTEXT), &rect);
+-    rect.top = rect.left = rect.bottom = 0;
+-    DrawTextW(hdc, lpszText, -1, &rect,
+-              DT_LEFT | DT_EXPANDTABS | DT_WORDBREAK | DT_CALCRECT | DT_NOPREFIX);
+-    /* Min text width corresponds to space for the buttons */
+-    tleft = ileft;
+-    if (iwidth) tleft += ileft + iwidth;
+-    twidth = max((bw + bspace) * buttons + bspace - tleft, rect.right);
+-    theight = rect.bottom;
+-
+-    SelectObject(hdc, hPrevFont);
++    /* The prototype's width: the text's longest line (never past 5/8 of the work area less the margins) plus the
++     * body's 54 px and the icon's 42 px column; at least the buttons' row or the caption's needs. */
++    icon = pw_msg_icon( lpmb->dwStyle );
++    icon_column = icon >= 0 || (lpmb->dwStyle & MB_USERICON) ? PW_MSG_ICON_COLUMN : 0;
++    monitor = MonitorFromWindow( lpmb->hwndOwner ? lpmb->hwndOwner : GetActiveWindow(), MONITOR_DEFAULTTOPRIMARY );
++    GetMonitorInfoW( monitor, &mon_info );
++    hdc = NtUserGetDC( hwnd );
++    prior_font = SelectObject( hdc, font );
++    text_limit = max( PW_MSG_TEXT_LIMIT_MIN, (mon_info.rcWork.right - mon_info.rcWork.left) * 5 / 8 -
++                      PW_MSG_LEFT - PW_MSG_RIGHT - icon_column );
++    text_width = min( pw_msg_text_width( hdc, lpszText ), text_limit );
++    {
++        RECT block = {0, 0, text_width, 0};
++        DrawTextW( hdc, lpszText, -1, &block, DT_LEFT | DT_EXPANDTABS | DT_CALCRECT | DT_WORDBREAK | DT_NOPREFIX );
++        text_height = max( block.bottom, PW_MSG_TEXT_MIN );
++    }
++    caption_width = 0;
++    {
++        WCHAR caption[MAX_PATH];
++        if (GetWindowTextW( hwnd, caption, ARRAY_SIZE(caption) ))
++        {
++            RECT line = {0, 0, 0, 0};
++            DrawTextW( hdc, caption, -1, &line, DT_CALCRECT | DT_SINGLELINE | DT_NOPREFIX );
++            caption_width = line.right + 48 + 46 + 24;
++        }
++    }
++    for (buttons = 0, i = 0; i < ARRAY_SIZE(buttonOrder); i++)
++    {
++        hItem = GetDlgItem( hwnd, buttonOrder[i] );
++        if (hItem && (GetWindowLongW( hItem, GWL_STYLE ) & WS_VISIBLE)) ids[buttons++] = buttonOrder[i];
++    }
++    buttons_width = PW_MSG_FOOT_PAD * 2 + (buttons ? buttons * PW_MSG_BUTTON_MIN + (buttons - 1) * PW_MSG_BUTTON_GAP : 0);
++    client_width = max( max( text_width + PW_MSG_LEFT + icon_column + PW_MSG_RIGHT, buttons_width ),
++                        max( caption_width, PW_MSG_MIN_W ) );
++    client_height = PW_MSG_TOP + text_height + PW_MSG_BOTTOM + PW_MSG_FOOT;
++    SelectObject( hdc, prior_font );
+     NtUserReleaseDC( hwnd, hdc );
+-
+-    tiheight = 16 + max(iheight, theight);
+-    wwidth  = tleft + twidth + ileft + borwidth;
+-    wheight = 8 + tiheight + bh + borheight;
++    wwidth = client_width + borwidth;
++    wheight = client_height + borheight;
+ 
+     /* Message boxes are always desktop centered, so query desktop size and center window */
+-    monitor = MonitorFromWindow(lpmb->hwndOwner ? lpmb->hwndOwner : GetActiveWindow(), MONITOR_DEFAULTTOPRIMARY);
+-    mon_info.cbSize = sizeof(mon_info);
+-    GetMonitorInfoW(monitor, &mon_info);
+     wleft = (mon_info.rcWork.left + mon_info.rcWork.right - wwidth) / 2;
+     wtop = (mon_info.rcWork.top + mon_info.rcWork.bottom - wheight) / 2;
+-
+-    /* Resize and center the window */
+-    NtUserSetWindowPos( hwnd, 0, wleft, wtop, wwidth, wheight,
+-                        SWP_NOZORDER | SWP_NOACTIVATE | SWP_NOREDRAW );
+-
+-    /* Position the icon */
+-    NtUserSetWindowPos( GetDlgItem(hwnd, MSGBOX_IDICON), 0, ileft, (tiheight - iheight) / 2, 0, 0,
+-                        SWP_NOSIZE | SWP_NOZORDER | SWP_NOACTIVATE | SWP_NOREDRAW );
++    NtUserSetWindowPos( hwnd, 0, wleft, wtop, wwidth, wheight, SWP_NOZORDER | SWP_NOACTIVATE );
++
++    /* The icon is the prototype's 32 px pixels drawn in WM_PAINT; MB_USERICON's own icon keeps the static control. */
++    SetPropW( hwnd, L"pw_msg_icon", (HANDLE)(INT_PTR)icon );
++    if (icon >= 0) NtUserShowWindow( GetDlgItem( hwnd, MSGBOX_IDICON ), SW_HIDE );
++    else if (icon_column)
++        NtUserSetWindowPos( GetDlgItem( hwnd, MSGBOX_IDICON ), 0, PW_MSG_LEFT, PW_MSG_TOP, PW_MSG_ICON, PW_MSG_ICON,
++                            SWP_NOZORDER | SWP_NOACTIVATE );
+ 
+     /* Position the text */
+-    NtUserSetWindowPos( GetDlgItem(hwnd, MSGBOX_IDTEXT), 0, tleft, (tiheight - theight) / 2, twidth, theight,
+-                        SWP_NOZORDER | SWP_NOACTIVATE | SWP_NOREDRAW );
+-
+-    /* Position the buttons */
+-    bpos = (wwidth - (bw + bspace) * buttons + bspace) / 2;
+-    for (buttons = i = 0; i < ARRAY_SIZE(buttonOrder); i++) {
+-
+-	/* Convert the button order to ID* value to order for the buttons */
+-	hItem = GetDlgItem(hwnd, buttonOrder[i]);
+-	if (GetWindowLongW(hItem, GWL_STYLE) & WS_VISIBLE) {
+-	    if (buttons++ == ((lpmb->dwStyle & MB_DEFMASK) >> 8)) {
+-		NtUserSetFocus(hItem);
+-		SendMessageW( hItem, BM_SETSTYLE, BS_DEFPUSHBUTTON, TRUE );
+-	    }
+-	    NtUserSetWindowPos( hItem, 0, bpos, tiheight, bw, bh,
+-                                SWP_NOZORDER|SWP_NOACTIVATE|SWP_NOREDRAW );
+-	    bpos += bw + bspace;
+-	}
++    NtUserSetWindowPos( GetDlgItem(hwnd, MSGBOX_IDTEXT), 0, PW_MSG_LEFT + icon_column, PW_MSG_TOP,
++                        client_width - PW_MSG_LEFT - icon_column - PW_MSG_RIGHT, text_height,
++                        SWP_NOZORDER | SWP_NOACTIVATE );
++
++    /* The buttons, right-aligned in the footer: 26 px tall, 88 px at least, 10 px apart, the default drawn with its
++     * accent ring. Their style becomes BS_OWNERDRAW so WM_DRAWITEM paints the prototype's button. */
++    {
++        int right = client_width - PW_MSG_FOOT_PAD;
++        int default_index = (lpmb->dwStyle & MB_DEFMASK) >> 8;
++        int default_id = default_index >= 0 && default_index < (int)ARRAY_SIZE(buttonOrder) ? buttonOrder[default_index] : IDOK;
++        for (i = buttons - 1; i >= 0; i--)
++        {
++            WCHAR label[64];
++            int width = PW_MSG_BUTTON_MIN;
++            hItem = GetDlgItem( hwnd, ids[i] );
++            if (GetWindowTextW( hItem, label, ARRAY_SIZE(label) ))
++            {
++                RECT line = {0, 0, 0, 0};
++                HDC measure_dc = NtUserGetDC( hwnd );
++                HGDIOBJ prior = SelectObject( measure_dc, font );
++                DrawTextW( measure_dc, label, -1, &line, DT_CALCRECT | DT_SINGLELINE | DT_NOPREFIX );
++                SelectObject( measure_dc, prior );
++                NtUserReleaseDC( hwnd, measure_dc );
++                width = max( width, line.right + 22 );
++            }
++            right -= width;
++            SetWindowLongW( hItem, GWL_STYLE, (GetWindowLongW( hItem, GWL_STYLE ) & ~BS_TYPEMASK) | BS_OWNERDRAW );
++            SetPropW( hItem, L"pw_msg_default", (HANDLE)(INT_PTR)(ids[i] == default_id ? 1 : 0) );
++            NtUserSetWindowPos( hItem, 0, right, client_height - PW_MSG_FOOT + PW_MSG_FOOT_PAD, width, PW_MSG_BUTTON,
++                                SWP_NOZORDER | SWP_NOACTIVATE );
++            right -= PW_MSG_BUTTON_GAP;
++        }
++        hItem = GetDlgItem( hwnd, default_id );
++        if (hItem && (GetWindowLongW( hItem, GWL_STYLE ) & WS_VISIBLE)) NtUserSetFocus( hItem );
+     }
+ 
+     HeapFree( GetProcessHeap(), 0, buffer );
+ }
+ 
++/* The body's white page and the footer's strip; the prototype's icons over the body's left. */
++static void pw_msg_paint( HWND hwnd )
++{
++    PAINTSTRUCT ps;
++    HDC dc = NtUserBeginPaint( hwnd, &ps );
++    RECT client;
++    int icon = (int)(INT_PTR)GetPropW( hwnd, L"pw_msg_icon" );
++
++    GetClientRect( hwnd, &client );
++    {
++        RECT foot = {0, client.bottom - PW_MSG_FOOT, client.right, client.bottom};
++        pw_msg_fill( dc, &foot, PW_MSG_FACE );
++    }
++    if (icon >= 0) pw_msg_sprite( dc, icon, PW_MSG_LEFT, PW_MSG_TOP, 0 );
++    NtUserEndPaint( hwnd, &ps );
++}
++
++/* A footer button in the prototype's own pixels: normal, the default's 2 px accent ring, and the pressed look. */
++static void pw_msg_draw_button( HWND hwnd, const DRAWITEMSTRUCT *dis )
++{
++    BOOL is_default = !!GetPropW( dis->hwndItem, L"pw_msg_default" );
++    BOOL pressed = !!(dis->itemState & ODS_SELECTED);
++    WCHAR label[64], text[64];
++    RECT box = dis->rcItem;
++    int sprite;
++
++    if (pressed) sprite = is_default ? PW_DIALOG_BUTTON_DEFAULT_PRESS : PW_DIALOG_BUTTON_NORMAL_PRESS;
++    else sprite = is_default ? PW_DIALOG_BUTTON_DEFAULT : PW_DIALOG_BUTTON_NORMAL;
++    pw_msg_sprite( dis->hDC, sprite, box.left, box.top, box.right - box.left );
++    if (GetWindowTextW( dis->hwndItem, label, ARRAY_SIZE(label) ))
++    {
++        const WCHAR *from = label; int at = 0;
++        while (*from) { if (*from != '&') text[at++] = *from; from++; }
++        text[at] = 0;
++        SetBkMode( dis->hDC, TRANSPARENT );
++        SetTextColor( dis->hDC, PW_MSG_INK );
++        {
++            HGDIOBJ prior = SelectObject( dis->hDC, (HFONT)GetPropW( hwnd, L"pw_msg_font" ) );
++            DrawTextW( dis->hDC, text, -1, &box, DT_CENTER | DT_VCENTER | DT_SINGLELINE | DT_NOPREFIX );
++            SelectObject( dis->hDC, prior );
++        }
++    }
++}
+ 
+ /**************************************************************************
+  *           MSGBOX_DlgProc
+@@ -338,6 +442,41 @@
+        SetPropA(hwnd, "WINE_MSGBOX_HELPCALLBACK", mbp->lpfnMsgBoxCallback);
+        break;
+    }
++
++   case WM_CTLCOLORSTATIC:
++   {
++       HDC dc = (HDC)wParam;
++       static HBRUSH page;
++       SetTextColor( dc, PW_MSG_INK );
++       SetBkMode( dc, TRANSPARENT );
++       if (!page) page = CreateSolidBrush( PW_MSG_PAGE );
++       return (INT_PTR)page;
++   }
++
++   case WM_ERASEBKGND:
++   {
++       RECT client;
++       GetClientRect( hwnd, &client );
++       pw_msg_fill( (HDC)wParam, &client, PW_MSG_PAGE );
++       return 1;
++   }
++
++   case WM_PAINT:
++       pw_msg_paint( hwnd );
++       return 0;
++
++   case WM_DRAWITEM:
++   {
++       const DRAWITEMSTRUCT *dis = (const DRAWITEMSTRUCT *)lParam;
++       if (dis->CtlType == ODT_BUTTON) { pw_msg_draw_button( hwnd, dis ); return TRUE; }
++       break;
++   }
++
++   case WM_NCDESTROY:
++       if ((HFONT)GetPropW( hwnd, L"pw_msg_font" )) DeleteObject( (HFONT)GetPropW( hwnd, L"pw_msg_font" ) );
++       RemovePropW( hwnd, L"pw_msg_font" );
++       RemovePropW( hwnd, L"pw_msg_icon" );
++       return 0;
+ 
+    case WM_COMMAND:
+     switch (LOWORD(wParam))

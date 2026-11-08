@@ -95,7 +95,7 @@ static BOOL select_appearance(BOOL selected_dark)
     dark = selected_dark;
     SendMessageW(light_button, BM_SETCHECK, dark ? BST_UNCHECKED : BST_CHECKED, 0);
     SendMessageW(dark_button, BM_SETCHECK, dark ? BST_CHECKED : BST_UNCHECKED, 0);
-    SetWindowTextW(status_label, L"Saved for this Windows environment. Existing windows receive the theme change.");
+    SetWindowTextW(status_label, L"Saved for this MihawkOS environment. Existing windows receive the theme change.");
     update_icons();
     InvalidateRect(window, NULL, TRUE);
     return TRUE;
@@ -119,7 +119,7 @@ static void qualify_caption(void)
     if (!ready) goto done;
     int width=GetSystemMetrics(SM_CXSIZE), height=GetSystemMetrics(SM_CYCAPTION);
     int frame_x=GetSystemMetrics(SM_CXFRAME), frame_y=GetSystemMetrics(SM_CYFRAME);
-    check(width==PW_APPEARANCE_CAPTION_BUTTON_WIDTH && height==PW_APPEARANCE_CAPTION_HEIGHT+1,"Windows 11 caption button size");
+    check(width==PW_APPEARANCE_CAPTION_BUTTON_WIDTH && height==PW_APPEARANCE_CAPTION_HEIGHT+1,"Mihawk 11 caption button size");
     UINT hot=dark ? HTCLOSE : HTMAXBUTTON;
     POINT pointer={bounds.right-frame_x-(dark ? 0 : width)-4,bounds.top+frame_y+height-4};
     SetCursorPos(pointer.x,pointer.y);
@@ -406,7 +406,7 @@ void mainCRTStartup(void)
     if (!window) ExitProcess(1);
     SendMessageW(window,WM_SETICON,ICON_SMALL,(LPARAM)caption_icon);
     control(L"STATIC",L"Appearance",0,32,22,350,24,0);
-    control(L"STATIC",L"Choose the appearance of this Windows environment",0,32,56,700,24,0);
+    control(L"STATIC",L"Choose the appearance of this MihawkOS environment",0,32,56,700,24,0);
     light_button=control(L"BUTTON",L"Light",BS_AUTORADIOBUTTON|WS_TABSTOP|WS_GROUP,32,90,150,32,1);
     dark_button=control(L"BUTTON",L"Dark",BS_AUTORADIOBUTTON|WS_TABSTOP,192,90,150,32,2);
     sync_appearance();

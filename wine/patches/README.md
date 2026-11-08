@@ -772,3 +772,44 @@ Patch 2461 keeps the program in the title out of the GPU driver's device-memory 
 the broker's driver maps VkDeviceMemory on demand): out of Wine's free ranges at start, and a fixed request over it
 refused. Steam's browser in the title had its V8 cage granted there and faulted on pages the driver's memory had taken
 (`e1-webhelper-title-base-2026-11-02-04/-05`: "kernel none" under MEM_COMMIT).
+
+Patch 2490 draws the message box as the approved prototype does (user32 only; `tools/build-dialog-sprites.py`).
+
+Patch 2494 gives shell32's item menu (File Explorer's right-click, the desktop's classic menu) a working **Create shortcut**
+and a **Pin to Start**. The menu's old "Create Link" had no handler behind it (its id fell to "Unhandled verb"), so it did
+nothing. Its translations are kept (the msgid changes with the English in all 49 `po/*.po`; French now says "raccourci"),
+"Pin to Start" is translated for the ten guided-setup languages, and the command makes a "<name> - Shortcut.lnk" on the user's
+Desktop, or in Start's Programs and pinned, through `wine/ps5/pw_shell_shortcut.h` (names and pin list: `src/pw_shortcut.h`,
+`tests/test_pw_shortcut.c`; `tests/desktop-view-probe.c` asks shell32 for the same menu and fails on "Create Link").
+
+Patch 2495 changes the two Wine prompts in the shell's DLLs that said "Windows" in a readable sentence (shell32's restart
+prompt and its "no program configured" message), in the English and in every translation.
+
+Patch 2496 stops shell32 from starting `winemenubuilder.exe` each time a shortcut is saved. It mirrors links into a host
+desktop's menus, which MihawkOS does not have, and on the console every one was a new helper process that held up the
+thread saving the link (the desktop's own Create shortcut and Pin to Start).
+
+Patch 2497 makes a shell32 folder view act only on changes in its own folder. The desktop is registered for the
+whole namespace and matched changes by name alone, so a link Pin to Start made in Start's Programs showed up as a
+desktop icon and hid the real desktop shortcut of the same name (`shell81-view-r5-08`).
+
+Patch 2498 draws smoothed text (not ClearType) from 256-level glyphs with light hinting, blended like ClearType's
+per-channel path but with the same coverage in each channel, so no colour fringes. It replaces 17-level, fully hinted
+glyphs and a per-level range table. The shell's text matches the prototype's more closely, and it is no longer wider than it
+(`shell81-fonts-a1`).
+
+Patch 2499 gives every shortcut its own icon. A .lnk shows the icon it names, else its target's (a folder's, a program's,
+a file type's). A .url shows its IconFile, which the default icon of the InternetShortcut class used to hide. A path that is
+not there as written is looked for next to the shortcut. A target that is nowhere keeps the default icon
+(`tests/shortcut-icons-probe.c`).
+
+Patch 2491 keeps the message box and the task dialog light in the dark theme, as the prototype does. A window with the
+`pw_light_frame` property gets the light caption, and its caption buttons come from the theme's MihawkLight classes, which
+`tools/build-wine-theme.py` writes in both variants. The task dialog also gets a white page, a #f3f3f3 footer and the
+prototype's 16 px main instruction.
+
+Patch 2492 gives the taskbar the applied theme's accent (`src/pw_accent.h`), which Settings stores when a theme is applied,
+in place of the default blue.
+
+Patch 2493 aliases Segoe UI (and its Light, Semilight and Semibold faces) to Proton UI in `wine.inf`. Before, Wine's Times
+New Roman alias made every program asking for the most common UI face draw serif text, the message box included.

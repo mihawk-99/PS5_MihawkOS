@@ -1543,7 +1543,7 @@ class VulkanExample : public ps5ui::KitExample
 			: picking ? std::string(tr(PW_TEXT_SET_THEMES_SUBTITLE))
 			: page == Page::settings ? std::string(tr(PW_TEXT_SET_SUBTITLE))
 			: configuring ? std::string(tr(PW_TEXT_SET_CONTROLS_SUBTITLE))
-			: std::string("Your Windows game library");
+			: std::string("Your PC game library");
 		paint.body(subtitle, 122, 195, 24, paint.page_text_muted());
 		char count[64];
 		if (page == Page::aurelia && aureliaAccounts) snprintf(count, sizeof(count), "Accounts");

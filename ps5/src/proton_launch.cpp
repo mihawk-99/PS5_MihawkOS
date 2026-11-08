@@ -116,6 +116,15 @@ std::string proton_game_mode_path()
 #endif
 }
 
+std::string proton_wallpaper_path()
+{
+#if defined(PS5_HOST_REFERENCE)
+	return std::string(PS5_APP_ROOT) + "/wallpaper.txt";
+#else
+	return proton_data_grant() ? PROTON_DATA_ROOT "/wallpaper.txt" : proton_title_path("/app0/wallpaper.txt");
+#endif
+}
+
 std::string proton_high_refresh_path()
 {
 #if defined(PS5_HOST_REFERENCE)
@@ -657,7 +666,7 @@ ProtonGame read_game(const std::string &id, const std::string &directory)
 			game.complaint = "prefix must be a folder ID of up to 64 letters, digits, underscores or hyphens";
 		}
 		if (!game.directory.empty() && !absolute_windows_path(game.directory)) {
-			game.complaint = "directory is not an absolute Windows path (C:\\... or Z:\\...): " + game.directory;
+			game.complaint = "directory is not an absolute path (C:\\... or Z:\\...): " + game.directory;
 		}
 		auto variables = json.find("env");
 		if (variables != json.end() && variables->is_array()) {
@@ -700,7 +709,7 @@ void proton_check_program(ProtonGame &game)
 	if (!game.executable.empty()) {
 		const bool absolute = absolute_windows_path(game.executable);
 		if (!absolute) {
-			game.complaint = "executable is not an absolute Windows path (C:\\... or Z:\\...): " +
+			game.complaint = "executable is not an absolute path (C:\\... or Z:\\...): " +
 				game.executable;
 		} else if (game.executable.size() > 3) {
 			/* Wine maps Z: onto the host root and C: onto the game's prefix
@@ -741,7 +750,7 @@ void proton_check_program(ProtonGame &game)
 					if (stat(i386_dir.c_str(), &i386_modules) != 0 || !S_ISDIR(i386_modules.st_mode)) {
 						game.complaint = pe.clr ?
 							"a 32-bit .NET program (it requires 32 bits), and this runtime has no 32-bit modules" :
-							"a 32-bit Windows program, and this runtime has no 32-bit modules";
+							"a 32-bit PC program, and this runtime has no 32-bit modules";
 					} else {
 						/* Under WoW64 a program runs in a helper only: its signals and 32-bit TEBs
 						 * rest on the payload loader and the helper's address space. The launcher
@@ -954,7 +963,7 @@ std::vector<ProtonGame> proton_read_games(std::string *problem)
 		ProtonGame desktop;
 		desktop.id = "mihawk-os";
 		desktop.name = "Mihawk OS";
-		desktop.detail = "Shared Windows desktop";
+		desktop.detail = "Shared MihawkOS desktop";
 		desktop.prefix = "mihawk";
 		desktop.executable = "C:\\windows\\system32\\mihawk.exe";
 		desktop.directory = "C:\\";

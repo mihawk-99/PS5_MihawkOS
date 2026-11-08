@@ -276,6 +276,21 @@ int main(void)
     assert(out[15*W+15]==pw_window_mica_alt_pixel(pw_window_blur_sample(effects.mica_alt,effects.mica_alt_width,
                effects.mica_alt_height,0,0,PW_MICA_SCALE,15,15),pw_material_tints[PW_BACKDROP_MICA_ALT].dark,
                pw_material_tints[PW_BACKDROP_MICA_ALT].tint_dark,PW_RECIPE_MICA_ALT_DARK));
+    /* A framed window's Mica shows only while it is active: an inactive one is its solid caption colour, light and dark,
+     * and becomes Mica again when it is activated (its backdrop is keyed on the flag); glass without a frame keeps it. */
+    {
+        const uint32_t active=out[15*W+15];
+        s.windows[0].flags|=PW_WINDOW_ACTIVE;s.windows[0].shadow=PW_SHADOW_WINDOW;
+        assert(!pw_windows_compose_effects(out,W,H,&s,images,2,&effects) && out[15*W+15]==active);
+        s.windows[0].flags&=~PW_WINDOW_ACTIVE;
+        assert(!pw_windows_compose_effects(out,W,H,&s,images,2,&effects) && out[15*W+15]==(0xff000000u|PW_MICA_INACTIVE_DARK));
+        s.windows[0].material=PW_MATERIAL_LIGHT;
+        assert(!pw_windows_compose_effects(out,W,H,&s,images,2,&effects) && out[15*W+15]==(0xff000000u|PW_MICA_INACTIVE_LIGHT));
+        s.windows[0].material=PW_MATERIAL_DARK;s.windows[0].flags|=PW_WINDOW_ACTIVE;
+        assert(!pw_windows_compose_effects(out,W,H,&s,images,2,&effects) && out[15*W+15]==active);
+        s.windows[0].flags&=~PW_WINDOW_ACTIVE;s.windows[0].shadow=PW_SHADOW_NONE;
+        assert(!pw_windows_compose_effects(out,W,H,&s,images,2,&effects) && out[15*W+15]==active);
+    }
     /* The taskbar's material: the prototype's light transfer, then 85% #f3f3f3; in dark saturate(1.25), then 97% #1c1c1c. */
     s.windows[0].backdrop=PW_BACKDROP_TASKBAR;s.windows[0].material=PW_MATERIAL_LIGHT;
     assert(!pw_windows_compose_effects(out,W,H,&s,images,2,&effects));

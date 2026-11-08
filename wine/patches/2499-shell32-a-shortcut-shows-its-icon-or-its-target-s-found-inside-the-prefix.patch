@@ -1,0 +1,165 @@
+From 7b0dcdc0fd044d02ca30251458f3bf9db0c3811d Mon Sep 17 00:00:00 2001
+From: Mihawk <163614687+mihawk-99@users.noreply.github.com>
+Date: Sat, 7 Nov 2026 16:00:00 -0500
+Subject: [PATCH] shell32: a shortcut shows its icon, or its target's, found
+ inside the prefix
+
+The desktop, File Explorer and Start show a shortcut with the icon shell32 names for it, and that was hit or miss. A
+.lnk showed an icon only when it named one, and only when that path existed as written. Otherwise it showed Wine's
+default icon: a program's link without an icon location, a link copied from another PC or prefix whose paths name a
+folder that is not here. A .url never showed the icon it names (IconFile): the InternetShortcut class's default icon
+(url.dll) came first, so a store client's desktop shortcut to a game always showed the same icon.
+
+- dlls/shell32/folders.c: a .lnk shows the icon it names when that file is there, else its target's own icon (a
+  folder's, a program's or the generic program icon when it has none, a file type's); a target that is no file shows
+  its namespace item's icon. A .url shows its IconFile and IconIndex. A stored path is used with its environment
+  variables expanded, relative to the shortcut's folder when relative, and, when it does not exist, by its file name
+  next to the shortcut, where copied files land with it. A target that is nowhere keeps the default icon and is logged
+  (no icon is invented); a shortcut to a shortcut stops there.
+---
+ dlls/shell32/folders.c | 108 ++++++++++++++++++++++++++++++++++++++---
+ 1 file changed, 102 insertions(+), 6 deletions(-)
+
+diff --git a/dlls/shell32/folders.c b/dlls/shell32/folders.c
+index 896286c..41359a2 100644
+--- a/dlls/shell32/folders.c
++++ b/dlls/shell32/folders.c
+@@ -36,6 +36,7 @@
+ #include "shell32_main.h"
+ #include "shfldr.h"
+ #include "shresdef.h"
++#include "shlwapi.h"
+ 
+ WINE_DEFAULT_DEBUG_CHANNEL(shell);
+ 
+@@ -172,6 +173,103 @@ static HRESULT getIconLocationForFolder(IExtractIconWImpl *This, UINT uFlags, LP
+ 
+ WCHAR swShell32Name[MAX_PATH];
+ 
++/* A path a shortcut stores (its icon, its target), usable here: environment variables expanded, a relative one taken
++ * from the shortcut's own folder, and one that does not exist (a shortcut copied from another PC or prefix) looked for
++ * by its file name next to the shortcut, where its files were copied with it. */
++static BOOL shortcut_resolve_path(const WCHAR *link, const WCHAR *path, WCHAR *out, UINT len)
++{
++    WCHAR expanded[MAX_PATH], folder[MAX_PATH], candidate[MAX_PATH];
++
++    if (!path || !*path) return FALSE;
++    if (!ExpandEnvironmentStringsW(path, expanded, MAX_PATH)) lstrcpynW(expanded, path, MAX_PATH);
++    PathUnquoteSpacesW(expanded);
++    lstrcpynW(folder, link, MAX_PATH);
++    PathRemoveFileSpecW(folder);
++    if (!PathIsRelativeW(expanded)) lstrcpynW(candidate, expanded, MAX_PATH);
++    else if (!*folder || !PathCombineW(candidate, folder, expanded)) return FALSE;
++    if (GetFileAttributesW(candidate) == INVALID_FILE_ATTRIBUTES &&
++        (!*folder || !PathCombineW(candidate, folder, PathFindFileNameW(expanded)) ||
++         GetFileAttributesW(candidate) == INVALID_FILE_ATTRIBUTES))
++        return FALSE;
++    lstrcpynW(out, candidate, len);
++    return TRUE;
++}
++
++/* The icon an existing target shows: a folder's, a program's own (the generic program icon when it has none), or its
++ * file type's. A shortcut to a shortcut stops here, so two that point at each other cannot loop. */
++static BOOL target_icon_location(const WCHAR *target, UINT flags, WCHAR *file, UINT len, int *index, UINT *pwFlags)
++{
++    const WCHAR *ext = PathFindExtensionW(target);
++    IExtractIconW *extract;
++    LPITEMIDLIST pidl;
++    HRESULT hr;
++
++    if (!lstrcmpiW(ext, L".lnk") || !lstrcmpiW(ext, L".url")) return FALSE;
++    if (!lstrcmpiW(ext, L".exe") && !PrivateExtractIconsW(target, 0, 0, 0, NULL, NULL, 0, 0))
++    {
++        lstrcpynW(file, swShell32Name, len);
++        *index = -IDI_SHELL_WINDOW;
++        return TRUE;
++    }
++    if (!(pidl = ILCreateFromPathW(target))) return FALSE;
++    extract = IExtractIconW_Constructor(pidl);
++    ILFree(pidl);
++    if (!extract) return FALSE;
++    hr = IExtractIconW_GetIconLocation(extract, flags, file, len, index, pwFlags);
++    IExtractIconW_Release(extract);
++    return SUCCEEDED(hr) && *file;
++}
++
++/* A .lnk's icon: its icon location when that file is there, else its target's own icon. A target that is no file
++ * (Control Panel, a namespace item) shows its item's icon. A target that cannot be found shows none of its own. */
++static BOOL link_icon_location(IShellLinkW *link, LPCITEMIDLIST pidl, UINT flags, WCHAR *file, UINT len, int *index,
++                               UINT *pwFlags)
++{
++    WCHAR self[MAX_PATH], path[MAX_PATH], resolved[MAX_PATH];
++    LPITEMIDLIST target = NULL;
++    IExtractIconW *extract;
++    int icon = 0;
++    BOOL found = FALSE;
++
++    if (!SHGetPathFromIDListW(pidl, self)) self[0] = 0;
++    path[0] = 0;
++    if (SUCCEEDED(IShellLinkW_GetIconLocation(link, path, MAX_PATH, &icon)) &&
++        shortcut_resolve_path(self, path, resolved, MAX_PATH))
++    {
++        lstrcpynW(file, resolved, len);
++        *index = icon;
++        return TRUE;
++    }
++    path[0] = 0;
++    if (SUCCEEDED(IShellLinkW_GetPath(link, path, MAX_PATH, NULL, SLGP_RAWPATH)) && *path)
++    {
++        if (shortcut_resolve_path(self, path, resolved, MAX_PATH))
++            return target_icon_location(resolved, flags, file, len, index, pwFlags);
++        WARN("shortcut %s: its target %s is not there\n", debugstr_w(self), debugstr_w(path));
++        return FALSE;
++    }
++    if (SUCCEEDED(IShellLinkW_GetIDList(link, &target)) && target && (extract = IExtractIconW_Constructor(target)))
++    {
++        found = SUCCEEDED(IExtractIconW_GetIconLocation(extract, flags, file, len, index, pwFlags)) && *file;
++        IExtractIconW_Release(extract);
++    }
++    ILFree(target);
++    return found;
++}
++
++/* A .url's icon: its IconFile and IconIndex, when that file is there (a store client's shortcut names the game's icon). */
++static BOOL url_icon_location(LPCITEMIDLIST pidl, WCHAR *file, UINT len, int *index)
++{
++    WCHAR self[MAX_PATH], path[MAX_PATH], resolved[MAX_PATH];
++
++    if (!SHGetPathFromIDListW(pidl, self)) return FALSE;
++    if (!GetPrivateProfileStringW(L"InternetShortcut", L"IconFile", NULL, path, MAX_PATH, self)) return FALSE;
++    if (!shortcut_resolve_path(self, path, resolved, MAX_PATH)) return FALSE;
++    lstrcpynW(file, resolved, len);
++    *index = GetPrivateProfileIntW(L"InternetShortcut", L"IconIndex", 0, self);
++    return TRUE;
++}
++
+ /**************************************************************************
+ *  IExtractIconW::GetIconLocation
+ *
+@@ -277,7 +375,9 @@ static HRESULT WINAPI IExtractIconW_fnGetIconLocation(IExtractIconW * iface, UIN
+ 	  }
+ 	  else if (_ILGetExtension(pSimplePidl, sTemp, MAX_PATH))
+ 	  {
+-	    if (HCR_MapTypeToValueA(sTemp, sTemp, MAX_PATH, TRUE)
++	    if (!lstrcmpiA(sTemp, "url") && url_icon_location(This->pidl, szIconFile, cchMax, piIndex))
++	      found = TRUE;
++	    else if (HCR_MapTypeToValueA(sTemp, sTemp, MAX_PATH, TRUE)
+ 		&& HCR_GetDefaultIconA(sTemp, sTemp, MAX_PATH, &icon_idx))
+ 	    {
+ 	      if (!lstrcmpA("%1", sTemp))		/* icon is in the file */
+@@ -305,11 +405,7 @@ static HRESULT WINAPI IExtractIconW_fnGetIconLocation(IExtractIconW * iface, UIN
+ 
+ 		if (SUCCEEDED(hr))
+ 		{
+-		  hr = IShellLinkW_GetIconLocation(psl, szIconFile, cchMax, piIndex);
+-
+-		  if (SUCCEEDED(hr) && *szIconFile)
+-		    found = TRUE;
+-
++		  found = link_icon_location(psl, This->pidl, uFlags, szIconFile, cchMax, piIndex, pwFlags);
+ 		  IShellLinkW_Release(psl);
+ 		}
+ 
+-- 
+2.56.0
+

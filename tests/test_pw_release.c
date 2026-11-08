@@ -123,6 +123,7 @@ int main(void)
     {
         char name[40];
         assert(!pw_release_name("8.1.0-alpha-8", "01.003.000", name, sizeof(name)) && !strcmp(name, "Alpha 8.1"));
+        assert(!pw_release_name("8.2.0-alpha-8", "01.004.000", name, sizeof(name)) && !strcmp(name, "Alpha 8.2"));
         assert(!pw_release_name("v8.0.0-alpha-8", NULL, name, sizeof(name)) && !strcmp(name, "Alpha 8"));
         assert(!pw_release_name("7.1.0-alpha-7", NULL, name, sizeof(name)) && !strcmp(name, "Alpha 7.1"));
         assert(!pw_release_name("v5.0.1-alpha-5", NULL, name, sizeof(name)) && !strcmp(name, "Alpha 5.0.1"));
@@ -146,6 +147,7 @@ int main(void)
         assert(!tag[0]);
         /* the 8.1 tag must be one an Alpha 8 console reads and takes as newer (its pick, built into Alpha 8) */
         assert(pw_release_tag_compare("v8.1.0-alpha-8", "8.0.0-alpha-8") > 0);
+        assert(pw_release_tag_compare("v8.2.0-alpha-8", "8.1.0-alpha-8") > 0);   /* Alpha 8.2 is offered to an 8.1 console */
         assert(pw_release_tag_compare("v8.1.0-alpha-8.1", "8.0.0-alpha-8") < 0);   /* why VERSION is not "...-alpha-8.1" */
     }
 

@@ -77,6 +77,39 @@ static void shot(const char *state)
     line(text);
     if (!capture_display(captures)) { wsprintfA(text, "shell-scorecard note: capture %u timed out\n", captures); line(text); }
 }
+static void point(int x, int y);
+static void park(void);
+/* The title takes a capture request up only about once a second, so a hover state's frame is drawn long after its
+ * 250 ms: the item's tooltip (500 ms) is up by then and the reference's is not. Hiding the tooltip control keeps the
+ * state's own plate and removes the tip the reference does not have; no mouse event follows, so it stays hidden. */
+static BOOL CALLBACK hide_tip(HWND window, LPARAM unused)
+{
+    WCHAR name[64];
+    (void)unused;
+    if (IsWindowVisible(window) && GetClassNameW(window, name, ARRAY_SIZE(name)) && !lstrcmpiW(name, L"tooltips_class32"))
+        ShowWindow(window, SW_HIDE);
+    return TRUE;
+}
+static void hide_tooltips(void) { EnumWindows(hide_tip, 0); }
+
+/* Capture a hover state without the item's tooltip: the title picks a capture request up only about once a second,
+ * so the frame is drawn after the 500 ms tip delay (Start's said "Start" in every capture), while the reference's
+ * 250 ms hover has no tip. Pump past the delay, hide the tip, then request. */
+static void shot_soon(const char *state)
+{
+    char text[160]; POINT pointer = {0, 0};
+    pump(600); hide_tooltips(); GetCursorPos(&pointer);
+    wsprintfA(text, "shell-scorecard capture=%u state=%s theme=%s pointer=%ld,%ld\n", ++captures, state, theme, pointer.x, pointer.y);
+    line(text);
+    if (!capture_display(captures)) { wsprintfA(text, "shell-scorecard note: capture %u timed out\n", captures); line(text); }
+}
+/* The pointer parked first dismisses any tip the previous state raised; 450 ms lets comctl32's 100 ms reshow window
+ * (a tip within 400 ms of another closing) expire, so this hover waits the initial 500 ms like the reference's. */
+static void hover(const char *state, int x, int y)
+{
+    park(); pump(450); point(x, y); pump(200); shot_soon(state);
+}
+
 static void absent(const char *state, const char *reason)
 {
     char text[200]; ++missing;
@@ -286,12 +319,12 @@ static void taskbar_states(void)
     EnumChildWindows(tray, find_start, (LPARAM)&start);
     if (!start) { absent("taskbar-start-hover", "no Start button"); return; }
     middle(start, &x, &y);
-    point(x, y); pump(250); shot("taskbar-start-hover");
-    mouse(MOUSEEVENTF_LEFTDOWN, x, y); pump(150); shot("taskbar-start-pressed");
+    hover("taskbar-start-hover", x, y);
+    park(); pump(450); point(x, y); mouse(MOUSEEVENTF_LEFTDOWN, x, y); pump(80); shot_soon("taskbar-start-pressed");
     mouse(MOUSEEVENTF_LEFTUP, x, y);
     if (!(panel = wait_class(L"MihawkStart", NULL, TRUE, 5000))) { absent("start-opened-by-click", "Start did not open"); return; }
     pump(300); shot("start-opened-by-click");
-    if ((pin = GetDlgItem(panel, 200)) && IsWindowVisible(pin)) { middle(pin, &x, &y); point(x, y); pump(250); shot("start-pin-hover"); }
+    if ((pin = GetDlgItem(panel, 200)) && IsWindowVisible(pin)) { middle(pin, &x, &y); hover("start-pin-hover", x, y); }
     else absent("start-pin-hover", "Start has no first pin");
     park(); pump(250); shot("start");
     PostMessageW(panel, WM_CLOSE, 0, 0); wait_class(L"MihawkStart", NULL, FALSE, 3000);
@@ -428,7 +461,7 @@ static void dialog_states(void)
 static void app_states(void)
 {
     WCHAR path[MAX_PATH]; PROCESS_INFORMATION process; HWND window, tabs;
-    if (launch(system_path(path, L"mihawk-appearance.exe", FALSE), NULL, &process, 0))
+    if (launch(system_path(path, L"mihawk-settings.exe", FALSE), L"personalization/colors", &process, 0))
     {
         if ((window = wait_owned(process.dwProcessId, NULL, 10000)))
         {
@@ -438,7 +471,7 @@ static void app_states(void)
         else absent("settings", "no window");
         finish(&process, window);
     }
-    else absent("settings", "mihawk-appearance.exe did not start");
+    else absent("settings", "mihawk-settings.exe did not start");
     if (launch(system_path(path, L"cmd.exe", FALSE), NULL, &process, CREATE_NEW_CONSOLE))
     {
         if ((window = wait_class(L"WineConsoleClass", NULL, TRUE, 10000))) { place(window, 470, 236, 980, 560); park(); shot("terminal"); }

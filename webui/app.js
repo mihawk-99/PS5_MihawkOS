@@ -134,7 +134,7 @@ async function loadGames() {
     const body = el('div', { className: 'body' }, el('div', { className: 'name dynamic', textContent: game.name || game.id }));
     const card = el('button', { className: 'glass game', type: 'button' }, art, body);
     if (game.id === 'mihawk') {
-      body.append(el('div', { className: 'muted', textContent: t('The Windows desktop, where your games have their shortcuts') }),
+      body.append(el('div', { className: 'muted', textContent: t('The MihawkOS desktop, where your games have their shortcuts') }),
         el('span', { className: 'badge plain', textContent: t('Built in') }));
       card.disabled = true;
       return card;
@@ -973,7 +973,7 @@ async function connect() {
   try {
     const status = await refreshToken();
     language = useLanguage(storedLanguage() || status.language || '');
-    $('#about-version').textContent = t('Version {0} · Windows runtime {1}', status.version, status.runtime || t('not installed'));
+    $('#about-version').textContent = t('Version {0} · MihawkOS runtime {1}', status.version, status.runtime || t('not installed'));
     return true;
   } catch (error) {
     language = useLanguage(storedLanguage());

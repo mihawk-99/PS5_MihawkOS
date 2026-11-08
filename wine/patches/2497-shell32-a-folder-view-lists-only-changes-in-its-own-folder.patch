@@ -1,0 +1,95 @@
+From e4751ccf3ad42c9e2e76eda3db8b82857d450516 Mon Sep 17 00:00:00 2001
+From: Mihawk <163614687+mihawk-99@users.noreply.github.com>
+Date: Sat, 7 Nov 2026 12:00:00 -0500
+Subject: [PATCH] shell32: a folder view lists only changes in its own folder
+
+A shell view registers for change notices on its whole subtree (fRecursive), and the desktop's on the namespace root,
+so it heard about files made anywhere, and it acted on the item's last name alone. On the console (shell81-view-r5-08,
+the desktop's own log of each notice): Pin to Start's link in Start's Programs, announced with SHCNE_CREATE, was added
+to the desktop as an icon of its own (19 items, then 20, with no change in the Desktop folder); the real link of the
+same name made next on the Desktop was then taken for one already listed (20, then 20) and never appeared; deleting it
+removed one of the two, and the other stayed as a ghost icon. An installer announcing its Start menu shortcuts would
+have put each on the desktop the same way.
+
+- dlls/shell32/shlview.c: view_holds_change() takes a change only when the item's parent is the view's folder (for the
+  desktop, the user's Desktop or the Public Desktop it merges); an item without a file path, or a view of a folder
+  without one, is taken as before. Create, delete and rename go through it; a rename across the folder's edge is a
+  delete or an add.
+---
+ dlls/shell32/shlview.c | 39 +++++++++++++++++++++++++++++++++++++--
+ 1 file changed, 37 insertions(+), 2 deletions(-)
+
+diff --git a/dlls/shell32/shlview.c b/dlls/shell32/shlview.c
+index 5eb47c0..8b38e2f 100644
+--- a/dlls/shell32/shlview.c
++++ b/dlls/shell32/shlview.c
+@@ -2192,6 +2192,31 @@ static LRESULT ShellView_OnNotify(IShellViewImpl * This, UINT CtlID, LPNMHDR lpn
+ * ShellView_OnChange()
+ */
+ 
++/* PS5 (MihawkOS): whether a changed file or folder lies directly in this view's folder (for the desktop, the user's
++ * Desktop or the Public Desktop it merges). A view registers for its whole subtree, the desktop for every folder, and
++ * acts on the item's last name: a link made in Start's Programs was listed as a desktop icon, and hid the real one of
++ * the same name made next. An item with no file path, or a view of a folder without one, is taken as before. */
++static BOOL view_holds_change(IShellViewImpl *This, LPCITEMIDLIST changed)
++{
++    WCHAR path[MAX_PATH], folder[MAX_PATH];
++    IPersistFolder2 *persist;
++    LPITEMIDLIST own = NULL;
++    BOOL ours = TRUE;
++
++    if (!changed || !SHGetPathFromIDListW(changed, path) || !PathRemoveFileSpecW(path)) return TRUE;
++    if (FAILED(IShellFolder_QueryInterface(This->pSFParent, &IID_IPersistFolder2, (void **)&persist))) return TRUE;
++    if (FAILED(IPersistFolder2_GetCurFolder(persist, &own)))
++        own = NULL;
++    else if (_ILIsDesktop(own))
++        ours = (SUCCEEDED(SHGetFolderPathW(NULL, CSIDL_DESKTOPDIRECTORY, NULL, 0, folder)) && !lstrcmpiW(path, folder)) ||
++               (SUCCEEDED(SHGetFolderPathW(NULL, CSIDL_COMMON_DESKTOPDIRECTORY, NULL, 0, folder)) && !lstrcmpiW(path, folder));
++    else if (SHGetPathFromIDListW(own, folder))
++        ours = !lstrcmpiW(path, folder);
++    ILFree(own);
++    IPersistFolder2_Release(persist);
++    return ours;
++}
++
+ static LRESULT ShellView_OnChange(IShellViewImpl * This, const LPCITEMIDLIST *pidls, LONG event)
+ {
+     LPCITEMIDLIST pidl;
+@@ -2203,6 +2228,7 @@ static LRESULT ShellView_OnChange(IShellViewImpl * This, const LPCITEMIDLIST *pi
+     {
+         case SHCNE_MKDIR:
+         case SHCNE_CREATE:
++            if (!view_holds_change(This, pidls[0])) break;
+             /* an item can be announced twice (the program that made it, and the desktop's own watch) */
+             if (LV_FindItemByPidl(This, ILFindLastID(pidls[0])) >= 0) break;
+             pidl = ILClone(ILFindLastID(pidls[0]));
+@@ -2212,15 +2238,24 @@ static LRESULT ShellView_OnChange(IShellViewImpl * This, const LPCITEMIDLIST *pi
+         case SHCNE_RMDIR:
+         case SHCNE_DELETE:
+         {
+-            INT i = LV_FindItemByPidl(This, ILFindLastID(pidls[0]));
++            INT i;
++            if (!view_holds_change(This, pidls[0])) break;
++            i = LV_FindItemByPidl(This, ILFindLastID(pidls[0]));
+             ret = SendMessageW(This->hWndList, LVM_DELETEITEM, i, 0);
+             desktop_settle_item(This, -1);
+             break;
+         }
+         case SHCNE_RENAMEFOLDER:
+         case SHCNE_RENAMEITEM:
+-            LV_RenameItem(This, pidls[0], pidls[1]);
++        {
++            BOOL from = view_holds_change(This, pidls[0]), to = view_holds_change(This, pidls[1]);
++            if (from && to) LV_RenameItem(This, pidls[0], pidls[1]);
++            else if (from)   /* moved out of this folder */
++                SendMessageW(This->hWndList, LVM_DELETEITEM, LV_FindItemByPidl(This, ILFindLastID(pidls[0])), 0);
++            else if (to && LV_FindItemByPidl(This, ILFindLastID(pidls[1])) < 0)   /* moved in */
++                shellview_add_item(This, ILClone(ILFindLastID(pidls[1])));
+             break;
++        }
+         case SHCNE_UPDATEITEM:
+ 	    break;
+     }
+-- 
+2.56.0
+

@@ -1,0 +1,1310 @@
+From bc423e2fee9a56bcbd19a8450e97c46796f86beb Mon Sep 17 00:00:00 2001
+From: Mihawk <163614687+mihawk-99@users.noreply.github.com>
+Date: Sat, 7 Nov 2026 06:30:00 -0500
+Subject: [PATCH] shell32: two prompts say MihawkOS, not Windows
+
+The owner's rule of 2026-11-06: user-facing text says MihawkOS. Of Wine's own strings in the shell's DLLs (shell32, comdlg32,
+comctl32, user32, Explorer, shlwapi) two said "Windows" in a sentence a person can read:
+
+- IDS_RESTART_PROMPT: "Do you want to simulate a MihawkOS reboot?"
+- IDS_SHLEXEC_NOASSOC: "There is no program configured to open this type of file."
+
+dlls/shell32/shell32.rc and the 49 translation files (po/*.po) that carry them: the msgids change with the English (so the
+translations are kept) and the translations' own "Windows" reads MihawkOS. user32's "&More Windows..." means windows,
+not the system, and stays; cmd's version line is a console tool's.
+---
+ dlls/shell32/shell32.rc | 4 ++--
+ po/ar.po                | 4 ++--
+ po/ast.po               | 8 ++++----
+ po/bg.po                | 6 +++---
+ po/ca.po                | 8 ++++----
+ po/cs.po                | 8 ++++----
+ po/da.po                | 8 ++++----
+ po/de.po                | 6 +++---
+ po/el.po                | 4 ++--
+ po/en.po                | 8 ++++----
+ po/en_US.po             | 8 ++++----
+ po/eo.po                | 4 ++--
+ po/es.po                | 8 ++++----
+ po/fa.po                | 4 ++--
+ po/fi.po                | 8 ++++----
+ po/fr.po                | 8 ++++----
+ po/he.po                | 8 ++++----
+ po/hi.po                | 4 ++--
+ po/hr.po                | 6 +++---
+ po/hu.po                | 8 ++++----
+ po/it.po                | 8 ++++----
+ po/ja.po                | 8 ++++----
+ po/ka.po                | 8 ++++----
+ po/ko.po                | 8 ++++----
+ po/lt.po                | 8 ++++----
+ po/ml.po                | 4 ++--
+ po/nb_NO.po             | 8 ++++----
+ po/nl.po                | 8 ++++----
+ po/or.po                | 4 ++--
+ po/pa.po                | 4 ++--
+ po/pl.po                | 8 ++++----
+ po/pt_BR.po             | 8 ++++----
+ po/pt_PT.po             | 8 ++++----
+ po/rm.po                | 4 ++--
+ po/ro.po                | 8 ++++----
+ po/ru.po                | 6 +++---
+ po/si.po                | 6 +++---
+ po/sk.po                | 4 ++--
+ po/sl.po                | 8 ++++----
+ po/sr_RS@cyrillic.po    | 6 +++---
+ po/sr_RS@latin.po       | 6 +++---
+ po/sv.po                | 8 ++++----
+ po/ta.po                | 4 ++--
+ po/te.po                | 4 ++--
+ po/th.po                | 4 ++--
+ po/tr.po                | 8 ++++----
+ po/uk.po                | 8 ++++----
+ po/wa.po                | 4 ++--
+ po/zh_CN.po             | 8 ++++----
+ po/zh_TW.po             | 8 ++++----
+ 50 files changed, 163 insertions(+), 163 deletions(-)
+
+diff --git a/dlls/shell32/shell32.rc b/dlls/shell32/shell32.rc
+index 0d8e187..c9c5933 100644
+--- a/dlls/shell32/shell32.rc
++++ b/dlls/shell32/shell32.rc
+@@ -187,7 +187,7 @@ the folder?"
+ 
+         /* message box strings */
+         IDS_RESTART_TITLE       "Restart"
+-        IDS_RESTART_PROMPT      "Do you want to simulate a Windows reboot?"
++        IDS_RESTART_PROMPT      "Do you want to simulate a MihawkOS reboot?"
+         IDS_SHUTDOWN_TITLE      "Shutdown"
+         IDS_SHUTDOWN_PROMPT     "Do you want to shutdown your Wine session?"
+ 
+@@ -243,7 +243,7 @@ the folder?"
+ 	IDS_CPANEL_NAME             "Name"
+ 	IDS_CPANEL_DESCRIPTION      "Description"
+ 
+-        IDS_SHLEXEC_NOASSOC         "There is no Windows program configured to open this type of file."
++        IDS_SHLEXEC_NOASSOC         "There is no program configured to open this type of file."
+ 
+         IDS_RECYCLEBIN_ERASEITEM       "Are you sure you wish to permanently delete '%1'?"
+         IDS_RECYCLEBIN_ERASEMULTIPLE   "Are you sure you wish to permanently delete these %1 items?"
+diff --git a/po/ar.po b/po/ar.po
+index 9f1c999..125e9f6 100644
+--- a/po/ar.po
++++ b/po/ar.po
+@@ -10893,7 +10893,7 @@ msgid "Restart"
+ msgstr "أعد التشغيل"
+ 
+ #: dlls/shell32/shell32.rc:190
+-msgid "Do you want to simulate a Windows reboot?"
++msgid "Do you want to simulate a MihawkOS reboot?"
+ msgstr "هل أنت متأكد من رغبتك في محاكاة إعادة تشغيل وندوز ؟"
+ 
+ #: dlls/shell32/shell32.rc:191
+@@ -11122,7 +11122,7 @@ msgid "Executable files (*.exe)"
+ msgstr "الملفات التطبيقية (*.exe)"
+ 
+ #: dlls/shell32/shell32.rc:246
+-msgid "There is no Windows program configured to open this type of file."
++msgid "There is no program configured to open this type of file."
+ msgstr "لا يوجد برنامج وندوزي معد للتعامل مع هذا النوع من الملفات ."
+ 
+ #: dlls/shell32/shell32.rc:248
+diff --git a/po/ast.po b/po/ast.po
+index 0088286..67ed082 100644
+--- a/po/ast.po
++++ b/po/ast.po
+@@ -10312,8 +10312,8 @@ msgid "Restart"
+ msgstr "Reaniciu"
+ 
+ #: dlls/shell32/shell32.rc:190
+-msgid "Do you want to simulate a Windows reboot?"
+-msgstr "¿Quies simular un reaniciu de Windows?"
++msgid "Do you want to simulate a MihawkOS reboot?"
++msgstr "¿Quies simular un reaniciu de MihawkOS?"
+ 
+ #: dlls/shell32/shell32.rc:191
+ msgid "Shutdown"
+@@ -10539,9 +10539,9 @@ msgid "Executable files (*.exe)"
+ msgstr "Ficheros executables (*.exe)"
+ 
+ #: dlls/shell32/shell32.rc:246
+-msgid "There is no Windows program configured to open this type of file."
++msgid "There is no program configured to open this type of file."
+ msgstr ""
+-"Nun hai nengún programa de Windows configuráu p'abrir esti tipu de ficheru."
++"Nun hai nengún programa de MihawkOS configuráu p'abrir esti tipu de ficheru."
+ 
+ #: dlls/shell32/shell32.rc:248
+ msgid "Are you sure you wish to permanently delete '%1'?"
+diff --git a/po/bg.po b/po/bg.po
+index 0cba170..61a634d 100644
+--- a/po/bg.po
++++ b/po/bg.po
+@@ -10692,8 +10692,8 @@ msgid "Restart"
+ msgstr "Рестартиране"
+ 
+ #: dlls/shell32/shell32.rc:190
+-msgid "Do you want to simulate a Windows reboot?"
+-msgstr "Искате ли да симулирате рестартиране на Windows?"
++msgid "Do you want to simulate a MihawkOS reboot?"
++msgstr "Искате ли да симулирате рестартиране на MihawkOS?"
+ 
+ #: dlls/shell32/shell32.rc:191
+ msgid "Shutdown"
+@@ -10922,7 +10922,7 @@ msgid "Executable files (*.exe)"
+ msgstr "Текстови файлове (*.txt)"
+ 
+ #: dlls/shell32/shell32.rc:246
+-msgid "There is no Windows program configured to open this type of file."
++msgid "There is no program configured to open this type of file."
+ msgstr ""
+ 
+ #: dlls/shell32/shell32.rc:248
+diff --git a/po/ca.po b/po/ca.po
+index 26b7264..24a7609 100644
+--- a/po/ca.po
++++ b/po/ca.po
+@@ -10414,8 +10414,8 @@ msgid "Restart"
+ msgstr "Reinicia"
+ 
+ #: dlls/shell32/shell32.rc:190
+-msgid "Do you want to simulate a Windows reboot?"
+-msgstr "Voleu simular un reinici de Windows?"
++msgid "Do you want to simulate a MihawkOS reboot?"
++msgstr "Voleu simular un reinici de MihawkOS?"
+ 
+ #: dlls/shell32/shell32.rc:191
+ msgid "Shutdown"
+@@ -10648,9 +10648,9 @@ msgid "Executable files (*.exe)"
+ msgstr "Fitxers executables (*.exe)"
+ 
+ #: dlls/shell32/shell32.rc:246
+-msgid "There is no Windows program configured to open this type of file."
++msgid "There is no program configured to open this type of file."
+ msgstr ""
+-"No hi ha cap programa de Windows configurat per a obrir aquest tipus de "
++"No hi ha cap programa de MihawkOS configurat per a obrir aquest tipus de "
+ "fitxer."
+ 
+ #: dlls/shell32/shell32.rc:248
+diff --git a/po/cs.po b/po/cs.po
+index 5aa5d22..8dd5c85 100644
+--- a/po/cs.po
++++ b/po/cs.po
+@@ -10724,8 +10724,8 @@ msgid "Restart"
+ msgstr "Restartovat"
+ 
+ #: dlls/shell32/shell32.rc:190
+-msgid "Do you want to simulate a Windows reboot?"
+-msgstr "Přejete si nasimulovat restart Windows?"
++msgid "Do you want to simulate a MihawkOS reboot?"
++msgstr "Přejete si nasimulovat restart MihawkOS?"
+ 
+ #: dlls/shell32/shell32.rc:191
+ msgid "Shutdown"
+@@ -10954,10 +10954,10 @@ msgid "Executable files (*.exe)"
+ msgstr "Spustitelné soubory (*.exe)"
+ 
+ #: dlls/shell32/shell32.rc:246
+-msgid "There is no Windows program configured to open this type of file."
++msgid "There is no program configured to open this type of file."
+ msgstr ""
+ "Pro otevírání tohoto typu souborů není přiřazen žádný program pro Microsoft "
+-"Windows."
++"MihawkOS."
+ 
+ #: dlls/shell32/shell32.rc:248
+ msgid "Are you sure you wish to permanently delete '%1'?"
+diff --git a/po/da.po b/po/da.po
+index 08cdfbd..cb0435b 100644
+--- a/po/da.po
++++ b/po/da.po
+@@ -10964,8 +10964,8 @@ msgid "Restart"
+ msgstr "Genstart"
+ 
+ #: dlls/shell32/shell32.rc:190
+-msgid "Do you want to simulate a Windows reboot?"
+-msgstr "Vil du simulere en genstart af Windows?"
++msgid "Do you want to simulate a MihawkOS reboot?"
++msgstr "Vil du simulere en genstart af MihawkOS?"
+ 
+ #: dlls/shell32/shell32.rc:191
+ msgid "Shutdown"
+@@ -11197,9 +11197,9 @@ msgid "Executable files (*.exe)"
+ msgstr "Program Filer (*.exe)"
+ 
+ #: dlls/shell32/shell32.rc:246
+-msgid "There is no Windows program configured to open this type of file."
++msgid "There is no program configured to open this type of file."
+ msgstr ""
+-"Der er ikke konfigureret noget Windows program til at åbne denne type af fil."
++"Der er ikke konfigureret noget MihawkOS program til at åbne denne type af fil."
+ 
+ #: dlls/shell32/shell32.rc:248
+ msgid "Are you sure you wish to permanently delete '%1'?"
+diff --git a/po/de.po b/po/de.po
+index 6b9b6f2..b066e4c 100644
+--- a/po/de.po
++++ b/po/de.po
+@@ -10396,8 +10396,8 @@ msgid "Restart"
+ msgstr "Neustarten"
+ 
+ #: dlls/shell32/shell32.rc:190
+-msgid "Do you want to simulate a Windows reboot?"
+-msgstr "Möchten Sie, dass ein simulierter Windows-Neustart durchgeführt wird?"
++msgid "Do you want to simulate a MihawkOS reboot?"
++msgstr "Möchten Sie, dass ein simulierter MihawkOS-Neustart durchgeführt wird?"
+ 
+ #: dlls/shell32/shell32.rc:191
+ msgid "Shutdown"
+@@ -10630,7 +10630,7 @@ msgid "Executable files (*.exe)"
+ msgstr "Programme (*.exe)"
+ 
+ #: dlls/shell32/shell32.rc:246
+-msgid "There is no Windows program configured to open this type of file."
++msgid "There is no program configured to open this type of file."
+ msgstr "Es ist kein Programm mit diesem Dateityp verknüpft."
+ 
+ #: dlls/shell32/shell32.rc:248
+diff --git a/po/el.po b/po/el.po
+index 01e2626..9848790 100644
+--- a/po/el.po
++++ b/po/el.po
+@@ -10456,7 +10456,7 @@ msgid "Restart"
+ msgstr ""
+ 
+ #: dlls/shell32/shell32.rc:190
+-msgid "Do you want to simulate a Windows reboot?"
++msgid "Do you want to simulate a MihawkOS reboot?"
+ msgstr ""
+ 
+ #: dlls/shell32/shell32.rc:191
+@@ -10683,7 +10683,7 @@ msgid "Executable files (*.exe)"
+ msgstr ""
+ 
+ #: dlls/shell32/shell32.rc:246
+-msgid "There is no Windows program configured to open this type of file."
++msgid "There is no program configured to open this type of file."
+ msgstr ""
+ 
+ #: dlls/shell32/shell32.rc:248
+diff --git a/po/en.po b/po/en.po
+index 2243a15..b048d9e 100644
+--- a/po/en.po
++++ b/po/en.po
+@@ -10331,8 +10331,8 @@ msgid "Restart"
+ msgstr "Restart"
+ 
+ #: dlls/shell32/shell32.rc:190
+-msgid "Do you want to simulate a Windows reboot?"
+-msgstr "Do you want to simulate a Windows reboot?"
++msgid "Do you want to simulate a MihawkOS reboot?"
++msgstr "Do you want to simulate a MihawkOS reboot?"
+ 
+ #: dlls/shell32/shell32.rc:191
+ msgid "Shutdown"
+@@ -10560,8 +10560,8 @@ msgid "Executable files (*.exe)"
+ msgstr "Executable files (*.exe)"
+ 
+ #: dlls/shell32/shell32.rc:246
+-msgid "There is no Windows program configured to open this type of file."
+-msgstr "There is no Windows program configured to open this type of file."
++msgid "There is no program configured to open this type of file."
++msgstr "There is no MihawkOS program configured to open this type of file."
+ 
+ #: dlls/shell32/shell32.rc:248
+ msgid "Are you sure you wish to permanently delete '%1'?"
+diff --git a/po/en_US.po b/po/en_US.po
+index 70d0c27..a184c89 100644
+--- a/po/en_US.po
++++ b/po/en_US.po
+@@ -10331,8 +10331,8 @@ msgid "Restart"
+ msgstr "Restart"
+ 
+ #: dlls/shell32/shell32.rc:190
+-msgid "Do you want to simulate a Windows reboot?"
+-msgstr "Do you want to simulate a Windows reboot?"
++msgid "Do you want to simulate a MihawkOS reboot?"
++msgstr "Do you want to simulate a MihawkOS reboot?"
+ 
+ #: dlls/shell32/shell32.rc:191
+ msgid "Shutdown"
+@@ -10560,8 +10560,8 @@ msgid "Executable files (*.exe)"
+ msgstr "Executable files (*.exe)"
+ 
+ #: dlls/shell32/shell32.rc:246
+-msgid "There is no Windows program configured to open this type of file."
+-msgstr "There is no Windows program configured to open this type of file."
++msgid "There is no program configured to open this type of file."
++msgstr "There is no MihawkOS program configured to open this type of file."
+ 
+ #: dlls/shell32/shell32.rc:248
+ msgid "Are you sure you wish to permanently delete '%1'?"
+diff --git a/po/eo.po b/po/eo.po
+index 9462476..5ea236d 100644
+--- a/po/eo.po
++++ b/po/eo.po
+@@ -10560,7 +10560,7 @@ msgid "Restart"
+ msgstr "Restartigi"
+ 
+ #: dlls/shell32/shell32.rc:190
+-msgid "Do you want to simulate a Windows reboot?"
++msgid "Do you want to simulate a MihawkOS reboot?"
+ msgstr "Ĉu vi volas simuli Vindozan restartigon?"
+ 
+ #: dlls/shell32/shell32.rc:191
+@@ -10779,7 +10779,7 @@ msgid "Executable files (*.exe)"
+ msgstr "Plenumeblaj dosieroj (*.exe)"
+ 
+ #: dlls/shell32/shell32.rc:246
+-msgid "There is no Windows program configured to open this type of file."
++msgid "There is no program configured to open this type of file."
+ msgstr ""
+ 
+ #: dlls/shell32/shell32.rc:248
+diff --git a/po/es.po b/po/es.po
+index 9a51cfc..e579041 100644
+--- a/po/es.po
++++ b/po/es.po
+@@ -10682,8 +10682,8 @@ msgid "Restart"
+ msgstr "Reiniciar"
+ 
+ #: dlls/shell32/shell32.rc:190
+-msgid "Do you want to simulate a Windows reboot?"
+-msgstr "¿Desea simular un reinicio de Windows?"
++msgid "Do you want to simulate a MihawkOS reboot?"
++msgstr "¿Desea simular un reinicio de MihawkOS?"
+ 
+ #: dlls/shell32/shell32.rc:191
+ msgid "Shutdown"
+@@ -10916,9 +10916,9 @@ msgid "Executable files (*.exe)"
+ msgstr "Archivos ejecutables (*.exe)"
+ 
+ #: dlls/shell32/shell32.rc:246
+-msgid "There is no Windows program configured to open this type of file."
++msgid "There is no program configured to open this type of file."
+ msgstr ""
+-"No hay un programa de Windows configurado para abrir este tipo de archivo."
++"No hay un programa de MihawkOS configurado para abrir este tipo de archivo."
+ 
+ #: dlls/shell32/shell32.rc:248
+ msgid "Are you sure you wish to permanently delete '%1'?"
+diff --git a/po/fa.po b/po/fa.po
+index 1f5fc13..d1b99ae 100644
+--- a/po/fa.po
++++ b/po/fa.po
+@@ -10380,7 +10380,7 @@ msgid "Restart"
+ msgstr ""
+ 
+ #: dlls/shell32/shell32.rc:190
+-msgid "Do you want to simulate a Windows reboot?"
++msgid "Do you want to simulate a MihawkOS reboot?"
+ msgstr ""
+ 
+ #: dlls/shell32/shell32.rc:191
+@@ -10606,7 +10606,7 @@ msgid "Executable files (*.exe)"
+ msgstr "پرونده‌های متنی (*.txt)"
+ 
+ #: dlls/shell32/shell32.rc:246
+-msgid "There is no Windows program configured to open this type of file."
++msgid "There is no program configured to open this type of file."
+ msgstr ""
+ 
+ #: dlls/shell32/shell32.rc:248
+diff --git a/po/fi.po b/po/fi.po
+index 0a5b939..4bb97e2 100644
+--- a/po/fi.po
++++ b/po/fi.po
+@@ -10319,8 +10319,8 @@ msgid "Restart"
+ msgstr "Käynnistä uudelleen"
+ 
+ #: dlls/shell32/shell32.rc:190
+-msgid "Do you want to simulate a Windows reboot?"
+-msgstr "Haluatko simuloida Windowsin uudelleenkäynnistämistä?"
++msgid "Do you want to simulate a MihawkOS reboot?"
++msgstr "Haluatko simuloida MihawkOSin uudelleenkäynnistämistä?"
+ 
+ #: dlls/shell32/shell32.rc:191
+ msgid "Shutdown"
+@@ -10549,9 +10549,9 @@ msgid "Executable files (*.exe)"
+ msgstr "Suoritettavat tiedostot (*.exe)"
+ 
+ #: dlls/shell32/shell32.rc:246
+-msgid "There is no Windows program configured to open this type of file."
++msgid "There is no program configured to open this type of file."
+ msgstr ""
+-"Tämän tiedostotyypin avaamiseen ei ole kytketty mitään Windows-ohjelmaa."
++"Tämän tiedostotyypin avaamiseen ei ole kytketty mitään MihawkOS-ohjelmaa."
+ 
+ #: dlls/shell32/shell32.rc:248
+ msgid "Are you sure you wish to permanently delete '%1'?"
+diff --git a/po/fr.po b/po/fr.po
+index a6b8743..f933bbf 100644
+--- a/po/fr.po
++++ b/po/fr.po
+@@ -10457,8 +10457,8 @@ msgid "Restart"
+ msgstr "Redémarrer"
+ 
+ #: dlls/shell32/shell32.rc:190
+-msgid "Do you want to simulate a Windows reboot?"
+-msgstr "Voulez-vous simuler le redémarrage de Windows ?"
++msgid "Do you want to simulate a MihawkOS reboot?"
++msgstr "Voulez-vous simuler le redémarrage de MihawkOS ?"
+ 
+ #: dlls/shell32/shell32.rc:191
+ msgid "Shutdown"
+@@ -10691,9 +10691,9 @@ msgid "Executable files (*.exe)"
+ msgstr "Fichiers exécutables (*.exe)"
+ 
+ #: dlls/shell32/shell32.rc:246
+-msgid "There is no Windows program configured to open this type of file."
++msgid "There is no program configured to open this type of file."
+ msgstr ""
+-"Aucun programme Windows n'est configuré pour ouvrir ce type de fichier."
++"Aucun programme MihawkOS n'est configuré pour ouvrir ce type de fichier."
+ 
+ #: dlls/shell32/shell32.rc:248
+ msgid "Are you sure you wish to permanently delete '%1'?"
+diff --git a/po/he.po b/po/he.po
+index 0cb263f..e7064cf 100644
+--- a/po/he.po
++++ b/po/he.po
+@@ -10889,8 +10889,8 @@ msgid "Restart"
+ msgstr "הפעלה מחדש"
+ 
+ #: dlls/shell32/shell32.rc:190
+-msgid "Do you want to simulate a Windows reboot?"
+-msgstr "האם ברצונך לדמות הפעלה מחדש של Windows?"
++msgid "Do you want to simulate a MihawkOS reboot?"
++msgstr "האם ברצונך לדמות הפעלה מחדש של MihawkOS?"
+ 
+ #: dlls/shell32/shell32.rc:191
+ msgid "Shutdown"
+@@ -11123,8 +11123,8 @@ msgid "Executable files (*.exe)"
+ msgstr "קובצי הפעלה (‎*.exe)"
+ 
+ #: dlls/shell32/shell32.rc:246
+-msgid "There is no Windows program configured to open this type of file."
+-msgstr "אין תכנית Windows המוגדרת לפתיחת סוג כזה של קבצים."
++msgid "There is no program configured to open this type of file."
++msgstr "אין תכנית MihawkOS המוגדרת לפתיחת סוג כזה של קבצים."
+ 
+ #: dlls/shell32/shell32.rc:248
+ #, fuzzy
+diff --git a/po/hi.po b/po/hi.po
+index 403edbc..95c9946 100644
+--- a/po/hi.po
++++ b/po/hi.po
+@@ -10222,7 +10222,7 @@ msgid "Restart"
+ msgstr ""
+ 
+ #: dlls/shell32/shell32.rc:190
+-msgid "Do you want to simulate a Windows reboot?"
++msgid "Do you want to simulate a MihawkOS reboot?"
+ msgstr ""
+ 
+ #: dlls/shell32/shell32.rc:191
+@@ -10441,7 +10441,7 @@ msgid "Executable files (*.exe)"
+ msgstr ""
+ 
+ #: dlls/shell32/shell32.rc:246
+-msgid "There is no Windows program configured to open this type of file."
++msgid "There is no program configured to open this type of file."
+ msgstr ""
+ 
+ #: dlls/shell32/shell32.rc:248
+diff --git a/po/hr.po b/po/hr.po
+index eab1600..3c63a6d 100644
+--- a/po/hr.po
++++ b/po/hr.po
+@@ -10895,8 +10895,8 @@ msgid "Restart"
+ msgstr "Ponovno pokretanje"
+ 
+ #: dlls/shell32/shell32.rc:190
+-msgid "Do you want to simulate a Windows reboot?"
+-msgstr "Želite li simulirati ponovno pokretanje Windowsa?"
++msgid "Do you want to simulate a MihawkOS reboot?"
++msgstr "Želite li simulirati ponovno pokretanje MihawkOSa?"
+ 
+ #: dlls/shell32/shell32.rc:191
+ msgid "Shutdown"
+@@ -11125,7 +11125,7 @@ msgid "Executable files (*.exe)"
+ msgstr "Izvršne datoteke (*.exe)"
+ 
+ #: dlls/shell32/shell32.rc:246
+-msgid "There is no Windows program configured to open this type of file."
++msgid "There is no program configured to open this type of file."
+ msgstr "Nijedan program nije podešen za otvaranje ove vrste datoteka."
+ 
+ #: dlls/shell32/shell32.rc:248
+diff --git a/po/hu.po b/po/hu.po
+index a26fc38..4daabae 100644
+--- a/po/hu.po
++++ b/po/hu.po
+@@ -10925,8 +10925,8 @@ msgid "Restart"
+ msgstr "Újraindítás"
+ 
+ #: dlls/shell32/shell32.rc:190
+-msgid "Do you want to simulate a Windows reboot?"
+-msgstr "Szimulálni szeretne egy Windows újraindítást?"
++msgid "Do you want to simulate a MihawkOS reboot?"
++msgstr "Szimulálni szeretne egy MihawkOS újraindítást?"
+ 
+ #: dlls/shell32/shell32.rc:191
+ msgid "Shutdown"
+@@ -11156,8 +11156,8 @@ msgid "Executable files (*.exe)"
+ msgstr "Futtatható fájlok (*.exe)"
+ 
+ #: dlls/shell32/shell32.rc:246
+-msgid "There is no Windows program configured to open this type of file."
+-msgstr "Nincs Windowsos program társítva ennek a fájltípusnak a megnyitásához."
++msgid "There is no program configured to open this type of file."
++msgstr "Nincs MihawkOSos program társítva ennek a fájltípusnak a megnyitásához."
+ 
+ #: dlls/shell32/shell32.rc:248
+ msgid "Are you sure you wish to permanently delete '%1'?"
+diff --git a/po/it.po b/po/it.po
+index 6aaa4b4..5cc3106 100644
+--- a/po/it.po
++++ b/po/it.po
+@@ -10987,8 +10987,8 @@ msgid "Restart"
+ msgstr "Riavvia"
+ 
+ #: dlls/shell32/shell32.rc:190
+-msgid "Do you want to simulate a Windows reboot?"
+-msgstr "Vuoi simulare un riavvio di Windows?"
++msgid "Do you want to simulate a MihawkOS reboot?"
++msgstr "Vuoi simulare un riavvio di MihawkOS?"
+ 
+ #: dlls/shell32/shell32.rc:191
+ msgid "Shutdown"
+@@ -11219,9 +11219,9 @@ msgid "Executable files (*.exe)"
+ msgstr "File eseguibili (*.exe)"
+ 
+ #: dlls/shell32/shell32.rc:246
+-msgid "There is no Windows program configured to open this type of file."
++msgid "There is no program configured to open this type of file."
+ msgstr ""
+-"Non c'è un programma Windows configurato per aprire questo tipo di file."
++"Non c'è un programma MihawkOS configurato per aprire questo tipo di file."
+ 
+ #: dlls/shell32/shell32.rc:248
+ msgid "Are you sure you wish to permanently delete '%1'?"
+diff --git a/po/ja.po b/po/ja.po
+index 429e8a6..10caba2 100644
+--- a/po/ja.po
++++ b/po/ja.po
+@@ -10324,8 +10324,8 @@ msgid "Restart"
+ msgstr "再起動"
+ 
+ #: dlls/shell32/shell32.rc:190
+-msgid "Do you want to simulate a Windows reboot?"
+-msgstr "Windows の再起動をシミュレートしますか?"
++msgid "Do you want to simulate a MihawkOS reboot?"
++msgstr "MihawkOS の再起動をシミュレートしますか?"
+ 
+ #: dlls/shell32/shell32.rc:191
+ msgid "Shutdown"
+@@ -10551,8 +10551,8 @@ msgid "Executable files (*.exe)"
+ msgstr "実行可能ファイル (*.exe)"
+ 
+ #: dlls/shell32/shell32.rc:246
+-msgid "There is no Windows program configured to open this type of file."
+-msgstr "このファイルの種類に関連付けられた Windows プログラムはありません。"
++msgid "There is no program configured to open this type of file."
++msgstr "このファイルの種類に関連付けられた MihawkOS プログラムはありません。"
+ 
+ #: dlls/shell32/shell32.rc:248
+ msgid "Are you sure you wish to permanently delete '%1'?"
+diff --git a/po/ka.po b/po/ka.po
+index c6388d2..96b0f1a 100644
+--- a/po/ka.po
++++ b/po/ka.po
+@@ -10321,8 +10321,8 @@ msgid "Restart"
+ msgstr "გადატვირთვა"
+ 
+ #: dlls/shell32/shell32.rc:190
+-msgid "Do you want to simulate a Windows reboot?"
+-msgstr "გნებავთ Windows-ის გადატვირთვის სიმულაცია?"
++msgid "Do you want to simulate a MihawkOS reboot?"
++msgstr "გნებავთ MihawkOS-ის გადატვირთვის სიმულაცია?"
+ 
+ #: dlls/shell32/shell32.rc:191
+ msgid "Shutdown"
+@@ -10545,8 +10545,8 @@ msgid "Executable files (*.exe)"
+ msgstr "გამშვები ფაილები (*.exe)"
+ 
+ #: dlls/shell32/shell32.rc:246
+-msgid "There is no Windows program configured to open this type of file."
+-msgstr "ამ ტიპის ფაილის გასახსნელად Windows-ის პროგრამა მითითებული არაა."
++msgid "There is no program configured to open this type of file."
++msgstr "ამ ტიპის ფაილის გასახსნელად MihawkOS-ის პროგრამა მითითებული არაა."
+ 
+ #: dlls/shell32/shell32.rc:248
+ msgid "Are you sure you wish to permanently delete '%1'?"
+diff --git a/po/ko.po b/po/ko.po
+index abfdccf..b0f7ae1 100644
+--- a/po/ko.po
++++ b/po/ko.po
+@@ -10304,8 +10304,8 @@ msgid "Restart"
+ msgstr "다시 시작"
+ 
+ #: dlls/shell32/shell32.rc:190
+-msgid "Do you want to simulate a Windows reboot?"
+-msgstr "Windows 재부팅을 시뮬레이션하시겠습니까?"
++msgid "Do you want to simulate a MihawkOS reboot?"
++msgstr "MihawkOS 재부팅을 시뮬레이션하시겠습니까?"
+ 
+ #: dlls/shell32/shell32.rc:191
+ msgid "Shutdown"
+@@ -10531,8 +10531,8 @@ msgid "Executable files (*.exe)"
+ msgstr "실행 파일 (*.exe)"
+ 
+ #: dlls/shell32/shell32.rc:246
+-msgid "There is no Windows program configured to open this type of file."
+-msgstr "이 유형의 파일을 열도록 구성된 Windows 프로그램이 없습니다."
++msgid "There is no program configured to open this type of file."
++msgstr "이 유형의 파일을 열도록 구성된 MihawkOS 프로그램이 없습니다."
+ 
+ #: dlls/shell32/shell32.rc:248
+ msgid "Are you sure you wish to permanently delete '%1'?"
+diff --git a/po/lt.po b/po/lt.po
+index d6b7233..8bfa3d5 100644
+--- a/po/lt.po
++++ b/po/lt.po
+@@ -10336,8 +10336,8 @@ msgid "Restart"
+ msgstr "Paleisti iš naujo"
+ 
+ #: dlls/shell32/shell32.rc:190
+-msgid "Do you want to simulate a Windows reboot?"
+-msgstr "Ar norite simuliuoti „Windows“ paleidimą iš naujo?"
++msgid "Do you want to simulate a MihawkOS reboot?"
++msgstr "Ar norite simuliuoti „MihawkOS“ paleidimą iš naujo?"
+ 
+ #: dlls/shell32/shell32.rc:191
+ msgid "Shutdown"
+@@ -10566,8 +10566,8 @@ msgid "Executable files (*.exe)"
+ msgstr "Vykdomieji failai (*.exe)"
+ 
+ #: dlls/shell32/shell32.rc:246
+-msgid "There is no Windows program configured to open this type of file."
+-msgstr "Jokia „Windows“ programa nėra sukonfigūruota atidaryti šio tipo failų."
++msgid "There is no program configured to open this type of file."
++msgstr "Jokia „MihawkOS“ programa nėra sukonfigūruota atidaryti šio tipo failų."
+ 
+ #: dlls/shell32/shell32.rc:248
+ msgid "Are you sure you wish to permanently delete '%1'?"
+diff --git a/po/ml.po b/po/ml.po
+index 15182dc..3a96d0b 100644
+--- a/po/ml.po
++++ b/po/ml.po
+@@ -10229,7 +10229,7 @@ msgid "Restart"
+ msgstr ""
+ 
+ #: dlls/shell32/shell32.rc:190
+-msgid "Do you want to simulate a Windows reboot?"
++msgid "Do you want to simulate a MihawkOS reboot?"
+ msgstr ""
+ 
+ #: dlls/shell32/shell32.rc:191
+@@ -10448,7 +10448,7 @@ msgid "Executable files (*.exe)"
+ msgstr ""
+ 
+ #: dlls/shell32/shell32.rc:246
+-msgid "There is no Windows program configured to open this type of file."
++msgid "There is no program configured to open this type of file."
+ msgstr ""
+ 
+ #: dlls/shell32/shell32.rc:248
+diff --git a/po/nb_NO.po b/po/nb_NO.po
+index 80002f8..31e6e78 100644
+--- a/po/nb_NO.po
++++ b/po/nb_NO.po
+@@ -10638,8 +10638,8 @@ msgid "Restart"
+ msgstr "Starte på nytt"
+ 
+ #: dlls/shell32/shell32.rc:190
+-msgid "Do you want to simulate a Windows reboot?"
+-msgstr "Vil du simulere en omstart av Windows?"
++msgid "Do you want to simulate a MihawkOS reboot?"
++msgstr "Vil du simulere en omstart av MihawkOS?"
+ 
+ #: dlls/shell32/shell32.rc:191
+ msgid "Shutdown"
+@@ -10867,8 +10867,8 @@ msgid "Executable files (*.exe)"
+ msgstr "Programfiler (*.exe)"
+ 
+ #: dlls/shell32/shell32.rc:246
+-msgid "There is no Windows program configured to open this type of file."
+-msgstr "Intet Windows-program er satt opp til å åpne denne filtypen."
++msgid "There is no program configured to open this type of file."
++msgstr "Intet MihawkOS-program er satt opp til å åpne denne filtypen."
+ 
+ #: dlls/shell32/shell32.rc:248
+ msgid "Are you sure you wish to permanently delete '%1'?"
+diff --git a/po/nl.po b/po/nl.po
+index 9d298e7..58961ca 100644
+--- a/po/nl.po
++++ b/po/nl.po
+@@ -10346,8 +10346,8 @@ msgid "Restart"
+ msgstr "Herstarten"
+ 
+ #: dlls/shell32/shell32.rc:190
+-msgid "Do you want to simulate a Windows reboot?"
+-msgstr "Een Windows herstart simuleren?"
++msgid "Do you want to simulate a MihawkOS reboot?"
++msgstr "Een MihawkOS herstart simuleren?"
+ 
+ #: dlls/shell32/shell32.rc:191
+ msgid "Shutdown"
+@@ -10576,9 +10576,9 @@ msgid "Executable files (*.exe)"
+ msgstr "Uitvoerbare bestanden (*.exe)"
+ 
+ #: dlls/shell32/shell32.rc:246
+-msgid "There is no Windows program configured to open this type of file."
++msgid "There is no program configured to open this type of file."
+ msgstr ""
+-"Er is geen Windows-programma geconfigureerd om dit soort bestanden te openen."
++"Er is geen MihawkOS-programma geconfigureerd om dit soort bestanden te openen."
+ 
+ #: dlls/shell32/shell32.rc:248
+ msgid "Are you sure you wish to permanently delete '%1'?"
+diff --git a/po/or.po b/po/or.po
+index b76ddea..3218c4b 100644
+--- a/po/or.po
++++ b/po/or.po
+@@ -10207,7 +10207,7 @@ msgid "Restart"
+ msgstr ""
+ 
+ #: dlls/shell32/shell32.rc:190
+-msgid "Do you want to simulate a Windows reboot?"
++msgid "Do you want to simulate a MihawkOS reboot?"
+ msgstr ""
+ 
+ #: dlls/shell32/shell32.rc:191
+@@ -10426,7 +10426,7 @@ msgid "Executable files (*.exe)"
+ msgstr ""
+ 
+ #: dlls/shell32/shell32.rc:246
+-msgid "There is no Windows program configured to open this type of file."
++msgid "There is no program configured to open this type of file."
+ msgstr ""
+ 
+ #: dlls/shell32/shell32.rc:248
+diff --git a/po/pa.po b/po/pa.po
+index 2abd2de..c26a433 100644
+--- a/po/pa.po
++++ b/po/pa.po
+@@ -10207,7 +10207,7 @@ msgid "Restart"
+ msgstr ""
+ 
+ #: dlls/shell32/shell32.rc:190
+-msgid "Do you want to simulate a Windows reboot?"
++msgid "Do you want to simulate a MihawkOS reboot?"
+ msgstr ""
+ 
+ #: dlls/shell32/shell32.rc:191
+@@ -10426,7 +10426,7 @@ msgid "Executable files (*.exe)"
+ msgstr ""
+ 
+ #: dlls/shell32/shell32.rc:246
+-msgid "There is no Windows program configured to open this type of file."
++msgid "There is no program configured to open this type of file."
+ msgstr ""
+ 
+ #: dlls/shell32/shell32.rc:248
+diff --git a/po/pl.po b/po/pl.po
+index ddf4c7d..9e732a9 100644
+--- a/po/pl.po
++++ b/po/pl.po
+@@ -10361,8 +10361,8 @@ msgid "Restart"
+ msgstr "Uruchom ponownie"
+ 
+ #: dlls/shell32/shell32.rc:190
+-msgid "Do you want to simulate a Windows reboot?"
+-msgstr "Czy chcesz zasymulować zrestartowanie Windows?"
++msgid "Do you want to simulate a MihawkOS reboot?"
++msgstr "Czy chcesz zasymulować zrestartowanie MihawkOS?"
+ 
+ #: dlls/shell32/shell32.rc:191
+ msgid "Shutdown"
+@@ -10592,9 +10592,9 @@ msgid "Executable files (*.exe)"
+ msgstr "Pliki wykonywalne (*.exe)"
+ 
+ #: dlls/shell32/shell32.rc:246
+-msgid "There is no Windows program configured to open this type of file."
++msgid "There is no program configured to open this type of file."
+ msgstr ""
+-"Nie ma przypisanego programu Windowsowego do otwierania tego rodzaju plików."
++"Nie ma przypisanego programu MihawkOSowego do otwierania tego rodzaju plików."
+ 
+ #: dlls/shell32/shell32.rc:248
+ msgid "Are you sure you wish to permanently delete '%1'?"
+diff --git a/po/pt_BR.po b/po/pt_BR.po
+index 221f00c..d94a7bd 100644
+--- a/po/pt_BR.po
++++ b/po/pt_BR.po
+@@ -10428,8 +10428,8 @@ msgid "Restart"
+ msgstr "Reiniciar"
+ 
+ #: dlls/shell32/shell32.rc:190
+-msgid "Do you want to simulate a Windows reboot?"
+-msgstr "Deseja simular a reinicialização do Windows?"
++msgid "Do you want to simulate a MihawkOS reboot?"
++msgstr "Deseja simular a reinicialização do MihawkOS?"
+ 
+ #: dlls/shell32/shell32.rc:191
+ msgid "Shutdown"
+@@ -10657,9 +10657,9 @@ msgid "Executable files (*.exe)"
+ msgstr "Arquivos executáveis (*.exe)"
+ 
+ #: dlls/shell32/shell32.rc:246
+-msgid "There is no Windows program configured to open this type of file."
++msgid "There is no program configured to open this type of file."
+ msgstr ""
+-"Não existe um programa Windows configurado para abrir este tipo de arquivo."
++"Não existe um programa MihawkOS configurado para abrir este tipo de arquivo."
+ 
+ #: dlls/shell32/shell32.rc:248
+ msgid "Are you sure you wish to permanently delete '%1'?"
+diff --git a/po/pt_PT.po b/po/pt_PT.po
+index f0389d4..0e4d5d2 100644
+--- a/po/pt_PT.po
++++ b/po/pt_PT.po
+@@ -10776,8 +10776,8 @@ msgid "Restart"
+ msgstr "Reiniciar"
+ 
+ #: dlls/shell32/shell32.rc:190
+-msgid "Do you want to simulate a Windows reboot?"
+-msgstr "Deseja simular a reinicialização do Windows?"
++msgid "Do you want to simulate a MihawkOS reboot?"
++msgstr "Deseja simular a reinicialização do MihawkOS?"
+ 
+ #: dlls/shell32/shell32.rc:191
+ msgid "Shutdown"
+@@ -11006,9 +11006,9 @@ msgid "Executable files (*.exe)"
+ msgstr "Ficheiros executáveis (*.exe)"
+ 
+ #: dlls/shell32/shell32.rc:246
+-msgid "There is no Windows program configured to open this type of file."
++msgid "There is no program configured to open this type of file."
+ msgstr ""
+-"Não existe um programa Windows configurado para abrir este tipo de ficheiro."
++"Não existe um programa MihawkOS configurado para abrir este tipo de ficheiro."
+ 
+ #: dlls/shell32/shell32.rc:248
+ msgid "Are you sure you wish to permanently delete '%1'?"
+diff --git a/po/rm.po b/po/rm.po
+index c8821d4..e40da99 100644
+--- a/po/rm.po
++++ b/po/rm.po
+@@ -10293,7 +10293,7 @@ msgid "Restart"
+ msgstr ""
+ 
+ #: dlls/shell32/shell32.rc:190
+-msgid "Do you want to simulate a Windows reboot?"
++msgid "Do you want to simulate a MihawkOS reboot?"
+ msgstr ""
+ 
+ #: dlls/shell32/shell32.rc:191
+@@ -10514,7 +10514,7 @@ msgid "Executable files (*.exe)"
+ msgstr "Tuot las datotecas (*.*)"
+ 
+ #: dlls/shell32/shell32.rc:246
+-msgid "There is no Windows program configured to open this type of file."
++msgid "There is no program configured to open this type of file."
+ msgstr ""
+ 
+ #: dlls/shell32/shell32.rc:248
+diff --git a/po/ro.po b/po/ro.po
+index b7d737c..6158bef 100644
+--- a/po/ro.po
++++ b/po/ro.po
+@@ -10862,8 +10862,8 @@ msgid "Restart"
+ msgstr "Repornire"
+ 
+ #: dlls/shell32/shell32.rc:190
+-msgid "Do you want to simulate a Windows reboot?"
+-msgstr "Vreți să simulați o repornire de Windows?"
++msgid "Do you want to simulate a MihawkOS reboot?"
++msgstr "Vreți să simulați o repornire de MihawkOS?"
+ 
+ #: dlls/shell32/shell32.rc:191
+ msgid "Shutdown"
+@@ -11097,9 +11097,9 @@ msgid "Executable files (*.exe)"
+ msgstr "Fișiere executabile (*.exe)"
+ 
+ #: dlls/shell32/shell32.rc:246
+-msgid "There is no Windows program configured to open this type of file."
++msgid "There is no program configured to open this type of file."
+ msgstr ""
+-"Nici un program Windows nu este configurat să deschidă fișiere de acest tip."
++"Nici un program MihawkOS nu este configurat să deschidă fișiere de acest tip."
+ 
+ #: dlls/shell32/shell32.rc:248
+ msgid "Are you sure you wish to permanently delete '%1'?"
+diff --git a/po/ru.po b/po/ru.po
+index 40e4533..022ce30 100644
+--- a/po/ru.po
++++ b/po/ru.po
+@@ -10437,8 +10437,8 @@ msgid "Restart"
+ msgstr "Перезагрузить"
+ 
+ #: dlls/shell32/shell32.rc:190
+-msgid "Do you want to simulate a Windows reboot?"
+-msgstr "Вы хотите симулировать перезапуск Windows?"
++msgid "Do you want to simulate a MihawkOS reboot?"
++msgstr "Вы хотите симулировать перезапуск MihawkOS?"
+ 
+ #: dlls/shell32/shell32.rc:191
+ msgid "Shutdown"
+@@ -10664,7 +10664,7 @@ msgid "Executable files (*.exe)"
+ msgstr "Исполняемые файлы (*.exe)"
+ 
+ #: dlls/shell32/shell32.rc:246
+-msgid "There is no Windows program configured to open this type of file."
++msgid "There is no program configured to open this type of file."
+ msgstr "Программы для открытия файлов этого типа не сконфигурировано."
+ 
+ #: dlls/shell32/shell32.rc:248
+diff --git a/po/si.po b/po/si.po
+index 320732d..25ec125 100644
+--- a/po/si.po
++++ b/po/si.po
+@@ -10504,7 +10504,7 @@ msgid "Restart"
+ msgstr "යළි අරඔන්න"
+ 
+ #: dlls/shell32/shell32.rc:190
+-msgid "Do you want to simulate a Windows reboot?"
++msgid "Do you want to simulate a MihawkOS reboot?"
+ msgstr ""
+ 
+ #: dlls/shell32/shell32.rc:191
+@@ -10723,8 +10723,8 @@ msgid "Executable files (*.exe)"
+ msgstr "ක්රියාත්මක කළ ගොනු (*.exe)"
+ 
+ #: dlls/shell32/shell32.rc:246
+-msgid "There is no Windows program configured to open this type of file."
+-msgstr "Windows යෙදුමක් නැහැ මේ ගොනුව වර්ගය විවෘත කරන්නට."
++msgid "There is no program configured to open this type of file."
++msgstr "MihawkOS යෙදුමක් නැහැ මේ ගොනුව වර්ගය විවෘත කරන්නට."
+ 
+ #: dlls/shell32/shell32.rc:248
+ msgid "Are you sure you wish to permanently delete '%1'?"
+diff --git a/po/sk.po b/po/sk.po
+index 5be1743..761510a 100644
+--- a/po/sk.po
++++ b/po/sk.po
+@@ -10694,7 +10694,7 @@ msgid "Restart"
+ msgstr ""
+ 
+ #: dlls/shell32/shell32.rc:190
+-msgid "Do you want to simulate a Windows reboot?"
++msgid "Do you want to simulate a MihawkOS reboot?"
+ msgstr ""
+ 
+ #: dlls/shell32/shell32.rc:191
+@@ -10919,7 +10919,7 @@ msgid "Executable files (*.exe)"
+ msgstr "Súbory pomoci (*.hlp)"
+ 
+ #: dlls/shell32/shell32.rc:246
+-msgid "There is no Windows program configured to open this type of file."
++msgid "There is no program configured to open this type of file."
+ msgstr ""
+ 
+ #: dlls/shell32/shell32.rc:248
+diff --git a/po/sl.po b/po/sl.po
+index 1d9f7b2..164a233 100644
+--- a/po/sl.po
++++ b/po/sl.po
+@@ -10981,8 +10981,8 @@ msgid "Restart"
+ msgstr "Ponoven zagon"
+ 
+ #: dlls/shell32/shell32.rc:190
+-msgid "Do you want to simulate a Windows reboot?"
+-msgstr "Ali želite simulirati ponoven zagon sistema Windows?"
++msgid "Do you want to simulate a MihawkOS reboot?"
++msgstr "Ali želite simulirati ponoven zagon sistema MihawkOS?"
+ 
+ #: dlls/shell32/shell32.rc:191
+ msgid "Shutdown"
+@@ -11210,8 +11210,8 @@ msgid "Executable files (*.exe)"
+ msgstr "Izvedljive datoteke (*.exe)"
+ 
+ #: dlls/shell32/shell32.rc:246
+-msgid "There is no Windows program configured to open this type of file."
+-msgstr "Za odpiranje te vrste datotek ni na voljo noben program Windows."
++msgid "There is no program configured to open this type of file."
++msgstr "Za odpiranje te vrste datotek ni na voljo noben program MihawkOS."
+ 
+ #: dlls/shell32/shell32.rc:248
+ msgid "Are you sure you wish to permanently delete '%1'?"
+diff --git a/po/sr_RS@cyrillic.po b/po/sr_RS@cyrillic.po
+index 3c9cf7b..fef1ea2 100644
+--- a/po/sr_RS@cyrillic.po
++++ b/po/sr_RS@cyrillic.po
+@@ -10917,8 +10917,8 @@ msgid "Restart"
+ msgstr "Поновно покретање"
+ 
+ #: dlls/shell32/shell32.rc:190
+-msgid "Do you want to simulate a Windows reboot?"
+-msgstr "Желите ли да симулирате поновно покретање Windows-а?"
++msgid "Do you want to simulate a MihawkOS reboot?"
++msgstr "Желите ли да симулирате поновно покретање MihawkOS-а?"
+ 
+ #: dlls/shell32/shell32.rc:191
+ msgid "Shutdown"
+@@ -11158,7 +11158,7 @@ msgid "Executable files (*.exe)"
+ msgstr "Извршне датотеке (*.exe)"
+ 
+ #: dlls/shell32/shell32.rc:246
+-msgid "There is no Windows program configured to open this type of file."
++msgid "There is no program configured to open this type of file."
+ msgstr "Ниједан програм није подешен да отвара ову врсту датотека."
+ 
+ #: dlls/shell32/shell32.rc:248
+diff --git a/po/sr_RS@latin.po b/po/sr_RS@latin.po
+index 6a57297..67c39af 100644
+--- a/po/sr_RS@latin.po
++++ b/po/sr_RS@latin.po
+@@ -11063,8 +11063,8 @@ msgid "Restart"
+ msgstr "Ponovno pokretanje"
+ 
+ #: dlls/shell32/shell32.rc:190
+-msgid "Do you want to simulate a Windows reboot?"
+-msgstr "Želite li da simulirate ponovno pokretanje Windows-a?"
++msgid "Do you want to simulate a MihawkOS reboot?"
++msgstr "Želite li da simulirate ponovno pokretanje MihawkOS-a?"
+ 
+ #: dlls/shell32/shell32.rc:191
+ msgid "Shutdown"
+@@ -11305,7 +11305,7 @@ msgid "Executable files (*.exe)"
+ msgstr "Izvršne datoteke (*.exe)"
+ 
+ #: dlls/shell32/shell32.rc:246
+-msgid "There is no Windows program configured to open this type of file."
++msgid "There is no program configured to open this type of file."
+ msgstr "Nijedan program nije podešen da otvara ovu vrstu datoteka."
+ 
+ #: dlls/shell32/shell32.rc:248
+diff --git a/po/sv.po b/po/sv.po
+index 4c09e7d..393e3ca 100644
+--- a/po/sv.po
++++ b/po/sv.po
+@@ -10741,8 +10741,8 @@ msgid "Restart"
+ msgstr "Starta om"
+ 
+ #: dlls/shell32/shell32.rc:190
+-msgid "Do you want to simulate a Windows reboot?"
+-msgstr "Vill du simulera en omstart av Windows?"
++msgid "Do you want to simulate a MihawkOS reboot?"
++msgstr "Vill du simulera en omstart av MihawkOS?"
+ 
+ #: dlls/shell32/shell32.rc:191
+ msgid "Shutdown"
+@@ -10970,8 +10970,8 @@ msgid "Executable files (*.exe)"
+ msgstr "Programfiler (*.exe)"
+ 
+ #: dlls/shell32/shell32.rc:246
+-msgid "There is no Windows program configured to open this type of file."
+-msgstr "Inget Windows-program är inställt för att öppna denna filtyp."
++msgid "There is no program configured to open this type of file."
++msgstr "Inget MihawkOS-program är inställt för att öppna denna filtyp."
+ 
+ #: dlls/shell32/shell32.rc:248
+ msgid "Are you sure you wish to permanently delete '%1'?"
+diff --git a/po/ta.po b/po/ta.po
+index 4afb78a..2fa0af5 100644
+--- a/po/ta.po
++++ b/po/ta.po
+@@ -10218,7 +10218,7 @@ msgid "Restart"
+ msgstr ""
+ 
+ #: dlls/shell32/shell32.rc:190
+-msgid "Do you want to simulate a Windows reboot?"
++msgid "Do you want to simulate a MihawkOS reboot?"
+ msgstr ""
+ 
+ #: dlls/shell32/shell32.rc:191
+@@ -10437,7 +10437,7 @@ msgid "Executable files (*.exe)"
+ msgstr ""
+ 
+ #: dlls/shell32/shell32.rc:246
+-msgid "There is no Windows program configured to open this type of file."
++msgid "There is no program configured to open this type of file."
+ msgstr ""
+ 
+ #: dlls/shell32/shell32.rc:248
+diff --git a/po/te.po b/po/te.po
+index a0bf4f3..7abb0e4 100644
+--- a/po/te.po
++++ b/po/te.po
+@@ -10207,7 +10207,7 @@ msgid "Restart"
+ msgstr ""
+ 
+ #: dlls/shell32/shell32.rc:190
+-msgid "Do you want to simulate a Windows reboot?"
++msgid "Do you want to simulate a MihawkOS reboot?"
+ msgstr ""
+ 
+ #: dlls/shell32/shell32.rc:191
+@@ -10426,7 +10426,7 @@ msgid "Executable files (*.exe)"
+ msgstr ""
+ 
+ #: dlls/shell32/shell32.rc:246
+-msgid "There is no Windows program configured to open this type of file."
++msgid "There is no program configured to open this type of file."
+ msgstr ""
+ 
+ #: dlls/shell32/shell32.rc:248
+diff --git a/po/th.po b/po/th.po
+index 2ed949e..c8b25e0 100644
+--- a/po/th.po
++++ b/po/th.po
+@@ -10471,7 +10471,7 @@ msgid "Restart"
+ msgstr ""
+ 
+ #: dlls/shell32/shell32.rc:190
+-msgid "Do you want to simulate a Windows reboot?"
++msgid "Do you want to simulate a MihawkOS reboot?"
+ msgstr ""
+ 
+ #: dlls/shell32/shell32.rc:191
+@@ -10698,7 +10698,7 @@ msgid "Executable files (*.exe)"
+ msgstr "แฟ้มตํารา (*.txt)"
+ 
+ #: dlls/shell32/shell32.rc:246
+-msgid "There is no Windows program configured to open this type of file."
++msgid "There is no program configured to open this type of file."
+ msgstr ""
+ 
+ #: dlls/shell32/shell32.rc:248
+diff --git a/po/tr.po b/po/tr.po
+index e27ff99..2f0542c 100644
+--- a/po/tr.po
++++ b/po/tr.po
+@@ -10386,8 +10386,8 @@ msgid "Restart"
+ msgstr "Yeniden Başlat"
+ 
+ #: dlls/shell32/shell32.rc:190
+-msgid "Do you want to simulate a Windows reboot?"
+-msgstr "Windows'u yeniden başlatma canlandırılsın mı?"
++msgid "Do you want to simulate a MihawkOS reboot?"
++msgstr "MihawkOS'u yeniden başlatma canlandırılsın mı?"
+ 
+ #: dlls/shell32/shell32.rc:191
+ msgid "Shutdown"
+@@ -10615,8 +10615,8 @@ msgid "Executable files (*.exe)"
+ msgstr "Çalıştırılabilir dosyalar (*.exe)"
+ 
+ #: dlls/shell32/shell32.rc:246
+-msgid "There is no Windows program configured to open this type of file."
+-msgstr "Bu dosya türünü açmak üzere hiçbir Windows programı yapılandırılmamış."
++msgid "There is no program configured to open this type of file."
++msgstr "Bu dosya türünü açmak üzere hiçbir MihawkOS programı yapılandırılmamış."
+ 
+ #: dlls/shell32/shell32.rc:248
+ msgid "Are you sure you wish to permanently delete '%1'?"
+diff --git a/po/uk.po b/po/uk.po
+index cd04ffe..299a3a0 100644
+--- a/po/uk.po
++++ b/po/uk.po
+@@ -10587,8 +10587,8 @@ msgid "Restart"
+ msgstr "Перезавантажити"
+ 
+ #: dlls/shell32/shell32.rc:190
+-msgid "Do you want to simulate a Windows reboot?"
+-msgstr "Симулювати перезавантаження Windows?"
++msgid "Do you want to simulate a MihawkOS reboot?"
++msgstr "Симулювати перезавантаження MihawkOS?"
+ 
+ #: dlls/shell32/shell32.rc:191
+ msgid "Shutdown"
+@@ -10815,8 +10815,8 @@ msgid "Executable files (*.exe)"
+ msgstr "Виконувані Файли (*.exe)"
+ 
+ #: dlls/shell32/shell32.rc:246
+-msgid "There is no Windows program configured to open this type of file."
+-msgstr "Не сконфігуровано програми Windows для відкриття файлів цього типу."
++msgid "There is no program configured to open this type of file."
++msgstr "Не сконфігуровано програми MihawkOS для відкриття файлів цього типу."
+ 
+ #: dlls/shell32/shell32.rc:248
+ msgid "Are you sure you wish to permanently delete '%1'?"
+diff --git a/po/wa.po b/po/wa.po
+index e58d5fe..ec7e1a6 100644
+--- a/po/wa.po
++++ b/po/wa.po
+@@ -10377,7 +10377,7 @@ msgid "Restart"
+ msgstr ""
+ 
+ #: dlls/shell32/shell32.rc:190
+-msgid "Do you want to simulate a Windows reboot?"
++msgid "Do you want to simulate a MihawkOS reboot?"
+ msgstr ""
+ 
+ #: dlls/shell32/shell32.rc:191
+@@ -10604,7 +10604,7 @@ msgid "Executable files (*.exe)"
+ msgstr "Fitchîs tekse (*.txt)"
+ 
+ #: dlls/shell32/shell32.rc:246
+-msgid "There is no Windows program configured to open this type of file."
++msgid "There is no program configured to open this type of file."
+ msgstr ""
+ 
+ #: dlls/shell32/shell32.rc:248
+diff --git a/po/zh_CN.po b/po/zh_CN.po
+index 1c895a4..6607c0e 100644
+--- a/po/zh_CN.po
++++ b/po/zh_CN.po
+@@ -10255,8 +10255,8 @@ msgid "Restart"
+ msgstr "重启"
+ 
+ #: dlls/shell32/shell32.rc:190
+-msgid "Do you want to simulate a Windows reboot?"
+-msgstr "要模拟 Windows 重启吗?"
++msgid "Do you want to simulate a MihawkOS reboot?"
++msgstr "要模拟 MihawkOS 重启吗?"
+ 
+ #: dlls/shell32/shell32.rc:191
+ msgid "Shutdown"
+@@ -10480,8 +10480,8 @@ msgid "Executable files (*.exe)"
+ msgstr "可执行文件 (*.exe)"
+ 
+ #: dlls/shell32/shell32.rc:246
+-msgid "There is no Windows program configured to open this type of file."
+-msgstr "找不到用于打开此类文件的 Windows 程序。"
++msgid "There is no program configured to open this type of file."
++msgstr "找不到用于打开此类文件的 MihawkOS 程序。"
+ 
+ #: dlls/shell32/shell32.rc:248
+ msgid "Are you sure you wish to permanently delete '%1'?"
+diff --git a/po/zh_TW.po b/po/zh_TW.po
+index 899fe46..c3353eb 100644
+--- a/po/zh_TW.po
++++ b/po/zh_TW.po
+@@ -10331,8 +10331,8 @@ msgid "Restart"
+ msgstr "重新啟動"
+ 
+ #: dlls/shell32/shell32.rc:190
+-msgid "Do you want to simulate a Windows reboot?"
+-msgstr "您確定要模擬 Windows 的重新開機程序嗎?"
++msgid "Do you want to simulate a MihawkOS reboot?"
++msgstr "您確定要模擬 MihawkOS 的重新開機程序嗎?"
+ 
+ #: dlls/shell32/shell32.rc:191
+ msgid "Shutdown"
+@@ -10558,8 +10558,8 @@ msgid "Executable files (*.exe)"
+ msgstr "可執行檔 (*.exe)"
+ 
+ #: dlls/shell32/shell32.rc:246
+-msgid "There is no Windows program configured to open this type of file."
+-msgstr "沒有設定開啟這種類型的檔案的 Windows 程式。"
++msgid "There is no program configured to open this type of file."
++msgstr "沒有設定開啟這種類型的檔案的 MihawkOS 程式。"
+ 
+ #: dlls/shell32/shell32.rc:248
+ msgid "Are you sure you wish to permanently delete '%1'?"
+-- 
+2.56.0
+
