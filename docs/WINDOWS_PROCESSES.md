@@ -11,13 +11,20 @@ shared wineserver, graphics/display, input and audio. Windows programs run in
 isolated native processes through two complementary backends:
 
 - **`elfldr` payload helpers** (created via resident `websrv`/`elfldr`): used for
-  32-bit programs (WoW64), Wine system services, non-graphics tools, and direct-launched
-  helpers. They consume page tables from the console's 8,192-entry system pool and
-  allocate direct memory through `sceKernelAllocateDirectMemoryForApp`.
+  32-bit programs (WoW64), Wine system services, non-graphics tools, and explicit
+  `WINE_PS5_LOCAL_GAMES=0` runs. They consume page tables from the console's 8,192-entry
+  system pool and allocate direct memory through `sceKernelAllocateDirectMemoryForApp`.
+  **Why 32-bit (WoW64) stays in `elfldr` payload helpers:** 32-bit compatibility mode
+  requires raw `sigaction` installation (`payload_raw_sigaction` via inline `syscall`)
+  because Sony's `libkernel` `sigaction` wrapper crashes when invoked with WoW64's 32-bit
+  `%fs` TEB selector, and Sony local processes forbid direct `syscall` instructions
+  (`SIGSYS`). Moving all 64-bit games and applications into Sony local processes frees the
+  entire 8,192-entry system page-table pool for 32-bit programs and Wine services.
 - **Elevated Sony local processes (`/app0/wine-local-child.bin`)** (created via
-  `sceSystemServiceAddLocalProcess`, enabled by default in persistent store-client
-  sessions with `WINE_PS5_LOCAL_GAMES=1`): used for 64-bit graphics programs (games
-  and the store client's browser). Each local child elevates through the resident
+  `sceSystemServiceAddLocalProcess`, enabled by default for all 64-bit applications and
+  games via `WINE_PS5_LOCAL_GAMES=1` unless `WINE_PS5_TITLE_PROCESS` or `WINE_PS5_LOCAL_GAMES=0`
+  is set): used for both standalone 64-bit launches (direct library/desktop games) and
+  store-client games plus the client's browser. Each local child elevates through the resident
   Lapy daemon before touching memory (granting `euid=0` and JIT shared-memory
   execution on firmware 13.60), loads `ntdll.prx` via `sceKernelLoadStartModule`
   (`~5–6 ms`), draws 100% of its page tables from the title's expanded **65,536 CPU
@@ -25,7 +32,10 @@ isolated native processes through two complementary backends:
   flexible pool (`0` system page tables), allocates direct memory via ordinary
   `sceKernelAllocateDirectMemory`, and returns 100% of its page tables and memory
   when ended through `sceSystemServiceKillLocalProcess`. One pre-warmed local child
-  is kept parked so game and browser launches complete in **25–30 ms**.
+  is kept parked so game and browser launches complete in **25–30 ms**. On title startup
+  and exit (`catchReturnFromMain`), `platform_kill_local_processes()` reaps any lingering
+  `wine-local-child` processes owned by the title so a forced close or crash never blocks
+  relaunch or uninstall.
 
 Descendant requests return to the owning title; Wine preserves their actual
 Windows parent relationships, startup parameters and inherited handles.

@@ -138,6 +138,7 @@ int pw_wine_dns_config(struct pw_dns_config *config);
 int pw_ps5_set_initial_environment(const char *block,size_t bytes);
 const char *pw_ps5_initial_environment(void);
 int pw_ps5_start_root(int server_fd,const char *runtime,const char *prefix,const char *cwd,int argc,const char *const *argv);
+int pw_ps5_start_root_local(int server_fd,const char *runtime,const char *prefix,const char *cwd,int argc,const char *const *argv,int prefer_local);
 /* The title, before its server starts: start the memory helper. Then shared memory the title's server and its GPU
  * broker hand to helpers is made by it (pw_ps5_shared_alloc, -1 when there is no helper or it failed) and its pages
  * written through by it before the title writes them (pw_ps5_shared_touch: grow fd to `to` bytes if smaller, then
@@ -203,6 +204,9 @@ int pw_ps5_unload_root(void);
  * or not), up to capacity, and in *memory_pid (may be NULL) the memory helper's, 0 when there is none. Returns how many
  * were written. Holds child_lock only; allocates nothing. */
 unsigned pw_ps5_helpers(int *pids, unsigned capacity, int *memory_pid);
+/* Terminate any live Sony local-process helpers via local_close (sceSystemServiceKillLocalProcess).
+ * Returns the number of local processes closed. */
+unsigned pw_ps5_close_local_helpers(void);
 /* The title, before it ends the game's helpers by SIGKILL: no helper starts after this (ESHUTDOWN), and one closed
  * afterwards that does not leave is sent SIGKILL and waited for until ESRCH, so pw_ps5_wait_children returns only once
  * every helper spawned or spawning is gone. */

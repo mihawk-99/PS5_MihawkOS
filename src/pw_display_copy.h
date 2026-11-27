@@ -16,26 +16,41 @@
  * of the pixel loop did. The pixel loop read one pixel at a time through two tables in the tiles' order and took
  * 4.3-7.7 ms on the console in a Direct3D 12 game's presents (2026-10-17, present_avg 5.8 ms; record removed from the tree); on a
  * host this is 2-3.4 times faster than that loop. SSE2 only. */
-enum { PW_DISPLAY_WIDTH = 1920, PW_DISPLAY_HEIGHT = 1080, PW_DISPLAY_BLOCKS = 15 };
+enum {
+    PW_DISPLAY_WIDTH = 1920,
+    PW_DISPLAY_HEIGHT = 1080,
+    PW_DISPLAY_BLOCKS = 15,
+    PW_DISPLAY_MAX_WIDTH = 3840,
+    PW_DISPLAY_MAX_HEIGHT = 2160,
+    PW_DISPLAY_MAX_BLOCKS = 30,
+    PW_DISPLAY_MAX_BLOCK_ROWS = 17
+};
 
-/* The byte offset of pixel (x, y) in the tiled buffer (display.cpp's tiled()). */
-static inline size_t pw_display_tiled(unsigned x, unsigned y)
+/* The byte offset of pixel (x, y) in a 64KB_R_X-tiled buffer of `blocks` 128-pixel tile columns. */
+static inline size_t pw_display_tiled_stride(unsigned x, unsigned y, unsigned blocks)
 {
     const unsigned offset = ((y << 4) & 0x70) ^ ((y << 5) & 0xf00) ^ ((y << 9) & 0x1000) ^ ((y << 8) & 0x4000) ^
                             ((x << 2) & 0xc) ^ ((x << 5) & 0x380) ^ ((x << 4) & 0x400) ^ ((x << 6) & 0x800) ^
                             ((x << 9) & 0xa000);
-    return ((size_t)((y >> 7) * PW_DISPLAY_BLOCKS + (x >> 7)) << 16) + offset;
+    return ((size_t)((y >> 7) * blocks + (x >> 7)) << 16) + offset;
 }
 
-/* pixels: 1920x1080, pitch bytes a row, any alignment; buffer: the tiled buffer, 64-byte aligned. bgra 0 swaps the red
- * and blue channels (RGBA in, the display's BGRA out), as the pixel loop does. */
-static inline void pw_display_copy_lines(uint8_t *buffer, const uint8_t *pixels, size_t pitch, int bgra)
+/* The byte offset of pixel (x, y) in the 1080p tiled buffer (display.cpp's tiled()). */
+static inline size_t pw_display_tiled(unsigned x, unsigned y)
+{
+    return pw_display_tiled_stride(x, y, PW_DISPLAY_BLOCKS);
+}
+
+/* pixels: dst_w x dst_h (multiples of 4), pitch bytes a row, any alignment; buffer: tiled buffer of `blocks` columns,
+ * 64-byte aligned. bgra 0 swaps red and blue channels (RGBA in, display's BGRA out). */
+static inline void pw_display_copy_lines_wh(uint8_t *buffer, unsigned dst_w, unsigned dst_h, unsigned blocks,
+                                            const uint8_t *pixels, size_t pitch, int bgra)
 {
     const __m128i keep = _mm_set1_epi32((int)0xff00ff00u), low = _mm_set1_epi32(0xff);
-    for (unsigned y = 0; y < PW_DISPLAY_HEIGHT; y += 4)
-        for (unsigned x = 0; x < PW_DISPLAY_WIDTH; x += 4) {
+    for (unsigned y = 0; y < dst_h; y += 4)
+        for (unsigned x = 0; x < dst_w; x += 4) {
             const uint8_t *row = pixels + (size_t)y * pitch + (size_t)x * 4;
-            __m128i *line = (__m128i *)(void *)(buffer + pw_display_tiled(x, y));
+            __m128i *line = (__m128i *)(void *)(buffer + pw_display_tiled_stride(x, y, blocks));
             for (unsigned r = 0; r < 4; ++r) {
                 __m128i v = _mm_loadu_si128((const __m128i *)(const void *)(row + r * pitch));
                 if (!bgra)
@@ -48,23 +63,31 @@ static inline void pw_display_copy_lines(uint8_t *buffer, const uint8_t *pixels,
     _mm_sfence();
 }
 
-/* A frame of any other size scaled to the screen's 1920x1080, nearest neighbour exactly as display.cpp's pixel loop
- * scales it (the source pixel x*width/1920, y*height/1080), into rows: 1920x1080, PW_DISPLAY_WIDTH*4 bytes a row,
- * cached memory of the caller's. pw_display_copy_lines then takes them to the display. The pixel loop read each pixel
- * through two tables in the tiles' order and took 5.34-5.41 ms a 1272x680 frame on the standard PS5, every present
- * (v71-fix-gate-base-2026-11-02, gpu-display copy_us), against 0.61-0.65 ms for an unscaled frame by the line copy. A
- * row the scaling repeats is copied whole from the one before. width at most 2176, so x*width fits. */
-static inline void pw_display_scale_rows(uint8_t *rows, const uint8_t *pixels, unsigned width, unsigned height, size_t pitch)
+static inline void pw_display_copy_lines(uint8_t *buffer, const uint8_t *pixels, size_t pitch, int bgra)
 {
-    uint16_t source_x[PW_DISPLAY_WIDTH];
-    for (unsigned x = 0; x < PW_DISPLAY_WIDTH; ++x) source_x[x] = (uint16_t)(x * width / PW_DISPLAY_WIDTH);
+    pw_display_copy_lines_wh(buffer, PW_DISPLAY_WIDTH, PW_DISPLAY_HEIGHT, PW_DISPLAY_BLOCKS, pixels, pitch, bgra);
+}
+
+/* A frame of src_w x src_h scaled nearest-neighbour to dst_w x dst_h (up to 3840x2160) into rows (dst_w*4 bytes a row,
+ * cached caller memory). pw_display_copy_lines_wh then streams them to VideoOut. */
+static inline void pw_display_scale_rows_wh(uint8_t *rows, unsigned dst_w, unsigned dst_h, const uint8_t *pixels,
+                                            unsigned width, unsigned height, size_t pitch)
+{
+    uint16_t source_x[PW_DISPLAY_MAX_WIDTH];
+    if (!dst_w || dst_w > PW_DISPLAY_MAX_WIDTH || !dst_h || dst_h > PW_DISPLAY_MAX_HEIGHT) return;
+    for (unsigned x = 0; x < dst_w; ++x) source_x[x] = (uint16_t)((uint64_t)x * width / dst_w);
     uint32_t *out = (uint32_t *)(void *)rows;
-    for (unsigned y = 0, previous = ~0u; y < PW_DISPLAY_HEIGHT; ++y, out += PW_DISPLAY_WIDTH) {
-        const unsigned sy = y * height / PW_DISPLAY_HEIGHT;
-        if (sy == previous) { memcpy(out, out - PW_DISPLAY_WIDTH, PW_DISPLAY_WIDTH * 4); continue; }
+    for (unsigned y = 0, previous = ~0u; y < dst_h; ++y, out += dst_w) {
+        const unsigned sy = (unsigned)((uint64_t)y * height / dst_h);
+        if (sy == previous) { memcpy(out, out - dst_w, (size_t)dst_w * 4); continue; }
         previous = sy;
         const uint8_t *row = pixels + (size_t)sy * pitch;
-        for (unsigned x = 0; x < PW_DISPLAY_WIDTH; ++x) memcpy(&out[x], row + (size_t)source_x[x] * 4, 4);
+        for (unsigned x = 0; x < dst_w; ++x) memcpy(&out[x], row + (size_t)source_x[x] * 4, 4);
     }
+}
+
+static inline void pw_display_scale_rows(uint8_t *rows, const uint8_t *pixels, unsigned width, unsigned height, size_t pitch)
+{
+    pw_display_scale_rows_wh(rows, PW_DISPLAY_WIDTH, PW_DISPLAY_HEIGHT, pixels, width, height, pitch);
 }
 #endif

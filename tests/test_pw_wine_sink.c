@@ -153,6 +153,42 @@ static void start_pad_helper(void)
     _exit(seen == first + 2 ? 0 : 4);
 }
 
+/* A third helper, for multi-slot + cross-process rumble: reads slot 2 from the shared page and sends rumble on slot 2. */
+static int rumble_helper_socket = -1;
+static pid_t rumble_helper;
+static void start_rumble_helper(void)
+{
+    int pair[2];
+    assert(!socketpair(AF_UNIX, SOCK_STREAM, 0, pair));
+    rumble_helper = fork();
+    assert(rumble_helper >= 0);
+    if (rumble_helper) {
+        close(pair[1]);
+        rumble_helper_socket = pair[0];
+        return;
+    }
+    close(pair[0]);
+    const int fd = pw_shared_page_create(PW_WINE_INPUT_PAGE_BYTES);
+    if (fd < 0) _exit(2);
+    send_fd(pair[1], fd);
+    char value[16];
+    snprintf(value, sizeof(value), "%d", fd);
+    setenv("WINE_PS5_INPUT_FD", value, 1);
+    /* Wait until title publishes slot 2 with buttons == 0x5555 */
+    PwWinePad p = {0};
+    for (int i = 0; i < 4000; i++) {
+        if (pw_wine_pad_slot(2, &p) && p.buttons == 0x5555) break;
+        usleep(1000);
+    }
+    if (p.buttons != 0x5555) _exit(3);
+    /* Send rumble on slot 2 back to the title through the shared input page */
+    pw_wine_set_rumble_slot(2, 50000, 25000);
+    /* Wait for parent to confirm it read the rumble before exiting */
+    char ack = 0;
+    if (read(pair[1], &ack, 1) != 1 || ack != 'R') _exit(4);
+    _exit(0);
+}
+
 static void *play(void *unused)
 {
     static int16_t grain[PW_WINE_AUDIO_GRAIN * 2];
@@ -174,6 +210,7 @@ int main(void)
 {
     start_dualsense_helper();
     start_pad_helper();
+    start_rumble_helper();
     /* the title's close and terminate requests travel like input */
     PwWineInput event = {.type = PW_WINE_INPUT_CLOSE}, out;
     assert(!pw_wine_post_input(&event));
@@ -455,6 +492,81 @@ int main(void)
     assert(!memcmp(pw_frame_pixels(received_frame), pixels, sizeof(pixels)));
     assert(!pw_wine_present(pixels, 2, 1, sizeof(pixels)) && frame_allocations == 1 && received_frame->frames == 2);
     assert(!munmap(received_frame, PW_FRAME_BYTES));
+    /* Multi-controller slots (0..3) and cross-process child-to-title rumble via the shared input page. */
+    {
+        int pair[2];
+        assert(!socketpair(AF_UNIX, SOCK_STREAM, 0, pair));
+        const pid_t child = fork();
+        assert(child >= 0);
+        if (!child) {
+            close(pair[0]);
+            const int fd = pw_shared_page_create(PW_WINE_INPUT_PAGE_BYTES);
+            if (fd < 0) _exit(2);
+            send_fd(pair[1], fd);
+            /* Reset pad_set/dualsense_set? This child starts after parent called set_pad;
+             * exec/fresh state isn't needed if we test via a helper started BEFORE set_pad, OR we test slots directly below. */
+            _exit(0);
+        }
+        close(pair[1]);
+        const int fd = receive_fd(pair[0]);
+        assert(fd >= 0);
+        void *page = pw_wine_input_page_adopt(fd);
+        assert(page);
+        int status = 0;
+        assert(waitpid(child, &status, 0) == child && WIFEXITED(status) && WEXITSTATUS(status) == 0);
+        /* Title-side slots 1..3 work independently of slot 0 */
+        const PwWinePad p1 = {1, 0, 0x2000, 11, 22, 300, -300, 400, -400};
+        const PwWinePad p3 = {1, 0, 0x4000, 33, 44, 500, -500, 600, -600};
+        pw_wine_set_pad_slot(1, &p1);
+        pw_wine_set_pad_slot(3, &p3);
+        PwWinePad out_p = {0};
+        assert(pw_wine_pad_slot(1, &out_p) && out_p.buttons == 0x2000 && out_p.thumb_lx == 300);
+        assert(!pw_wine_pad_slot(2, &out_p));
+        assert(pw_wine_pad_slot(3, &out_p) && out_p.buttons == 0x4000 && out_p.thumb_ry == -600);
+        assert(!pw_wine_pad_slot(4, &out_p));
+        uint8_t ds2[64] = {0}, ds_out[64] = {0};
+        ds2[0] = 0x01; ds2[1] = 0x33; ds2[63] = 0x99;
+        pw_wine_set_dualsense_slot(2, ds2);
+        assert(pw_wine_dualsense_slot(2, ds_out) && ds_out[1] == 0x33 && ds_out[63] == 0x99);
+        assert(!pw_wine_dualsense_slot(1, ds_out));
+        /* Title-side per-slot rumble clamping */
+        uint32_t rl = 0, rr = 0;
+        pw_wine_set_rumble_slot(2, 70000, 12345);
+        assert(pw_wine_rumble_slot(2, &rl, &rr) == 1 && rl == 0xffffu && rr == 12345u);
+        assert(pw_wine_rumble_slot(2, &rl, &rr) == 0);
+        assert(pw_wine_rumble_slot(1, &rl, &rr) == 0 && rl == 0 && rr == 0);
+        pw_wine_set_pad_slot(1, NULL);
+        pw_wine_set_pad_slot(3, NULL);
+        pw_wine_set_dualsense_slot(2, NULL);
+        pw_wine_input_page_release(page);
+        close(fd);
+        close(pair[0]);
+    }
+    /* Cross-process child reads slot 2 pad and sends rumble back through the shared page; releasing zeros active rumble. */
+    {
+        const int fd = receive_fd(rumble_helper_socket);
+        assert(fd >= 0);
+        void *page = pw_wine_input_page_adopt(fd);
+        assert(page);
+        const PwWinePad p2 = {1, 0, 0x5555, 0, 0, 0, 0, 0, 0};
+        pw_wine_set_pad_slot(2, &p2);
+        uint32_t rl = 0, rr = 0;
+        int got = 0;
+        for (int i = 0; i < 2000 && !got; i++) {
+            if (pw_wine_rumble_slot(2, &rl, &rr) && rl == 50000u && rr == 25000u) got = 1;
+            else usleep(1000);
+        }
+        assert(got);
+        assert(write(rumble_helper_socket, "R", 1) == 1);
+        int status = 0;
+        assert(waitpid(rumble_helper, &status, 0) == rumble_helper && WIFEXITED(status) && WEXITSTATUS(status) == 0);
+        /* Releasing a helper that exited while rumbling auto-zeros that slot so motors never stick on. */
+        pw_wine_input_page_release(page);
+        assert(pw_wine_rumble_slot(2, &rl, &rr) == 1 && rl == 0 && rr == 0);
+        pw_wine_set_pad_slot(2, NULL);
+        close(fd);
+        close(rumble_helper_socket);
+    }
     puts("pw_wine_sink: ok");
     return 0;
 }

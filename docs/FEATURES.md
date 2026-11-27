@@ -1,8 +1,17 @@
 # Features and accomplishments
 
-Desktop/runtime evidence reviewed through 2026-11-26.
-Application results retain the dates of their own evidence; the 2026-11-26 section below is the newest.
+Desktop/runtime evidence reviewed through 2026-11-27.
+Application results retain the dates of their own evidence; the 2026-11-27 section below is the newest.
 These are focused console accomplishments, not a universal compatibility list.
+
+## Alpha 10: 1440p/4K, multi-controller + rumble, universal local processes & D3D12 Tier 2 (2026-11-27, base PS5 13.60)
+
+| Feature | Accomplishment and limit |
+| --- | --- |
+| 1440p & 4K display output | Native `2560x1440` (`92.1 FPS`, `a10-res1440p-2026-11-27-01.json`) and `3840x2160` (`96.1 FPS`, `a10-res4k-2026-11-27-02.json`) at 120 Hz with `fast_copy=1` and graceful fallback to 1080p; configurable in Settings, per-game Options, and WebUI (10 languages). Pro 10.01 not yet tested |
+| Multi-controller (2–4 DualSense) + Rumble | Up to 4 logged-in DualSense slots polled with 2 s hot-plug refresh across `xinput1_3` (64/32-bit) and `winebus.sys` HID; XInput and DualSense USB `0x02` rumble forwarded to `scePadSetVibration` (`a10-xinput-rumble-2026-11-27-01.json`) |
+| Universal elevated local processes | All 64-bit games, browsers, and Chromium apps share the 65,536 CPU / 32,768 GPU app PT pool (`0` system PT) with deterministic `SHUT_WR`/`MSG_PEEK` exit flush (`a10-d3d12-local-2026-11-27-03.json`); 32-bit WoW64 stays in `elfldr` payload helpers |
+| D3D12 Tier 2 & compatibility fixes | VKD3D-Proton Tiled Resources Tier 2 (`tiled_tier=2`, `a10-d3d12-local-2026-11-27-03.json`), 256 MiB executable cache budget, DXVK `dxbc-spirv` SM3 constant swizzle fix (`#42`), VM `EINTR`/`EAGAIN` retry (`#43`), atomic rename writeback flush (`#56`/`#59`), and orphan local-child cleanup (`#70`) |
 
 ## Persistent store client and elevated local-process 64-bit games (2026-11-26, base PS5 13.60)
 

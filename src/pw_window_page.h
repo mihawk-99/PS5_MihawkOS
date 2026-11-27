@@ -8,10 +8,10 @@
  * before a producer retires its old mapping. Fields except sequence and pixels
  * are immutable. The reader uses its validated copy of metadata, never live
  * producer sizes, and retains the previous image while a write is in progress.
- * 16 KiB native alignment; 1920x1080 output plus Wine's 128-pixel surface rounding, no padding in pixel rows. */
+ * 16 KiB native alignment; up to 3840x2160 output plus Wine's 128-pixel surface rounding, no padding in pixel rows. */
 enum { PW_WINDOW_PAGE_MAGIC=0x50575731, PW_WINDOW_PAGE_VERSION=2,
        PW_WINDOW_PAGE_PREMULTIPLIED=1,
-       PW_WINDOW_PAGE_ALIGN=16384, PW_WINDOW_WIDTH=2176, PW_WINDOW_HEIGHT=1408 };
+       PW_WINDOW_PAGE_ALIGN=16384, PW_WINDOW_WIDTH=4096, PW_WINDOW_HEIGHT=2432 };
 typedef struct PwWindowPage {
     uint32_t magic, version, bytes, hwnd;
     uint64_t generation;

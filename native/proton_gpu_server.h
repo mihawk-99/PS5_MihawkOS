@@ -26,6 +26,8 @@ unsigned long long proton_gpu_broker_flips();
 /* The rate the broker's display kept, 120 or 60, opening it now if no present has (0: not open); asked right after the
  * broker starts, before any helper, so WINE_PS5_REFRESH says the truth (graphics patch 0029, src/pw_display_rate.h). */
 unsigned proton_gpu_broker_display_hz();
+/* Active display dimensions (1920x1080, 2560x1440 or 3840x2160) after opening the display. */
+void proton_gpu_broker_display_size(unsigned *width, unsigned *height);
 /* The native pid whose full-screen frames the broker flips directly (game mode), or 0. */
 int proton_gpu_broker_game_mode();
 bool proton_gpu_broker_capture_next(const char *path);

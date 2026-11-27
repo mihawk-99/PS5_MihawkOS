@@ -217,6 +217,37 @@ static inline int pw_title_route_in_title(enum PwTitleRoute route)
     return route == PW_TITLE_ROUTE_GAME || route == PW_TITLE_ROUTE_PICKED || route == PW_TITLE_ROUTE_STEAM_BROWSER;
 }
 
+/* Universal elevated Sony local-process routing (Alpha 10, WINE_PS5_LOCAL_GAMES=1): any 64-bit user game,
+ * browser/launcher shell, Chromium/Electron app, or library .NET game outside \windows\ runs in an isolated
+ * Sony local process sharing the 65,536 CPU / 32,768 GPU app page-table pool (0 system page tables).
+ * 32-bit WoW64 executables stay in elfldr payload helpers (which supply raw sigaction for 32-bit %fs TEB
+ * signals); Windows system binaries, crash reporters, redistributable installers, and WINE_PS5_TITLE_OPTOUT
+ * entries stay in lightweight helpers. */
+static inline int pw_local_game_wanted(const char *image, int x64, const char *local_setting, const char *optout,
+                                       const char *picked, const char *listed, int inherited,
+                                       int is_game, int is_browser, int is_dotnet, int chromium,
+                                       const char *command_line)
+{
+    if (!image || !*image || !x64 || !local_setting || strcmp(local_setting, "1")) return 0;
+    const char *name = pw_title_game_name(image);
+    if (pw_title_game_listed(picked, name)) return 1;
+    if (pw_title_game_listed(optout, name)) return 0;
+    /* Keep Windows/Wine system daemons and shell utilities in lightweight payload helpers. */
+    if (pw_title_game_has(image, "\\windows\\") || pw_title_game_has(image, "/windows/")) return 0;
+    /* Keep crashpad/renderer sub-processes and crash/redist tools out of local-process slots. */
+    if (command_line && pw_title_game_has(command_line, "--type=")) return 0;
+    static const char *const folders[] = { "\\steamworks shared\\", "\\_commonredist\\", "\\redist\\", "\\redistributables\\" };
+    for (size_t i = 0; i < sizeof(folders) / sizeof(*folders); ++i)
+        if (pw_title_game_has(image, folders[i])) return 0;
+    static const char *const tools[] = { "vcredist", "vc_redist", "dxsetup", "dotnet", "unitycrashhandler",
+                                         "crashreport", "crashhandler", "uninstall", "unins0", "steamerrorreporter" };
+    for (size_t i = 0; i < sizeof(tools) / sizeof(*tools); ++i)
+        if (pw_title_game_has(name, tools[i])) return 0;
+    if (is_game || is_browser || chromium) return 1;
+    if (is_dotnet && (pw_title_game_library_path(image, listed) || inherited)) return 1;
+    return 0;
+}
+
 static inline const char *pw_title_route_word(enum PwTitleRoute route)
 {
     switch (route) {

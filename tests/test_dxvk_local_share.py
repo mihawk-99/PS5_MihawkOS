@@ -40,13 +40,20 @@ def added_file(patch_text, name):
 
 class LocalShare(unittest.TestCase):
     def test_the_series_applies_in_order_to_the_pinned_source(self):
+        pins = json.loads(PINS.read_text())
+        for pin in pins:
+            if not (ROOT / '.deps' / pin['archive']).is_file():
+                raise unittest.SkipTest(f"{pin['archive']} is not cached in .deps (tools/fetch-all.sh)")
         with tempfile.TemporaryDirectory(prefix='dxvk-series-') as tmp:
-            with tarfile.open(archive()) as source:
-                for member in source.getmembers():
-                    parts = Path(member.name).parts
-                    if len(parts) > 1:
-                        member.name = str(Path(*parts[1:]))
-                        source.extract(member, tmp, filter='data')
+            for pin in pins:
+                dest = Path(tmp) / pin['path']
+                dest.mkdir(parents=True, exist_ok=True)
+                with tarfile.open(ROOT / '.deps' / pin['archive']) as source:
+                    for member in source.getmembers():
+                        parts = Path(member.name).parts
+                        if len(parts) > 1:
+                            member.name = str(Path(*parts[1:]))
+                            source.extract(member, dest, filter='data')
             for patch in PATCHES:
                 with patch.open('rb') as stream:
                     done = subprocess.run(['patch', '--batch', '--forward', '-p1'], cwd=tmp, stdin=stream,
@@ -70,6 +77,51 @@ class LocalShare(unittest.TestCase):
             self.assertRegex(prepare, r'isLocalShared\(\)\)\s*\{\s*flushClears\(false\);')
             self.assertIn('VK_ACCESS_2_MEMORY_READ_BIT | VK_ACCESS_2_MEMORY_WRITE_BIT', prepare)
             self.assertIn('m_image->setLocalShared();', (Path(tmp) / 'src/d3d9/d3d9_common_texture.cpp').read_text())
+            # Patch 0008 (Issue #42): synthetic SM3 ps_3_0 shader with `texkill c0` converts without asserting.
+            spv = Path(tmp) / 'subprojects/dxbc-spirv'
+            self.assertIn('emitConstantLoad(builder, operand, mask, swizzle, type)',
+                          (spv / 'sm3/sm3_converter.cpp').read_text())
+            harness = Path(tmp) / 'test_texkill.cpp'
+            harness.write_text(
+                '#include <cstdint>\n'
+                '#include <iostream>\n'
+                '#include "sm3/sm3_converter.h"\n'
+                '#include "ir/ir_builder.h"\n'
+                '#include "util/util_byte_stream.h"\n'
+                'int main() {\n'
+                '  static const uint32_t words[] = {\n'
+                '    0xffff0300u, /* ps_3_0 */\n'
+                '    0x01000041u, 0xa00f0000u, /* texkill c0 */\n'
+                '    0x02000001u, 0x800f0800u, 0xa0e40000u, /* mov oC0, c0 */\n'
+                '    0x0000ffffu  /* end */\n'
+                '  };\n'
+                '  dxbc_spv::util::ByteReader reader(words, sizeof(words));\n'
+                '  dxbc_spv::sm3::Converter::Options opts{};\n'
+                '  dxbc_spv::sm3::Converter conv(reader, opts);\n'
+                '  dxbc_spv::ir::Builder builder;\n'
+                '  if (!conv.convertShader(builder)) return 1;\n'
+                '  std::cout << "sm3 texkill c0 ok\\n";\n'
+                '  return 0;\n'
+                '}\n'
+            )
+            sources = [
+                'sm3/sm3_types.cpp', 'sm3/sm3_parser.cpp', 'sm3/sm3_disasm.cpp',
+                'sm3/sm3_converter.cpp', 'sm3/sm3_io_map.cpp', 'sm3/sm3_registers.cpp',
+                'sm3/sm3_resources.cpp',
+                'ir/ir.cpp', 'ir/ir_builder.cpp', 'ir/ir_disasm.cpp', 'ir/ir_divergence.cpp',
+                'ir/ir_dominance.cpp', 'ir/ir_utils.cpp',
+                'util/util_float16.cpp', 'util/util_log.cpp', 'util/util_md5.cpp',
+                'util/util_swizzle.cpp',
+            ]
+            built = subprocess.run(
+                ['g++', '-std=c++17', '-O1', '-fno-exceptions', '-DDXBC_SPV_ENABLE_SM3',
+                 f'-I{spv}', '-o', str(Path(tmp) / 'test_texkill'), str(harness),
+                 *[str(spv / s) for s in sources]],
+                capture_output=True, text=True)
+            self.assertEqual(built.returncode, 0, built.stderr[-3000:])
+            ran = subprocess.run([str(Path(tmp) / 'test_texkill')], capture_output=True, text=True, timeout=30)
+            self.assertEqual(ran.returncode, 0, ran.stdout + ran.stderr)
+            self.assertIn('sm3 texkill c0 ok', ran.stdout)
 
     def test_the_shared_table(self):
         with tempfile.TemporaryDirectory(prefix='dxvk-share-') as tmp:

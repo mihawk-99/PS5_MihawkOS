@@ -37,3 +37,7 @@ with a memory barrier. Where handles work nothing changes. Config: `d3d9.shareD3
 on a PC under Wine. Not covered: a D3D9Ex device made before the Direct3D 11 one, and a Direct3D 11 texture opened by D3D9.
 `tests/test_dxvk_local_share.py` applies the series to the pinned source and runs the table; the APIs using it together are the
 probe's to show. Written from the problem PC5's patches/dxvk 0001 to 0003 describe (NOTICE.md, "PC5").
+
+Patch 0008 fixes an assertion failure in `dxbc-spirv` (`Operand::getSwizzle()`) on SM3 shaders that load a constant
+register through a destination-encoded operand such as `texkill c0` (Issue #42): `Converter::emitRegisterLoad` already
+computes the explicit swizzle and now passes it directly into `ResourceMap::emitConstantLoad`.

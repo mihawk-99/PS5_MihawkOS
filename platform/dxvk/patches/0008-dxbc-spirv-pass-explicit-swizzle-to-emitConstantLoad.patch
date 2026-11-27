@@ -1,0 +1,54 @@
+From: Mihawk <mihawk@localhost>
+Date: Fri, 27 Nov 2026 00:00:00 +0000
+Subject: [PATCH] dxbc-spirv: pass explicit swizzle to emitConstantLoad
+
+Fixes Issue #42 (crash in dxbc-spirv during SM3 pixel-shader conversion):
+Converter::emitRegisterLoad already computes the operand's swizzle cleanly
+(including destination-encoded operands such as SM3 `texkill c0`, where
+Operand::getSwizzle() asserts). Pass that swizzle explicitly into
+ResourceMap::emitConstantLoad instead of re-querying operand.getSwizzle(info).
+
+---
+diff --git a/subprojects/dxbc-spirv/sm3/sm3_converter.cpp b/subprojects/dxbc-spirv/sm3/sm3_converter.cpp
+--- a/subprojects/dxbc-spirv/sm3/sm3_converter.cpp
++++ b/subprojects/dxbc-spirv/sm3/sm3_converter.cpp
+@@ -1380,7 +1380,7 @@
+     case RegisterType::eConst4:
+     case RegisterType::eConstInt:
+     case RegisterType::eConstBool:
+-      loadDef = m_resources.emitConstantLoad(builder, operand, mask, type);
++      loadDef = m_resources.emitConstantLoad(builder, operand, mask, swizzle, type);
+       break;
+ 
+     default:
+diff --git a/subprojects/dxbc-spirv/sm3/sm3_resources.h b/subprojects/dxbc-spirv/sm3/sm3_resources.h
+--- a/subprojects/dxbc-spirv/sm3/sm3_resources.h
++++ b/subprojects/dxbc-spirv/sm3/sm3_resources.h
+@@ -106,6 +106,7 @@
+           ir::Builder&            builder,
+     const Operand&                operand,
+           WriteMask               componentMask,
++          Swizzle                 swizzle,
+           ir::ScalarType          scalarType);
+ 
+   void emitImmediateConstant(
+diff --git a/subprojects/dxbc-spirv/sm3/sm3_resources.cpp b/subprojects/dxbc-spirv/sm3/sm3_resources.cpp
+--- a/subprojects/dxbc-spirv/sm3/sm3_resources.cpp
++++ b/subprojects/dxbc-spirv/sm3/sm3_resources.cpp
+@@ -55,6 +55,7 @@
+           ir::Builder&            builder,
+     const Operand&                operand,
+           WriteMask               componentMask,
++          Swizzle                 swizzle,
+           ir::ScalarType          scalarType) {
+   ShaderInfo info = m_converter.getShaderInfo();
+ 
+@@ -131,7 +132,7 @@
+ 
+   /* Build result vector */
+   return composite(builder, makeVectorType(scalarType, componentMask),
+-    components.data(), operand.getSwizzle(info), componentMask);
++    components.data(), swizzle, componentMask);
+ }
+ 
+ 

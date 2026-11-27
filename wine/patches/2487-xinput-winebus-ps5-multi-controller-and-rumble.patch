@@ -1,0 +1,633 @@
+From: Mihawk <mihawk@localhost>
+Date: Fri, 27 Nov 2026 00:00:00 +0000
+Subject: [PATCH] xinput,winebus: ps5: support up to 4 controllers and HID/XInput rumble
+
+Extend PS5 XInput and winebus HID transport from a single controller slot
+to 4 slots (XUSER_MAX_COUNT = 4) and wire rumble feedback end-to-end:
+- dlls/xinput1_3: add unix_pad_state_slot and unix_pad_rumble_slot (zero-pointer
+  structs, no WoW64 thunks needed), per-slot title_pad_vibration[4], and query
+  pw_wine_pad_slot / pw_wine_set_rumble_slot for indices 0..3.
+- dlls/winebus.sys/bus_ps5.c: expose up to 4 DualSense or Xbox HID devices
+  (slot 0 always present as before; slots 1..3 dynamically added/removed as
+  extra PS5 users sign in/out, with unique PS5-LOCAL-1..4 serials) and forward
+  DualSense USB output report 0x02 vibration bytes to pw_wine_set_rumble_slot.
+
+---
+diff --git a/dlls/xinput1_3/unixlib.h b/dlls/xinput1_3/unixlib.h
+--- a/dlls/xinput1_3/unixlib.h
++++ b/dlls/xinput1_3/unixlib.h
+@@ -38,8 +38,21 @@
+     INT16 thumb_ry;
+ };
+ 
++struct xinput_pad_slot_params
++{
++    UINT32 index;
++    struct xinput_pad_state state;
++};
++
+ struct xinput_rumble_params
+ {
++    UINT32 left;
++    UINT32 right;
++};
++
++struct xinput_rumble_slot_params
++{
++    UINT32 index;
+     UINT32 left;
+     UINT32 right;
+ };
+@@ -50,6 +63,8 @@
+     unix_pad_state,
+     unix_pad_rumble,
+     unix_pad_kind,
++    unix_pad_state_slot,
++    unix_pad_rumble_slot,
+     unix_funcs_count,
+ };
+ 
+diff --git a/dlls/xinput1_3/unixlib.c b/dlls/xinput1_3/unixlib.c
+--- a/dlls/xinput1_3/unixlib.c
++++ b/dlls/xinput1_3/unixlib.c
+@@ -38,23 +38,46 @@
+  * (wine/ps5/pw_wine_sink.h), whose calls ntdll exports; anywhere else they
+  * are missing and xinput uses HID. */
+ static int (*title_pad)( struct xinput_pad_state *state );
++static int (*title_pad_slot)( UINT32 slot, struct xinput_pad_state *state );
+ static void (*title_rumble)( UINT32 left, UINT32 right );
++static void (*title_rumble_slot)( UINT32 slot, UINT32 left, UINT32 right );
+ static int (*title_kind)( void );
+ 
+ static NTSTATUS pad_init( void *args )
+ {
+     title_pad = dlsym( RTLD_DEFAULT, "pw_wine_pad" );
++    title_pad_slot = dlsym( RTLD_DEFAULT, "pw_wine_pad_slot" );
+     title_rumble = dlsym( RTLD_DEFAULT, "pw_wine_set_rumble" );
++    title_rumble_slot = dlsym( RTLD_DEFAULT, "pw_wine_set_rumble_slot" );
+     title_kind = dlsym( RTLD_DEFAULT, "pw_wine_pad_kind" );
+-    return title_pad ? STATUS_SUCCESS : STATUS_NOT_SUPPORTED;
++    return (title_pad_slot || title_pad) ? STATUS_SUCCESS : STATUS_NOT_SUPPORTED;
+ }
+ 
+ static NTSTATUS pad_state( void *args )
+ {
+     struct xinput_pad_state *state = args;
+ 
++    if (title_pad_slot)
++    {
++        if (!title_pad_slot( 0, state )) memset( state, 0, sizeof(*state) );
++        return STATUS_SUCCESS;
++    }
+     if (!title_pad) return STATUS_NOT_SUPPORTED;
+     if (!title_pad( state )) memset( state, 0, sizeof(*state) );
++    return STATUS_SUCCESS;
++}
++
++static NTSTATUS pad_state_slot( void *args )
++{
++    struct xinput_pad_slot_params *params = args;
++
++    if (title_pad_slot)
++    {
++        if (!title_pad_slot( params->index, &params->state )) memset( &params->state, 0, sizeof(params->state) );
++        return STATUS_SUCCESS;
++    }
++    if (!title_pad) return STATUS_NOT_SUPPORTED;
++    if (params->index || !title_pad( &params->state )) memset( &params->state, 0, sizeof(params->state) );
+     return STATUS_SUCCESS;
+ }
+ 
+@@ -62,8 +85,27 @@
+ {
+     const struct xinput_rumble_params *params = args;
+ 
++    if (title_rumble_slot)
++    {
++        title_rumble_slot( 0, params->left, params->right );
++        return STATUS_SUCCESS;
++    }
+     if (!title_rumble) return STATUS_NOT_SUPPORTED;
+     title_rumble( params->left, params->right );
++    return STATUS_SUCCESS;
++}
++
++static NTSTATUS pad_rumble_slot( void *args )
++{
++    const struct xinput_rumble_slot_params *params = args;
++
++    if (title_rumble_slot)
++    {
++        title_rumble_slot( params->index, params->left, params->right );
++        return STATUS_SUCCESS;
++    }
++    if (!title_rumble) return STATUS_NOT_SUPPORTED;
++    if (!params->index) title_rumble( params->left, params->right );
+     return STATUS_SUCCESS;
+ }
+ 
+@@ -80,6 +122,8 @@
+     pad_state,
+     pad_rumble,
+     pad_kind,
++    pad_state_slot,
++    pad_rumble_slot,
+ };
+ 
+ C_ASSERT( ARRAYSIZE(__wine_unix_call_funcs) == unix_funcs_count );
+@@ -92,6 +136,8 @@
+     pad_state,
+     pad_rumble,
+     pad_kind,
++    pad_state_slot,
++    pad_rumble_slot,
+ };
+ 
+ C_ASSERT( ARRAYSIZE(__wine_unix_call_wow64_funcs) == unix_funcs_count );
+diff --git a/dlls/xinput1_3/main.c b/dlls/xinput1_3/main.c
+--- a/dlls/xinput1_3/main.c
++++ b/dlls/xinput1_3/main.c
+@@ -116,7 +116,7 @@
+  * controller; anything else as a wired Xbox 360 controller. */
+ static BOOL title_pad_hidden;
+ static WORD title_pad_product = 0x028e;
+-static XINPUT_VIBRATION title_pad_vibration;
++static XINPUT_VIBRATION title_pad_vibration[XUSER_MAX_COUNT];
+ 
+ static BOOL WINAPI find_title_pad(INIT_ONCE *once, void *param, void **context)
+ {
+@@ -172,34 +172,38 @@
+ 
+ static BOOL title_pad_state(DWORD index, XINPUT_STATE *state)
+ {
+-    struct xinput_pad_state pad = {0};
+-
+-    if (!index) title_pad_kind();
+-    if (index || title_pad_hidden || __wine_unix_call(title_pad, unix_pad_state, &pad) || !pad.connected) return FALSE;
++    struct xinput_pad_slot_params params = {0};
++
++    if (index >= XUSER_MAX_COUNT) return FALSE;
++    title_pad_kind();
++    params.index = index;
++    if (title_pad_hidden || __wine_unix_call(title_pad, unix_pad_state_slot, &params) || !params.state.connected) return FALSE;
+     memset(state, 0, sizeof(*state));
+-    state->dwPacketNumber = pad.packet;
++    state->dwPacketNumber = params.state.packet;
+     if (!title_pad_enabled) return TRUE;  /* XInputEnable(FALSE): neutral, still connected */
+-    state->Gamepad.wButtons = pad.buttons;
+-    state->Gamepad.bLeftTrigger = pad.left_trigger;
+-    state->Gamepad.bRightTrigger = pad.right_trigger;
+-    state->Gamepad.sThumbLX = pad.thumb_lx;
+-    state->Gamepad.sThumbLY = pad.thumb_ly;
+-    state->Gamepad.sThumbRX = pad.thumb_rx;
+-    state->Gamepad.sThumbRY = pad.thumb_ry;
++    state->Gamepad.wButtons = params.state.buttons;
++    state->Gamepad.bLeftTrigger = params.state.left_trigger;
++    state->Gamepad.bRightTrigger = params.state.right_trigger;
++    state->Gamepad.sThumbLX = params.state.thumb_lx;
++    state->Gamepad.sThumbLY = params.state.thumb_ly;
++    state->Gamepad.sThumbRX = params.state.thumb_rx;
++    state->Gamepad.sThumbRY = params.state.thumb_ry;
+     return TRUE;
+ }
+ 
+ /* xinput_cs must be held */
+-static void title_pad_rumble(void)
+-{
+-    struct xinput_rumble_params params = {0};
+-
++static void title_pad_rumble(DWORD index)
++{
++    struct xinput_rumble_slot_params params = {0};
++
++    if (index >= XUSER_MAX_COUNT) return;
++    params.index = index;
+     if (title_pad_enabled)
+     {
+-        params.left = title_pad_vibration.wLeftMotorSpeed;
+-        params.right = title_pad_vibration.wRightMotorSpeed;
+-    }
+-    __wine_unix_call(title_pad, unix_pad_rumble, &params);
++        params.left = title_pad_vibration[index].wLeftMotorSpeed;
++        params.right = title_pad_vibration[index].wRightMotorSpeed;
++    }
++    __wine_unix_call(title_pad, unix_pad_rumble_slot, &params);
+ }
+ 
+ static void set_current_state(UINT index, const XINPUT_STATE *state)
+@@ -915,7 +919,7 @@
+     {
+         EnterCriticalSection(&xinput_cs);
+         title_pad_enabled = enable;
+-        title_pad_rumble();
++        for (index = 0; index < XUSER_MAX_COUNT; index++) title_pad_rumble(index);
+         LeaveCriticalSection(&xinput_cs);
+         return;
+     }
+@@ -944,8 +948,8 @@
+         if (index >= XUSER_MAX_COUNT) return ERROR_BAD_ARGUMENTS;
+         if (!title_pad_state(index, &state)) return ERROR_DEVICE_NOT_CONNECTED;
+         EnterCriticalSection(&xinput_cs);
+-        title_pad_vibration = *vibration;
+-        title_pad_rumble();
++        title_pad_vibration[index] = *vibration;
++        title_pad_rumble(index);
+         LeaveCriticalSection(&xinput_cs);
+         return ERROR_SUCCESS;
+     }
+@@ -1341,7 +1345,7 @@
+         {
+             /* PS5 controller-path counters (branch controller-input): a program asks what controller 0 is. */
+             static LONG asked;
+-            if (InterlockedIncrement( &asked ) <= 4) ERR( "pad-path xinput: controller 0 described as 045e:%04x\n", title_pad_product );
++            if (InterlockedIncrement( &asked ) <= 8) ERR( "pad-path xinput: controller %lu described as 045e:%04x\n", index, title_pad_product );
+         }
+         return ERROR_SUCCESS;
+     }
+diff --git a/dlls/winebus.sys/bus_ps5.c b/dlls/winebus.sys/bus_ps5.c
+--- a/dlls/winebus.sys/bus_ps5.c
++++ b/dlls/winebus.sys/bus_ps5.c
+@@ -15,11 +15,15 @@
+ #include "unix_private.h"
+ #include "pw_wine_xusb.h"
+ 
+-struct ps5_device { struct unix_device base; int started; };
+-static struct ps5_device *device;
++#define PS5_MAX_SLOTS 4
++#define PS5_EXTRA_DISCONNECT_LOOPS 250   /* ~2 s before removing a disconnected player 2..4 controller */
++
++struct ps5_device { struct unix_device base; int started; int slot; };
++static struct ps5_device *devices[PS5_MAX_SLOTS];
+ static int stopping;
+ static pthread_mutex_t device_lock = PTHREAD_MUTEX_INITIALIZER;
+ static int (*read_pad)(unsigned char *);
++static int (*read_pad_slot)(unsigned int, unsigned char *);
+ /* The helper's count of what became of each report (pw_wine_input_note, wine/ps5/pw_wine_sink.h in PS5_Proton):
+  * queued 0, held back while the device is not started 1, device created 2, removed 3. */
+ static void (*note)(int);
+@@ -27,9 +31,30 @@
+ static int start_kind;           /* the kind until the title sets one: WINE_PS5_HID=1 the DualSense, else the env's Xbox */
+ /* An Xbox controller chosen: Windows' HID gamepad for it (pw_wine_xusb.h, patch 2480), from the title's pad slot */
+ static int (*read_xbox)(PwWinePad *);
+-static struct ps5_device *xbox;
+-static int xbox_kind;
++static int (*read_xbox_slot)(unsigned int, PwWinePad *);
++static void (*write_rumble)(UINT32, UINT32);
++static void (*write_rumble_slot)(unsigned int, UINT32, UINT32);
++static struct ps5_device *xboxes[PS5_MAX_SLOTS];
++static int xbox_kinds[PS5_MAX_SLOTS];
+ static struct list events = LIST_INIT(events);
++
++static int ps5_read_dualsense(unsigned int slot, unsigned char *report)
++{
++    if (read_pad_slot) return read_pad_slot(slot, report);
++    return !slot && read_pad ? read_pad(report) : 0;
++}
++static int ps5_read_xbox(unsigned int slot, PwWinePad *pad)
++{
++    if (read_xbox_slot) return read_xbox_slot(slot, pad);
++    if (!slot && read_xbox) return read_xbox(pad);
++    memset(pad, 0, sizeof(*pad));
++    return 0;
++}
++static void ps5_send_rumble(unsigned int slot, UINT32 left, UINT32 right)
++{
++    if (write_rumble_slot) write_rumble_slot(slot, left, right);
++    else if (!slot && write_rumble) write_rumble(left, right);
++}
+ 
+ /* USB report 1: six axes, counter, hat, 15 buttons and vendor payload.
+  * The vendor payload retains DualSense's public USB layout for SDL HIDAPI. */
+@@ -68,9 +93,10 @@
+ }
+ static void stop(struct unix_device *iface)
+ {
++    struct ps5_device *dev = (struct ps5_device *)iface;
+     pthread_mutex_lock(&device_lock);
+-    if (device == (struct ps5_device *)iface) device = NULL;
+-    __atomic_store_n(&((struct ps5_device *)iface)->started, 0, __ATOMIC_RELEASE);
++    if (dev->slot >= 0 && dev->slot < PS5_MAX_SLOTS && devices[dev->slot] == dev) devices[dev->slot] = NULL;
++    __atomic_store_n(&dev->started, 0, __ATOMIC_RELEASE);
+     pthread_mutex_unlock(&device_lock);
+ }
+ static NTSTATUS get_descriptor(struct unix_device *iface, BYTE *buffer, UINT length, UINT *out)
+@@ -85,10 +111,27 @@
+     io->Status = STATUS_NOT_SUPPORTED;
+     io->Information = 0;
+ }
++static void output_report(struct unix_device *iface, HID_XFER_PACKET *packet, IO_STATUS_BLOCK *io)
++{
++    struct ps5_device *dev = (struct ps5_device *)iface;
++    if (packet && packet->reportBuffer && packet->reportBufferLen >= 5 &&
++        (packet->reportId == 0x02 || (!packet->reportId && packet->reportBuffer[0] == 0x02)))
++    {
++        const BYTE *buf = packet->reportBuffer;
++        /* DualSense USB output report 0x02: byte 1 valid_flag0 (bits 0..1 enable motors), byte 3 right, byte 4 left. */
++        if (buf[0] == 0x02 && (buf[1] & 0x03))
++            ps5_send_rumble((unsigned int)dev->slot, (UINT32)buf[4] * 257u, (UINT32)buf[3] * 257u);
++        io->Information = packet->reportBufferLen;
++        io->Status = STATUS_SUCCESS;
++        return;
++    }
++    unsupported(iface, packet, io);
++}
+ static void feature(struct unix_device *iface, HID_XFER_PACKET *packet, IO_STATUS_BLOCK *io)
+ {
+-    /* A stable local virtual-device serial, not the user's hardware address. */
+-    static const BYTE serial[20] = {9, 1, 0, 0, 0, 0, 2};
++    struct ps5_device *dev = (struct ps5_device *)iface;
++    /* A stable local virtual-device serial per slot, not the user's hardware address. */
++    BYTE serial[20] = {9, 1, 0, 0, 0, 0, (BYTE)(2 + (dev->slot & 0x0f))};
+     unsupported(iface, packet, io);
+     if (packet->reportId != 9) return;
+     if (packet->reportBufferLen < sizeof(serial)) { io->Status = STATUS_BUFFER_TOO_SMALL; return; }
+@@ -96,13 +139,14 @@
+     io->Information = sizeof(serial);
+     io->Status = STATUS_SUCCESS;
+ }
+-static const struct raw_device_vtbl vtbl = {destroy, start, stop, get_descriptor, unsupported, feature, unsupported};
++static const struct raw_device_vtbl vtbl = {destroy, start, stop, get_descriptor, output_report, feature, unsupported};
+ 
+ static void xbox_stop(struct unix_device *iface)
+ {
++    struct ps5_device *dev = (struct ps5_device *)iface;
+     pthread_mutex_lock(&device_lock);
+-    if (xbox == (struct ps5_device *)iface) xbox = NULL;
+-    __atomic_store_n(&((struct ps5_device *)iface)->started, 0, __ATOMIC_RELEASE);
++    if (dev->slot >= 0 && dev->slot < PS5_MAX_SLOTS && xboxes[dev->slot] == dev) xboxes[dev->slot] = NULL;
++    __atomic_store_n(&dev->started, 0, __ATOMIC_RELEASE);
+     pthread_mutex_unlock(&device_lock);
+ }
+ static NTSTATUS xbox_descriptor(struct unix_device *iface, BYTE *buffer, UINT length, UINT *out)
+@@ -114,48 +158,72 @@
+ }
+ static const struct raw_device_vtbl xbox_vtbl = {destroy, start, xbox_stop, xbox_descriptor, unsupported, unsupported, unsupported};
+ 
+-/* The Xbox controller's HID gamepad while kind (0 Xbox 360, 1 Xbox One) is chosen, made at once and kept, connected or
+- * not, as the DualSense is; a report goes out whenever the slot's packet moves. device_lock must be held. */
++/* The Xbox controllers' HID gamepads while kind (0 Xbox 360, 1 Xbox One) is chosen: slot 0 is made at once and kept,
++ * connected or not, as the DualSense is; slots 1..3 are created dynamically when connected and removed when disconnected.
++ * device_lock must be held. */
+ static void xbox_update(int kind)
+ {
+-    static UINT32 sent_packet, sent_connected = 2;
+-    static unsigned int waits;   /* as the DualSense's: a device stopped without the bus is made again after a second */
+-    PwWinePad pad;
+-    BYTE report[PW_WINE_XUSB_REPORT];
+-    int connected;
+-
+-    if (xbox && xbox_kind != kind)
++    static UINT32 sent_packet[PS5_MAX_SLOTS], sent_connected[PS5_MAX_SLOTS] = {2, 2, 2, 2};
++    static unsigned int waits[PS5_MAX_SLOTS];   /* as the DualSense's: a device stopped without the bus is made again after a second */
++    static unsigned int disconnect_loops[PS5_MAX_SLOTS];
++    unsigned int slot;
++
++    for (slot = 0; slot < PS5_MAX_SLOTS; ++slot)
+     {
+-        bus_event_queue_device_removed(&events, &xbox->base);
+-        xbox = NULL;
+-        waits = 0;   /* the other kind's at once */
++        PwWinePad pad;
++        BYTE report[PW_WINE_XUSB_REPORT];
++        int connected;
++
++        if (xboxes[slot] && xbox_kinds[slot] != kind)
++        {
++            bus_event_queue_device_removed(&events, &xboxes[slot]->base);
++            xboxes[slot] = NULL;
++            waits[slot] = 0;   /* the other kind's at once */
++            disconnect_loops[slot] = 0;
++        }
++        if (kind < 0) continue;
++        connected = ps5_read_xbox(slot, &pad);   /* all zero when not connected: released and centred */
++        if (slot > 0)
++        {
++            if (!connected)
++            {
++                if (xboxes[slot] && ++disconnect_loops[slot] >= PS5_EXTRA_DISCONNECT_LOOPS)
++                {
++                    bus_event_queue_device_removed(&events, &xboxes[slot]->base);
++                    xboxes[slot] = NULL;
++                    disconnect_loops[slot] = 0;
++                    fprintf(stderr, "wine-ps5: Xbox HID gamepad slot %u removed (disconnected)\n", slot);
++                }
++                continue;
++            }
++            disconnect_loops[slot] = 0;
++        }
++        if (!xboxes[slot] && waits[slot]) --waits[slot];
++        else if (!xboxes[slot])
++        {
++            struct device_desc desc = {.vid=0x045e, .pid=kind == 1 ? 0x02ea : 0x028e, .version=kind == 1 ? 0x0408 : 0x0114,
++                .input=-1, .bus_type=BUS_TYPE_USB,
++                .manufacturer={'M','i','c','r','o','s','o','f','t'},
++                .serialnumber={'P','S','5','-','L','O','C','A','L','-',(WCHAR)('1' + slot)}};
++            /* the names DirectInput shows on Windows, which hidclass also gives (device.c) */
++            static const WCHAR x360[] = {'C','o','n','t','r','o','l','l','e','r',' ','(','X','B','O','X',' ','3','6','0',' ','F','o','r',' ','W','i','n','d','o','w','s',')',0};
++            static const WCHAR xone[] = {'C','o','n','t','r','o','l','l','e','r',' ','(','X','b','o','x',' ','O','n','e',' ','F','o','r',' ','W','i','n','d','o','w','s',')',0};
++            memcpy(desc.product, kind == 1 ? xone : x360, kind == 1 ? sizeof(xone) : sizeof(x360));
++            waits[slot] = 125;
++            if (!(xboxes[slot] = raw_device_create(&xbox_vtbl, sizeof(*xboxes[slot])))) continue;
++            xboxes[slot]->slot = (int)slot;
++            xbox_kinds[slot] = kind;
++            sent_connected[slot] = 2;
++            bus_event_queue_device_created(&events, &xboxes[slot]->base, &desc);
++            fprintf(stderr, "wine-ps5: the Xbox controller's HID gamepad %04x:%04x (slot %u) is made\n", desc.vid, desc.pid, slot);
++        }
++        if (!xboxes[slot] || !__atomic_load_n(&xboxes[slot]->started, __ATOMIC_ACQUIRE)) continue;
++        if (connected == (int)sent_connected[slot] && (!connected || pad.packet == sent_packet[slot])) continue;
++        sent_connected[slot] = connected;
++        sent_packet[slot] = pad.packet;
++        pw_wine_xusb_report(&pad, report);
++        bus_event_queue_input_report(&events, &xboxes[slot]->base, report, sizeof(report));
+     }
+-    if (kind < 0) return;
+-    if (!xbox && waits) --waits;
+-    else if (!xbox)
+-    {
+-        struct device_desc desc = {.vid=0x045e, .pid=kind == 1 ? 0x02ea : 0x028e, .version=kind == 1 ? 0x0408 : 0x0114,
+-            .input=-1, .bus_type=BUS_TYPE_USB,
+-            .manufacturer={'M','i','c','r','o','s','o','f','t'},
+-            .serialnumber={'P','S','5','-','L','O','C','A','L','-','1'}};
+-        /* the names DirectInput shows on Windows, which hidclass also gives (device.c) */
+-        static const WCHAR x360[] = {'C','o','n','t','r','o','l','l','e','r',' ','(','X','B','O','X',' ','3','6','0',' ','F','o','r',' ','W','i','n','d','o','w','s',')',0};
+-        static const WCHAR xone[] = {'C','o','n','t','r','o','l','l','e','r',' ','(','X','b','o','x',' ','O','n','e',' ','F','o','r',' ','W','i','n','d','o','w','s',')',0};
+-        memcpy(desc.product, kind == 1 ? xone : x360, kind == 1 ? sizeof(xone) : sizeof(x360));
+-        waits = 125;
+-        if (!(xbox = raw_device_create(&xbox_vtbl, sizeof(*xbox)))) return;
+-        xbox_kind = kind;
+-        sent_connected = 2;
+-        bus_event_queue_device_created(&events, &xbox->base, &desc);
+-        fprintf(stderr, "wine-ps5: the Xbox controller's HID gamepad %04x:%04x is made\n", desc.vid, desc.pid);
+-    }
+-    if (!xbox || !__atomic_load_n(&xbox->started, __ATOMIC_ACQUIRE)) return;
+-    connected = read_xbox(&pad);   /* all zero when not connected: released and centred */
+-    if (connected == sent_connected && (!connected || pad.packet == sent_packet)) return;
+-    sent_connected = connected;
+-    sent_packet = pad.packet;
+-    pw_wine_xusb_report(&pad, report);
+-    bus_event_queue_input_report(&events, &xbox->base, report, sizeof(report));
+ }
+ 
+ static int (*thread_is_terminating)(void);
+@@ -164,22 +232,29 @@
+     thread_is_terminating = dlsym(RTLD_DEFAULT, "ps5_thread_is_terminating");
+     fprintf(stderr, "wine-ps5: bus thread %s ps5_thread_is_terminating\n", thread_is_terminating ? "found" : "has no");
+     read_pad = dlsym(RTLD_DEFAULT, "pw_wine_dualsense");
++    read_pad_slot = dlsym(RTLD_DEFAULT, "pw_wine_dualsense_slot");
+     note = dlsym(RTLD_DEFAULT, "pw_wine_input_note");
+     pad_kind = dlsym(RTLD_DEFAULT, "pw_wine_pad_kind");
+     read_xbox = dlsym(RTLD_DEFAULT, "pw_wine_pad");
++    read_xbox_slot = dlsym(RTLD_DEFAULT, "pw_wine_pad_slot");
++    write_rumble = dlsym(RTLD_DEFAULT, "pw_wine_set_rumble");
++    write_rumble_slot = dlsym(RTLD_DEFAULT, "pw_wine_set_rumble_slot");
+     {
+         const char *hid = getenv("WINE_PS5_HID"), *controller = getenv("WINE_PS5_CONTROLLER");
+         start_kind = hid && hid[0] == '1' ? 2 : controller && !strcmp(controller, "xbox-one") ? 1 : 0;
+     }
+-    return read_pad && read_xbox ? STATUS_SUCCESS : STATUS_NOT_SUPPORTED;
++    return (read_pad_slot || read_pad) && (read_xbox_slot || read_xbox) ? STATUS_SUCCESS : STATUS_NOT_SUPPORTED;
+ }
+ NTSTATUS ps5_bus_wait(void *args)
+ {
+     struct bus_event *event = args;
+-    static int was_connected;
+-    static unsigned int waits;   /* bus loops (8 ms each) until the device is made again */
+-    BYTE report[64];
+-    int connected, kind;
++    static int was_connected[PS5_MAX_SLOTS];
++    static unsigned int waits[PS5_MAX_SLOTS];   /* bus loops (8 ms each) until the device is made again */
++    static unsigned int disconnect_loops[PS5_MAX_SLOTS];
++    BYTE reports[PS5_MAX_SLOTS][64];
++    int connected_slots[PS5_MAX_SLOTS];
++    int kind;
++    unsigned int slot;
+     bus_event_cleanup(event);
+     /* This loop stays in the Unix call until an event or the stop request. A
+      * thread the server killed ends only when it returns to user mode, so the
+@@ -187,7 +262,8 @@
+     while (!__atomic_load_n(&stopping, __ATOMIC_ACQUIRE) && !(thread_is_terminating && thread_is_terminating()))
+     {
+         usleep(8000);
+-        connected = read_pad(report);
++        for (slot = 0; slot < PS5_MAX_SLOTS; ++slot)
++            connected_slots[slot] = ps5_read_dualsense(slot, reports[slot]);
+         /* The DualSense is there while it is the kind the title set (none set: from the start, as WINE_PS5_HID=1 asked);
+          * the control overlay switching away removes it, and back makes it again (patch 2472) */
+         if ((kind = pad_kind ? pad_kind() : -1) < 0) kind = start_kind;
+@@ -195,49 +271,76 @@
+         xbox_update(kind != 2 ? kind : -1);
+         if (kind != 2)
+         {
+-            if (device)
+-            {
+-                bus_event_queue_device_removed(&events, &device->base);
+-                device = NULL;
+-                fprintf(stderr, "wine-ps5: the DualSense is removed: another controller is chosen\n");
+-            }
+-            waits = 0;
++            for (slot = 0; slot < PS5_MAX_SLOTS; ++slot)
++            {
++                if (devices[slot])
++                {
++                    bus_event_queue_device_removed(&events, &devices[slot]->base);
++                    devices[slot] = NULL;
++                    if (!slot) fprintf(stderr, "wine-ps5: the DualSense is removed: another controller is chosen\n");
++                }
++                waits[slot] = 0;
++                disconnect_loops[slot] = 0;
++            }
+             pthread_mutex_unlock(&device_lock);
+             if (bus_event_queue_pop(&events, event)) return STATUS_PENDING;
+             continue;
+         }
+-        /* The DualSense is there from the bus's start, connected or not, and stays until the bus stops: a program
+-         * looks for controllers at its start, and nothing would tell it of one that came or went later (device
+-         * notifications need the plug-and-play service). A pad the title loses (the system menu takes it while
+-         * open, or it is turned off) reads as released until it is back. */
+-        /* A device that was stopped without the bus (its creation refused, say) is made again after a second,
+-         * not on every loop: two programs' buses whose devices had one name retried every 8 ms for good. */
+-        if (!device && waits)
+-            --waits;
+-        else if (!device)
+-        {
+-            waits = 125;
+-            struct device_desc desc = {.vid=0x054c, .pid=0x0ce6, .version=0x0100, .input=-1,
+-                .is_gamepad=TRUE, .is_hidraw=TRUE, .bus_type=BUS_TYPE_USB,
+-                .manufacturer={'S','o','n','y',' ','I','n','t','e','r','a','c','t','i','v','e',' ','E','n','t','e','r','t','a','i','n','m','e','n','t'},
+-                .product={'D','u','a','l','S','e','n','s','e',' ','W','i','r','e','l','e','s','s',' ','C','o','n','t','r','o','l','l','e','r'},
+-                .serialnumber={'P','S','5','-','L','O','C','A','L','-','1'}};
+-            if (!(device = raw_device_create(&vtbl, sizeof(*device))))
+-            { pthread_mutex_unlock(&device_lock); return STATUS_NO_MEMORY; }
+-            bus_event_queue_device_created(&events, &device->base, &desc);
+-            if (note) note(2);
+-        }
+-        else if (__atomic_load_n(&device->started, __ATOMIC_ACQUIRE))
+-        {
+-            if (connected || was_connected)
+-            {
+-                if (!connected) neutral_report(report);
+-                bus_event_queue_input_report(&events, &device->base, report, sizeof(report));
+-                if (note) note(0);
+-            }
+-            was_connected = connected;
+-        }
+-        else if (note) note(1);
++        /* Slot 0 is there from the bus's start, connected or not, and stays until the bus stops: a program looks for
++         * controllers at its start. Slots 1..3 are created dynamically when connected and removed when disconnected. */
++        for (slot = 0; slot < PS5_MAX_SLOTS; ++slot)
++        {
++            int connected = connected_slots[slot];
++            if (slot > 0 && !connected)
++            {
++                if (devices[slot])
++                {
++                    if (__atomic_load_n(&devices[slot]->started, __ATOMIC_ACQUIRE) && was_connected[slot])
++                    {
++                        neutral_report(reports[slot]);
++                        bus_event_queue_input_report(&events, &devices[slot]->base, reports[slot], sizeof(reports[slot]));
++                        was_connected[slot] = 0;
++                    }
++                    if (++disconnect_loops[slot] >= PS5_EXTRA_DISCONNECT_LOOPS)
++                    {
++                        bus_event_queue_device_removed(&events, &devices[slot]->base);
++                        devices[slot] = NULL;
++                        disconnect_loops[slot] = 0;
++                        fprintf(stderr, "wine-ps5: DualSense slot %u removed (disconnected)\n", slot);
++                    }
++                }
++                continue;
++            }
++            disconnect_loops[slot] = 0;
++            if (!devices[slot] && waits[slot])
++                --waits[slot];
++            else if (!devices[slot])
++            {
++                waits[slot] = 125;
++                struct device_desc desc = {.vid=0x054c, .pid=0x0ce6, .version=0x0100, .input=-1,
++                    .is_gamepad=TRUE, .is_hidraw=TRUE, .bus_type=BUS_TYPE_USB,
++                    .manufacturer={'S','o','n','y',' ','I','n','t','e','r','a','c','t','i','v','e',' ','E','n','t','e','r','t','a','i','n','m','e','n','t'},
++                    .product={'D','u','a','l','S','e','n','s','e',' ','W','i','r','e','l','e','s','s',' ','C','o','n','t','r','o','l','l','e','r'},
++                    .serialnumber={'P','S','5','-','L','O','C','A','L','-',(WCHAR)('1' + slot)}};
++                if (!(devices[slot] = raw_device_create(&vtbl, sizeof(*devices[slot]))))
++                { pthread_mutex_unlock(&device_lock); return STATUS_NO_MEMORY; }
++                devices[slot]->slot = (int)slot;
++                bus_event_queue_device_created(&events, &devices[slot]->base, &desc);
++                if (!slot && note) note(2);
++                if (slot) fprintf(stderr, "wine-ps5: DualSense slot %u is made\n", slot);
++            }
++            else if (__atomic_load_n(&devices[slot]->started, __ATOMIC_ACQUIRE))
++            {
++                if (connected || was_connected[slot])
++                {
++                    if (!connected) neutral_report(reports[slot]);
++                    bus_event_queue_input_report(&events, &devices[slot]->base, reports[slot], sizeof(reports[slot]));
++                    if (!slot && note) note(0);
++                }
++                was_connected[slot] = connected;
++            }
++            else if (!slot && note) note(1);
++        }
+         pthread_mutex_unlock(&device_lock);
+         if (bus_event_queue_pop(&events, event)) return STATUS_PENDING;
+     }

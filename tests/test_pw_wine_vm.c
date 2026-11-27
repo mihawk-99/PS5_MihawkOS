@@ -7,6 +7,8 @@
 #include <stddef.h>
 
 static int kernel_status;
+static int transient_status;
+static unsigned transient_left;
 static uintptr_t kernel_start, kernel_end;
 static uintptr_t owned_start, owned_end;
 /* With entries set, the kernel's map as NEXT walks it (the entry holding the address or the next); otherwise the one
@@ -20,6 +22,10 @@ int sceKernelVirtualQuery(const void *address, int flags, void *record, size_t b
     unsigned i = 0;
     assert(flags == 1 && bytes == 72);
     queries++;
+    if (transient_left) {
+        transient_left--;
+        return transient_status;
+    }
     if (entry_count) {
         while (i < entry_count && entries[i].end <= (uintptr_t)address) i++;
         if (i == entry_count) return (int)UINT32_C(0x8002000d);
@@ -194,6 +200,39 @@ int main(void)
         slots[1] = q;
         assert(pw_wine_vm_step_slot(slots, q) == 1 && pw_wine_vm_step_slot(slots, p) == 0);
         assert(pw_wine_vm_step_slot(slots, r) == -1);
+    }
+    /* Transient EINTR/EAGAIN retries and structured failure diagnostics (Issue #43). */
+    {
+        const PwWineVmEntry reservation = { 0, 0, 0, 0, 0, "" };
+        PwWineVmEntry found;
+        PwWineVmForeignDiag diag = {0};
+        entries[0] = (FakeEntry){ 0x900000000, 0xa00000000, 0, 0 };
+        entry_count = 1;
+        kernel_status = 0;
+        transient_status = (int)UINT32_C(0x80020004);
+        transient_left = 2;
+        assert(!pw_wine_vm_foreign_diag((void *)0x900000000, 0x10000, &reservation, &found, NULL, &diag));
+        assert(transient_left == 0 && diag.kind == PW_WINE_VM_FAILURE_NONE);
+        transient_status = (int)UINT32_C(0x80020023);
+        transient_left = 3;
+        assert(!pw_wine_vm_foreign_diag((void *)0x900000000, 0x10000, &reservation, &found, NULL, &diag));
+        assert(transient_left == 0);
+        /* Query failure diagnostic */
+        kernel_status = (int)UINT32_C(0x80020016);
+        assert(pw_wine_vm_foreign_diag((void *)0x900000000, 0x10000, &reservation, &found, NULL, &diag) == -1);
+        assert(diag.kind == PW_WINE_VM_FAILURE_QUERY && (uint32_t)diag.kernel_status == UINT32_C(0x80020016) &&
+               diag.cursor == 0x900000000 && !strcmp(pw_wine_vm_failure_name(diag.kind), "query"));
+        /* Invalid/non-advancing entry diagnostic */
+        kernel_status = 0;
+        entry_count = 0;
+        kernel_start = 0x900000000; kernel_end = 0x900000000;
+        assert(pw_wine_vm_foreign_diag((void *)0x900000000, 0x10000, &reservation, &found, NULL, &diag) == -1);
+        assert(diag.kind == PW_WINE_VM_FAILURE_ENTRY && diag.entry_start == 0x900000000 && diag.entry_end == 0x900000000);
+        /* Refill failure diagnostic */
+        entries[0] = (FakeEntry){ 0x900000000, 0xa00000000, 0, 0 };
+        entry_count = 1;
+        assert(pw_wine_vm_foreign_diag((void *)0x9ffffb000, 0xa000, &reservation, &found, fill, &diag) == -1);
+        assert(diag.kind == PW_WINE_VM_FAILURE_REFILL && diag.entry_start == 0xa00000000 && diag.entry_end == 0xa00005000);
     }
     puts("pw_wine_vm: PASS");
 }

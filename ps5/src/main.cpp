@@ -387,6 +387,9 @@ int main(int argc, char **argv)
 	}
 #endif
 	platform_init(PS5_TITLE_NAME);
+#if !defined(PS5_HOST_REFERENCE)
+	platform_kill_local_processes();
+#endif
 	pt_exit_at("platform");
 	// The samples report on std::cout and std::cerr: both reach klog
 	std::cout.rdbuf(std::cerr.rdbuf());

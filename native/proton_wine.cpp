@@ -79,6 +79,7 @@ extern "C" {
 #include "pw_usb_input_ps5.h"
 #include "../src/pw_game_mode.h"
 #include "../src/pw_high_refresh.h"
+#include "../src/pw_resolution.h"
 #include "../src/pw_controller.h"
 #include "../src/pw_detailed_logs.h"
 #ifdef PS5_GPU_BROKER
@@ -146,8 +147,10 @@ int (*terminate_game)() = nullptr;
 // helpers (src/pw_hang_breaker.h), listed by pw_ps5_helpers.
 bool programs_in_helpers = false;
 unsigned (*list_helpers)(int *, unsigned, int *) = nullptr;
+unsigned (*close_local_helpers)() = nullptr;
 // Before the SIGKILL: no helper starts after it, and one mid-spawn is waited for until gone (pw_ps5_end_spawns).
 void (*end_spawns)() = nullptr;
+static std::atomic<uint64_t> stop_requested_ms{0};
 // One pass of the direct-section collector on the way out, so the last 'gave back' line reaches klog.
 void (*collect_sections)() = nullptr;
 // The helpers sent SIGKILL, once per session: back_to_launcher replaces the title only once each is gone. The first
@@ -1306,13 +1309,15 @@ void return_to_launcher(const char *reason)
     // The game's exit (atexit, on a Windows thread) and the title's own stop
     // can both get here: the first one leaves, the other waits to be replaced.
     if (leaving.exchange(true)) for (;;) usleep(100000);
+    for (int s = 0; s < PAD_MAX_SLOTS; ++s) pad_vibrate_slot(s, 0.0f, 0.0f);
     // A play request, or any end of a Steam session (src/pw_title_play.h): Steam is asked to shut down, if it was not yet,
     // and its processes (every helper: the program in the title has ended) are waited for, with no time limit, before
     // owner_wait below closes whatever is left; then the screen says where the title goes.
     const PwTitleNext next = pw_title_play_next(play_session, play_requested.load(), player_left.load());
     // Only while Steam runs: "steam.exe -shutdown" with no Steam left would start one. A play session's game exit has
-    // asked already (play_game_exit).
-    if ((next != PW_TITLE_NEXT_LAUNCHER || steam_session) && (play_shutdown_ms.load() || steam_helpers())) {
+    // asked already (play_game_exit). Skip waiting when end_helpers() has already terminated the helpers.
+    if (!ending.load(std::memory_order_acquire) &&
+        (next != PW_TITLE_NEXT_LAUNCHER || steam_session) && (play_shutdown_ms.load() || steam_helpers())) {
         const bool done = steam_shutdown_wait(next == PW_TITLE_NEXT_PLAY ? "a play request" :
                                               next == PW_TITLE_NEXT_BROWSE ? "the game ended" : "the session ends",
                                               next == PW_TITLE_NEXT_PLAY ? PW_STEAM_HANDOVER_SAVE :
@@ -1330,6 +1335,8 @@ void return_to_launcher(const char *reason)
         pw_capped_log_sync(&title_log);
     }
     if(owner_wait)owner_wait();
+    // Guarantee no Sony local child survives across LoadExec even after a crash or forced close.
+    platform_kill_local_processes();
     // The client's standard output is flushed at its exit, which has just happened: the session's final read.
     if (aurelia_session()) aurelia_poll();
     if (steamcmd_session()) steamcmd_poll();
@@ -1538,10 +1545,13 @@ static bool local_process_present(int service_id)
 static int local_child_close(int service_id, int pid, int control_fd)
 {
     if (control_fd >= 0) {
-        (void)shutdown(control_fd, SHUT_RDWR);
-        // Give an exiting local process up to 300 ms to flush its log and close fd 3.
+        /* Half-close only the write side so the child sees EOF, finishes its exit
+         * summaries + fsync(), and closes fd 3 before we kill the local process.
+         * Using SHUT_RDWR here makes FreeBSD's poll()/recv() return 0 immediately
+         * and race-kill the child mid-flush. */
+        (void)shutdown(control_fd, SHUT_WR);
         struct pollfd wait{control_fd, POLLIN, 0};
-        for (int tries = 0; tries < 6; ++tries) {
+        for (int tries = 0; tries < 30; ++tries) {
             const int r = poll(&wait, 1, 50);
             if (r > 0 && (wait.revents & (POLLHUP | POLLERR | POLLNVAL))) break;
             if (r > 0 && (wait.revents & POLLIN)) {
@@ -1557,6 +1567,7 @@ static int local_child_close(int service_id, int pid, int control_fd)
         killed = sceSystemServiceKillLocalProcess(app, service_id);
         for (int attempt = 0; attempt < 300 && local_process_present(service_id); ++attempt)
             sceKernelUsleep(10000);
+        if (killed != 0 && !local_process_present(service_id)) killed = 0;
     }
     say("Wine: local child native=%d service=%#x closed status=%#x", pid, unsigned(service_id), unsigned(killed));
     return killed;
@@ -1669,6 +1680,7 @@ bool end_helpers(const char *why)
             if (status < 0 && status != -ESRCH) say("Wine: helper %d: not taken out of the sync device (%d)", pids[i], status);
         }
     pw_hang_breaker_end(pids, count, getpid(), signal_process, monotonic_ms(), &ended);
+    if (close_local_helpers) close_local_helpers();
     for (unsigned i = 0; i < ended.count; ++i)
         say("Wine: helper %d: SIGKILL %s (errno %d)", ended.pids[i],
             ended.sent[i] == PW_HANG_SKIPPED ? "not sent: not a helper's pid" : !ended.sent[i] ? "sent" :
@@ -2076,6 +2088,13 @@ static bool steam_shutdown_wait(const char *why, PwSteamHandover step)
             if (result == 2) end_helpers("the player closed Steam");
             return result == 1;
         }
+        const uint64_t stop_ms = stop_requested_ms.load();
+        if (stop_ms && monotonic_ms() - stop_ms >= 30000) {
+            steam_waiting = false;
+            say("Steam: still %u helper(s) after 30 s of stop request; ending remaining helpers", steam_helpers());
+            end_helpers("Steam shutdown timeout");
+            return false;
+        }
         usleep(100000);
     }
 }
@@ -2204,6 +2223,43 @@ static bool root_in_title(const char *image)
         kind!=PW_PE_KIND_UNREAD ? "; " : "",kind!=PW_PE_KIND_UNREAD ? pw_pe_kind_word(kind) : "",deepest[0] ? " through " : "",
         deepest);
     return pw_title_route_in_title(route);
+}
+
+// Whether a direct-launched session root should run in an elevated Sony local process (65,536 CPU PT, 0 system PT).
+static bool root_prefers_local(const char *image)
+{
+    const char *local_setting = getenv("WINE_PS5_LOCAL_GAMES");
+    char host[1024];
+    if (!image || !local_setting || strcmp(local_setting, "1") ||
+        pw_wine_launch_host_dir(session_prefix.c_str(), image, host, sizeof(host))) return false;
+    struct PwPeInfo pe;
+    const bool x64 = pw_pe_arch_file(host, &pe) == PW_PE_X64;
+    enum PwPeKind kind = PW_PE_KIND_UNREAD;
+    char deepest[PW_PE_IMPORT_NAME] = "";
+    int chromium = 0;
+    if (x64 && !pw_title_game_has(image, "\\windows\\") && !pw_title_game_has(image, "/windows/")) {
+        RootFolder folder;
+        folder.exe = host;
+        const size_t slash = folder.exe.rfind('/');
+        folder.dir = slash != std::string::npos ? folder.exe.substr(0, slash) : ".";
+        auto has = [&](const char *name) { return access((folder.dir + "/" + name).c_str(), F_OK) == 0; };
+        chromium = has("resources.pak") && has("icudtl.dat") &&
+                   (has("v8_context_snapshot.bin") || has("snapshot_blob.bin"));
+        kind = pw_pe_kind(root_folder_read, &folder, deepest);
+        if (folder.fd >= 0) close(folder.fd);
+    }
+    const char *pick = getenv("WINE_PS5_TITLE_PICK"), *named = getenv("WINE_PS5_TITLE_PROCESS");
+    const std::string picked = std::string(pick ? pick : "") + ";" + (named ? named : "");
+    const bool wanted = pw_local_game_wanted(image, x64 ? 1 : 0, local_setting,
+                                             getenv("WINE_PS5_TITLE_OPTOUT"), picked.c_str(),
+                                             getenv("WINE_PS5_TITLE_LISTED"), 0,
+                                             kind == PW_PE_KIND_GAME, kind == PW_PE_KIND_BROWSER,
+                                             kind == PW_PE_KIND_DOTNET, chromium, nullptr) != 0;
+    say("Wine: the session's root %s: %s (local_games=1; %s%s%s%s%s)", pw_title_game_name(image),
+        wanted ? "elevated local process" : "a helper", x64 ? "64-bit" : "32-bit",
+        kind != PW_PE_KIND_UNREAD ? "; " : "", kind != PW_PE_KIND_UNREAD ? pw_pe_kind_word(kind) : "",
+        deepest[0] ? " through " : "", deepest);
+    return wanted;
 }
 
 // The root run in the title: start_title_client's environment, with the root's own command line for Wine to start as
@@ -3088,6 +3144,31 @@ void proton_run_wine()
         say("120 Hz: %s%s", own ? "the game's or launch's own" : high ? "on" : "off",
             own ? "" : error == ENOENT ? " (default)" : error ? " (setting unreadable; default)" : "");
     }
+    {
+        // The player's game resolution setting (src/pw_resolution.h): 1080p, 1440p (2560x1440) or 4K (3840x2160).
+        // Explicit WINE_PS5_DESKTOP in game.json or launch.env wins; else WINE_PS5_RESOLUTION; else the console setting
+        // for game sessions (!game.id.empty(), keeping the MihawkOS desktop at 1920x1080 unless explicitly overridden).
+        auto has_word = [](const std::vector<std::string> &words, const char *prefix) {
+            for (const auto &w : words) if (w.rfind(prefix, 0) == 0) return true;
+            return false;
+        };
+        const bool explicit_desktop = has_word(game.env, "WINE_PS5_DESKTOP=") || has_word(launch.env, "WINE_PS5_DESKTOP=");
+        if (explicit_desktop) {
+            say("Resolution: %s (WINE_PS5_DESKTOP override)", getenv("WINE_PS5_DESKTOP"));
+        } else {
+            const char *own = getenv("WINE_PS5_RESOLUTION");
+            int res = pw_resolution_kind(own), error = 0;
+            if (res < 0 && !own && !game.id.empty())
+                error = pw_resolution_load(&res, proton_resolution_path().c_str());
+            if (res < 0) res = PW_RESOLUTION_1080P;
+            setenv("WINE_PS5_DESKTOP", pw_resolution_desktop(res), 1);
+            say("Resolution: %s (%s)%s", pw_resolution_word(res), pw_resolution_desktop(res),
+                own && pw_resolution_kind(own) >= 0 ? " (this game's or launch's own)" :
+                own ? " (WINE_PS5_RESOLUTION not understood; default)" :
+                game.id.empty() ? " (desktop default)" :
+                error == ENOENT ? " (default)" : error ? " (setting unreadable; default)" : "");
+        }
+    }
     // The speed switches on by default, after the game's and this launch's own, so either can still turn one off
     // with NAME=0 (src/pw_speed_defaults.h: the sync device, the helpers' CPUs, the asynchronous present, the present
     // link, 120 Hz).
@@ -3263,12 +3344,13 @@ void proton_run_wine()
         set_resolver(title_resolve);
     // A process another one starts gets its library entry's settings (src/pw_app_environment.h).
     build_application_table(catalog, prefix);
+    const bool launch_picked_title = getenv("WINE_PS5_TITLE_PICK") && *getenv("WINE_PS5_TITLE_PICK");
     {
         // The per-game opt-out from running inside MihawkOS (game.json "env": WINE_PS5_TITLE_GAMES=0): the helper that
         // starts a game decides before the game's settings reach it, so it is told those games' executable names.
         // And the pick (WINE_PS5_TITLE_GAME=<exe>): the one program of a game that runs in the title, for a game whose
         // program the rules miss (one that loads its renderer only at run time, src/../wine/ps5/pw_wine_pe_imports.h).
-        std::string optout, picked, listed;
+        std::string optout, picked = launch_picked_title ? getenv("WINE_PS5_TITLE_PICK") : "", listed;
         for (const auto &game : applications.games) {
             // Every program the library names counts as a library program wherever it lives (a game on a USB drive),
             // but the store client itself (its entry runs steam.exe, which restarts itself from a helper on an update).
@@ -3305,7 +3387,11 @@ void proton_run_wine()
     if (auto set_dns_config = symbol<void (*)(int (*)(struct pw_dns_config *))>("pw_ps5_set_dns_config"))
         set_dns_config(title_dns_config);
     auto set_dualsense = symbol<void (*)(const uint8_t *)>("pw_wine_set_dualsense");
+    auto set_dualsense_slot = symbol<void (*)(unsigned, const uint8_t *)>("pw_wine_set_dualsense_slot");
     auto set_pad = symbol<void (*)(const PwWinePad *)>("pw_wine_set_pad");
+    auto set_pad_slot = symbol<void (*)(unsigned, const PwWinePad *)>("pw_wine_set_pad_slot");
+    auto get_rumble = symbol<int (*)(uint32_t *, uint32_t *)>("pw_wine_rumble");
+    auto get_rumble_slot = symbol<int (*)(unsigned, uint32_t *, uint32_t *)>("pw_wine_rumble_slot");
     auto set_pad_kind = symbol<void (*)(int)>("pw_wine_set_pad_kind");
     if (set_pad_kind) set_pad_kind(session_controller);   // xinput and the PS5 bus follow it (patches 2471, 2472)
     auto set_cwd = symbol<int (*)(const char *)>("pw_cwd_set");
@@ -3318,7 +3404,8 @@ void proton_run_wine()
     if (windows_dir.size() == 2 && windows_dir[1] == ':') windows_dir += '\\';
     if (set_cwd && !pw_wine_launch_host_dir(prefix.c_str(), windows_dir.c_str(), cwd, sizeof(cwd)))
         say("Wine: working directory status=%d", set_cwd(cwd));
-    say("Wine: output=%d audio=%d xinput=%d", set_output != nullptr, audio_port >= 0, set_pad != nullptr);
+    say("Wine: output=%d audio=%d xinput=%d rumble=%d", set_output != nullptr, audio_port >= 0, set_pad != nullptr,
+        (get_rumble_slot != nullptr || get_rumble != nullptr));
     pad_script.load();
     if (auto ticks = symbol<uint64_t (*)()>("pw_wine_perf_ticks")) perf.wine_started = ticks();
     const char *owner=getenv("WINE_PS5_OWNER_BOOTSTRAP");
@@ -3404,21 +3491,20 @@ void proton_run_wine()
             }
             set_gpu(proton_gpu_broker_open,proton_gpu_broker_close);
             owner_broker_running=true;
-            // Alpha 7's default, "Run inside MihawkOS" (wine/ps5/pw_wine_title_game.h): a 64-bit library game runs
-            // with the title's expanded page-table pool (65,536 CPU PT) and 1 GiB flexible memory.
-            // Steam sessions (unless play_session) run 64-bit games and Steam's browser in elevated Sony local
-            // processes (/app0/wine-local-child.bin), so every 64-bit game gets the full 65,536-entry app pool and
-            // clean OS-level teardown without ever closing Steam or restarting with LoadExec.
-            const bool is_steam_root = !strcasecmp(pw_title_game_name(game.executable.c_str()), "steam.exe");
+            // Alpha 10 default: run all 64-bit games, browsers, and Chromium apps in elevated Sony local
+            // processes (/app0/wine-local-child.bin), sharing the 65,536 CPU / 32,768 GPU app PT pool and
+            // 1 GiB flexible memory with 0 system page tables and clean OS-level teardown. Explicit
+            // WINE_PS5_LOCAL_GAMES=0 or WINE_PS5_TITLE_PROCESS=<exe> keeps the Alpha 7 in-title path.
+            const char *named=getenv("WINE_PS5_TITLE_PROCESS");
             setenv("WINE_PS5_TITLE_GAMES", "1", 0);
-            if (is_steam_root && !play_session && access(proton_title_path("/app0/wine-local-child.bin").c_str(), F_OK) == 0)
+            if (!play_session && !(named && *named) && !launch_picked_title &&
+                access(proton_title_path("/app0/wine-local-child.bin").c_str(), F_OK) == 0)
                 setenv("WINE_PS5_LOCAL_GAMES", "1", 0);
-            // A Chromium-based game starts as one process (kernelbase patch 2404), so the whole game sits in the title's
-            // pool; a launch's own WINE_PS5_CHROMIUM_ARGS (another set, or empty: none) wins.
+            // A Chromium-based game starts as one process (kernelbase patch 2404), so the whole game sits in the
+            // app pool; a launch's own WINE_PS5_CHROMIUM_ARGS (another set, or empty: none) wins.
             setenv("WINE_PS5_CHROMIUM_ARGS","--single-process",0);
             const bool title_games=!strcmp(getenv("WINE_PS5_TITLE_GAMES"),"1");
             const bool local_games=getenv("WINE_PS5_LOCAL_GAMES") && !strcmp(getenv("WINE_PS5_LOCAL_GAMES"),"1");
-            const char *named=getenv("WINE_PS5_TITLE_PROCESS");
             if (access(proton_title_path("/app0/wine-local-child.bin").c_str(), F_OK) == 0) {
                 auto set_local=symbol<void (*)(int (*)(int *,int *,int *),int (*)(int,int,int))>("pw_ps5_set_local_spawner");
                 if (set_local) {
@@ -3440,12 +3526,30 @@ void proton_run_wine()
                 (unsigned)strtoul(title_stall,nullptr,10) : PW_HANG_TITLE_STALL_MS;
             say("Run inside MihawkOS: %s; the title watchdog ends a game in the title after %u ms with no new frame",
                 title_games ? "on" : "off (WINE_PS5_TITLE_GAMES=0)",title_stall_ms);
-            // Wine offers 120 Hz modes (patches 0924, 1188) only when the broker's display kept 119.88 Hz, asked here,
-            // before any helper starts (graphics patch 0029); on a TV that refuses it every program sees 60 Hz alone.
-            if(const char *high=getenv("PROTON_120HZ"); high && !strcmp(high,"1")) {
-                const unsigned hz=proton_gpu_broker_display_hz();
-                if(const char *refresh=pw_display_refresh_env(hz))setenv("WINE_PS5_REFRESH",refresh,1);
-                say("Wine: the display kept %u Hz; Wine offers %s",hz,hz==120 ? "60 and 120 Hz" : "60 Hz alone");
+            // Wine offers 120 Hz modes (patches 0924, 1188) only when the broker's display kept 119.88 Hz, and
+            // 1440p/4K modes only when VideoOut accepted the requested resolution (otherwise it fell back to 1080p).
+            // Open the display here before any helper starts so WINE_PS5_REFRESH and WINE_PS5_DESKTOP match hardware.
+            {
+                const char *high=getenv("PROTON_120HZ"), *desk=getenv("WINE_PS5_DESKTOP");
+                const bool want_120 = high && !strcmp(high,"1");
+                const bool want_high_res = desk && strcmp(desk, "1920x1080") != 0;
+                if(want_120 || want_high_res) {
+                    const unsigned hz=proton_gpu_broker_display_hz();
+                    if(want_120) {
+                        if(const char *refresh=pw_display_refresh_env(hz))setenv("WINE_PS5_REFRESH",refresh,1);
+                        say("Wine: the display kept %u Hz; Wine offers %s",hz,hz==120 ? "60 and 120 Hz" : "60 Hz alone");
+                    }
+                    unsigned dw=1920, dh=1080;
+                    proton_gpu_broker_display_size(&dw, &dh);
+                    char actual_desk[32];
+                    snprintf(actual_desk, sizeof(actual_desk), "%ux%u", dw, dh);
+                    if(!desk || strcmp(desk, actual_desk) != 0) {
+                        setenv("WINE_PS5_DESKTOP", actual_desk, 1);
+                        say("Wine: display fell back to %s (requested %s)", actual_desk, desk ? desk : "default");
+                    } else {
+                        say("Wine: display kept %s", actual_desk);
+                    }
+                }
             }
             // The desktop: helpers' frames (their user drivers compose their windows, the broker shows them), the
             // foreground window's process, and the cursor the touchpad moves, drawn by the title (patches 0931, 0932).
@@ -3482,6 +3586,7 @@ void proton_run_wine()
         // With every program in a helper, a game that does not close is ended by SIGKILL to its helpers.
         programs_in_helpers=!owner_graphics;
         list_helpers=symbol<unsigned (*)(int *,unsigned,int *)>("pw_ps5_helpers");
+        close_local_helpers=symbol<unsigned (*)()>("pw_ps5_close_local_helpers");
         end_spawns=symbol<void (*)()>("pw_ps5_end_spawns");
         collect_sections=symbol<void (*)()>("pw_ps5_dsection_collect_now");
         // And the touchpad's pointer and the close request go to the desktop, wherever its windows are.
@@ -3631,12 +3736,19 @@ void proton_run_wine()
         const int socket=connect_server((runtime+"/share/wine/nls").c_str());
         if(socket<0) fail("PS5_PROTON_OWNER_BOOTSTRAP FAIL server connection");
         int launched=-1;
+        auto start_root_local=symbol<int (*)(int,const char *,const char *,const char *,int,const char *const *,int)>("pw_ps5_start_root_local");
+        const bool local_games_active=getenv("WINE_PS5_LOCAL_GAMES") && !strcmp(getenv("WINE_PS5_LOCAL_GAMES"),"1");
 #ifdef PS5_GPU_BROKER
-        // A root that is a game runs in the title (root_in_title); a start that fails before Wine runs falls back.
-        if(owner_broker_running && config.argc>=2 && root_in_title(config.argv[1]) &&
+        // When WINE_PS5_LOCAL_GAMES=1 (default), 64-bit game roots run in isolated elevated Sony local processes.
+        // Otherwise (WINE_PS5_LOCAL_GAMES=0 / WINE_PS5_TITLE_PROCESS), a game root runs in the title (start_title_root).
+        if(!local_games_active && owner_broker_running && config.argc>=2 && root_in_title(config.argv[1]) &&
            start_title_root(socket,cwd,config.argc,config.argv)) launched=0;
 #endif
-        if(launched) launched=start_root(socket,modules.c_str(),prefix.c_str(),cwd,config.argc,config.argv);
+        if(launched) {
+            const int prefer_local=(local_games_active && owner_broker_running && config.argc>=2 && root_prefers_local(config.argv[1])) ? 1 : 0;
+            if(start_root_local) launched=start_root_local(socket,modules.c_str(),prefix.c_str(),cwd,config.argc,config.argv,prefer_local);
+            else launched=start_root(socket,modules.c_str(),prefix.c_str(),cwd,config.argc,config.argv);
+        }
         close(socket);
         say("Wine: owner-only server, initial Windows client launch=%d",launched);
         if(launched) fail("PS5_PROTON_OWNER_BOOTSTRAP FAIL initial client");
@@ -4488,22 +4600,73 @@ void proton_run_wine()
             if (!pw_osk_typer_next(&osk_typer, &typed_event)) break;
             deliver(&typed_event);
         }
+        auto build_wine_pad = [&](const struct pad &src, const struct pad &gp, bool connected) {
+            PwWinePad s{};
+            s.connected = connected ? 1u : 0u;
+            for (size_t i = 0; i < sizeof(ps_buttons)/sizeof(ps_buttons[0]); ++i)
+                if (gp.held & ps_buttons[i]) s.buttons |= xi_buttons[i];
+            s.left_trigger = std::clamp(gp.l2, 0.f, 1.f) * 255;
+            s.right_trigger = std::clamp(gp.r2, 0.f, 1.f) * 255;
+            s.thumb_lx = std::clamp(src.left_x, -1.f, 1.f) * 32767;
+            s.thumb_ly = -std::clamp(src.left_y, -1.f, 1.f) * 32767;
+            s.thumb_rx = std::clamp(src.right_x, -1.f, 1.f) * 32767;
+            s.thumb_ry = -std::clamp(src.right_y, -1.f, 1.f) * 32767;
+            return s;
+        };
         struct pad gamepad{};
         pw_controls_gamepad(&controls, &shown_pad, &gamepad);
-        PwWinePad state{};
-        state.connected = pw_controls_game_connected(&gamepad) && tick >= pad_swap_until;
-        for (size_t i = 0; i < sizeof(ps_buttons)/sizeof(ps_buttons[0]); ++i)
-            if (gamepad.held & ps_buttons[i]) state.buttons |= xi_buttons[i];
-        state.left_trigger = std::clamp(gamepad.l2, 0.f, 1.f) * 255;
-        state.right_trigger = std::clamp(gamepad.r2, 0.f, 1.f) * 255;
-        state.thumb_lx = std::clamp(shown_pad.left_x, -1.f, 1.f) * 32767;
-        state.thumb_ly = -std::clamp(shown_pad.left_y, -1.f, 1.f) * 32767;
-        state.thumb_rx = std::clamp(shown_pad.right_x, -1.f, 1.f) * 32767;
-        state.thumb_ry = -std::clamp(shown_pad.right_y, -1.f, 1.f) * 32767;
-        if (set_pad) set_pad(&state);
+        const bool slot0_connected = pw_controls_game_connected(&gamepad) && tick >= pad_swap_until;
+        PwWinePad state = build_wine_pad(shown_pad, gamepad, slot0_connected);
+        if (set_pad_slot) set_pad_slot(0, &state);
+        else if (set_pad) set_pad(&state);
         uint8_t report[64];
         proton_dualsense_report(&gamepad, tick, report);
-        if (set_dualsense) set_dualsense(pw_controls_game_connected(&gamepad) && tick >= pad_swap_until ? report : nullptr);
+        if (set_dualsense_slot) set_dualsense_slot(0, slot0_connected ? report : nullptr);
+        else if (set_dualsense) set_dualsense(slot0_connected ? report : nullptr);
+        // Additional DualSense controllers (slots 1..3, one per extra signed-in PS5 user).
+        static struct pad extra_pads[PAD_MAX_SLOTS];
+        static bool extra_was_connected[PAD_MAX_SLOTS];
+        const bool overlays_covering = handover_covering.load() || control_open || own_open || osk_pad.open;
+        for (int s = 1; s < PAD_MAX_SLOTS; ++s) {
+            pad_poll_slot(s, &extra_pads[s]);
+            const bool conn = extra_pads[s].connected && !extra_pads[s].intercepted && !overlays_covering && tick >= pad_swap_until;
+            PwWinePad extra_state = build_wine_pad(extra_pads[s], extra_pads[s], conn);
+            if (set_pad_slot) set_pad_slot((unsigned)s, &extra_state);
+            uint8_t extra_report[64];
+            if (conn) proton_dualsense_report(&extra_pads[s], tick, extra_report);
+            if (set_dualsense_slot) set_dualsense_slot((unsigned)s, conn ? extra_report : nullptr);
+            if (extra_pads[s].connected != extra_was_connected[s]) {
+                say("Wine: pad slot=%d connected=%d", s, extra_pads[s].connected);
+                extra_was_connected[s] = extra_pads[s].connected;
+            }
+        }
+        // Rumble feedback from XInputSetState / DualSense HID output reports (title + every child/helper).
+        static uint32_t rumble_want_l[PAD_MAX_SLOTS], rumble_want_r[PAD_MAX_SLOTS];
+        static uint32_t rumble_sent_l[PAD_MAX_SLOTS], rumble_sent_r[PAD_MAX_SLOTS];
+        static unsigned rumble_logs;
+        const bool mute_rumble = overlays_covering || leaving.load() || title_suspend.away;
+        for (int s = 0; s < PAD_MAX_SLOTS; ++s) {
+            uint32_t rl = 0, rr = 0;
+            const bool changed = get_rumble_slot ? (get_rumble_slot((unsigned)s, &rl, &rr) != 0)
+                                                 : (s == 0 && get_rumble && get_rumble(&rl, &rr) != 0);
+            if (changed) {
+                rumble_want_l[s] = rl;
+                rumble_want_r[s] = rr;
+                if (rumble_logs < 12) {
+                    ++rumble_logs;
+                    say("Wine: rumble slot=%d left=%u right=%u", s, rl, rr);
+                }
+            }
+            const bool active_pad = (s == 0) ? (pad.connected && !pad.intercepted)
+                                             : (extra_pads[s].connected && !extra_pads[s].intercepted);
+            const uint32_t target_l = (!mute_rumble && active_pad) ? rumble_want_l[s] : 0u;
+            const uint32_t target_r = (!mute_rumble && active_pad) ? rumble_want_r[s] : 0u;
+            if (target_l != rumble_sent_l[s] || target_r != rumble_sent_r[s]) {
+                pad_vibrate_slot(s, (float)target_l / 65535.0f, (float)target_r / 65535.0f);
+                rumble_sent_l[s] = target_l;
+                rumble_sent_r[s] = target_r;
+            }
+        }
         if (tick == 0 || pad.pressed || (pad.connected != was_connected) || (pad.intercepted != was_intercepted))
             say("Wine: pad connected=%d%s buttons=%#x touch=%u", pad.connected, pad.intercepted ? " (the system has it: idle to the game)" : "",
                 pad.held, pad.touch_count);
@@ -4712,7 +4875,11 @@ void proton_run_wine()
             // alone, no stop, so the stop's 10 s escalation does not end Steam's helpers under its shutdown (it did in
             // 8.1's B2 loop on the base, 2026-11-03: the game was exiting, Steam was killed). A later stop-game still stops.
             const bool game_only = !strncmp(stop_why, "game-ended", 10);
-            if (!game_only) stop_tick = tick;
+            if (!game_only) {
+                stop_tick = tick;
+                uint64_t zero = 0;
+                stop_requested_ms.compare_exchange_strong(zero, monotonic_ms());
+            }
             // The player's exit, or a test's stop, goes to the launcher.
             if (!play_stop_ours.load() && !game_only) player_left = true;
             // Steam browsing ignores a close: it is asked to shut down, as its own Exit would (src/pw_title_play.h). A play
@@ -4731,9 +4898,9 @@ void proton_run_wine()
         // After a sign-in the client ignores the close and is not hung: no snapshot (16 s of klog on 2026-10-26), and it is
         // ended once its token is on disk, checked each second from the close, or 25 s after it.
         const unsigned stop_age = stop_tick ? tick - stop_tick : 0;
-        // Steam asked to shut down is given all the time it takes while Steam's own helpers are still alive;
-        // once Steam itself is gone, a lingering game must still escalate normally.
-        const bool steam_closing = play_shutdown_ms.load() != 0 && steam_helpers() > 0;
+        // Steam asked to shut down is given up to 35 s after a stop request to finish Cloud sync and close cleanly;
+        // once Steam exits or the grace window expires, lingering helpers/games escalate normally instead of hanging.
+        const bool steam_closing = play_shutdown_ms.load() != 0 && steam_helpers() > 0 && (!stop_tick || stop_age < 35 * 120);
         // A play session's game ended alone (end_game) and still there 20 s later: everything is ended.
         // Not while its exit waits for Steam (play_game_exit): the game is gone then, and Steam is not to be cut short.
         if (tick % 120 == 30 && play_game_end_ms.load() && !leaving.load() && !play_game_end_full && !steam_waiting.load() &&
@@ -5082,7 +5249,7 @@ void proton_run_wine()
             }
         }
 #ifdef PS5_GPU_BROKER
-        if (server_dialog && tick % 120 == 30 && title_client_claimed.load() && !guide_screens && !setup_preparing &&
+        if (server_dialog && tick % 120 == 30 && !desktop_session && !guide_screens && !setup_preparing &&
             showcase.empty()) {
             char text[2048];
             const bool up = server_dialog(text, sizeof(text)) > 0;

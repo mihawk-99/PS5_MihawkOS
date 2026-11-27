@@ -155,6 +155,23 @@ int main(void)
     /* Each reason has its word for the log. */
     for (int r = PW_TITLE_ROUTE_GAME; r <= PW_TITLE_ROUTE_STEAM_BROWSER; ++r) assert(strcmp(pw_title_route_word(r), "unknown"));
     assert(pw_title_game_listed("a.exe;;b.exe;", "b.exe") && !pw_title_game_listed("a.exe", "") && !pw_title_game_listed(NULL, "a.exe"));
+
+    /* Universal elevated Sony local-process routing (WINE_PS5_LOCAL_GAMES=1): any 64-bit game, browser/launcher shell,
+     * Chromium app, or library .NET game outside \windows\ gets a local process; 32-bit, Windows system tools, crash
+     * reporters, --type= sub-processes, and opted-out programs stay in payload helpers. */
+    assert(pw_local_game_wanted("C:\\d3d12-levels-probe.exe", 1, "1", NULL, NULL, NULL, 0, 1, 0, 0, 0, NULL));
+    assert(pw_local_game_wanted("Z:\\mnt\\usb0\\Standalone\\MyGame.exe", 1, "1", NULL, NULL, NULL, 0, 1, 0, 0, 0, NULL));
+    assert(pw_local_game_wanted(web, 1, "1", NULL, NULL, NULL, 0, 0, 1, 0, 0, web_line));
+    assert(pw_local_game_wanted("C:\\Program Files\\StoreClient\\Launcher\\WebHelper.exe", 1, "1", NULL, NULL, NULL, 0, 0, 1, 0, 0, NULL));
+    assert(pw_local_game_wanted("C:\\Games\\NWGame\\nw.exe", 1, "1", NULL, NULL, NULL, 0, 0, 0, 0, 1, NULL));
+    assert(pw_local_game_wanted("C:\\users\\Mihawk\\Games\\Platformer\\Platformer.exe", 1, "1", NULL, NULL, NULL, 0, 0, 0, 1, 0, NULL));
+    assert(!pw_local_game_wanted("C:\\Games\\PlainTool\\tool.exe", 1, "1", NULL, NULL, NULL, 0, 0, 0, 0, 0, NULL));
+    assert(!pw_local_game_wanted("C:\\Games\\Game32\\game32.exe", 0, "1", NULL, NULL, NULL, 0, 1, 0, 0, 0, NULL));
+    assert(!pw_local_game_wanted("C:\\windows\\system32\\explorer.exe", 1, "1", NULL, NULL, NULL, 0, 1, 0, 0, 0, NULL));
+    assert(!pw_local_game_wanted(web, 1, "1", NULL, NULL, NULL, 0, 0, 1, 0, 0, "steamwebhelper.exe --type=renderer"));
+    assert(!pw_local_game_wanted("C:\\Program Files (x86)\\Steam\\steamerrorreporter64.exe", 1, "1", NULL, NULL, NULL, 0, 1, 0, 0, 0, NULL));
+    assert(!pw_local_game_wanted(lib, 1, "1", "game3d.exe", NULL, NULL, 0, 1, 0, 0, 0, NULL));
+    assert(!pw_local_game_wanted(lib, 1, "0", NULL, NULL, NULL, 0, 1, 0, 0, 0, NULL));
     printf("test_pw_wine_title_game: ok\n");
     return 0;
 }

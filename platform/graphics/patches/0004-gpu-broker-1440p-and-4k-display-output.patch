@@ -1,0 +1,908 @@
+From: PS5_MihawkOS Contributors
+Subject: [PATCH] gpu-broker: support 1440p (2560x1440) and 4K (3840x2160) display output
+
+Parameterize Ps5GpuDisplay, GPU broker protocol bounds, overlay/HUD scaling, and
+Vulkan WSI display extents for 1080p, 1440p, and 4K output with graceful fallback
+to 1080p when VideoOut refuses a higher mode.
+
+---
+--- a/tooling/gpu-broker/display.cpp
++++ b/tooling/gpu-broker/display.cpp
+@@ -14,20 +14,17 @@
+ extern "C" int sceKernelUsleep(unsigned);
+ #include <time.h>
+ namespace {
+-constexpr unsigned width=1920,height=1080,blocks=15,block_rows=9,buffer_count=3;
+-constexpr size_t alignment=2u<<20,frame_bytes=size_t(blocks)*block_rows<<16;
+-constexpr size_t buffer_bytes=(frame_bytes+alignment-1)/alignment*alignment,memory_bytes=buffer_bytes*buffer_count;
+-size_t tiled(unsigned x,unsigned y)
+-{
+-    const unsigned offset=((y<<4)&0x70)^((y<<5)&0xf00)^((y<<9)&0x1000)^((y<<8)&0x4000)^
+-        ((x<<2)&0xc)^((x<<5)&0x380)^((x<<4)&0x400)^((x<<6)&0x800)^((x<<9)&0xa000);
+-    return (size_t((y>>7)*blocks+(x>>7))<<16)+offset;
++constexpr unsigned buffer_count=3;
++constexpr size_t alignment=2u<<20;
++size_t tiled_at(unsigned x,unsigned y,unsigned blocks)
++{
++    return pw_display_tiled_stride(x,y,blocks);
+ }
+ // The pixel each 4-byte word of a 64 KiB tile holds: dy<<7|dx. A frame is written tile by tile in memory order, so
+ // the stores are sequential, rather than pixel by pixel across the tiled layout.
+ struct TileOrder {
+     uint16_t pixel[16384];
+-    TileOrder() { for(unsigned dy=0;dy<128;++dy)for(unsigned dx=0;dx<128;++dx)pixel[tiled(dx,dy)>>2]=uint16_t(dy<<7|dx); }
++    TileOrder() { for(unsigned dy=0;dy<128;++dy)for(unsigned dx=0;dx<128;++dx)pixel[tiled_at(dx,dy,1)>>2]=uint16_t(dy<<7|dx); }
+ };
+ const TileOrder &tile_order() { static const TileOrder order;return order; }
+ // The pointer: an arrow, 1 the outline, 2 the fill, drawn at its tip.
+@@ -36,13 +33,13 @@
+     "1           ","11          ","121         ","1221        ","12221       ","122221      ","1222221     ",
+     "12222221    ","122222221   ","1222222221  ","12222222221 ","122222111111","1222121     ","122112221   ",
+     "12 1 1221   ","1   12221   ","     1221   ","     1221   ","      11    "};
+-void draw_cursor(uint8_t *buffer,int at_x,int at_y)
++void draw_cursor(uint8_t *buffer,unsigned disp_w,unsigned disp_h,unsigned blocks,int at_x,int at_y)
+ {
+     for(unsigned dy=0;dy<cursor_height;++dy)for(unsigned dx=0;dx<cursor_width;++dx) {
+         const char c=cursor_shape[dy][dx];
+         const int x=at_x+int(dx),y=at_y+int(dy);
+-        if(c==' ' || x<0 || y<0 || x>=int(width) || y>=int(height))continue;
+-        auto *pixel=(uint32_t *)(buffer+tiled(unsigned(x),unsigned(y)));
++        if(c==' ' || x<0 || y<0 || x>=int(disp_w) || y>=int(disp_h))continue;
++        auto *pixel=(uint32_t *)(buffer+tiled_at(unsigned(x),unsigned(y),blocks));
+         *pixel=c=='1' ? 0xff000000u : 0xffffffffu;
+         __asm__ volatile("clflushopt (%0)"::"r"(pixel):"memory");
+     }
+@@ -86,10 +83,17 @@
+         _mm_store_si128(out+at,a);_mm_store_si128(out+at+1,b);_mm_store_si128(out+at+2,c);_mm_store_si128(out+at+3,d);
+     }
+ }
+-static_assert(frame_bytes%64==0,"read_shown copies whole 64-byte lines");
+ // The display's captures, written on their own thread (pw_display_capture.h); one display per title.
+ PwDisplayCaptures captures=PW_DISPLAY_CAPTURES_INIT;
+-static_assert(frame_bytes==PW_DISPLAY_TILED_BYTES,"the capture copies the whole tiled frame");
++}
++void Ps5GpuDisplay::configure_geometry(unsigned w,unsigned h)
++{
++    if(!((w==3840 && h==2160) || (w==2560 && h==1440))) w=1920,h=1080;
++    out_width=w;out_height=h;
++    out_blocks=(w+127)/128;out_block_rows=(h+127)/128;
++    out_frame_bytes=size_t(out_blocks)*out_block_rows<<16;
++    out_buffer_bytes=(out_frame_bytes+alignment-1)/alignment*alignment;
++    out_memory_bytes=out_buffer_bytes*buffer_count;
+ }
+ // Opens the display: at the first present, or earlier when the title asks the rate it kept (graphics patch 0029,
+ // ps5_gpu_broker_display_hz). 0, or the first failure; a display that failed after VideoOut opened stays unregistered.
+@@ -120,23 +124,43 @@
+     fprintf(log,"gpu-display rate found_us=%llu restored=%d asked_120hz=%d supported=%d configured=%d period_us=%llu "
+         "high_frame_rate=%d\n",(unsigned long long)found/1000,restored,asked,supported,configured,
+         (unsigned long long)period/1000,high_frame_rate);
+-    int status=sceKernelAllocateDirectMemory(0,sceKernelGetDirectMemorySize(),memory_bytes,alignment,3,&physical);
+-    if(!status)status=sceKernelMapDirectMemory(&mapped,memory_bytes,0x33,0,physical,alignment);
+-    if(status)return status;
+-    memset(mapped,0,memory_bytes);
+-    uint8_t attribute[PS5_VIDEO_OUT_ATTRIBUTE_BYTES]{};
+-    sceVideoOutSetBufferAttribute2(attribute,PS5_VIDEO_OUT_PIXEL_FORMAT_B8G8R8A8_SDR,PS5_VIDEO_OUT_TILING_64KB_R_X,width,height,0,0,0);
+-    ps5_video_out_buffer buffers[buffer_count]{};
+-    for(unsigned i=0;i<buffer_count;++i)buffers[i]={(uint8_t *)mapped+i*buffer_bytes,nullptr,{}};
+-    status=sceVideoOutSetFlipRate(handle,0);
+-    if(!status)status=sceVideoOutRegisterBuffers2(handle,0,0,buffers,buffer_count,attribute,0,nullptr);
++    unsigned req_w=1920,req_h=1080;
++    if(const char *desk=getenv("WINE_PS5_DESKTOP")) {
++        unsigned pw=0,ph=0;
++        if(sscanf(desk,"%ux%u",&pw,&ph)==2 && ((pw==3840 && ph==2160) || (pw==2560 && ph==1440)))
++            req_w=pw,req_h=ph;
++    }
++    auto register_mode=[&](unsigned w,unsigned h) -> int {
++        configure_geometry(w,h);
++        int st=sceKernelAllocateDirectMemory(0,sceKernelGetDirectMemorySize(),out_memory_bytes,alignment,3,&physical);
++        if(!st)st=sceKernelMapDirectMemory(&mapped,out_memory_bytes,0x33,0,physical,alignment);
++        if(!st) {
++            memset(mapped,0,out_memory_bytes);
++            uint8_t attribute[PS5_VIDEO_OUT_ATTRIBUTE_BYTES]{};
++            sceVideoOutSetBufferAttribute2(attribute,PS5_VIDEO_OUT_PIXEL_FORMAT_B8G8R8A8_SDR,PS5_VIDEO_OUT_TILING_64KB_R_X,out_width,out_height,0,0,0);
++            ps5_video_out_buffer buffers[buffer_count]{};
++            for(unsigned i=0;i<buffer_count;++i)buffers[i]={(uint8_t *)mapped+i*out_buffer_bytes,nullptr,{}};
++            st=sceVideoOutSetFlipRate(handle,0);
++            if(!st)st=sceVideoOutRegisterBuffers2(handle,0,0,buffers,buffer_count,attribute,0,nullptr);
++        }
++        if(st) {
++            if(mapped) { sceKernelMunmap(mapped,out_memory_bytes);mapped=nullptr; }
++            if(physical>=0) { sceKernelReleaseDirectMemory(physical,out_memory_bytes);physical=-1; }
++        }
++        return st;
++    };
++    int status=register_mode(req_w,req_h);
++    if(status && req_w>1920) {
++        fprintf(log,"gpu-display fallback=1920x1080 requested=%ux%u status=%#x\n",req_w,req_h,unsigned(status));
++        status=register_mode(1920,1080);
++    }
+     if(status)return status;
+     registered=true;
+     // PS5_Proton's PROTON_GPU_FAST_COPY=1: an unscaled frame is copied a 64-byte line at a time with streaming
+     // stores (pw_display_copy.h); a scaled one, and every frame without it, pixel by pixel below.
+     const char *fast=getenv("PROTON_GPU_FAST_COPY");fast_copy=fast && !strcmp(fast,"1");
+-    if(fast_copy && !rows)rows=(uint8_t *)aligned_alloc(64,size_t(width)*height*4);   // none: scaled frames keep the loop
+-    fprintf(log,"gpu-display opened fast_copy=%d\n",fast_copy);
++    if(fast_copy && !rows)rows=(uint8_t *)aligned_alloc(64,size_t(out_width)*out_height*4);   // none: scaled frames keep the loop
++    fprintf(log,"gpu-display opened mode=%ux%u fast_copy=%d\n",out_width,out_height,fast_copy);
+     return 0;
+ }
+ // The see-through panel's cost (the blend, the blur and the bubbles), said every 120 composes (PS5_Proton rule 7: measured
+@@ -161,13 +185,13 @@
+ int Ps5GpuDisplay::present(const void *pixels,unsigned w,unsigned h,unsigned pitch,FILE *log,const char *capture,bool bgra,
+     int cursor_x,int cursor_y)
+ {
+-    // A row may be longer than the part shown: the top-left of a swapchain larger than the screen (pw_gpu_display_shown).
+-    if(!pixels || !w || w>width || !h || h>height || pitch<w*4 || pitch>2176*4)return EINVAL;
++    if(!pixels || !w || !h || pitch<w*4 || pitch>4096*4)return EINVAL;
+     if(handle<0) {
+         const int status=open(log);
+         if(status)return status;
+     }
+     if(!registered)return EBUSY;
++    if(w>out_width || h>out_height)return EINVAL;
+     // Three buffers: the one written next was last on screen two flips ago, so it is free once the flip after it has
+     // been shown. Only then is there a wait, and only when presents outrun the display.
+     uint64_t shown[PS5_VIDEO_OUT_FLIP_STATUS_WORDS]{};
+@@ -182,24 +206,24 @@
+         if(shown[PS5_VIDEO_OUT_FLIP_STATUS_SHOWN_ARGUMENT]+1<flips)return EBUSY;
+     }
+     const uint64_t copy_start=now_ns();
+-    auto *buffer=(uint8_t *)mapped+back*buffer_bytes;
++    auto *buffer=(uint8_t *)mapped+back*out_buffer_bytes;
+     // The frame into a tiled buffer, the pointer over it: the display's buffer, and a capture's own copy below.
+     const auto frame=[&](uint8_t *target) {
+-        if(fast_copy && w==width && h==height)pw_display_copy_lines(target,(const uint8_t *)pixels,pitch,bgra);
++        if(fast_copy && w==out_width && h==out_height)pw_display_copy_lines_wh(target,out_width,out_height,out_blocks,(const uint8_t *)pixels,pitch,bgra);
+         else if(fast_copy && rows) {   // 5.4 ms a 1272x680 frame on the standard PS5 by the loop below (pw_display_copy.h)
+-            pw_display_scale_rows(rows,(const uint8_t *)pixels,w,h,pitch);
+-            pw_display_copy_lines(target,rows,size_t(width)*4,bgra);
++            pw_display_scale_rows_wh(rows,out_width,out_height,(const uint8_t *)pixels,w,h,pitch);
++            pw_display_copy_lines_wh(target,out_width,out_height,out_blocks,rows,size_t(out_width)*4,bgra);
+         } else {
+         // Scaling, nearest neighbour, as tables; then each tile in memory order, flushed as it is finished.
+-        static uint16_t source_x[width],source_y[height];
+-        for(unsigned x=0;x<width;++x)source_x[x]=uint16_t(x*w/width);
+-        for(unsigned y=0;y<height;++y)source_y[y]=uint16_t(y*h/height);
++        static uint16_t source_x[PW_DISPLAY_MAX_WIDTH],source_y[PW_DISPLAY_MAX_HEIGHT];
++        for(unsigned x=0;x<out_width;++x)source_x[x]=uint16_t(uint64_t(x)*w/out_width);
++        for(unsigned y=0;y<out_height;++y)source_y[y]=uint16_t(uint64_t(y)*h/out_height);
+         const auto &order=tile_order();
+-        for(unsigned by=0;by<block_rows;++by)for(unsigned bx=0;bx<blocks;++bx) {
+-            auto *tile=(uint32_t *)(target+(size_t(by*blocks+bx)<<16));
++        for(unsigned by=0;by<out_block_rows;++by)for(unsigned bx=0;bx<out_blocks;++bx) {
++            auto *tile=(uint32_t *)(target+(size_t(by*out_blocks+bx)<<16));
+             for(unsigned k=0;k<16384;++k) {
+                 const unsigned at=order.pixel[k],x=bx*128+(at&127),y=by*128+(at>>7);
+-                if(y>=height)continue;
++                if(y>=out_height)continue;
+                 uint32_t rgba;memcpy(&rgba,(const uint8_t *)pixels+size_t(source_y[y])*pitch+size_t(source_x[x])*4,4);
+                 tile[k]=bgra ? rgba : (rgba&0xff00ff00)|((rgba&0xff)<<16)|((rgba>>16)&0xff);
+             }
+@@ -210,35 +234,27 @@
+     // clean: the frame without the panel, in cached memory (the shadow, or a capture's own picture)
+     const auto decorate=[&](uint8_t *target,const uint8_t *clean) {
+         if(overlay && blur && panel_cache)compose_panel(target,clean,log);
+-        else if(overlay)pw_display_overlay_blit(target,overlay,overlay_x,overlay_y,overlay_w,overlay_h);
++        else if(overlay)pw_display_overlay_blit_wh(target,out_width,out_height,out_blocks,overlay,overlay_x,overlay_y,overlay_w,overlay_h);
+         if(hud) {   // over the frame: the shadow when there is one, else the presented picture itself
+             const uint64_t start=now_ns();
+-            pw_display_hud_compose(target,hud,hud_x,hud_y,hud_w,hud_h,clean!=target ? clean : nullptr,pixels,w,h,pitch,bgra);
++            pw_display_hud_compose_wh(target,out_width,out_height,out_blocks,hud,hud_x,hud_y,hud_w,hud_h,clean!=target ? clean : nullptr,pixels,w,h,pitch,bgra);
+             hud_composed(log,now_ns()-start);
+         }
+-        if(cursor_x>=0 && cursor_y>=0)draw_cursor(target,cursor_x,cursor_y);
++        if(cursor_x>=0 && cursor_y>=0)draw_cursor(target,out_width,out_height,out_blocks,cursor_x,cursor_y);
+     };
+     const auto fill=[&](uint8_t *target) { frame(target);decorate(target,target); };
+     last_cursor_x=cursor_x,last_cursor_y=cursor_y;
+     last_frame_ns=now_ns();
+     if(overlay && shadow) {   // the frame kept for the panel's re-shows, then streamed out with the panel over it
+         frame(shadow);shadow_valid=true;
+-        pw_display_stream_copy(buffer,shadow,frame_bytes);decorate(buffer,shadow);
++        pw_display_stream_copy(buffer,shadow,out_frame_bytes);decorate(buffer,shadow);
+     } else fill(buffer);
+     __asm__ volatile("sfence":::"memory");
+     last_copy_ns=now_ns()-copy_start;
+-    // A capture (a probe's or a pad script's): the same frame filled again into memory of its own and written by the
+-    // capture thread, so the present does not wait for the picture (pw_display_capture.h). Never read back from the
+-    // display's buffer: that reads at about 105 MB/s, 80 ms for a frame inside the present (2026-10-17).
+-    // Without memory for the copy or a thread, it is read back and written here once the flip is shown, as before.
+-    // With the fast copy the capture reads what was scanned out instead (below, once the flip is shown): its own copy
+-    // came out black on the console while the screen showed the frame (w3-ab-b-pro-2026-11-01, the owner watching),
+-    // and the same copy into the same kind of buffer is exact on a host. A capture then costs one whole-buffer read in that
+-    // present (read_shown), and the capture thread writes it.
+     uint8_t *picture=nullptr;uint64_t picture_ns=0;
+     if(capture && !fast_copy) {
+         const uint64_t start=now_ns();
+-        picture=(uint8_t *)aligned_alloc(64,frame_bytes);   // the line copy's streaming stores want 16-byte lines
++        picture=(uint8_t *)aligned_alloc(64,out_frame_bytes);   // the line copy's streaming stores want 16-byte lines
+         if(picture)fill(picture);
+         picture_ns=now_ns()-start;
+     }
+@@ -246,7 +262,7 @@
+     int status=sceVideoOutSubmitFlip(handle,back,PS5_VIDEO_OUT_FLIP_VSYNC,serial);
+     last_present_ns=now_ns();
+     if(!status && capture) {
+-        if(picture && !pw_display_capture_take(&captures,picture,capture,serial,picture_ns,log))picture=nullptr;
++        if(picture && !pw_display_capture_take_wh(&captures,picture,out_width,out_height,out_blocks,capture,serial,picture_ns,log))picture=nullptr;
+         else {
+             if(!settled(handle))status=EBUSY;
+             if(!status)status=sceVideoOutGetFlipStatus(handle,shown);
+@@ -254,15 +270,15 @@
+             // The shown buffer copied out whole, then written by the capture thread like any other picture.
+             bool taken=false;
+             if(!status && fast_copy) {
+-                auto *shown_frame=(uint8_t *)aligned_alloc(64,frame_bytes);
++                auto *shown_frame=(uint8_t *)aligned_alloc(64,out_frame_bytes);
+                 if(shown_frame) {
+                     const uint64_t start=now_ns();
+-                    read_shown(shown_frame,buffer,frame_bytes);
+-                    taken=!pw_display_capture_take(&captures,shown_frame,capture,serial,now_ns()-start,log);
++                    read_shown(shown_frame,buffer,out_frame_bytes);
++                    taken=!pw_display_capture_take_wh(&captures,shown_frame,out_width,out_height,out_blocks,capture,serial,now_ns()-start,log);
+                     if(!taken)free(shown_frame);
+                 }
+             }
+-            if(!status && !taken && pw_display_capture_write(buffer,capture))status=EIO;
++            if(!status && !taken && pw_display_capture_write_wh(buffer,out_width,out_height,out_blocks,capture))status=EIO;
+         }
+     }
+     free(picture);   // not handed over: the flip failed, or it was written here
+@@ -291,14 +307,14 @@
+     if(!registered || !flips || !settled(handle))return false;
+     uint64_t shown[PS5_VIDEO_OUT_FLIP_STATUS_WORDS]{};
+     if(sceVideoOutGetFlipStatus(handle,shown) || shown[PS5_VIDEO_OUT_FLIP_STATUS_SHOWN_ARGUMENT]!=flips)return false;
+-    return !pw_display_capture_write((const uint8_t *)mapped+((back+buffer_count-1)%buffer_count)*buffer_bytes,path);
++    return !pw_display_capture_write_wh((const uint8_t *)mapped+((back+buffer_count-1)%buffer_count)*out_buffer_bytes,out_width,out_height,out_blocks,path);
+ }
+ bool Ps5GpuDisplay::read_last(uint32_t *pixels) const
+ {
+     if(!registered || !flips || !mapped || !pixels)return false;
+-    const uint8_t *buffer=(const uint8_t *)mapped+((back+buffer_count-1)%buffer_count)*buffer_bytes;
+-    for(unsigned y=0;y<height;++y)for(unsigned x=0;x<width;++x)
+-        pixels[size_t(y)*width+x]=*(const uint32_t *)(buffer+tiled(x,y));
++    const uint8_t *buffer=(const uint8_t *)mapped+((back+buffer_count-1)%buffer_count)*out_buffer_bytes;
++    for(unsigned y=0;y<out_height;++y)for(unsigned x=0;x<out_width;++x)
++        pixels[size_t(y)*out_width+x]=*(const uint32_t *)(buffer+tiled_at(x,y,out_blocks));
+     return true;
+ }
+ int Ps5GpuDisplay::reshow(FILE *log)
+@@ -317,18 +333,18 @@
+     }
+     // The last frame from the shadow (cached; streamed out in a few ms). Without one, or before it holds a frame, the
+     // last frame is read back from the display (slow: 137 ms on a standard PS5), into the shadow when there is one.
+-    const auto *last=(const __m128i *)((const uint8_t *)mapped+((back+buffer_count-1)%buffer_count)*buffer_bytes);
+-    auto *buffer=(uint8_t *)mapped+back*buffer_bytes;
++    const auto *last=(const __m128i *)((const uint8_t *)mapped+((back+buffer_count-1)%buffer_count)*out_buffer_bytes);
++    auto *buffer=(uint8_t *)mapped+back*out_buffer_bytes;
+     if(shadow && !shadow_valid) {
+-        for(size_t at=0;at<frame_bytes/16;++at)_mm_store_si128((__m128i *)(void *)shadow+at,_mm_load_si128(last+at));
++        for(size_t at=0;at<out_frame_bytes/16;++at)_mm_store_si128((__m128i *)(void *)shadow+at,_mm_load_si128(last+at));
+         shadow_valid=true;
+     }
+-    if(shadow)pw_display_stream_copy(buffer,shadow,frame_bytes);
+-    else for(size_t at=0;at<frame_bytes/16;++at)_mm_stream_si128((__m128i *)(void *)buffer+at,_mm_load_si128(last+at));
++    if(shadow)pw_display_stream_copy(buffer,shadow,out_frame_bytes);
++    else for(size_t at=0;at<out_frame_bytes/16;++at)_mm_stream_si128((__m128i *)(void *)buffer+at,_mm_load_si128(last+at));
+     if(overlay && shadow && blur && panel_cache)compose_panel(buffer,shadow,log);
+-    else if(overlay)pw_display_overlay_blit(buffer,overlay,overlay_x,overlay_y,overlay_w,overlay_h);
+-    if(hud && shadow)pw_display_hud_compose(buffer,hud,hud_x,hud_y,hud_w,hud_h,shadow,nullptr,0,0,0,1);
+-    if(last_cursor_x>=0 && last_cursor_y>=0)draw_cursor(buffer,last_cursor_x,last_cursor_y);
++    else if(overlay)pw_display_overlay_blit_wh(buffer,out_width,out_height,out_blocks,overlay,overlay_x,overlay_y,overlay_w,overlay_h);
++    if(hud && shadow)pw_display_hud_compose_wh(buffer,out_width,out_height,out_blocks,hud,hud_x,hud_y,hud_w,hud_h,shadow,nullptr,0,0,0,1);
++    if(last_cursor_x>=0 && last_cursor_y>=0)draw_cursor(buffer,out_width,out_height,out_blocks,last_cursor_x,last_cursor_y);
+     _mm_sfence();
+     const uint64_t serial=__atomic_add_fetch(&flips,1,__ATOMIC_RELAXED);
+     const int status=sceVideoOutSubmitFlip(handle,back,PS5_VIDEO_OUT_FLIP_VSYNC,serial);
+@@ -353,21 +369,21 @@
+     const uint64_t start=now_ns();
+     const unsigned bands=high_frame_rate ? 4u : 2u;
+     if(!blur_ready || panel_blended!=panel_changes) {
+-        pw_display_overlay_blend(panel_cache,clean,overlay,overlay_x,overlay_y,overlay_w,overlay_h,blur,!blur_ready,0,1);
++        pw_display_overlay_blend_wh(panel_cache,clean,out_width,out_height,out_blocks,overlay,overlay_x,overlay_y,overlay_w,overlay_h,blur,!blur_ready,0,1);
+         blur_ready=true,panel_blended=panel_changes,composes=0;
+     } else {
+-        pw_display_overlay_blend(panel_cache,clean,overlay,overlay_x,overlay_y,overlay_w,overlay_h,blur,1,composes%bands,bands);
++        pw_display_overlay_blend_wh(panel_cache,clean,out_width,out_height,out_blocks,overlay,overlay_x,overlay_y,overlay_w,overlay_h,blur,1,composes%bands,bands);
+         ++composes;
+     }
+-    pw_display_overlay_show(target,panel_cache,overlay,overlay_x,overlay_y,overlay_w,overlay_h,start/1e9,sweep_at(start));
++    pw_display_overlay_show_wh(target,panel_cache,out_width,out_height,out_blocks,overlay,overlay_x,overlay_y,overlay_w,overlay_h,start/1e9,sweep_at(start));
+     composed(log,now_ns()-start);
+ }
+ void Ps5GpuDisplay::keep_shadow(bool on)
+ {
+     if(on && !shadow) {
+-        shadow=(uint8_t *)aligned_alloc(64,frame_bytes),shadow_valid=false,blur_ready=false;
+-        blur=(uint32_t *)malloc((size_t(width/8+2)*(height/8+2)*2+size_t(width/4)*(height/4))*sizeof(uint32_t));
+-        panel_cache=(uint8_t *)aligned_alloc(64,frame_bytes);
++        shadow=(uint8_t *)aligned_alloc(64,out_frame_bytes),shadow_valid=false,blur_ready=false;
++        blur=(uint32_t *)malloc((size_t(out_width/8+2)*(out_height/8+2)*2+size_t(out_width/4)*(out_height/4))*sizeof(uint32_t));
++        panel_cache=(uint8_t *)aligned_alloc(64,out_frame_bytes);
+     } else if(!on) free(shadow),free(blur),free(panel_cache),shadow=nullptr,blur=nullptr,panel_cache=nullptr,shadow_valid=false;
+ }
+ bool Ps5GpuDisplay::close(FILE *log)
+@@ -393,10 +409,10 @@
+         if(registered && unregistered && closed)return false;
+         handle=-1;registered=false;
+     }
+-    int unmapped=mapped ? sceKernelMunmap(mapped,memory_bytes) : 0;
++    int unmapped=mapped ? sceKernelMunmap(mapped,out_memory_bytes) : 0;
+     if(unmapped)return false;
+     mapped=nullptr;
+-    int released=physical>=0 ? sceKernelReleaseDirectMemory(physical,memory_bytes) : 0;
++    int released=physical>=0 ? sceKernelReleaseDirectMemory(physical,out_memory_bytes) : 0;
+     if(!released)physical=-1;
+     fprintf(log,"gpu-display closed=1 flips=%llu blank=%#x unregister=%#x close=%#x release=%#x\n",
+         (unsigned long long)flips,unsigned(blank),unsigned(unregistered),unsigned(closed),unsigned(released));fsync(fileno(log));
+--- a/tooling/gpu-broker/display.h
++++ b/tooling/gpu-broker/display.h
+@@ -10,8 +10,11 @@
+     int handle=-1, back=0;
+     int64_t physical=-1;
+     void *mapped=nullptr;
++    unsigned out_width=1920,out_height=1080,out_blocks=15,out_block_rows=9;
++    size_t out_frame_bytes=size_t(15)*9<<16,out_buffer_bytes=10u<<20,out_memory_bytes=30u<<20;
+     uint64_t flips=0,last_copy_ns=0;
+     bool registered=false;
++    void configure_geometry(unsigned w,unsigned h);
+     bool fast_copy=false;   /* PS5_Proton's PROTON_GPU_FAST_COPY=1, read when the display opens */
+     uint8_t *rows=nullptr;  /* with it: a frame of another size scaled to 1920x1080 here first (pw_display_scale_rows) */
+     bool high_frame_rate=false;   /* the output at 119.88 Hz (PS5_Proton's PROTON_120HZ=1), restored at close */
+--- a/tooling/gpu-broker/protocol.h
++++ b/tooling/gpu-broker/protocol.h
+@@ -79,3 +79,3 @@
+      * clips it, up to the size it composes (PS5_Proton's src/pw_window_page.h, 2176x1408). */
+-    return width && width<=2176 && height && height<=1408 && stride>=width*4 && stride<=2176*4 &&
++    return width && width<=4096 && height && height<=2432 && stride>=width*4 && stride<=4096*4 &&
+            !(stride&3) && hwnd && m->argument[2] && (m->argument[3]&~PW_GPU_PRESENT_SHOWN)<=1 &&
+@@ -89,6 +89,11 @@
+     const uint64_t width=m->argument[0],height=m->argument[1],pitch=m->argument[2];
+-    return width && width<=2176 && height && height<=1408 && pitch>=width*4 && pitch<=2176*4 && !(pitch&3) &&
++    return width && width<=4096 && height && height<=2432 && pitch>=width*4 && pitch<=4096*4 && !(pitch&3) &&
+            (m->argument[3]&~PW_GPU_PRESENT_SHOWN)<=1 && m->bytes==height*pitch && m->address && !(m->address&3);
+ }
+-/* The part of a display image on screen: its top-left, at most the screen's 1920x1080 (a smaller image is scaled). */
++/* The part of a display image on screen: its top-left, at most max_w x max_h (a smaller image is scaled). */
++static inline void pw_gpu_display_shown_in(const PwGpuMessage *m,unsigned max_w,unsigned max_h,unsigned *width,unsigned *height)
++{
++    *width=m->argument[0]>max_w ? max_w : (unsigned)m->argument[0];
++    *height=m->argument[1]>max_h ? max_h : (unsigned)m->argument[1];
++}
+ static inline void pw_gpu_display_shown(const PwGpuMessage *m,unsigned *width,unsigned *height)
+--- a/tooling/gpu-broker/pw_display_overlay.h
++++ b/tooling/gpu-broker/pw_display_overlay.h
+@@ -19,17 +19,17 @@
+             _mm_stream_si128((__m128i *)(void *)(buffer + at) + r, _mm_load_si128((const __m128i *)(const void *)(frame + at) + r));
+ }
+ 
+-static inline void pw_display_overlay_blit(uint8_t *buffer, const uint32_t *pixels, unsigned x, unsigned y, unsigned w,
+-                                           unsigned h)
++static inline void pw_display_overlay_blit_wh(uint8_t *buffer, unsigned disp_w, unsigned disp_h, unsigned blocks,
++                                              const uint32_t *pixels, unsigned x, unsigned y, unsigned w, unsigned h)
+ {
+-    if (!buffer || !pixels || x >= PW_DISPLAY_WIDTH || y >= PW_DISPLAY_HEIGHT) return;
++    if (!buffer || !pixels || x >= disp_w || y >= disp_h) return;
+     const unsigned pitch = w;
+-    if (w > PW_DISPLAY_WIDTH - x) w = PW_DISPLAY_WIDTH - x;
+-    if (h > PW_DISPLAY_HEIGHT - y) h = PW_DISPLAY_HEIGHT - y;
++    if (w > disp_w - x) w = disp_w - x;
++    if (h > disp_h - y) h = disp_h - y;
+     if (!(x & 3) && !(y & 3) && !(w & 3) && !(h & 3)) {
+         for (unsigned by = 0; by < h; by += 4)
+             for (unsigned bx = 0; bx < w; bx += 4) {
+-                __m128i *line = (__m128i *)(void *)(buffer + pw_display_tiled(x + bx, y + by));
++                __m128i *line = (__m128i *)(void *)(buffer + pw_display_tiled_stride(x + bx, y + by, blocks));
+                 for (unsigned r = 0; r < 4; ++r)
+                     _mm_stream_si128(line + r, _mm_loadu_si128((const __m128i *)(const void *)(pixels + (size_t)(by + r) * pitch + bx)));
+             }
+@@ -38,7 +38,13 @@
+     }
+     for (unsigned j = 0; j < h; ++j)
+         for (unsigned i = 0; i < w; ++i)
+-            *(uint32_t *)(void *)(buffer + pw_display_tiled(x + i, y + j)) = pixels[(size_t)j * pitch + i];
++            *(uint32_t *)(void *)(buffer + pw_display_tiled_stride(x + i, y + j, blocks)) = pixels[(size_t)j * pitch + i];
++}
++
++static inline void pw_display_overlay_blit(uint8_t *buffer, const uint32_t *pixels, unsigned x, unsigned y, unsigned w,
++                                           unsigned h)
++{
++    pw_display_overlay_blit_wh(buffer, PW_DISPLAY_WIDTH, PW_DISPLAY_HEIGHT, PW_DISPLAY_BLOCKS, pixels, x, y, w, h);
+ }
+ 
+ /* ---- A see-through panel (PS5_Proton's keyboard, "Frosted Meadow", the owner's pick of 2026-11-01): premultiplied
+@@ -115,25 +121,31 @@
+ 
+ /* The glass sweep's light at diagonal position `diag` (x + 0.45 (y - top)), `k` seconds into it (the owner's pick,
+  * 2026-11-01, mockup video B: a soft band crossing the panel in 1.8 s); 0..1 */
+-static inline float pw_overlay_sweep_band(float diag, double k)
++static inline float pw_overlay_sweep_band_w(float diag, double k, unsigned disp_w)
+ {
+     double s = k / 1.8;
+     s = s < 0 ? 0 : s > 1 ? 1 : s;
+-    const float centre = (float)(-300 + (PW_DISPLAY_WIDTH + 600) * s * s * (3 - 2 * s)), d = (diag - centre) / 110;
++    const float centre = (float)(-300 + ((double)disp_w + 600) * s * s * (3 - 2 * s)), d = (diag - centre) / 110;
+     return d > 3.5f || d < -3.5f ? 0 : expf(-d * d);
+ }
+ 
++static inline float pw_overlay_sweep_band(float diag, double k)
++{
++    return pw_overlay_sweep_band_w(diag, k, PW_DISPLAY_WIDTH);
++}
++
+ /* The panel over the frame blurred under it, without the bubbles or the sweep, into `cache` (cached memory tiled as the
+  * display's buffer; only the rectangle's blocks are written); pw_display_overlay_show puts it out every frame, with what
+  * moves. scratch: (w / 8 + 2) * (h / 8 + 2) * 2 + (w / 4) * (h / 4) uint32, the blur's. fresh_blur 0 keeps the last blur.
+  * Band `band` of `bands` (0 of 1: all of it): the frame's rows of that band shrunk for the next blur, the blur made when
+  * the last band's are, and the panel's rows of that band blended. A band a frame spreads the work over `bands` frames
+  * (the 120 Hz budget, 8.3 ms a frame; the blur then new every `bands` frames); a changed panel is blended whole. */
+-static inline void pw_display_overlay_blend(uint8_t *cache, const uint8_t *frame, const uint32_t *panel, unsigned x,
+-                                            unsigned y, unsigned w, unsigned h, uint32_t *scratch, int fresh_blur,
+-                                            unsigned band, unsigned bands)
++static inline void pw_display_overlay_blend_wh(uint8_t *cache, const uint8_t *frame, unsigned disp_w, unsigned disp_h,
++                                               unsigned blocks, const uint32_t *panel, unsigned x, unsigned y,
++                                               unsigned w, unsigned h, uint32_t *scratch, int fresh_blur,
++                                               unsigned band, unsigned bands)
+ {
+-    if (!cache || !frame || !panel || (x | y | w | h) & 7 || x + w > PW_DISPLAY_WIDTH || y + h > PW_DISPLAY_HEIGHT) return;
++    if (!cache || !frame || !panel || (x | y | w | h) & 7 || x + w > disp_w || y + h > disp_h) return;
+     const unsigned sw = w / 8, sh = h / 8, stride = sw + 2, mw = w / 4;
+     uint32_t *small = scratch, *soft = scratch + (size_t)stride * (sh + 2), *mid = soft + (size_t)stride * (sh + 2);
+     if (!bands || band >= bands) return;
+@@ -143,7 +155,7 @@
+         for (unsigned bx = 0; bx < sw; ++bx) {
+             unsigned r = 0, g = 0, b = 0;
+             for (unsigned q = 0; q < 4; ++q) {
+-                const __m128i *line = (const __m128i *)(const void *)(frame + pw_display_tiled(x + bx * 8 + (q & 1) * 4, y + by * 8 + (q >> 1) * 4));
++                const __m128i *line = (const __m128i *)(const void *)(frame + pw_display_tiled_stride(x + bx * 8 + (q & 1) * 4, y + by * 8 + (q >> 1) * 4, blocks));
+                 b += pw_overlay_line_sum(line, 0), g += pw_overlay_line_sum(line, 8), r += pw_overlay_line_sum(line, 16);
+             }
+             small[(by + 1) * stride + bx + 1] = (r / 64) << 16 | (g / 64) << 8 | (b / 64);
+@@ -184,7 +196,7 @@
+     const __m128i zero = _mm_setzero_si128();
+     for (unsigned oy = h / 4 * band / bands * 4; oy < h / 4 * (band + 1) / bands * 4; oy += 4)
+         for (unsigned ox = 0; ox < w; ox += 4) {
+-            __m128i *at = (__m128i *)(void *)(cache + pw_display_tiled(x + ox, y + oy));
++            __m128i *at = (__m128i *)(void *)(cache + pw_display_tiled_stride(x + ox, y + oy, blocks));
+             const __m128i under16 = _mm_unpacklo_epi8(_mm_set1_epi32((int)mid[(oy / 4) * mw + ox / 4]), zero);
+             for (unsigned r = 0; r < 4; ++r)
+                 _mm_store_si128(at + r, pw_overlay_over4(_mm_loadu_si128((const __m128i *)(const void *)(panel + (size_t)(oy + r) * w + ox)),
+@@ -192,13 +204,22 @@
+         }
+ }
+ 
+-/* The blended panel (pw_display_overlay_blend's cache) into the display's buffer, a 4x4 block at a time with streaming
++static inline void pw_display_overlay_blend(uint8_t *cache, const uint8_t *frame, const uint32_t *panel, unsigned x,
++                                            unsigned y, unsigned w, unsigned h, uint32_t *scratch, int fresh_blur,
++                                            unsigned band, unsigned bands)
++{
++    pw_display_overlay_blend_wh(cache, frame, PW_DISPLAY_WIDTH, PW_DISPLAY_HEIGHT, PW_DISPLAY_BLOCKS, panel, x, y, w, h,
++                                scratch, fresh_blur, band, bands);
++}
++
++/* The blended panel (pw_display_overlay_blend_wh's cache) into the display's buffer, a 4x4 block at a time with streaming
+  * stores, with the glass sweep (`sweep`: seconds into it, below 0 for none; it reads the panel's alpha) and the bubbles
+  * rising in the rectangle's margins at `seconds`. cache may be buffer. */
+-static inline void pw_display_overlay_show(uint8_t *buffer, const uint8_t *cache, const uint32_t *panel, unsigned x,
+-                                           unsigned y, unsigned w, unsigned h, double seconds, double sweep)
++static inline void pw_display_overlay_show_wh(uint8_t *buffer, const uint8_t *cache, unsigned disp_w, unsigned disp_h,
++                                              unsigned blocks, const uint32_t *panel, unsigned x, unsigned y,
++                                              unsigned w, unsigned h, double seconds, double sweep)
+ {
+-    if (!buffer || !cache || !panel || (x | y | w | h) & 7 || x + w > PW_DISPLAY_WIDTH || y + h > PW_DISPLAY_HEIGHT) return;
++    if (!buffer || !cache || !panel || (x | y | w | h) & 7 || x + w > disp_w || y + h > disp_h) return;
+     PwOverlayBubble bubbles[PW_OVERLAY_BUBBLES];
+     const unsigned nb = pw_overlay_bubbles(seconds, x, y, w, h, bubbles);
+     const __m128i zero = _mm_setzero_si128();
+@@ -207,13 +228,13 @@
+     for (unsigned tx = x / 128 * 128; tx < x + w; tx += 128)
+     for (unsigned oy = (ty > y ? ty : y) - y; oy < (ty + 128 < y + h ? ty + 128 : y + h) - y; oy += 4)
+         for (unsigned ox = (tx > x ? tx : x) - x; ox < (tx + 128 < x + w ? tx + 128 : x + w) - x; ox += 4) {
+-            __m128i *at = (__m128i *)(void *)(buffer + pw_display_tiled(x + ox, y + oy));
+-            const __m128i *from = (const __m128i *)(const void *)(cache + pw_display_tiled(x + ox, y + oy));
++            __m128i *at = (__m128i *)(void *)(buffer + pw_display_tiled_stride(x + ox, y + oy, blocks));
++            const __m128i *from = (const __m128i *)(const void *)(cache + pw_display_tiled_stride(x + ox, y + oy, blocks));
+             __m128i rows[4];
+             for (unsigned r = 0; r < 4; ++r) rows[r] = _mm_load_si128(from + r);
+             const int bx = (int)(x + ox), by = (int)(y + oy);
+             /* the glass sweep: the band's light at the block's middle, more on more opaque glass (the keys') */
+-            const float band = sweep < 0 ? 0 : pw_overlay_sweep_band((float)ox + 2 + ((float)oy + 2) * 0.45f, sweep);
++            const float band = sweep < 0 ? 0 : pw_overlay_sweep_band_w((float)ox + 2 + ((float)oy + 2) * 0.45f, sweep, disp_w);
+             if (band > 0.004f) {
+                 /* 0.10 of the way to white on clear glass, up to 0.26 on the keys' (alpha 0.75 to 0.95), x65536 */
+                 static unsigned glass[256];
+@@ -258,6 +279,13 @@
+     _mm_sfence();
+ }
+ 
++static inline void pw_display_overlay_show(uint8_t *buffer, const uint8_t *cache, const uint32_t *panel, unsigned x,
++                                           unsigned y, unsigned w, unsigned h, double seconds, double sweep)
++{
++    pw_display_overlay_show_wh(buffer, cache, PW_DISPLAY_WIDTH, PW_DISPLAY_HEIGHT, PW_DISPLAY_BLOCKS, panel, x, y, w, h,
++                               seconds, sweep);
++}
++
+ 
+ /* scratch: (w / 8 + 2) * (h / 8 + 2) * 2 + (w / 4) * (h / 4) uint32. fresh_blur 0 keeps the last call's blur; `sweep`: seconds
+  * into the glass sweep, or below 0 for none. Blend and show in one go, in place (for a buffer in cached memory). */
+@@ -289,25 +317,27 @@
+     return _mm_or_si128(_mm_packus_epi16(half[0], half[1]), _mm_set1_epi32((int)0xff000000u));
+ }
+ 
+-static inline void pw_display_hud_compose(uint8_t *buffer, const uint32_t *hud, unsigned x, unsigned y, unsigned w, unsigned h,
+-                                          const uint8_t *tiled, const void *pixels, unsigned sw, unsigned sh, size_t pitch,
+-                                          int bgra)
++static inline void pw_display_hud_compose_wh(uint8_t *buffer, unsigned disp_w, unsigned disp_h, unsigned blocks,
++                                             const uint32_t *hud, unsigned x, unsigned y, unsigned w, unsigned h,
++                                             const uint8_t *tiled, const void *pixels, unsigned sw, unsigned sh,
++                                             size_t pitch, int bgra)
+ {
+-    if (!buffer || !hud || (x | y | w | h) & 3 || x + w > PW_DISPLAY_WIDTH || y + h > PW_DISPLAY_HEIGHT) return;
++    if (!buffer || !hud || (x | y | w | h) & 3 || x + w > disp_w || y + h > disp_h) return;
+     if (!tiled && (!pixels || !sw || !sh)) return;
+     for (unsigned oy = 0; oy < h; oy += 4)
+         for (unsigned ox = 0; ox < w; ox += 4) {
+-            __m128i *at = (__m128i *)(void *)(buffer + pw_display_tiled(x + ox, y + oy));
++            __m128i *at = (__m128i *)(void *)(buffer + pw_display_tiled_stride(x + ox, y + oy, blocks));
+             for (unsigned r = 0; r < 4; ++r) {
+                 __m128i under;
+                 if (tiled) {
+-                    under = _mm_load_si128((const __m128i *)(const void *)(tiled + pw_display_tiled(x + ox, y + oy)) + r);
++                    under = _mm_load_si128((const __m128i *)(const void *)(tiled + pw_display_tiled_stride(x + ox, y + oy, blocks)) + r);
+                 } else {
+                     uint32_t u[4];
+-                    const unsigned sy = (y + oy + r) * sh / PW_DISPLAY_HEIGHT;
++                    const unsigned sy = (unsigned)((uint64_t)(y + oy + r) * sh / disp_h);
+                     for (unsigned i = 0; i < 4; ++i) {
+                         uint32_t c;
+-                        memcpy(&c, (const uint8_t *)pixels + sy * pitch + (size_t)((x + ox + i) * sw / PW_DISPLAY_WIDTH) * 4, 4);
++                        const unsigned sx = (unsigned)((uint64_t)(x + ox + i) * sw / disp_w);
++                        memcpy(&c, (const uint8_t *)pixels + (size_t)sy * pitch + (size_t)sx * 4, 4);
+                         u[i] = bgra ? c : (c & 0xff00ff00u) | (c & 0xff) << 16 | (c >> 16 & 0xff);
+                     }
+                     under = _mm_loadu_si128((const __m128i *)(const void *)u);
+@@ -319,4 +349,12 @@
+     _mm_sfence();
+ }
+ 
++static inline void pw_display_hud_compose(uint8_t *buffer, const uint32_t *hud, unsigned x, unsigned y, unsigned w, unsigned h,
++                                          const uint8_t *tiled, const void *pixels, unsigned sw, unsigned sh, size_t pitch,
++                                          int bgra)
++{
++    pw_display_hud_compose_wh(buffer, PW_DISPLAY_WIDTH, PW_DISPLAY_HEIGHT, PW_DISPLAY_BLOCKS, hud, x, y, w, h, tiled,
++                              pixels, sw, sh, pitch, bgra);
++}
++
+ #endif
+--- /dev/null
++++ b/tooling/gpu-broker/resolution-wsi.patch
+@@ -0,0 +1,54 @@
++--- a/src/vulkan/wsi/wsi_common_videoout.c
+++++ b/src/vulkan/wsi/wsi_common_videoout.c
++@@ -54,18 +54,31 @@
++ { return mode!=VK_PRESENT_MODE_MAILBOX_KHR && mode!=VK_PRESENT_MODE_IMMEDIATE_KHR; }
++ #define VIDEOOUT_SIZES 1
++ struct wsi_videoout_size { VkExtent2D extent; };
++-static const struct wsi_videoout_size videoout_sizes[] = {{{1920,1080}}};
+++static VkExtent2D videoout_desktop_extent(void)
+++{
+++   const char *desk = getenv("WINE_PS5_DESKTOP");
+++   unsigned w = 0, h = 0;
+++   if (desk && sscanf(desk, "%ux%u", &w, &h) == 2 && w >= 320 && h >= 200 && w <= 3840 && h <= 2160)
+++      return (VkExtent2D){w, h};
+++   return (VkExtent2D){1920, 1080};
+++}
+++static struct wsi_videoout_size videoout_sizes[] = {{{1920,1080}}};
++ struct wsi_videoout_mode { const struct wsi_videoout_size *size;uint32_t refresh_millihertz; };
++ static struct wsi_videoout_mode videoout_size_modes[1][1]={{{&videoout_sizes[0],59940}}};
++ static int videoout_display;
++-static const VkExtent2D videoout_extent={1920,1080};
++ static VkDisplayKHR videoout_display_handle(void) { return (VkDisplayKHR)(uintptr_t)&videoout_display; }
++ static VkDisplayModeKHR videoout_mode_handle(struct wsi_videoout_mode *m) { return (VkDisplayModeKHR)(uintptr_t)m; }
++ static struct wsi_videoout_mode *videoout_mode_from_handle(VkDisplayModeKHR m) { return (void *)(uintptr_t)m; }
++ static const struct wsi_videoout_size *videoout_surface_size(const VkIcdSurfaceBase *s)
++-{ return videoout_mode_from_handle(((const VkIcdSurfaceDisplay *)s)->displayMode)->size; }
+++{
+++   videoout_sizes[0].extent = videoout_desktop_extent();
+++   return videoout_mode_from_handle(((const VkIcdSurfaceDisplay *)s)->displayMode)->size;
+++}
++ static uint32_t videoout_modes(struct wsi_videoout_mode *m[VIDEOOUT_SIZES*2])
++-{ m[0]=&videoout_size_modes[0][0];return 1; }
+++{
+++   videoout_sizes[0].extent = videoout_desktop_extent();
+++   m[0]=&videoout_size_modes[0][0];return 1;
+++}
++ VKAPI_ATTR VkResult VKAPI_CALL
++ wsi_GetPhysicalDeviceDisplayPropertiesKHR(VkPhysicalDevice physicalDevice, uint32_t *pPropertyCount,
++                                           VkDisplayPropertiesKHR *pProperties)
++@@ -78,7 +91,7 @@
++          .displayName = "PS5 VideoOut",
++          /* The size of the screen VideoOut drives is not known. */
++          .physicalDimensions = {0, 0},
++-         .physicalResolution = videoout_extent,
+++         .physicalResolution = videoout_desktop_extent(),
++          .supportedTransforms = VK_SURFACE_TRANSFORM_IDENTITY_BIT_KHR,
++          .planeReorderPossible = VK_FALSE,
++          .persistentContent = VK_FALSE,
++@@ -564,5 +577,5 @@
++    const struct broker_surface *surface=(const void *)s;
++-   const uint32_t max_width=2176,max_height=1408;
+++   const uint32_t max_width=4096,max_height=2432;
++    if(!info->imageExtent.width || info->imageExtent.width>max_width || !info->imageExtent.height ||
++       info->imageExtent.height>max_height ||
++       info->minImageCount>VIDEOOUT_BUFFERS ||
+--- a/tooling/gpu-broker/server.cpp
++++ b/tooling/gpu-broker/server.cpp
+@@ -791,7 +791,7 @@
+     // Vulkan client (its cookie) or a helper's frame page (minus its pid), with the native process it belongs to.
+     int holder=0,holder_pid=0;uint64_t holder_ns=0;unsigned switches=0,hidden=0;
+     struct FrameSource { int pid=0;PwFramePage *page=nullptr;uint32_t shown=0; } frames[32];
+-    uint8_t *frame_copy=nullptr;int cursor_x=INT32_MIN,cursor_y=INT32_MIN;
++    uint8_t *frame_copy=nullptr;size_t frame_copy_bytes=0;int cursor_x=INT32_MIN,cursor_y=INT32_MIN;
+     PwWindowScene window_scene{};
+     PwWindowEffects window_effects{}; // DWM corners/shadows/materials/thumbnails caches
+     bool window_composed=false;       // frame_copy holds the last complete composition
+@@ -863,15 +863,56 @@
+         b.holder,foreground,focus ? "foreground" : "idle");
+     b.holder=source;b.holder_pid=pid;b.holder_ns=now;++b.switches;return true;
+ }
+-// Where the pointer goes on the 1920x1080 screen for a picture of width x height whose top-left corner is at
++// Ensure frame_copy is large enough for the active display resolution (1080p, 1440p or 4K).
++bool ensure_frame_copy(Broker &b)
++{
++    const size_t need=size_t(b.display.out_width)*b.display.out_height*4;
++    if(b.frame_copy && b.frame_copy_bytes>=need)return true;
++    uint8_t *next=static_cast<uint8_t *>(realloc(b.frame_copy,need));
++    if(!next)return false;
++    b.frame_copy=next;b.frame_copy_bytes=need;return true;
++}
++// Scale a 1080p-space UI overlay/HUD rectangle and BGRA pixel buffer to the active display resolution.
++uint32_t *scale_panel_to_display(const void *pixels,unsigned x,unsigned y,unsigned w,unsigned h,
++                                 unsigned dw,unsigned dh,unsigned align,
++                                 unsigned &out_x,unsigned &out_y,unsigned &out_w,unsigned &out_h)
++{
++    if(dw==1920 && dh==1080) {
++        auto *copy=(uint32_t *)malloc(size_t(w)*h*4);
++        if(!copy)return nullptr;
++        memcpy(copy,pixels,size_t(w)*h*4);
++        out_x=x;out_y=y;out_w=w;out_h=h;
++        return copy;
++    }
++    const unsigned sx=unsigned(uint64_t(x)*dw/1920) & ~(align-1);
++    const unsigned sy=unsigned(uint64_t(y)*dh/1080) & ~(align-1);
++    unsigned ex=(unsigned(uint64_t(x+w)*dw/1920)+align-1) & ~(align-1);
++    unsigned ey=(unsigned(uint64_t(y+h)*dh/1080)+align-1) & ~(align-1);
++    if(ex>dw)ex=dw & ~(align-1);
++    if(ey>dh)ey=dh & ~(align-1);
++    const unsigned sw=ex>sx ? ex-sx : align,sh=ey>sy ? ey-sy : align;
++    if(sx+sw>dw || sy+sh>dh)return nullptr;
++    auto *scaled=(uint32_t *)malloc(size_t(sw)*sh*4);
++    if(!scaled)return nullptr;
++    const auto *src=(const uint32_t *)pixels;
++    for(unsigned j=0;j<sh;++j) {
++        const unsigned src_y=unsigned(uint64_t(j)*h/sh);
++        const uint32_t *srow=src+size_t(src_y)*w;
++        uint32_t *drow=scaled+size_t(j)*sw;
++        for(unsigned i=0;i<sw;++i)drow[i]=srow[unsigned(uint64_t(i)*w/sw)];
++    }
++    out_x=sx;out_y=sy;out_w=sw;out_h=sh;
++    return scaled;
++}
++// Where the pointer goes on the active display for a picture of width x height whose top-left corner is at
+ // (x, y) on the desktop: the screen shows the picture scaled to fill it.
+-void screen_cursor(int x,int y,unsigned width,unsigned height,int &screen_x,int &screen_y)
++void screen_cursor(int x,int y,unsigned width,unsigned height,unsigned out_w,unsigned out_h,int &screen_x,int &screen_y)
+ {
+     screen_x=screen_y=-1;
+     if(!desktop_cursor)return;
+     int cx,cy;desktop_cursor(&cx,&cy);cx-=x;cy-=y;
+     if(cx<0 || cy<0 || unsigned(cx)>=width || unsigned(cy)>=height)return;
+-    screen_x=int(int64_t(cx)*1920/width);screen_y=int(int64_t(cy)*1080/height);
++    screen_x=int(int64_t(cx)*out_w/width);screen_y=int(int64_t(cy)*out_h/height);
+ }
+ void note_peaks(Broker &b)
+ {
+@@ -889,8 +930,9 @@
+ {
+     if(!b.direct)return;
+     int restored=0;
+-    if(restore && snapshot && b.frame_copy && b.display.read_last(reinterpret_cast<uint32_t *>(b.frame_copy)) &&
+-       !pw_window_scene_gpu(&b.window_scene,b.direct_pid,b.direct_hwnd,b.direct_generation,b.frame_copy,1920,1080,1920*4,1,
++    const unsigned dw=b.display.out_width,dh=b.display.out_height;
++    if(restore && snapshot && ensure_frame_copy(b) && b.display.read_last(reinterpret_cast<uint32_t *>(b.frame_copy)) &&
++       !pw_window_scene_gpu(&b.window_scene,b.direct_pid,b.direct_hwnd,b.direct_generation,b.frame_copy,dw,dh,dw*4,1,
+                             snapshot))
+         { restored=1;++b.direct_restores; }
+     b.direct=false;++b.direct_exits;b.window_composed=false;b.window_dirty=true;
+@@ -915,7 +957,9 @@
+         const size_t count=pw_window_scene_images(&b.window_scene,images,PW_WINDOW_IMAGE_LIMIT);
+         const uint64_t start=radv_ps5_now_ns();
+         b.window_composed=false;
+-        if(pw_windows_compose_effects(reinterpret_cast<uint32_t *>(b.frame_copy),1920,1080,&snapshot,images,count,
++        const unsigned dw=b.display.out_width,dh=b.display.out_height;
++        if(!ensure_frame_copy(b))return ENOMEM;
++        if(pw_windows_compose_effects(reinterpret_cast<uint32_t *>(b.frame_copy),dw,dh,&snapshot,images,count,
+                                       &b.window_effects))return errno;
+         const uint64_t spent=radv_ps5_now_ns()-start;
+         b.window_composed=true;++b.compose_count;b.compose_ns+=spent;
+@@ -944,7 +988,9 @@
+         pw_frame_pacing_next(&b.desktop_pacing,now);
+     }
+     const uint64_t present_begin=radv_ps5_now_ns();
+-    if(b.display.present(b.frame_copy,1920,1080,1920*4,b.log,asked.empty() ? nullptr : asked.c_str(),true,cx,cy))return EIO;
++    const unsigned dw=b.display.out_width,dh=b.display.out_height;
++    if(!ensure_frame_copy(b))return ENOMEM;
++    if(b.display.present(b.frame_copy,dw,dh,dw*4,b.log,asked.empty() ? nullptr : asked.c_str(),true,cx,cy))return EIO;
+     // A capture's present also copies the whole frame for its picture (pw_display_capture.h): the probe's time, not
+     // the desktop's pacing.
+     const uint64_t present_end=radv_ps5_now_ns(),previous=b.desktop_pacing.last_ns;
+@@ -1100,14 +1146,15 @@
+                     const uint64_t flips_before=b.display.flips;
+                     PwWindowSnapshot snapshot{};
+                     m.status=desktop_windows(&snapshot,sizeof(snapshot)) ? errno : 0;
+-                    const int verdict=m.status ? -1 : pw_window_direct_flip(&snapshot,c.pid,hwnd,m.argument[2],width,height,1920,1080);
++                    const unsigned dw=b.display.out_width,dh=b.display.out_height;
++                    const int verdict=m.status ? -1 : pw_window_direct_flip(&snapshot,c.pid,hwnd,m.argument[2],width,height,dw,dh);
+                     const bool mine=b.direct && b.direct_pid==c.pid && b.direct_hwnd==hwnd;
+                     // Another window owns the screen in game mode: this one is behind it. Its frame still updates the
+                     // scene, but nothing is composed while that window remains the whole screen.
+                     bool behind=false;
+                     if(!m.status && b.direct && !mine) {
+                         const int held=pw_window_direct_flip(&snapshot,b.direct_pid,b.direct_hwnd,b.direct_generation,
+-                                                             b.direct_width,b.direct_height,1920,1080);
++                                                             b.direct_width,b.direct_height,dw,dh);
+                         if(held==PW_DIRECT_YES)behind=true;
+                         else leave_direct(b,&snapshot,held,true);
+                     }
+@@ -1202,8 +1249,9 @@
+                     const bool shown=!b.cover && may_show(b,c.cookie,c.pid,radv_ps5_now_ns());
+                     if(b.cover)++b.cover_held_frames;
+                     if(shown) {
+-                        unsigned shown_width,shown_height;pw_gpu_display_shown(&m,&shown_width,&shown_height);
+-                        int cursor_x,cursor_y;screen_cursor(0,0,shown_width,shown_height,cursor_x,cursor_y);
++                        unsigned shown_width,shown_height;
++                        pw_gpu_display_shown_in(&m,b.display.out_width,b.display.out_height,&shown_width,&shown_height);
++                        int cursor_x,cursor_y;screen_cursor(0,0,shown_width,shown_height,b.display.out_width,b.display.out_height,cursor_x,cursor_y);
+                         std::string asked=take_capture(b);
+                         const std::string &picture=asked.empty() ? capture : asked;
+                         m.status=b.display.present((void *)m.address,shown_width,shown_height,
+@@ -1287,7 +1335,7 @@
+                 PwWindowSnapshot held{};
+                 const int verdict=desktop_windows(&held,sizeof(held)) ? PW_DIRECT_INCOMPLETE :
+                     pw_window_direct_flip(&held,b.direct_pid,b.direct_hwnd,b.direct_generation,b.direct_width,
+-                                          b.direct_height,1920,1080);
++                                          b.direct_height,b.display.out_width,b.display.out_height);
+                 if(verdict==PW_DIRECT_YES) { pthread_mutex_unlock(&b.display_lock);continue; }
+                 leave_direct(b,&held,verdict,true);
+             }
+@@ -1321,7 +1369,7 @@
+             memcpy(b.frame_copy,pw_frame_pixels(f.page),size_t(stride)*height);
+             __atomic_thread_fence(__ATOMIC_ACQUIRE);
+             if(__atomic_load_n(&f.page->sequence,__ATOMIC_ACQUIRE)!=sequence)continue; // torn: the next tick
+-            int screen_x,screen_y;screen_cursor(x,y,width,height,screen_x,screen_y);
++            int screen_x,screen_y;screen_cursor(x,y,width,height,b.display.out_width,b.display.out_height,screen_x,screen_y);
+             // PROTON_GPU_CAPTURE: a picture of each helper's first frame as the screen showed it, pointer included.
+             char path[96];snprintf(path,sizeof(path),"/app0/gpu-desktop-%d.ppm",f.pid);
+             const std::string capture=b.capture && !f.shown ? output_path(path) : std::string();
+@@ -1380,18 +1428,18 @@
+ {
+     auto &b=broker_state;
+     if(pixels && (!w || !h || x>=1920 || y>=1080))return false;
+-    uint32_t *copy=nullptr;
+-    if(pixels) {
+-        copy=(uint32_t *)malloc(size_t(w)*h*4);
+-        if(!copy)return false;
+-        memcpy(copy,pixels,size_t(w)*h*4);
+-    }
+     timespec asked{};clock_gettime(CLOCK_MONOTONIC,&asked);
+     for(unsigned waited=0;pthread_mutex_trylock(&b.display_lock);++waited) {
+-        if(waited>=100) { free(copy);return false; }
++        if(waited>=100)return false;
+         sceKernelUsleep(1000);
+     }
+     timespec locked{};clock_gettime(CLOCK_MONOTONIC,&locked);
++    unsigned sx=x,sy=y,sw=w,sh=h;
++    uint32_t *copy=nullptr;
++    if(pixels) {
++        copy=scale_panel_to_display(pixels,x,y,w,h,b.display.out_width,b.display.out_height,8u,sx,sy,sw,sh);
++        if(!copy) { pthread_mutex_unlock(&b.display_lock);return false; }
++    }
+     const bool was=b.display.overlay!=nullptr;
+     free(b.display.overlay);
+     b.display.overlay=copy;
+@@ -1405,7 +1453,7 @@
+         else if(copy)b.display.panel_press_ns=t;
+         else b.display.next_sweep_ns=0,b.display.sweep_ns=0;
+     }
+-    b.display.overlay_x=x;b.display.overlay_y=y;b.display.overlay_w=copy ? w : 0;b.display.overlay_h=copy ? h : 0;
++    b.display.overlay_x=sx;b.display.overlay_y=sy;b.display.overlay_w=copy ? sw : 0;b.display.overlay_h=copy ? sh : 0;
+     if(b.log && was!=(copy!=nullptr))fprintf(b.log,"gpu-overlay %s x=%u y=%u w=%u h=%u flips=%llu\n",copy ? "on" : "off",x,y,w,h,
+                                              (unsigned long long)b.display.flips);
+     timespec now{};clock_gettime(CLOCK_MONOTONIC,&now);   // the display's own clock (display.cpp now_ns)
+@@ -1434,20 +1482,20 @@
+ {
+     auto &b=broker_state;
+     if(pixels && (!w || !h || (x|y|w|h)&3 || x+w>1920 || y+h>1080))return false;
+-    uint32_t *copy=nullptr;
+-    if(pixels) {
+-        copy=(uint32_t *)malloc(size_t(w)*h*4);
+-        if(!copy)return false;
+-        memcpy(copy,pixels,size_t(w)*h*4);
+-    }
+     for(unsigned waited=0;pthread_mutex_trylock(&b.display_lock);++waited) {
+-        if(waited>=100) { free(copy);return false; }
++        if(waited>=100)return false;
+         sceKernelUsleep(1000);
+     }
++    unsigned sx=x,sy=y,sw=w,sh=h;
++    uint32_t *copy=nullptr;
++    if(pixels) {
++        copy=scale_panel_to_display(pixels,x,y,w,h,b.display.out_width,b.display.out_height,4u,sx,sy,sw,sh);
++        if(!copy) { pthread_mutex_unlock(&b.display_lock);return false; }
++    }
+     const bool was=b.display.hud!=nullptr;
+     free(b.display.hud);
+     b.display.hud=copy;
+-    b.display.hud_x=x;b.display.hud_y=y;b.display.hud_w=copy ? w : 0;b.display.hud_h=copy ? h : 0;
++    b.display.hud_x=sx;b.display.hud_y=sy;b.display.hud_w=copy ? sw : 0;b.display.hud_h=copy ? sh : 0;
+     if(b.log && was!=(copy!=nullptr))fprintf(b.log,"gpu-hud %s x=%u y=%u w=%u h=%u\n",copy ? "on" : "off",x,y,w,h);
+     pthread_mutex_unlock(&b.display_lock);
+     return true;
+@@ -1477,9 +1525,21 @@
+     const int status=b.display.handle<0 ? b.display.open(b.log) : 0;
+     const unsigned hz=b.display.refresh_hz();
+     pthread_mutex_unlock(&b.display_lock);
+-    fprintf(b.log,"gpu-display early hz=%u status=%#x\n",hz,unsigned(status));
++    fprintf(b.log,"gpu-display early hz=%u mode=%ux%u status=%#x\n",hz,b.display.out_width,b.display.out_height,unsigned(status));
+     return hz;
+ }
++void ps5_gpu_broker_display_size(unsigned *width,unsigned *height)
++{
++    auto &b=broker_state;
++    unsigned w=1920,h=1080;
++    if(b.started) {
++        pthread_mutex_lock(&b.display_lock);
++        w=b.display.out_width;h=b.display.out_height;
++        pthread_mutex_unlock(&b.display_lock);
++    }
++    if(width)*width=w;
++    if(height)*height=h;
++}
+ bool ps5_gpu_broker_capture_next(const char *path)
+ {
+     auto &b=broker_state;
+@@ -1628,7 +1688,10 @@
+     b.holder=b.holder_pid=0;b.switches=b.hidden=0;b.compositor_stop=false;
+     b.window_sequence=b.window_frames=0;b.window_error=0;b.window_dirty=true;
+     b.window_composed=false;b.compose_count=b.compose_ns=b.compose_max_ns=0;
+-    if(!b.frame_copy)b.frame_copy=static_cast<uint8_t *>(malloc(size_t(PW_FRAME_WIDTH)*PW_FRAME_HEIGHT*4));
++    if(!b.frame_copy) {
++        b.frame_copy_bytes=size_t(PW_FRAME_WIDTH)*PW_FRAME_HEIGHT*4;
++        b.frame_copy=static_cast<uint8_t *>(malloc(b.frame_copy_bytes));
++    }
+     b.compositing=b.frame_copy && !pthread_create(&b.compositor,nullptr,compositor_main,nullptr);
+     fprintf(b.log,"gpu-desktop compositor=%d\n",b.compositing);
+     b.started=true;return true;
+--- a/tooling/gpu-broker/server.h
++++ b/tooling/gpu-broker/server.h
+@@ -42,6 +42,8 @@
+  * running, or the display did not open). The title asks before any helper starts, so Wine offers 120 Hz modes only
+  * when the display really runs at 119.88 Hz (PS5_Proton src/pw_display_rate.h, graphics patch 0029). */
+ unsigned ps5_gpu_broker_display_hz(void);
++/* Active display dimensions (1920x1080, 2560x1440 or 3840x2160) once opened. */
++void ps5_gpu_broker_display_size(unsigned *width, unsigned *height);
+ /* The next frame the display shows is also written to path, a PPM picture, once: false when the broker is not running,
+  * a picture is already waiting for its frame, or the display stayed busy for 100 ms (it waits no longer than that). */
+ bool ps5_gpu_broker_capture_next(const char *path);
+--- a/tools/build-gpu-broker-client.sh
++++ b/tools/build-gpu-broker-client.sh
+@@ -95,6 +95,8 @@
+     patch --batch -p1 -d "$out/source" < "$out/patches/display-extent-wsi.patch"
+     cp "$root/tooling/gpu-broker/present-wait-wsi.patch" "$out/patches/"   # FIFO held to the display, present waits when shown
+     patch --batch -p1 -d "$out/source" < "$out/patches/present-wait-wsi.patch"
++    cp "$root/tooling/gpu-broker/resolution-wsi.patch" "$out/patches/"   # 1440p and 4K swapchains and display modes
++    patch --batch -p1 -d "$out/source" < "$out/patches/resolution-wsi.patch"
+     cp "$root/tooling/gpu-broker/pw_present_retry.h" "$out/source/src/vulkan/wsi/"   # PS5_Proton's, beside the WSI
+     python3 - "$radv" "$out" <<'PYWSI'
+ import json,shlex,subprocess,sys

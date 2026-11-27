@@ -56,6 +56,7 @@ declare -A sources=(
     [test_pw_wallpaper]="src/pw_wallpaper.c"
     [test_pw_shortcut]=""
     [test_pw_high_refresh]="src/pw_high_refresh.c"
+    [test_pw_resolution]="src/pw_resolution.c"
     [test_pw_controller]="src/pw_controller.c"
     [test_pw_setup]="src/pw_setup.c"
     [test_pw_drive_browse]="src/pw_drive_browse.c"
@@ -318,7 +319,7 @@ done
 # compiled as C, then linked with it.
 if (( $# == 0 )) || [[ "$*" == *webui* ]]; then
     webui_objects=()
-    for source in pw_controller pw_controls pw_detailed_logs pw_log_sessions pw_game_mode pw_high_refresh pw_drive_browse; do
+    for source in pw_controller pw_controls pw_detailed_logs pw_log_sessions pw_game_mode pw_high_refresh pw_resolution pw_drive_browse; do
         "${CC:-cc}" -std=gnu11 -O2 -g -Wall -Wextra -Werror -fsanitize=address,undefined -c "$root/src/$source.c" \
             -o "$out/webui_$source.o"
         webui_objects+=("$out/webui_$source.o")

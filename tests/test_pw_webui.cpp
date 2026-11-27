@@ -89,6 +89,12 @@ int main()
     assert(call(context, "POST", "/api/settings", R"({"high_refresh":false})").status == 200 &&
            get(data + "/high-refresh.txt") == "120hz off\n");
     assert(call(context, "POST", "/api/settings", R"({"high_refresh":"no"})").status == 400);
+    assert(settings["resolution"] == "1080p" && settings["choices"]["resolutions"].size() == 3);
+    assert(call(context, "POST", "/api/settings", R"({"resolution":"1440p"})").status == 200 &&
+           get(data + "/resolution.txt") == "resolution 1440p\n");
+    assert(call(context, "POST", "/api/settings", R"({"resolution":"4k"})").status == 200 &&
+           get(data + "/resolution.txt") == "resolution 4k\n");
+    assert(call(context, "POST", "/api/settings", R"({"resolution":"8k"})").status == 400);
     assert(settings["game_mode"] == true && settings["controller"] == "xbox-360" && settings["logging"] == false &&
            settings["show_all"] == false && settings["mouse"]["left"] == "touchpad");
     r = call(context, "POST", "/api/settings",

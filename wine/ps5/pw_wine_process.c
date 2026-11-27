@@ -176,7 +176,7 @@ static int spawns_ended;
 /* The helper started ahead of need, under child_lock (src/pw_warm_helper.h); warm_changed wakes its keeper. */
 static PwWarmHelper warm = PW_WARM_HELPER_INIT;
 static pthread_cond_t warm_changed = PTHREAD_COND_INITIALIZER;
-static int warm_local_fd = -1, warm_local_pid, warm_local_service, warm_local_making;
+static int warm_local_fd = -1, warm_local_pid, warm_local_service, warm_local_making, warm_local_closing;
 void pw_ps5_end_spawns(void)
 {
     pthread_mutex_lock(&child_lock);
@@ -204,8 +204,12 @@ static void *warm_local_keeper(void *unused)
     pthread_mutex_lock(&child_lock);
     warm_local_making = 0;
     if (spawns_ended || warm_local_fd >= 0 || fd < 0 || pid <= 0 || service <= 0) {
+        warm_local_closing++;
         pthread_mutex_unlock(&child_lock);
         local_close(service, pid, fd);
+        pthread_mutex_lock(&child_lock);
+        warm_local_closing--;
+        pthread_mutex_unlock(&child_lock);
         return NULL;
     }
     warm_local_fd = fd;
@@ -216,11 +220,14 @@ static void *warm_local_keeper(void *unused)
     while (!spawns_ended && warm_local_fd == fd && warm_local_pid == pid)
         pthread_cond_wait(&warm_changed, &child_lock);
     const int still = warm_local_fd == fd && warm_local_pid == pid;
-    if (still) { warm_local_fd = -1; warm_local_pid = 0; warm_local_service = 0; }
+    if (still) { warm_local_fd = -1; warm_local_pid = 0; warm_local_service = 0; warm_local_closing++; }
     pthread_mutex_unlock(&child_lock);
     if (still) {
         fprintf(stderr, "wine-ps5: warm local helper native=%d closed unused\n", pid);
         local_close(service, pid, fd);
+        pthread_mutex_lock(&child_lock);
+        warm_local_closing--;
+        pthread_mutex_unlock(&child_lock);
     }
     return NULL;
 }
@@ -1301,19 +1308,51 @@ static int folder_has(const char *dir, const char *name)
 unsigned int pw_ps5_title_route(const char *unix_name, unsigned short machine, const char *image, const char *command_line)
 {
     const char *setting = getenv("WINE_PS5_TITLE_GAMES");
+    const char *local_setting = getenv("WINE_PS5_LOCAL_GAMES");
     if (!image || !*image) return 0;
-    if (!setting || strcmp(setting, "1") || (child_control < 0 && !gpu_open)) {
-        fprintf(stderr, "wine-ps5: %s: a helper (%s)\n", pw_title_game_name(image),
-                !setting || strcmp(setting, "1") ? "the setting is off" : "no GPU broker in the title");
+    if ((!setting || strcmp(setting, "1")) && (!local_setting || strcmp(local_setting, "1"))) {
+        fprintf(stderr, "wine-ps5: %s: a helper (the setting is off)\n", pw_title_game_name(image));
+        return 0;
+    }
+    if (child_control < 0 && !gpu_open) {
+        fprintf(stderr, "wine-ps5: %s: a helper (no GPU broker in the title)\n", pw_title_game_name(image));
         return 0;
     }
     /* A program a library program (or steam.exe) started is one too (pw_title_game_inherit): a Steam shortcut's game. */
     char root[1024];
     const char *parent_root = getenv("WINE_PS5_LIBRARY_ROOT");
-    const int inherited = pw_title_game_inherit(image, parent_root, getenv("WINE_PS5_TITLE_LISTED"), root, sizeof(root));
+    const char *listed = getenv("WINE_PS5_TITLE_LISTED");
+    const int inherited = pw_title_game_inherit(image, parent_root, listed, root, sizeof(root));
+    if (local_setting && !strcmp(local_setting, "1")) {
+        enum PwPeKind kind = PW_PE_KIND_UNREAD;
+        char deepest[PW_PE_IMPORT_NAME] = "";
+        int chromium = 0;
+        if (machine == 0x8664 && unix_name &&
+            !pw_title_game_has(image, "\\windows\\") && !pw_title_game_has(image, "/windows/")) {
+            struct pe_folder folder = { unix_name, "", "", -1 };
+            copy_string(folder.dir, sizeof(folder.dir), unix_name);
+            char *slash = strrchr(folder.dir, '/');
+            if (slash) *slash = 0;
+            chromium = folder_has(folder.dir, "resources.pak") && folder_has(folder.dir, "icudtl.dat") &&
+                (folder_has(folder.dir, "v8_context_snapshot.bin") || folder_has(folder.dir, "snapshot_blob.bin"));
+            kind = pw_pe_kind(pe_folder_read, &folder, deepest);
+            if (folder.fd >= 0) close(folder.fd);
+        }
+        const int wanted = pw_local_game_wanted(image, machine == 0x8664, local_setting,
+                                                getenv("WINE_PS5_TITLE_OPTOUT"), getenv("WINE_PS5_TITLE_PICK"),
+                                                listed, inherited, kind == PW_PE_KIND_GAME,
+                                                kind == PW_PE_KIND_BROWSER, kind == PW_PE_KIND_DOTNET,
+                                                chromium, command_line);
+        fprintf(stderr, "wine-ps5: %s: %s (local_games=1; %s%s%s%s%s)\n", pw_title_game_name(image),
+                wanted ? "elevated local process" : "a helper",
+                machine == 0x8664 ? "64-bit" : "32-bit",
+                kind != PW_PE_KIND_UNREAD ? "; " : "", kind != PW_PE_KIND_UNREAD ? pw_pe_kind_word(kind) : "",
+                deepest[0] ? " through " : "", deepest);
+        return wanted ? PW_CHILD_GRAPHICS : 0;
+    }
     enum PwTitleRoute route = pw_title_game_route_inherited(image, machine == 0x8664, setting,
                                                             getenv("WINE_PS5_TITLE_OPTOUT"), getenv("WINE_PS5_TITLE_PICK"),
-                                                            getenv("WINE_PS5_TITLE_LISTED"), inherited);
+                                                            listed, inherited);
     route = pw_title_game_steam_browser(route, image, command_line, getenv("WINE_PS5_TITLE_OPTOUT"));
     enum PwPeKind kind = PW_PE_KIND_UNREAD;
     char deepest[PW_PE_IMPORT_NAME] = "";
@@ -1340,7 +1379,7 @@ unsigned int pw_ps5_title_route(const char *unix_name, unsigned short machine, c
             inherited ? (parent_root && !strncmp(parent_root, "steam|", 6) ? "steam.exe" : parent_root) : "");
     return pw_title_route_in_title(route) ? PW_CHILD_GRAPHICS : 0;
 }
-int pw_ps5_start_root(int server_fd,const char *runtime,const char *prefix,const char *cwd,int argc,const char *const *argv)
+int pw_ps5_start_root_local(int server_fd,const char *runtime,const char *prefix,const char *cwd,int argc,const char *const *argv,int prefer_local)
 {
     struct pw_child_bootstrap boot;
     if(argc<2 || argc>64 || prepare_boot(&boot,runtime,prefix,cwd,NULL)) { errno=EINVAL;return -1; }
@@ -1370,7 +1409,11 @@ int pw_ps5_start_root(int server_fd,const char *runtime,const char *prefix,const
     boot.application_bytes=initial_environment_bytes;
     memcpy(boot.application,initial_environment,initial_environment_bytes);
     boot.flags=PW_CHILD_INITIAL;boot.argc=argc;root_result=-1;
-    return spawn_native(server_fd,&boot,NULL);
+    return spawn_native_ex(server_fd,&boot,NULL,prefer_local ? 1 : 0);
+}
+int pw_ps5_start_root(int server_fd,const char *runtime,const char *prefix,const char *cwd,int argc,const char *const *argv)
+{
+    return pw_ps5_start_root_local(server_fd,runtime,prefix,cwd,argc,argv,0);
 }
 /* The title's desktop session (src/pw_desktop_session.h): whether its root, Explorer, runs, and ending it on purpose
  * (game mode), which the session survives: its exit is not the result pw_ps5_root_result reports. 0 when asked,
@@ -1404,6 +1447,21 @@ unsigned pw_ps5_helpers(int *pids, unsigned capacity, int *memory)
         if (children[i].service > 0 && children[i].pid > 0) pids[count++] = children[i].pid;
     pthread_mutex_unlock(&child_lock);
     if (memory) *memory = __atomic_load_n(&memory_pid, __ATOMIC_RELAXED);
+    return count;
+}
+unsigned pw_ps5_close_local_helpers(void)
+{
+    int services[32], pids[32];
+    unsigned count = 0;
+    if (!local_close) return 0;
+    pthread_mutex_lock(&child_lock);
+    for (unsigned i = 0; i < 32; ++i)
+        if (children[i].service > 0 && children[i].local_service > 0 && children[i].pid > 0) {
+            services[count] = children[i].local_service;
+            pids[count++] = children[i].pid;
+        }
+    pthread_mutex_unlock(&child_lock);
+    for (unsigned i = 0; i < count; ++i) (void)local_close(services[i], pids[i], -1);
     return count;
 }
 int pw_ps5_remote_signal(pid_t pid, long tid, int signal)
@@ -1511,11 +1569,11 @@ void pw_ps5_wait_children(void)
             if (waited % 3000 == 0) report_open_children(waited / 100);
         }
     } while (live);
-    /* Every Windows process is gone: stop spawns and wait for any parked warm local helper to close cleanly. */
+    /* Every Windows process is gone: stop spawns and wait for any parked or closing warm local helper to finish. */
     pw_ps5_end_spawns();
     for (;;) {
         pthread_mutex_lock(&child_lock);
-        const int warm_live = warm_local_making != 0 || warm_local_fd >= 0;
+        const int warm_live = warm_local_making != 0 || warm_local_fd >= 0 || warm_local_closing != 0;
         pthread_mutex_unlock(&child_lock);
         if (!warm_live) break;
         sceKernelUsleep(10000);

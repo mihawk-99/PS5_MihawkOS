@@ -48,6 +48,16 @@ Patch 0003: shared resources without Win32 external handles.
 - `tests/d3d12-shared-probe.c` makes a shared render target and a shared fence, clears and signals them on the GPU,
   and asks both for handles.
 
+Patch 0004: tiled resources tier 2 without PRT residency bits.
+- Patch 0001 exposed Feature Level 12_0+ while leaving `TiledResourcesTier` at 1, which no Windows GPU reports
+  (D3D12 requires Tier 2 for FL 12_0). Modern D3D12 engines gate transient sparse resource registration on
+  `TiledResourcesTier >= 2` while still creating `CreateReservedResource` transient render targets on FL 12_0+,
+  crashing on first RTV bind.
+- Report `D3D12_TILED_RESOURCES_TIER_2` (capped at Tier 2 without PRT, never Tier 3/4) when every Tier 2 capability
+  except `shaderResourceResidency` / `residencyNonResidentStrict` is present, and guard
+  `VKD3D_SHADER_META_FLAG_USES_SPARSE_RESIDENCY` directly on `shaderResourceResidency` at PSO validation so shaders
+  using `CheckAccessFullyMapped` are still refused cleanly.
+
 ## Games that ship the Agility SDK
 
 A game that ships the Agility SDK gets VKD3D-Proton without anything of ours. Such a game exports `D3D12SDKVersion`

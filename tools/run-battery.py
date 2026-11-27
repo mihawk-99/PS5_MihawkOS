@@ -70,7 +70,7 @@ LAUNCHER = ['--env', 'PROTON_LAYOUT=launcher']
 # XInput's controller 0 and failed wow64 (gate-0036-pro-01, 2026-10-27). A case that names one keeps its own; the
 # runners that test a setting (Game Mode, controls, logging, mouse) set theirs. Logging and the controls mapping have
 # no launch override: a gate still reads the player's.
-PLAYER_DEFAULTS = ('WINE_PS5_CONTROLLER=xbox-360', 'WINE_PS5_GAME_MODE=1', 'PROTON_120HZ=1')
+PLAYER_DEFAULTS = ('WINE_PS5_CONTROLLER=xbox-360', 'WINE_PS5_GAME_MODE=1', 'PROTON_120HZ=1', 'WINE_PS5_RESOLUTION=1080p')
 
 
 def player_defaults(case=()):
@@ -136,21 +136,25 @@ CASES = [
     # title; a second 64-bit copy (the title takes one), the 32-bit copy and the opted-out copy in helpers, each drawing
     # and ending with 0 (process-probe --title-games). First passed on the base, rung8-base-2026-10-31-fallbacks.
     ('title-games', ['--exe', 'process-probe.exe', '--marker', 'PS5_PROTON_OWNER_BOOTSTRAP', '--args=--title-games',
+                     '--env', 'WINE_PS5_LOCAL_GAMES=0',
                      '--env', 'WINE_PS5_TITLE_OPTOUT=optout64.exe', '--env', 'PS5_PROTON_PROBE_FRAMES=3600',
                      '--expect-title-game', 'game64.exe', '--watchdog', '150'] + LAUNCHER),
     # A game's launcher in a library folder (a copy of process-probe: no graphics import) starts the renderer and exits:
     # its imports keep the launcher in a helper, the renderer takes the title, and the session outlives the launcher.
     ('launcher-pair', ['--exe', 'process-probe.exe', '--marker', 'PS5_PROTON_OWNER_BOOTSTRAP', '--args=--launcher-pair',
+                       '--env', 'WINE_PS5_LOCAL_GAMES=0',
                        '--env', 'PS5_PROTON_PROBE_FRAMES=1200', '--expect-title-game', 'game64.exe', '--watchdog', '180'] + LAUNCHER),
     # A game in the title whose parent is alive in a helper (tests/parent-query-probe.c, Wine 2426): what it learns of the
     # parent (basic, WoW64 and memory counters, the PEB read, its modules and their names) is as good as of itself.
     ('parent-query64-title', ['--exe', 'process-probe.exe', '--marker', 'PS5_PROTON_OWNER_BOOTSTRAP', '--args=--parent-query',
+                              '--env', 'WINE_PS5_LOCAL_GAMES=0',
                               '--expect-title-game', 'game64.exe', '--watchdog', '180'] + LAUNCHER),
     # A library game whose DLL is missing (tests/missing-import-probe.c): the title takes it, Wine's loader fails at once
     # (c0000135), and the session must end in order with the title alive, not with MihawkOS (a tester's demo, 2026-11-01).
     # The overlay beside it is held at its start (WINE_PS5_TEST_SPAWN_STALL, wine/ps5/pw_spawn_wait.h), as the console's
     # wedged loader held the store overlay's: the title's end lets that start go after 30 s instead of waiting for it.
     ('missing-import64-title', ['--exe', 'process-probe.exe', '--marker', 'PS5_PROTON_OWNER_BOOTSTRAP', '--args=--missing-import',
+                                '--env', 'WINE_PS5_LOCAL_GAMES=0',
                                 '--env', 'WINE_PS5_TEST_SPAWN_STALL=overlay64.exe',
                                 '--expect-title-game', 'game64.exe', '--watchdog', '150'] + LAUNCHER),
     # A Chromium-based game (a renderer copy with Chromium's resources beside it): started as one process (patch 2404's

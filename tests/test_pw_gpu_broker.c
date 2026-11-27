@@ -36,13 +36,15 @@ int main(void)
  m.argument[1]=2560ull|(2ull<<32);m.argument[3]=4;assert(!pw_gpu_window_image(&m));
  /* PW_GPU_PRESENT_SHOWN beside BGRA: a FIFO present answered once shown (PS5_Vulkan display-pacing). */
  m.argument[3]=PW_GPU_PRESENT_SHOWN|1;assert(pw_gpu_window_image(&m));m.argument[3]=PW_GPU_PRESENT_SHOWN|4;assert(!pw_gpu_window_image(&m));
- /* A window larger than the screen (Steam's restored 1922x1081, rows padded to 256 bytes), up to 2176x1408. */
+ /* A window larger than the screen (Steam's restored 1922x1081, rows padded to 256 bytes), up to 4096x2432 (4K + rounding). */
  m.argument[3]=1;m.argument[0]=1922ull|(1081ull<<32);m.argument[1]=7936ull|(2ull<<32);m.bytes=7936ull*1081;
  assert(pw_gpu_window_image(&m));
- m.argument[0]=2176ull|(1408ull<<32);m.argument[1]=8704ull|(2ull<<32);m.bytes=8704ull*1408;assert(pw_gpu_window_image(&m));
- m.argument[0]=2177ull|(1408ull<<32);m.argument[1]=8708ull|(2ull<<32);m.bytes=8708ull*1408;assert(!pw_gpu_window_image(&m));
- m.argument[0]=2176ull|(1409ull<<32);m.argument[1]=8704ull|(2ull<<32);m.bytes=8704ull*1409;assert(!pw_gpu_window_image(&m));
- m.argument[0]=1922ull|(1081ull<<32);m.argument[1]=8708ull|(2ull<<32);m.bytes=8708ull*1081;assert(!pw_gpu_window_image(&m));
+ m.argument[0]=2560ull|(1440ull<<32);m.argument[1]=10240ull|(2ull<<32);m.bytes=10240ull*1440;assert(pw_gpu_window_image(&m));
+ m.argument[0]=3840ull|(2160ull<<32);m.argument[1]=15360ull|(2ull<<32);m.bytes=15360ull*2160;assert(pw_gpu_window_image(&m));
+ m.argument[0]=4096ull|(2432ull<<32);m.argument[1]=16384ull|(2ull<<32);m.bytes=16384ull*2432;assert(pw_gpu_window_image(&m));
+ m.argument[0]=4097ull|(2432ull<<32);m.argument[1]=16388ull|(2ull<<32);m.bytes=16388ull*2432;assert(!pw_gpu_window_image(&m));
+ m.argument[0]=4096ull|(2433ull<<32);m.argument[1]=16384ull|(2ull<<32);m.bytes=16384ull*2433;assert(!pw_gpu_window_image(&m));
+ m.argument[0]=1922ull|(1081ull<<32);m.argument[1]=16388ull|(2ull<<32);m.bytes=16388ull*1081;assert(!pw_gpu_window_image(&m));
 
  /* A display swapchain larger than the screen (graphics patch 0039): The Binding of Isaac's borderless fullscreen
   * window, 1921x1080, was refused (VK_ERROR_INITIALIZATION_FAILED) and Zink then wrote to NULL. It is shown clipped. */
@@ -51,14 +53,19 @@ int main(void)
  assert(pw_gpu_display_image(&d));pw_gpu_display_shown(&d,&shown_w,&shown_h);assert(shown_w==1920 && shown_h==1080);
  d.argument[0]=960;d.argument[1]=540;d.argument[2]=3840;d.bytes=3840ull*540;   /* smaller: whole, the display scales it */
  assert(pw_gpu_display_image(&d));pw_gpu_display_shown(&d,&shown_w,&shown_h);assert(shown_w==960 && shown_h==540);
- d.argument[0]=2176;d.argument[1]=1408;d.argument[2]=8704;d.bytes=8704ull*1408;assert(pw_gpu_display_image(&d));
+ d.argument[0]=2560;d.argument[1]=1440;d.argument[2]=10240;d.bytes=10240ull*1440;assert(pw_gpu_display_image(&d));
+ pw_gpu_display_shown_in(&d,2560,1440,&shown_w,&shown_h);assert(shown_w==2560 && shown_h==1440);
+ d.argument[0]=3840;d.argument[1]=2160;d.argument[2]=15360;d.bytes=15360ull*2160;assert(pw_gpu_display_image(&d));
+ pw_gpu_display_shown_in(&d,3840,2160,&shown_w,&shown_h);assert(shown_w==3840 && shown_h==2160);
  pw_gpu_display_shown(&d,&shown_w,&shown_h);assert(shown_w==1920 && shown_h==1080);
- d.argument[0]=2177;d.argument[2]=8708;d.bytes=8708ull*1408;assert(!pw_gpu_display_image(&d));
- d.argument[0]=2176;d.argument[1]=1409;d.argument[2]=8704;d.bytes=8704ull*1409;assert(!pw_gpu_display_image(&d));
- d.argument[1]=1080;d.bytes=8704ull*1080;assert(pw_gpu_display_image(&d));
- d.argument[2]=8700;d.bytes=8700ull*1080;assert(!pw_gpu_display_image(&d));   /* a row shorter than the image */
- d.argument[2]=8706;d.bytes=8706ull*1080;assert(!pw_gpu_display_image(&d));   /* a row not of whole pixels */
- d.argument[2]=8704;d.bytes=8704ull*1080+1;assert(!pw_gpu_display_image(&d));d.bytes--;
+ d.argument[0]=4096;d.argument[1]=2432;d.argument[2]=16384;d.bytes=16384ull*2432;assert(pw_gpu_display_image(&d));
+ pw_gpu_display_shown_in(&d,3840,2160,&shown_w,&shown_h);assert(shown_w==3840 && shown_h==2160);
+ d.argument[0]=4097;d.argument[2]=16388;d.bytes=16388ull*2432;assert(!pw_gpu_display_image(&d));
+ d.argument[0]=4096;d.argument[1]=2433;d.argument[2]=16384;d.bytes=16384ull*2433;assert(!pw_gpu_display_image(&d));
+ d.argument[1]=1080;d.bytes=16384ull*1080;assert(pw_gpu_display_image(&d));
+ d.argument[2]=16380;d.bytes=16380ull*1080;assert(!pw_gpu_display_image(&d));   /* a row shorter than the image */
+ d.argument[2]=16386;d.bytes=16386ull*1080;assert(!pw_gpu_display_image(&d));   /* a row not of whole pixels */
+ d.argument[2]=16384;d.bytes=16384ull*1080+1;assert(!pw_gpu_display_image(&d));d.bytes--;
  d.argument[3]=4;assert(!pw_gpu_display_image(&d));d.argument[3]=PW_GPU_PRESENT_SHOWN;assert(pw_gpu_display_image(&d));d.argument[3]=0;
  d.address=0;assert(!pw_gpu_display_image(&d));d.address=0x240000002ull;assert(!pw_gpu_display_image(&d));
  d.address=0x240000000ull;d.argument[0]=0;assert(!pw_gpu_display_image(&d));

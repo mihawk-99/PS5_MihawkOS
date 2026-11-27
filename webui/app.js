@@ -173,8 +173,8 @@ function slug(name) {
 }
 
 // ---- a game's settings ----
-// game.json "env" words the editor shows as choices of its own (src/pw_game_mode.h, src/pw_controller.h)
-const GAME_MODE = 'WINE_PS5_GAME_MODE', CONTROLLER = 'WINE_PS5_CONTROLLER', OPENGL = 'WINE_PS5_OPENGL=1';
+// game.json "env" words the editor shows as choices of its own (src/pw_game_mode.h, src/pw_controller.h, src/pw_resolution.h)
+const GAME_MODE = 'WINE_PS5_GAME_MODE', CONTROLLER = 'WINE_PS5_CONTROLLER', RESOLUTION = 'WINE_PS5_RESOLUTION', OPENGL = 'WINE_PS5_OPENGL=1';
 const word = (env, name) => { const found = env.filter((w) => w.startsWith(`${name}=`)).pop(); return found ? found.slice(name.length + 1) : ''; };
 let editing = null, fromWizard = false;
 async function openEditor(game, preset = {}) {
@@ -196,7 +196,7 @@ async function openEditor(game, preset = {}) {
   form.desktop.checked = game ? game.desktop : true;
   form.launcher.checked = game ? game.launcher : true;   // a game set up here shows in the launcher's list
   form.opengl.checked = env.includes(OPENGL);
-  form.env.value = env.filter((w) => w !== OPENGL && !w.startsWith(`${GAME_MODE}=`) && !w.startsWith(`${CONTROLLER}=`)).join('\n');
+  form.env.value = env.filter((w) => w !== OPENGL && !w.startsWith(`${GAME_MODE}=`) && !w.startsWith(`${CONTROLLER}=`) && !w.startsWith(`${RESOLUTION}=`)).join('\n');
   pickerStart = preset.folder ? `Games/${preset.folder}` : '';
   showProgram();
   $('#editor-delete-row').hidden = !game;
@@ -208,10 +208,15 @@ async function openEditor(game, preset = {}) {
     const current = now.choices.controllers.find((choice) => choice.id === now.controller);
     form.controller.replaceChildren(el('option', { value: '', textContent: same(current ? t(current.label) : '') }),
       ...now.choices.controllers.map((choice) => el('option', { value: choice.id, textContent: t(choice.label) })));
+    const curRes = now.choices.resolutions.find((choice) => choice.id === now.resolution);
+    form.resolution.replaceChildren(el('option', { value: '', textContent: same(curRes ? curRes.label : '1080p (1920x1080)') }),
+      ...now.choices.resolutions.map((choice) => el('option', { value: choice.id, textContent: choice.label })));
   } catch (error) { /* the choices stay empty: the toast said why */ }
   form.game_mode.value = ['0', '1'].includes(word(env, GAME_MODE)) ? word(env, GAME_MODE) : '';
   form.controller.value = word(env, CONTROLLER);
   if (form.controller.selectedIndex < 0) form.controller.value = '';
+  form.resolution.value = word(env, RESOLUTION);
+  if (form.resolution.selectedIndex < 0) form.resolution.value = '';
   showMedia(game);
   $('#editor').showModal();
   // A new game: its program guessed, its picture looked up, so a player only has to confirm
@@ -229,10 +234,11 @@ function entryFromForm() {
   const form = $('#editor-form');
   if (!form.id.value) form.id.value = slug(form.name.value);
   const env = form.env.value.split('\n').map((w) => w.trim()).filter(Boolean)
-    .filter((w) => !w.startsWith(`${GAME_MODE}=`) && !w.startsWith(`${CONTROLLER}=`) && w !== OPENGL);
+    .filter((w) => !w.startsWith(`${GAME_MODE}=`) && !w.startsWith(`${CONTROLLER}=`) && !w.startsWith(`${RESOLUTION}=`) && w !== OPENGL);
   if (form.opengl.checked) env.push(OPENGL);
   if (form.game_mode.value) env.push(`${GAME_MODE}=${form.game_mode.value}`);
   if (form.controller.value) env.push(`${CONTROLLER}=${form.controller.value}`);
+  if (form.resolution.value) env.push(`${RESOLUTION}=${form.resolution.value}`);
   return {
     id: form.id.value, name: form.name.value.trim(), detail: form.detail.value.trim(), executable: form.executable.value.trim(),
     arguments: form.arguments.value.trim(), directory: form.directory.value.trim(), prefix: form.prefix.value.trim(),
@@ -868,6 +874,11 @@ function renderSettings() {
   $('#controller').replaceChildren(...settings.choices.controllers.map((choice) => {
     const button = el('button', { type: 'button', textContent: t(choice.label), className: choice.id === settings.controller ? 'on' : '' });
     button.addEventListener('click', () => saveSetting({ controller: choice.id }));
+    return button;
+  }));
+  $('#resolution').replaceChildren(...settings.choices.resolutions.map((choice) => {
+    const button = el('button', { type: 'button', textContent: choice.label, className: choice.id === settings.resolution ? 'on' : '' });
+    button.addEventListener('click', () => saveSetting({ resolution: choice.id }));
     return button;
   }));
   $('#look-card').hidden = !settings.choices.themes.length;

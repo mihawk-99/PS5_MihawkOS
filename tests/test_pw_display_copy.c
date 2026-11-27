@@ -87,6 +87,43 @@ int main(void)
     free(source);
     free(expected);
     free(actual);
+    /* Verify 1440p (2560x1440, 20x12 tiles) and 4K (3840x2160, 30x17 tiles) tiled line copy & scaling. */
+    static const unsigned modes[][4] = {{2560, 1440, 20, 12}, {3840, 2160, 30, 17}};
+    for (unsigned m = 0; m < 2; ++m) {
+        const unsigned dw = modes[m][0], dh = modes[m][1], db = modes[m][2], dr = modes[m][3];
+        const size_t tb = (size_t)db * dr << 16;
+        uint8_t *src = malloc((size_t)dw * dh * 4);
+        uint8_t *buf = aligned_alloc(65536, tb);
+        uint8_t *sc = aligned_alloc(64, (size_t)dw * dh * 4);
+        assert(src && buf && sc);
+        for (size_t i = 0; i < (size_t)dw * dh; ++i) {
+            uint32_t p = 0xff000000u | (uint32_t)((i * 2654435761u) & 0x00ffffffu);
+            memcpy(src + i * 4, &p, 4);
+        }
+        memset(buf, 0, tb);
+        pw_display_copy_lines_wh(buf, dw, dh, db, src, (size_t)dw * 4, 1);
+        for (unsigned y = 0; y < dh; y += 97)
+            for (unsigned x = 0; x < dw; x += 113) {
+                uint32_t got, want;
+                memcpy(&got, buf + pw_display_tiled_stride(x, y, db), 4);
+                memcpy(&want, src + ((size_t)y * dw + x) * 4, 4);
+                assert(got == want);
+            }
+        pw_display_scale_rows_wh(sc, dw, dh, src, 1920, 1080, 1920 * 4);
+        pw_display_copy_lines_wh(buf, dw, dh, db, sc, (size_t)dw * 4, 0);
+        {
+            uint32_t got, raw;
+            memcpy(&got, buf + pw_display_tiled_stride(dw - 1, dh - 1, db), 4);
+            const unsigned sx = (unsigned)((uint64_t)(dw - 1) * 1920 / dw);
+            const unsigned sy = (unsigned)((uint64_t)(dh - 1) * 1080 / dh);
+            memcpy(&raw, src + ((size_t)sy * 1920 + sx) * 4, 4);
+            const uint32_t want = (raw & 0xff00ff00u) | ((raw & 0xffu) << 16) | ((raw >> 16) & 0xffu);
+            assert(got == want);
+        }
+        free(sc);
+        free(buf);
+        free(src);
+    }
     puts("test_pw_display_copy: ok");
     return 0;
 }

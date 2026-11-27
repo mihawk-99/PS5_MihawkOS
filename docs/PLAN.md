@@ -1,5 +1,21 @@
 # Plan
 
+## Alpha 10: Universal elevated local processes, 1440p/4K, 4-DualSense + rumble, D3D12 Tier 2 & compatibility fixes (2026-11-27; base PS5 13.60)
+
+Extends elevated Sony local processes (`/app0/wine-local-child.bin`, `65,536 CPU / 32,768 GPU` app page tables, `0` system PT) to all 64-bit games, browsers, and Chromium apps; adds native `1440p` and `4K` output (`#65`), 2–4 DualSense multi-controller + rumble (`#64`), D3D12 Tiled Resources Tier 2 (`platform/vkd3d-proton/patches/0004-tiled-resources-tier-2-without-prt-residency.patch`), larger executable cache (`PW_CODE_BUDGET_EVICTED = 16384`), and targeted game compatibility fixes (`#42`, `#43`, `#56/#59`, `#70`).
+
+- **Universal elevated local processes & lifecycle fixes (P0):** `wine/ps5/pw_wine_title_game.h` (`pw_local_game_wanted`), `wine/ps5/pw_wine_process.{h,c}` (`pw_ps5_close_local_helpers`, `pw_ps5_start_root_local`), `native/proton_wine.cpp` (orphan cleanup `#70`, bounded 30 s Steam shutdown, `SHUT_WR` + peer-close exit handshake, `local_child_close` idempotent kill on already-exited local child, explicit `WINE_PS5_TITLE_PICK` preservation), `native/proton_wine_child.c` (`PROTON_LOCAL_CHILD` `MSG_PEEK` half-close flush), `docs/WINDOWS_PROCESSES.md` (WoW64 stays in `elfldr` payload helpers).
+- **1440p & 4K display output (`#65`):** `src/pw_resolution.{h,c}`, `platform/graphics/patches/0004-gpu-broker-1440p-and-4k-display-output.patch`, Settings + per-game Options + WebUI (10 languages), graceful fallback to `1920x1080`.
+- **Multi-controller (2–4 DualSense) + Rumble (`#64`):** `ps5/src/platform.{h,c}` (`PAD_MAX_SLOTS = 4`, `sceUserServiceGetLoginUserIdList`, `pad_vibrate_slot`), `wine/ps5/pw_wine_sink.{h,c}` (4-slot ABI-compatible shared input page + child-to-title rumble), `wine/patches/2487-xinput-winebus-ps5-multi-controller-and-rumble.patch` (`xinput1_3` 64/32-bit + `winebus.sys` HID & USB report `0x02` rumble).
+- **Compatibility fixes (`#42`, `#43`, `#56/#59`):** `platform/dxvk/patches/0008-dxbc-spirv-pass-explicit-swizzle-to-emitConstantLoad.patch` (+ host synthetic SM3 test in `tests/test_dxvk_local_share.py`), `wine/ps5/pw_wine_vm.{h,c}` + `pw_wine_dmem_ps5.c` (`EINTR`/`EAGAIN` retry + `PwWineVmForeignDiag`), `wine/patches/2488-ntdll-ps5-flush-writeback-on-rename-and-hardened-hcache.patch`.
+- **Measured on base PS5 (13.60) and host:**
+  - Host: `tools/host-tests.sh` 100% pass; `tests/test_dxvk_local_share.py` 3/3 OK; `tools/publication-check.py tree` 0 FAIL.
+  - Native 1440p at 120 Hz (`evidence/a10-res1440p-2026-11-27-01.json`): `2560x1440`, `fast_copy=1`, `92.1 FPS` (`present_avg=2.73 ms`), warm local child `25 ms`, `passed: true`.
+  - Native 4K at 120 Hz (`evidence/a10-res4k-2026-11-27-02.json`): `3840x2160`, `fast_copy=1`, `96.1 FPS` (`present_avg=5.46 ms`), `passed: true`.
+  - Multi-slot XInput + DualSense rumble (`evidence/a10-xinput-rumble-2026-11-27-01.json`): slots `0..3` + bad-arg slot `4` + `XInputSetState` on/off end-to-end to `scePadSetVibration`, `passed: true`.
+  - D3D12 Feature Level `12_1` + Tiled Resources Tier `2` in elevated local child (`evidence/a10-d3d12-local-2026-11-27-03.json`): `tiled_tier=2`, 7 ms terminal flush, `passed: true`.
+  - Gate coverage: 138/140 passed in `alpha10-gate-2026-11-27-02` (136 passed + 2 env-skipped DNS TCP), then the remaining 2 (`launcher-tls` with `PROTON_TLS_TRUSTED_PORT=1749`/`1750` + `broker-wedge64` after the `local_child_close` fix) passed 2/2 in `evidence/a10-fix-check.json`.
+
 ## Fast persistent Steam and elevated Sony local-process 64-bit games (2026-11-26; branch `fast-steam`; base PS5 13.60; full commit gate pending)
 
 Removes Steam close/reopen `LoadExec` handovers, speeds up Steam startup and I/O, and moves 64-bit Steam games and

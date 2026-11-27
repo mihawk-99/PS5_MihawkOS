@@ -10,6 +10,7 @@
 #include "home_grid.hpp"
 #include "../../src/pw_drive_browse.h"
 #include "../../src/pw_capped_log.h"
+#include "../../src/pw_resolution.h"
 #include "proton_webui.h"
 #include "../../src/pw_qrcodegen.h"
 #include <algorithm>
@@ -33,6 +34,7 @@ class VulkanExample : public ps5ui::KitExample
 	std::string controlsNotice;
 	int gameMode{1};
 	int highRefresh{1};   // Settings > 120 Hz output (src/pw_high_refresh.h)
+	int resolution{PW_RESOLUTION_1080P};   // Settings > Game resolution (src/pw_resolution.h)
 	int detailedLogs{0};   // Settings > Logging (src/pw_detailed_logs.h)
 	int controller{PW_CONTROLLER_XBOX_360};   // Settings > Controller (src/pw_controller.h)
 	unsigned webuiSeen{0};   // the WebUI's change count the launcher last reloaded at (ps5/src/proton_webui.h)
@@ -269,6 +271,28 @@ class VulkanExample : public ps5ui::KitExample
 		settingsList.item(10).badge = tr(highRefresh ? PW_TEXT_OPTIONS_BADGE_ON : PW_TEXT_OPTIONS_BADGE_OFF);
 	}
 
+	void syncResolution()
+	{
+		settingsList.item(12).subtitle = home.fill(PW_TEXT_SET_RESOLUTION_SUB, { pw_resolution_name(resolution) });
+		settingsList.item(12).badge = pw_resolution_badge(resolution);
+	}
+
+	void nextResolution()
+	{
+		const int changed = (resolution + 1) % PW_RESOLUTION_KINDS;
+		const int error = ps5.frameBudget ? 0 : pw_resolution_save(changed, proton_resolution_path().c_str());
+		if (error) {
+			controlsNotice = tr(PW_TEXT_SET_NOT_SAVED);
+			proton_say("Resolution: save failed (%d)", error);
+		} else {
+			resolution = changed;
+			controlsNotice = home.fill(PW_TEXT_SET_RESOLUTION_CHOSEN, { pw_resolution_name(resolution) });
+			feedback.play(hui::audio::Cue::saved);
+			proton_say("Resolution: %s %s", ps5.frameBudget ? "preview" : "saved", pw_resolution_word(resolution));
+		}
+		syncResolution();
+	}
+
 	void toggleHighRefresh()
 	{
 		const int changed = !highRefresh;
@@ -417,7 +441,7 @@ class VulkanExample : public ps5ui::KitExample
 			{ PW_TEXT_SET_ABOUT, PW_TEXT_SET_ABOUT_SUB }, { PW_TEXT_SET_RUNTIME, PW_TEXT_COUNT }, { PW_TEXT_SET_SETUP, PW_TEXT_SET_SETUP_SUB },
 			{ PW_TEXT_SET_MUSIC, PW_TEXT_COUNT }, { PW_TEXT_SET_UPDATES, PW_TEXT_COUNT }, { PW_TEXT_SET_LOGGING, PW_TEXT_COUNT },
 			{ PW_TEXT_OPTIONS_CONTROLLER, PW_TEXT_COUNT }, { PW_TEXT_SET_WEBUI, PW_TEXT_SET_WEBUI_SUB }, { PW_TEXT_SET_HZ, PW_TEXT_COUNT },
-			{ PW_TEXT_SET_AUTO, PW_TEXT_COUNT } };
+			{ PW_TEXT_SET_AUTO, PW_TEXT_COUNT }, { PW_TEXT_SET_RESOLUTION, PW_TEXT_COUNT } };
 		for (size_t i = 0; i < sizeof(rows) / sizeof(rows[0]) && i < settingsList.items().size(); ++i) {
 			settingsList.item(i).title = tr(rows[i][0]);
 			if (rows[i][1] != PW_TEXT_COUNT) settingsList.item(i).subtitle = tr(rows[i][1]);
@@ -433,6 +457,7 @@ class VulkanExample : public ps5ui::KitExample
 		syncControls();
 		syncGameMode();
 		syncHighRefresh();
+		syncResolution();
 		syncLogging();
 		syncController();
 		syncInstall();
@@ -807,10 +832,11 @@ class VulkanExample : public ps5ui::KitExample
 		optionsGame = index;
 		optionsNote.clear();
 		optionsSaveFailed = false;
-		std::vector<hui::ui::ListItem> rows(3);
+		std::vector<hui::ui::ListItem> rows(4);
 		rows[0].title = tr(PW_TEXT_OPTIONS_GAME_MODE);
 		rows[1].title = tr(PW_TEXT_OPTIONS_CONTROLLER);
 		rows[2].title = tr(PW_TEXT_OPTIONS_INSIDE);
+		rows[3].title = tr(PW_TEXT_OPTIONS_RESOLUTION);
 		optionsList.set_items(rows);
 		optionsList.set_focus(0);
 		optionsList.enter();
@@ -836,6 +862,9 @@ class VulkanExample : public ps5ui::KitExample
 		const bool inside = envWord(game, "WINE_PS5_TITLE_GAMES") != "0";
 		optionsList.item(2).badge = tr(inside ? PW_TEXT_OPTIONS_BADGE_ON : PW_TEXT_OPTIONS_BADGE_OFF);
 		optionsList.item(2).subtitle = tr(inside ? PW_TEXT_OPTIONS_INSIDE_ON : PW_TEXT_OPTIONS_INSIDE_OFF);
+		const int res = pw_resolution_kind(envWord(game, "WINE_PS5_RESOLUTION").c_str());
+		optionsList.item(3).badge = res < 0 ? tr(PW_TEXT_OPTIONS_BADGE_SETTINGS) : pw_resolution_badge(res);
+		optionsList.item(3).subtitle = res < 0 ? home.fill(PW_TEXT_OPTIONS_SETTINGS_RES, { pw_resolution_name(resolution) }) : pw_resolution_name(res);
 	}
 
 	void optionsInput(const hui::InputFrame &input)
@@ -854,8 +883,11 @@ class VulkanExample : public ps5ui::KitExample
 		} else if (optionsList.focus() == 1) {   // as Settings, then each controller
 			const int kind = pw_controller_kind(envWord(game, "WINE_PS5_CONTROLLER").c_str());
 			name = "WINE_PS5_CONTROLLER", value = kind + 1 < PW_CONTROLLER_KINDS ? pw_controller_word(kind + 1) : "";
-		} else {
+		} else if (optionsList.focus() == 2) {
 			name = "WINE_PS5_TITLE_GAMES", value = envWord(game, name) == "0" ? "" : "0";
+		} else {   // as Settings, then 1080p, 1440p, 4K
+			const int res = pw_resolution_kind(envWord(game, "WINE_PS5_RESOLUTION").c_str());
+			name = "WINE_PS5_RESOLUTION", value = res + 1 < PW_RESOLUTION_KINDS ? pw_resolution_word(res + 1) : "";
 		}
 		// A scripted run previews (nothing written), as Settings' rows do, unless it tests the save itself
 		// (PROTON_OPTIONS_SAVE_TEST=1: tools/test-launcher-ui.py reads the game.json back)
@@ -886,11 +918,13 @@ class VulkanExample : public ps5ui::KitExample
 		pw_controls_load(&controls, proton_controls_path().c_str());
 		pw_game_mode_load(&gameMode, proton_game_mode_path().c_str());
 		pw_high_refresh_load(&highRefresh, proton_high_refresh_path().c_str());
+		pw_resolution_load(&resolution, proton_resolution_path().c_str());
 		pw_detailed_logs_load(&detailedLogs, proton_logging_path().c_str());
 		pw_controller_load(&controller, proton_controller_path().c_str());
 		syncControls();
 		syncGameMode();
 		syncHighRefresh();
+		syncResolution();
 		syncLogging();
 		syncController();
 		// The theme and the music the page chose (title folder hui/theme.txt, hui/music.txt)
@@ -1222,6 +1256,8 @@ class VulkanExample : public ps5ui::KitExample
 						toggleGameMode();
 					} else if (settingsList.focus() == 10) {
 						toggleHighRefresh();
+					} else if (settingsList.focus() == 12) {
+						nextResolution();
 					} else if (settingsList.focus() == 11) {
 						if (!ps5.frameBudget) proton_update_set_auto(!proton_update_auto_enabled());
 						syncUpdates();
@@ -1489,10 +1525,11 @@ class VulkanExample : public ps5ui::KitExample
 			home.panel(scene, look, { 120, 230, 1020, 740 });
 			optionsList.draw(canvas);
 			home.panel(scene, look, { 1200, 230, 600, 740 });
-			const PwSetupText heads[] = { PW_TEXT_OPTIONS_GAME_MODE, PW_TEXT_OPTIONS_CONTROLLER, PW_TEXT_OPTIONS_INSIDE };
+			const PwSetupText heads[] = { PW_TEXT_OPTIONS_GAME_MODE, PW_TEXT_OPTIONS_CONTROLLER, PW_TEXT_OPTIONS_INSIDE, PW_TEXT_OPTIONS_RESOLUTION };
 			const PwSetupText words[][2] = { { PW_TEXT_OPTIONS_GAME_MODE_BODY, PW_TEXT_OPTIONS_GAME_MODE_CYCLE },
 				{ PW_TEXT_OPTIONS_CONTROLLER_BODY, PW_TEXT_OPTIONS_CONTROLLER_CYCLE },
-				{ PW_TEXT_OPTIONS_INSIDE_BODY, PW_TEXT_OPTIONS_INSIDE_OFF_BODY } };
+				{ PW_TEXT_OPTIONS_INSIDE_BODY, PW_TEXT_OPTIONS_INSIDE_OFF_BODY },
+				{ PW_TEXT_OPTIONS_RESOLUTION_BODY, PW_TEXT_OPTIONS_RESOLUTION_CYCLE } };
 			const int focus = optionsList.focus();
 			float y = home.paragraph(scene, homeFonts.semibold, tr(heads[focus]), 1240, 300, 38, 520, ink) + 16;
 			y = home.paragraph(scene, homeFonts.regular, tr(words[focus][0]), 1240, y, 24, 520, quiet) + 12;
@@ -1611,6 +1648,17 @@ class VulkanExample : public ps5ui::KitExample
 			paragraph(paint, controlsNotice, 1240, y, 24, look.text);
 			ps5ui::draw_hints(scene, homeFonts, look,
 				{ { hui::ui::Button::dpad, tr(PW_TEXT_HINT_CHOOSE) }, { hui::ui::Button::cross, tr(highRefresh ? PW_TEXT_HINT_TURN_OFF : PW_TEXT_HINT_TURN_ON) },
+				  { hui::ui::Button::circle, tr(PW_TEXT_HINT_BACK) } }, 120, 1040);
+		} else if (page == Page::settings && settingsList.focus() == 12) {
+			paint.heading(tr(PW_TEXT_SET_RESOLUTION), 1240, y, 38, look.text);
+			y += 65;
+			paragraph(paint, tr(PW_TEXT_SET_RESOLUTION_BODY), 1240, y, 24, look.text_muted);
+			y += 30;
+			paragraph(paint, tr(PW_TEXT_SET_RESOLUTION_FALLBACK), 1240, y, 24, look.text_muted);
+			y += 30;
+			paragraph(paint, controlsNotice, 1240, y, 24, look.text);
+			ps5ui::draw_hints(scene, homeFonts, look,
+				{ { hui::ui::Button::dpad, tr(PW_TEXT_HINT_CHOOSE) }, { hui::ui::Button::cross, tr(PW_TEXT_HINT_CHANGE) },
 				  { hui::ui::Button::circle, tr(PW_TEXT_HINT_BACK) } }, 120, 1040);
 		} else if (page == Page::settings && settingsList.focus() == 2) {
 			// The Appropriate Legal Notices GPLv3 asks an interactive program to show (LICENSE, section 0); wording approved
@@ -2046,6 +2094,9 @@ public:
 		item = {};
 		item.title = "Automatic update check";
 		rows.push_back(item);
+		item = {};
+		item.title = "Game resolution";
+		rows.push_back(item);
 		settingsList.set_items(rows);
 		rows.clear();
 		for (const char *label : {"Left mouse click", "Right mouse click", "Middle mouse click", "On-screen keyboard", "Restore defaults"}) {
@@ -2068,6 +2119,8 @@ public:
 		syncGameMode();
 		if (!ps5.frameBudget) pw_high_refresh_load(&highRefresh, proton_high_refresh_path().c_str());
 		syncHighRefresh();
+		if (!ps5.frameBudget) pw_resolution_load(&resolution, proton_resolution_path().c_str());
+		syncResolution();
 		if (!ps5.frameBudget) pw_detailed_logs_load(&detailedLogs, proton_logging_path().c_str());
 		syncLogging();
 		if (!ps5.frameBudget) pw_controller_load(&controller, proton_controller_path().c_str());

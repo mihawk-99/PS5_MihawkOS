@@ -39,7 +39,7 @@ int main(void)
     snap.clip_count=PW_WINDOW_CLIP_LIMIT+1;
     assert(pw_window_scene_gpu(&scene,22,2,2,input,2,2,8,1,&snap)<0 && errno==EPROTO);
     snap.clip_count=1;
-    scene.pixel_bytes=64u<<20;
+    scene.pixel_bytes=128u<<20;
     assert(pw_window_scene_gpu(&scene,22,2,2,input,1,1,4,1,&snap)<0 && errno==ENOSPC);
     scene.pixel_bytes=16;
     snap.windows[0].flags=PW_WINDOW_CLIENT;assert(!pw_window_scene_update(&scene,&snap) && scene.pixel_bytes==16);

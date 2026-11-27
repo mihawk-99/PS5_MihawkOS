@@ -36,7 +36,7 @@ int main(void)
     /* The code cache reaches the helpers a program starts, not only the first (fmem-steam-b32-2026-10-25-01: the web helper ran without it). */
     assert(pw_wine_inherited("WINE_PS5_CODE_BUDGET_MIB=32") && pw_wine_inherited("WINE_PS5_CODE_BUDGET_START_MIB=16"));
     assert(pw_wine_inherited("WINE_PS5_DSECTION_MIN_MIB=16") && pw_wine_inherited("WINE_PS5_TITLE_PROCESS=game.exe"));
-    assert(pw_wine_inherited("WINE_PS5_TITLE_GAMES=1") && pw_wine_inherited("WINE_PS5_TITLE_OPTOUT=a.exe"));
+    assert(pw_wine_inherited("WINE_PS5_TITLE_GAMES=1") && pw_wine_inherited("WINE_PS5_LOCAL_GAMES=1") && pw_wine_inherited("WINE_PS5_TITLE_OPTOUT=a.exe"));
     assert(pw_wine_inherited("WINE_PS5_TITLE_PICK=game.exe") && pw_wine_inherited("WINE_PS5_CHROMIUM_ARGS=--single-process") &&
            pw_wine_inherited("WINE_PS5_TITLE_LISTED=game.exe"));
     /* A game's 2430 setting reaches the game its launcher starts; a library root is each spawner's own word, never inherited. */

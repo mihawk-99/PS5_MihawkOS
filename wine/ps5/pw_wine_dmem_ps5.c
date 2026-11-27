@@ -377,7 +377,8 @@ static int foreign_op(void *context, uintptr_t address, size_t bytes, uintptr_t 
 {
     static unsigned reported, failures;
     PwWineVmEntry found;
-    char line[224];
+    PwWineVmForeignDiag diag = {0};
+    char line[256];
     uintptr_t lent_start, lent_end;
     int status, lent_here;
     (void)context;
@@ -388,7 +389,7 @@ static int foreign_op(void *context, uintptr_t address, size_t bytes, uintptr_t 
     if (lent_here && lent_start > address) bytes = lent_start - address;
     if (lent_here && lent_start <= address) status = 0;
     else if (__atomic_load_n(&signature_state, __ATOMIC_ACQUIRE) <= 0) status = 0;
-    else status = pw_wine_vm_foreign((const void *)address, bytes, &signature, &found, refill);
+    else status = pw_wine_vm_foreign_diag((const void *)address, bytes, &signature, &found, refill, &diag);
     if (!status && lent_here) {
         *start = lent_start;
         *end = lent_end;
@@ -405,8 +406,10 @@ static int foreign_op(void *context, uintptr_t address, size_t bytes, uintptr_t 
                      found.type, found.flags, found.name, (unsigned long)address, bytes);
             say(line);
         }
-    } else if (status < 0 && failures++ < 4) {
-        snprintf(line, sizeof(line), "[wine-ps5] no answer about %#lx +%#zx: refused\n", (unsigned long)address, bytes);
+    } else if (status < 0 && failures++ < 8) {
+        snprintf(line, sizeof(line), "[wine-ps5] no answer about %#lx +%#zx: refused (kind=%s kernel=%#x cursor=%#lx entry=%#lx-%#lx)\n",
+                 (unsigned long)address, bytes, pw_wine_vm_failure_name(diag.kind), (unsigned)diag.kernel_status,
+                 (unsigned long)diag.cursor, (unsigned long)diag.entry_start, (unsigned long)diag.entry_end);
         say(line);
     }
     return status;

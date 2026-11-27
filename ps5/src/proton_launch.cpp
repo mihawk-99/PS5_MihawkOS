@@ -134,6 +134,15 @@ std::string proton_high_refresh_path()
 #endif
 }
 
+std::string proton_resolution_path()
+{
+#if defined(PS5_HOST_REFERENCE)
+	return std::string(PS5_APP_ROOT) + "/resolution.txt";
+#else
+	return proton_data_grant() ? PROTON_DATA_ROOT "/resolution.txt" : proton_title_path("/app0/resolution.txt");
+#endif
+}
+
 std::string proton_controller_path()
 {
 #if defined(PS5_HOST_REFERENCE)

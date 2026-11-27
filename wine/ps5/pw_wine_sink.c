@@ -28,28 +28,44 @@ static uint32_t head,count;
 static PwWineSinkStats stats;
 static pthread_once_t wake_once=PTHREAD_ONCE_INIT;
 static int wake[2]={-1,-1};
-static PwWinePad pad_state;
-static uint32_t pad_changes;      /* times the pad connected or disconnected (lock) */
-static int pad_seen=-1;           /* a helper: whether it saw the pad connected at its last look; -1 before the first */
+static PwWinePad pad_states[PW_WINE_MAX_PADS];
+static uint32_t pad_changes;      /* times any pad connected or disconnected (lock) */
+static int pad_seen=-1;           /* a helper: bitmask of connected pads at its last look; -1 before the first */
 /* The title's pad, for its Windows child processes (docs/GRAPHICS_PROCESS_BROKER.md). A child has a sink of its own,
  * which no title sets: each child makes an input page (src/pw_shared_page.h) and gives it to the title, whose sink
- * keeps a copy of its pad in every page it adopted (pw_wine_input_page_adopt); a child's sink reads the pad from its
- * own page (WINE_PS5_INPUT_FD). The sequence is odd while the page is written, so a read is whole. */
+ * keeps a copy of its pads in every page it adopted (pw_wine_input_page_adopt); a child's sink reads the pads from its
+ * own page (WINE_PS5_INPUT_FD) and writes rumble requests back into rumble[slot]. The sequence is odd while written. */
 _Static_assert(PW_WINE_INPUT_PAGE_BYTES == 16384, "an input page is one console page");
-/* The page also carries the DualSense's USB report, which winebus's PS5 bus reads (pw_wine_dualsense): a game in a
- * helper that finds the pad through raw HID, not XInput (a .NET (MonoGame) game's SDL with SDL_XINPUT_ENABLED=0), sees it. */
-typedef struct PwWineInputPage { uint32_t sequence, pad_kind; PwWinePad pad; uint32_t dualsense_connected;
-                                 uint8_t dualsense[64]; } PwWineInputPage;
+/* The page also carries the DualSense's USB reports, which winebus's PS5 bus reads (pw_wine_dualsense_slot): a game in a
+ * helper that finds pads through raw HID, not XInput, sees them. First five fields stay ABI-compatible with slot 0. */
+typedef struct PwWineRumbleSlot {
+    uint32_t sequence;
+    uint32_t left;
+    uint32_t right;
+} PwWineRumbleSlot;
+typedef struct PwWineInputPage {
+    uint32_t sequence, pad_kind;
+    PwWinePad pad;
+    uint32_t dualsense_connected;
+    uint8_t dualsense[64];
+    PwWinePad pads[PW_WINE_MAX_PADS];
+    uint32_t dualsense_connected_slots[PW_WINE_MAX_PADS];
+    uint8_t dualsense_slots[PW_WINE_MAX_PADS][64];
+    PwWineRumbleSlot rumble[PW_WINE_MAX_PADS];
+} PwWineInputPage;
 _Static_assert(sizeof(PwWineInputPage) <= PW_SUSPEND_PAGE_OFFSET, "the title's suspend word is clear of the pad");
-static PwWineInputPage *input_page;   /* a child's own page, read here */
-static int input_page_tried,pad_set;
+static PwWineInputPage *input_page;   /* a child's own page, read/written here */
+static int input_page_tried,input_page_writable,pad_set;
 static uint32_t pad_kind;   /* the title's controller kind + 1; 0: none set (pw_wine_set_pad_kind) */
-/* The title: the pages its helpers gave it, written whenever the pad or the DualSense report changes. */
+/* The title: the pages its helpers gave it, written whenever any pad or DualSense report changes. */
 #define PW_WINE_CHILD_PAGES 32
 static PwWineInputPage *child_pages[PW_WINE_CHILD_PAGES];
-static uint8_t dualsense_report[64];
-static int dualsense_connected,dualsense_set;
-static uint32_t rumble_left,rumble_right,rumble_changed;
+static uint32_t child_rumble_seq[PW_WINE_CHILD_PAGES][PW_WINE_MAX_PADS];
+static uint8_t child_rumble_nonzero[PW_WINE_CHILD_PAGES][PW_WINE_MAX_PADS];
+static uint8_t dualsense_reports[PW_WINE_MAX_PADS][64];
+static int dualsense_connected_slots[PW_WINE_MAX_PADS],dualsense_set;
+static uint32_t rumble_left[PW_WINE_MAX_PADS],rumble_right[PW_WINE_MAX_PADS],rumble_changed[PW_WINE_MAX_PADS];
+static uint8_t rumble_child_sent[PW_WINE_MAX_PADS];
 /* Audio has its own lock: its sink blocks for a grain, which must not hold
  * up frames or input. */
 static pthread_mutex_t audio_lock=PTHREAD_MUTEX_INITIALIZER;
@@ -409,10 +425,14 @@ static void input_page_write_locked(PwWineInputPage *page)
     const uint32_t sequence=__atomic_load_n(&page->sequence,__ATOMIC_RELAXED);
     __atomic_store_n(&page->sequence,sequence+1,__ATOMIC_RELAXED);
     __atomic_thread_fence(__ATOMIC_RELEASE);
-    page->pad=pad_state;
+    page->pad=pad_states[0];
     page->pad_kind=pad_kind;
-    page->dualsense_connected=(uint32_t)dualsense_connected;
-    memcpy(page->dualsense,dualsense_report,sizeof(page->dualsense));
+    page->dualsense_connected=(uint32_t)dualsense_connected_slots[0];
+    memcpy(page->dualsense,dualsense_reports[0],sizeof(page->dualsense));
+    memcpy(page->pads,pad_states,sizeof(page->pads));
+    for(unsigned s=0;s<PW_WINE_MAX_PADS;++s)
+        page->dualsense_connected_slots[s]=(uint32_t)dualsense_connected_slots[s];
+    memcpy(page->dualsense_slots,dualsense_reports,sizeof(page->dualsense_slots));
     __atomic_store_n(&page->sequence,sequence+2,__ATOMIC_RELEASE);
 }
 static void input_page_publish_locked(void)
@@ -429,7 +449,14 @@ void *pw_wine_input_page_adopt(int fd)
     if(page==MAP_FAILED)return NULL;
     pthread_mutex_lock(&lock);
     while(slot<PW_WINE_CHILD_PAGES && child_pages[slot])slot++;
-    if(slot<PW_WINE_CHILD_PAGES) { child_pages[slot]=page;input_page_write_locked(page); }
+    if(slot<PW_WINE_CHILD_PAGES) {
+        child_pages[slot]=page;
+        for(unsigned s=0;s<PW_WINE_MAX_PADS;++s) {
+            child_rumble_seq[slot][s]=0;
+            child_rumble_nonzero[slot][s]=0;
+        }
+        input_page_write_locked(page);
+    }
     pthread_mutex_unlock(&lock);
     if(slot==PW_WINE_CHILD_PAGES) { munmap(page,PW_WINE_INPUT_PAGE_BYTES);return NULL; }
     return page;
@@ -452,10 +479,21 @@ void pw_wine_input_page_release(void *page)
     if(!page)return;
     pthread_mutex_lock(&lock);
     for(unsigned i=0;i<PW_WINE_CHILD_PAGES;i++)
-        if(child_pages[i]==page) { child_pages[i]=NULL;munmap(page,PW_WINE_INPUT_PAGE_BYTES); }
+        if(child_pages[i]==page) {
+            /* If a helper exits or crashes mid-rumble, zero motors on slots it drove so they never stick on. */
+            for(unsigned s=0;s<PW_WINE_MAX_PADS;++s) {
+                if(child_rumble_nonzero[i][s] && (rumble_left[s] || rumble_right[s])) {
+                    rumble_left[s]=0;rumble_right[s]=0;rumble_changed[s]=1;
+                }
+                child_rumble_seq[i][s]=0;
+                child_rumble_nonzero[i][s]=0;
+            }
+            child_pages[i]=NULL;
+            munmap(page,PW_WINE_INPUT_PAGE_BYTES);
+        }
     pthread_mutex_unlock(&lock);
 }
-/* In a child: the page the loader was given, mapped once. */
+/* In a child: the page the loader was given, mapped once. Writable so rumble requests reach the title. */
 static void input_page_attach_locked(void)
 {
     const char *value;char *end;long fd;void *page;
@@ -465,41 +503,53 @@ static void input_page_attach_locked(void)
     if(!value || !*value)return;
     fd=strtol(value,&end,10);
     if(*end || fd<0 || fd>INT_MAX)return;
+    page=pw_wine_pages_map(PW_WINE_INPUT_PAGE_BYTES,PROT_READ|PROT_WRITE,(int)fd);
+    if(page!=MAP_FAILED) { input_page=page;input_page_writable=1;return; }
     page=pw_wine_pages_map(PW_WINE_INPUT_PAGE_BYTES,PROT_READ,(int)fd);
-    if(page!=MAP_FAILED)input_page=page;
+    if(page!=MAP_FAILED) { input_page=page;input_page_writable=0; }
+}
+void pw_wine_set_pad_slot(unsigned slot,const PwWinePad *pad)
+{
+    int changed,dirty=0;
+    if(slot>=PW_WINE_MAX_PADS)return;
+    pthread_mutex_lock(&lock);
+    pad_set=1;
+    changed=(pad && pad->connected)!=(pad_states[slot].connected!=0);
+    if(changed) { pad_changes++;dirty=1; }
+    if(!pad || !pad->connected) {
+        pad_states[slot].connected=0;
+    } else if(!pad_states[slot].connected || !same_pad(pad,&pad_states[slot])) {
+        uint32_t packet=pad_states[slot].packet+1;
+        pad_states[slot]=*pad;pad_states[slot].connected=1;
+        pad_states[slot].packet=packet?packet:1;   /* 0 is never a packet */
+        dirty=1;
+    }
+    if(dirty)input_page_publish_locked();
+    pthread_mutex_unlock(&lock);
+    if(changed)wake_driver();   /* the driver tells the game's windows */
 }
 void pw_wine_set_pad(const PwWinePad *pad)
 {
-    int changed;
-    pthread_mutex_lock(&lock);
-    pad_set=1;
-    changed=(pad && pad->connected)!=(pad_state.connected!=0);
-    if(changed)pad_changes++;
-    if(!pad || !pad->connected)pad_state.connected=0;
-    else if(!pad_state.connected || !same_pad(pad,&pad_state)) {
-        uint32_t packet=pad_state.packet+1;
-        pad_state=*pad;pad_state.connected=1;
-        pad_state.packet=packet?packet:1;   /* 0 is never a packet */
-    }
-    input_page_publish_locked();
-    pthread_mutex_unlock(&lock);
-    if(changed)wake_driver();   /* the driver tells the game's windows */
+    pw_wine_set_pad_slot(0,pad);
 }
 uint32_t pw_wine_pad_changes(void)
 {
     PwWinePad copy;
     uint32_t changes;
-    int connected,helper;
+    int mask=0,helper;
     pthread_mutex_lock(&lock);
     helper=!pad_set;
     pthread_mutex_unlock(&lock);
     /* A helper does not set the pad: it sees the title's through the input page, so a change is the page showing a
-     * different state than at the last look (the first look is the baseline). */
-    connected=helper ? pw_wine_pad(&copy)!=0 : 0;
+     * different connected mask than at the last look (the first look is the baseline). */
+    if(helper) {
+        for(unsigned s=0;s<PW_WINE_MAX_PADS;++s)
+            if(pw_wine_pad_slot(s,&copy)) mask |= (1 << s);
+    }
     pthread_mutex_lock(&lock);
     if(helper) {
-        if(pad_seen>=0 && pad_seen!=connected)pad_changes++;
-        pad_seen=connected;
+        if(pad_seen>=0 && pad_seen!=mask)pad_changes++;
+        pad_seen=mask;
     }
     changes=pad_changes;
     pthread_mutex_unlock(&lock);
@@ -524,10 +574,11 @@ int pw_wine_pad_kind(void)
     pthread_mutex_unlock(&lock);
     return kind>=1 && kind<=3 ? (int)kind-1 : -1;
 }
-int pw_wine_pad(PwWinePad *pad)
+int pw_wine_pad_slot(unsigned slot,PwWinePad *pad)
 {
     int connected;
     if(!pad)return 0;
+    if(slot>=PW_WINE_MAX_PADS) { memset(pad,0,sizeof(*pad));return 0; }
     pthread_mutex_lock(&lock);
     if(!pad_set) {
         input_page_attach_locked();
@@ -536,7 +587,7 @@ int pw_wine_pad(PwWinePad *pad)
             for(unsigned tries=0;tries<1000;++tries) {
                 const uint32_t before=__atomic_load_n(&input_page->sequence,__ATOMIC_ACQUIRE);
                 if(before&1)continue;
-                copy=input_page->pad;
+                copy=input_page->pads[slot];
                 __atomic_thread_fence(__ATOMIC_ACQUIRE);
                 if(__atomic_load_n(&input_page->sequence,__ATOMIC_RELAXED)==before)break;
             }
@@ -546,41 +597,98 @@ int pw_wine_pad(PwWinePad *pad)
             return 1;
         }
     }
-    connected=pad_state.connected!=0;
-    if(connected)*pad=pad_state;
+    connected=pad_states[slot].connected!=0;
+    if(connected)*pad=pad_states[slot];
     else memset(pad,0,sizeof(*pad));
     pthread_mutex_unlock(&lock);
     return connected;
 }
-void pw_wine_set_rumble(uint32_t left,uint32_t right)
+int pw_wine_pad(PwWinePad *pad)
 {
+    return pw_wine_pad_slot(0,pad);
+}
+void pw_wine_set_rumble_slot(unsigned slot,uint32_t left,uint32_t right)
+{
+    if(slot>=PW_WINE_MAX_PADS)return;
     if(left>0xffffu)left=0xffffu;
     if(right>0xffffu)right=0xffffu;
     pthread_mutex_lock(&lock);
-    if(left!=rumble_left || right!=rumble_right) {
-        rumble_left=left;rumble_right=right;rumble_changed=1;
+    const int changed=!rumble_child_sent[slot] || left!=rumble_left[slot] || right!=rumble_right[slot];
+    if(left!=rumble_left[slot] || right!=rumble_right[slot]) {
+        rumble_left[slot]=left;rumble_right[slot]=right;rumble_changed[slot]=1;
+    }
+    if(!pad_set && changed) {
+        input_page_attach_locked();
+        if(input_page && input_page_writable) {
+            PwWineRumbleSlot *r=&input_page->rumble[slot];
+            const uint32_t seq=__atomic_load_n(&r->sequence,__ATOMIC_RELAXED);
+            __atomic_store_n(&r->sequence,seq+1,__ATOMIC_RELAXED);
+            __atomic_thread_fence(__ATOMIC_RELEASE);
+            r->left=left;
+            r->right=right;
+            __atomic_store_n(&r->sequence,seq+2,__ATOMIC_RELEASE);
+            rumble_child_sent[slot]=1;
+        }
     }
     pthread_mutex_unlock(&lock);
 }
-int pw_wine_rumble(uint32_t *left,uint32_t *right)
+void pw_wine_set_rumble(uint32_t left,uint32_t right)
+{
+    pw_wine_set_rumble_slot(0,left,right);
+}
+int pw_wine_rumble_slot(unsigned slot,uint32_t *left,uint32_t *right)
 {
     int changed;
+    if(slot>=PW_WINE_MAX_PADS) {
+        if(left)*left=0;
+        if(right)*right=0;
+        return 0;
+    }
     pthread_mutex_lock(&lock);
-    changed=(int)rumble_changed;rumble_changed=0;
-    if(left)*left=rumble_left;
-    if(right)*right=rumble_right;
+    /* Harvest rumble updates written by any adopted helper / local child process. */
+    for(unsigned i=0;i<PW_WINE_CHILD_PAGES;++i) {
+        PwWineInputPage *page=child_pages[i];
+        if(!page)continue;
+        PwWineRumbleSlot *r=&page->rumble[slot];
+        const uint32_t before=__atomic_load_n(&r->sequence,__ATOMIC_ACQUIRE);
+        if(!before || (before&1) || before==child_rumble_seq[i][slot])continue;
+        uint32_t cl=r->left,cr=r->right;
+        __atomic_thread_fence(__ATOMIC_ACQUIRE);
+        if(__atomic_load_n(&r->sequence,__ATOMIC_RELAXED)!=before)continue;
+        if(cl>0xffffu)cl=0xffffu;
+        if(cr>0xffffu)cr=0xffffu;
+        child_rumble_seq[i][slot]=before;
+        child_rumble_nonzero[i][slot]=(cl || cr) ? 1 : 0;
+        if(cl!=rumble_left[slot] || cr!=rumble_right[slot]) {
+            rumble_left[slot]=cl;rumble_right[slot]=cr;rumble_changed[slot]=1;
+        }
+    }
+    changed=(int)rumble_changed[slot];rumble_changed[slot]=0;
+    if(left)*left=rumble_left[slot];
+    if(right)*right=rumble_right[slot];
     pthread_mutex_unlock(&lock);
     return changed;
 }
-
-void pw_wine_set_dualsense(const uint8_t *report)
+int pw_wine_rumble(uint32_t *left,uint32_t *right)
 {
+    return pw_wine_rumble_slot(0,left,right);
+}
+
+void pw_wine_set_dualsense_slot(unsigned slot,const uint8_t *report)
+{
+    if(slot>=PW_WINE_MAX_PADS)return;
     pthread_mutex_lock(&lock);
     dualsense_set = 1;
-    dualsense_connected = report != NULL;
-    if (report) memcpy(dualsense_report, report, sizeof(dualsense_report));
-    input_page_publish_locked();
+    const int was_connected = dualsense_connected_slots[slot];
+    const int now_connected = report != NULL;
+    dualsense_connected_slots[slot] = now_connected;
+    if (report) memcpy(dualsense_reports[slot], report, sizeof(dualsense_reports[slot]));
+    if (now_connected || was_connected) input_page_publish_locked();
     pthread_mutex_unlock(&lock);
+}
+void pw_wine_set_dualsense(const uint8_t *report)
+{
+    pw_wine_set_dualsense_slot(0,report);
 }
 static uint64_t input_counts[7];
 static void input_count(int index) { __atomic_add_fetch(&input_counts[index], 1, __ATOMIC_RELAXED); }
@@ -600,20 +708,27 @@ static int report_pressed(const uint8_t *report)
 {
     return (report[8] & 0x0f) != 8 || (report[8] & 0xf0) || report[9] || (report[10] & 3);
 }
-static int dualsense_read(uint8_t *report);
-int pw_wine_dualsense(uint8_t *report)
+static int dualsense_read_slot(unsigned slot, uint8_t *report);
+int pw_wine_dualsense_slot(unsigned slot, uint8_t *report)
 {
     uint8_t copy[64];
-    const int connected = dualsense_read(copy);
-    input_count(0);
+    if (slot >= PW_WINE_MAX_PADS) return 0;
+    const int connected = dualsense_read_slot(slot, copy);
+    if (slot == 0) input_count(0);
     if (connected) {
-        input_count(1);
-        if (report_pressed(copy)) input_count(2);
+        if (slot == 0) {
+            input_count(1);
+            if (report_pressed(copy)) input_count(2);
+        }
         if (report) memcpy(report, copy, sizeof(copy));
     }
     return connected;
 }
-static int dualsense_read(uint8_t *report)
+int pw_wine_dualsense(uint8_t *report)
+{
+    return pw_wine_dualsense_slot(0, report);
+}
+static int dualsense_read_slot(unsigned slot, uint8_t *report)
 {
     int connected;
     pthread_mutex_lock(&lock);
@@ -626,8 +741,8 @@ static int dualsense_read(uint8_t *report)
             for (unsigned tries = 0; tries < 1000; ++tries) {
                 const uint32_t before = __atomic_load_n(&input_page->sequence, __ATOMIC_ACQUIRE);
                 if (before & 1) continue;
-                page_connected = input_page->dualsense_connected;
-                memcpy(copy, input_page->dualsense, sizeof(copy));
+                page_connected = input_page->dualsense_connected_slots[slot];
+                memcpy(copy, input_page->dualsense_slots[slot], sizeof(copy));
                 __atomic_thread_fence(__ATOMIC_ACQUIRE);
                 if (__atomic_load_n(&input_page->sequence, __ATOMIC_RELAXED) == before) break;
             }
@@ -636,8 +751,8 @@ static int dualsense_read(uint8_t *report)
             return page_connected != 0;
         }
     }
-    connected = dualsense_connected;
-    if (report && connected) memcpy(report, dualsense_report, sizeof(dualsense_report));
+    connected = dualsense_connected_slots[slot];
+    if (report && connected) memcpy(report, dualsense_reports[slot], sizeof(dualsense_reports[slot]));
     pthread_mutex_unlock(&lock);
     return connected;
 }

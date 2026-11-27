@@ -2460,8 +2460,26 @@ static void wine_child_run(void)
     /* Only native control observation here: no guest locks, and of the statistics only the lock-free exec, scheduling and direct-section tallies. */
     for (;;) {
         short events=0;
-        const int polled = pw_control_watch(3,100,&events);
+        int polled = pw_control_watch(3,
+#ifdef PROTON_LOCAL_CHILD
+                                      25,
+#else
+                                      100,
+#endif
+                                      &events);
         const int poll_error=polled<0 ? errno : 0;
+#ifdef PROTON_LOCAL_CHILD
+        if (!error && !(events & (POLLHUP|POLLERR|POLLNVAL))) {
+            /* The title half-closes control_fd (SHUT_WR) and waits for us to flush
+             * exit summaries and close fd 3 before calling sceSystemServiceKillLocalProcess.
+             * MSG_PEEK never consumes a live control packet; 0 unambiguously means peer SHUT_WR. */
+            char peek=0;
+            if (recv(3,&peek,1,MSG_PEEK|MSG_DONTWAIT)==0) {
+                events|=POLLHUP;
+                polled=1;
+            }
+        }
+#endif
         const long long now=payload_monotonic_ms();
         if (doom_test && now>=doom_test_at) { doom_test(PW_CHILD_DOOM_TEST);doom_test=NULL; }
         if (doom_tick(&doom_watch,now,helper_suspend_tick(now))) return;

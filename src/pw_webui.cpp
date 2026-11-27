@@ -7,6 +7,7 @@
 #include "pw_drive_browse.h"
 #include "pw_game_mode.h"
 #include "pw_high_refresh.h"
+#include "pw_resolution.h"
 #include "json.hpp"   // external/tinygltf's vendored nlohmann::json, already in the title
 #include <algorithm>
 #include <cstdint>
@@ -343,22 +344,26 @@ json choices_json(const std::vector<PwWebuiChoice> &list, bool off)
 json settings_json(const PwWebuiContext &context)
 {
     const std::string &root = context.data_root;
-    int game_mode = 1, controller = PW_CONTROLLER_XBOX_360, logging = 0, high_refresh = 1;
+    int game_mode = 1, controller = PW_CONTROLLER_XBOX_360, logging = 0, high_refresh = 1, resolution = PW_RESOLUTION_1080P;
     pw_game_mode_load(&game_mode, (root + "/game-mode.txt").c_str());
     pw_high_refresh_load(&high_refresh, (root + "/high-refresh.txt").c_str());
+    pw_resolution_load(&resolution, (root + "/resolution.txt").c_str());
     pw_controller_load(&controller, (root + "/controller.txt").c_str());
     pw_detailed_logs_load(&logging, (root + "/logging.txt").c_str());
     pw_controls controls;
     pw_controls_load(&controls, (root + "/controls.txt").c_str());
-    json buttons = json::array(), controllers = json::array(), keyboards = json::array();
+    json buttons = json::array(), controllers = json::array(), keyboards = json::array(), resolutions = json::array();
     for (unsigned i = 0; i < PW_OSK_TRIGGERS; ++i)
         keyboards.push_back(json{{"id", pw_osk_trigger_id(i)}});
     for (unsigned i = 0; i < PW_CONTROLS_BUTTONS; ++i)
         buttons.push_back(json{{"id", pw_controls_button_id(i)}, {"label", pw_controls_button_label(i)}});
     for (int k = 0; k < PW_CONTROLLER_KINDS; ++k)
         controllers.push_back(json{{"id", pw_controller_word(k)}, {"label", pw_controller_name(k)}});
+    for (int k = 0; k < PW_RESOLUTION_KINDS; ++k)
+        resolutions.push_back(json{{"id", pw_resolution_word(k)}, {"label", pw_resolution_name(k)}});
     return json{{"game_mode", game_mode != 0},
                 {"high_refresh", high_refresh != 0},
+                {"resolution", pw_resolution_word(resolution)},
                 {"controller", pw_controller_word(controller)},
                 {"logging", logging != 0},
                 {"show_all", exists(root + "/library-show-all")},
@@ -369,6 +374,7 @@ json settings_json(const PwWebuiContext &context)
                 {"theme", kept_choice(context, "theme.txt", context.themes, false)},
                 {"music", kept_choice(context, "music.txt", context.music, true)},
                 {"choices", json{{"buttons", buttons}, {"controllers", controllers}, {"keyboards", keyboards},
+                                 {"resolutions", resolutions},
                                  {"themes", choices_json(context.themes, false)}, {"music", choices_json(context.music, true)}}}};
 }
 
@@ -385,7 +391,7 @@ PwWebuiResponse save_settings(const PwWebuiContext &context, const PwWebuiReques
     json body;
     if (!parse_body(request, body)) return fail(400, "The settings are not a JSON object.");
     const std::string &root = context.data_root;
-    int controller = -1;
+    int controller = -1, resolution = -1;
     pw_controls controls;
     pw_controls_load(&controls, (root + "/controls.txt").c_str());
     bool controls_changed = false;
@@ -394,6 +400,10 @@ PwWebuiResponse save_settings(const PwWebuiContext &context, const PwWebuiReques
     if (body.count("controller")) {
         controller = body["controller"].is_string() ? pw_controller_kind(body["controller"].get<std::string>().c_str()) : -1;
         if (controller < 0) return fail(400, "The controller is xbox-360, xbox-one or dualsense.");
+    }
+    if (body.count("resolution")) {
+        resolution = body["resolution"].is_string() ? pw_resolution_kind(body["resolution"].get<std::string>().c_str()) : -1;
+        if (resolution < 0) return fail(400, "The resolution is 1080p, 1440p or 4k.");
     }
     if (body.count("mouse")) {
         const json &mouse = body["mouse"];
@@ -433,6 +443,7 @@ PwWebuiResponse save_settings(const PwWebuiContext &context, const PwWebuiReques
     if (body.count("game_mode")) error = error ? error : pw_game_mode_save(body["game_mode"].get<bool>(), (root + "/game-mode.txt").c_str());
     if (body.count("high_refresh"))
         error = error ? error : pw_high_refresh_save(body["high_refresh"].get<bool>(), (root + "/high-refresh.txt").c_str());
+    if (resolution >= 0) error = error ? error : pw_resolution_save(resolution, (root + "/resolution.txt").c_str());
     if (body.count("logging")) error = error ? error : pw_detailed_logs_save(body["logging"].get<bool>(), (root + "/logging.txt").c_str());
     if (controller >= 0) error = error ? error : pw_controller_save(controller, (root + "/controller.txt").c_str());
     if (controls_changed) error = error ? error : pw_controls_save(&controls, (root + "/controls.txt").c_str());

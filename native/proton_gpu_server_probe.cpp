@@ -68,6 +68,7 @@ void proton_gpu_broker_frame_attach(int pid,int fd) { ps5_gpu_broker_frame_attac
 void proton_gpu_broker_frame_detach(int pid) { ps5_gpu_broker_frame_detach(pid); }
 unsigned long long proton_gpu_broker_flips() { return ps5_gpu_broker_flips(); }
 unsigned proton_gpu_broker_display_hz() { return ps5_gpu_broker_display_hz(); }
+void proton_gpu_broker_display_size(unsigned *width, unsigned *height) { ps5_gpu_broker_display_size(width, height); }
 int proton_gpu_broker_game_mode() { return ps5_gpu_broker_game_mode(); }
 bool proton_gpu_broker_capture_next(const char *path) { return ps5_gpu_broker_capture_next(path); }
 bool proton_gpu_broker_set_cover(const void *pixels) { return ps5_gpu_broker_set_cover(pixels); }

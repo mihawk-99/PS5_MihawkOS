@@ -166,6 +166,8 @@ std::string proton_wallpaper_path();
 std::string proton_controller_path();
 /* The 120 Hz setting (src/pw_high_refresh.h), beside game-mode.txt. */
 std::string proton_high_refresh_path();
+/* The game resolution setting (src/pw_resolution.h), beside game-mode.txt. */
+std::string proton_resolution_path();
 /* The Logging setting (src/pw_detailed_logs.h), beside game-mode.txt. */
 std::string proton_logging_path();
 /* Every place the catalog is read from, in order, existing or not. */

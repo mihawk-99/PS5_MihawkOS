@@ -35,7 +35,8 @@
 enum { PW_DISPLAY_CAPTURE_QUEUE = 2, PW_DISPLAY_TILED_BYTES = PW_DISPLAY_BLOCKS * 9 << 16 };
 
 typedef struct PwDisplayCapture {
-    uint8_t *frame;   /* PW_DISPLAY_TILED_BYTES, malloc'd; the capture thread frees it */
+    uint8_t *frame;   /* tiled frame, malloc'd; the capture thread frees it */
+    unsigned width, height, blocks;
     uint64_t serial, copy_ns;
     FILE *log;        /* where its line goes, or NULL */
     char path[240];
@@ -51,7 +52,7 @@ typedef struct PwDisplayCaptures {
     uint64_t written, failed;
 } PwDisplayCaptures;
 #define PW_DISPLAY_CAPTURES_INIT \
-    { PTHREAD_MUTEX_INITIALIZER, PTHREAD_COND_INITIALIZER, { { NULL, 0, 0, NULL, { 0 } } }, 0, 0, 0, 0, 0, 0 }
+    { PTHREAD_MUTEX_INITIALIZER, PTHREAD_COND_INITIALIZER, { { NULL, 0, 0, 0, 0, 0, NULL, { 0 } } }, 0, 0, 0, 0, 0, 0 }
 
 static inline uint64_t pw_display_capture_now_ns(void)
 {
@@ -62,23 +63,27 @@ static inline uint64_t pw_display_capture_now_ns(void)
 
 /* The picture of a tiled B8G8R8A8 frame as a binary PPM: PATH.part written and fsynced, then renamed to PATH.
  * 0, or an errno; nothing is left at PATH.part on failure. */
-static inline int pw_display_capture_write(const uint8_t *frame, const char *path)
+static inline int pw_display_capture_write_wh(const uint8_t *frame, unsigned width, unsigned height, unsigned blocks,
+                                              const char *path)
 {
+    if (!frame || !path || !width || width > PW_DISPLAY_MAX_WIDTH || !height || height > PW_DISPLAY_MAX_HEIGHT || !blocks)
+        return EINVAL;
     char part[256];
     if (snprintf(part, sizeof(part), "%s.part", path) >= (int)sizeof(part)) return ENAMETOOLONG;
     FILE *file = fopen(part, "wb");
     if (!file) return errno ? errno : EIO;
-    int okay = fprintf(file, "P6\n%u %u\n255\n", (unsigned)PW_DISPLAY_WIDTH, (unsigned)PW_DISPLAY_HEIGHT) > 0;
-    uint8_t row[PW_DISPLAY_WIDTH * 3];
-    for (unsigned y = 0; y < PW_DISPLAY_HEIGHT && okay; ++y) {
-        for (unsigned x = 0; x < PW_DISPLAY_WIDTH; ++x) {
+    int okay = fprintf(file, "P6\n%u %u\n255\n", width, height) > 0;
+    uint8_t row[PW_DISPLAY_MAX_WIDTH * 3];
+    const size_t row_bytes = (size_t)width * 3;
+    for (unsigned y = 0; y < height && okay; ++y) {
+        for (unsigned x = 0; x < width; ++x) {
             uint32_t pixel;
-            memcpy(&pixel, frame + pw_display_tiled(x, y), 4);
+            memcpy(&pixel, frame + pw_display_tiled_stride(x, y, blocks), 4);
             row[x * 3] = (uint8_t)(pixel >> 16);
             row[x * 3 + 1] = (uint8_t)(pixel >> 8);
             row[x * 3 + 2] = (uint8_t)pixel;
         }
-        okay = fwrite(row, 1, sizeof(row), file) == sizeof(row);
+        okay = fwrite(row, 1, row_bytes, file) == row_bytes;
     }
     okay &= !fflush(file);
     okay &= !fsync(fileno(file));
@@ -88,6 +93,11 @@ static inline int pw_display_capture_write(const uint8_t *frame, const char *pat
         return EIO;
     }
     return rename(part, path) ? (errno ? errno : EIO) : 0;
+}
+
+static inline int pw_display_capture_write(const uint8_t *frame, const char *path)
+{
+    return pw_display_capture_write_wh(frame, PW_DISPLAY_WIDTH, PW_DISPLAY_HEIGHT, PW_DISPLAY_BLOCKS, path);
 }
 
 static inline void *pw_display_capture_main(void *argument)
@@ -103,7 +113,10 @@ static inline void *pw_display_capture_main(void *argument)
         pthread_cond_broadcast(&captures->changed);   /* a present waiting for room */
         pthread_mutex_unlock(&captures->lock);
         const uint64_t begin = pw_display_capture_now_ns();
-        const int status = pw_display_capture_write(job.frame, job.path);
+        const unsigned w = job.width ? job.width : (unsigned)PW_DISPLAY_WIDTH;
+        const unsigned h = job.height ? job.height : (unsigned)PW_DISPLAY_HEIGHT;
+        const unsigned blocks = job.blocks ? job.blocks : (unsigned)PW_DISPLAY_BLOCKS;
+        const int status = pw_display_capture_write_wh(job.frame, w, h, blocks, job.path);
         const uint64_t spent = pw_display_capture_now_ns() - begin;
         free(job.frame);
         if (job.log)
@@ -119,13 +132,16 @@ static inline void *pw_display_capture_main(void *argument)
     return NULL;
 }
 
-/* Hands frame (a malloc'd tiled frame) to the capture thread, which starts on first use and
- * then owns and frees the frame. Waits while PW_DISPLAY_CAPTURE_QUEUE pictures already wait. Returns 0, or an errno
- * when the path is too long or the thread cannot start; the frame then stays the caller's. */
-static inline int pw_display_capture_take(PwDisplayCaptures *captures, uint8_t *frame, const char *path,
-                                          uint64_t serial, uint64_t copy_ns, FILE *log)
+/* Hands frame (a malloc'd tiled frame of width x height with `blocks` tile columns) to the capture thread, which starts
+ * on first use and then owns and frees the frame. Waits while PW_DISPLAY_CAPTURE_QUEUE pictures already wait. Returns 0,
+ * or an errno when the path is too long or the thread cannot start; the frame then stays the caller's. */
+static inline int pw_display_capture_take_wh(PwDisplayCaptures *captures, uint8_t *frame, unsigned width,
+                                             unsigned height, unsigned blocks, const char *path,
+                                             uint64_t serial, uint64_t copy_ns, FILE *log)
 {
-    if (!frame || !path || strlen(path) >= sizeof(captures->waiting[0].path)) return EINVAL;
+    if (!frame || !path || !width || width > PW_DISPLAY_MAX_WIDTH || !height || height > PW_DISPLAY_MAX_HEIGHT ||
+        !blocks || strlen(path) >= sizeof(captures->waiting[0].path))
+        return EINVAL;
     pthread_mutex_lock(&captures->lock);
     if (!captures->started) {
         captures->stopping = 0;
@@ -139,6 +155,9 @@ static inline int pw_display_capture_take(PwDisplayCaptures *captures, uint8_t *
     while (captures->count == PW_DISPLAY_CAPTURE_QUEUE) pthread_cond_wait(&captures->changed, &captures->lock);
     PwDisplayCapture *job = &captures->waiting[captures->count++];
     job->frame = frame;
+    job->width = width;
+    job->height = height;
+    job->blocks = blocks;
     job->serial = serial;
     job->copy_ns = copy_ns;
     job->log = log;
@@ -146,6 +165,13 @@ static inline int pw_display_capture_take(PwDisplayCaptures *captures, uint8_t *
     pthread_cond_broadcast(&captures->changed);
     pthread_mutex_unlock(&captures->lock);
     return 0;
+}
+
+static inline int pw_display_capture_take(PwDisplayCaptures *captures, uint8_t *frame, const char *path,
+                                          uint64_t serial, uint64_t copy_ns, FILE *log)
+{
+    return pw_display_capture_take_wh(captures, frame, PW_DISPLAY_WIDTH, PW_DISPLAY_HEIGHT, PW_DISPLAY_BLOCKS, path,
+                                      serial, copy_ns, log);
 }
 
 /* Waits until every picture handed over is written, then ends the thread; a later capture starts it again. */

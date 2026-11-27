@@ -21,6 +21,22 @@ typedef struct PwWineVmEntry
     int type;
     char name[33];
 } PwWineVmEntry;
+typedef enum PwWineVmFailureKind
+{
+    PW_WINE_VM_FAILURE_NONE = 0,
+    PW_WINE_VM_FAILURE_QUERY = 1,   /* sceKernelVirtualQuery returned an error status */
+    PW_WINE_VM_FAILURE_ENTRY = 2,   /* sceKernelVirtualQuery returned an invalid or non-advancing range */
+    PW_WINE_VM_FAILURE_REFILL = 3,  /* refill() failed twice on the same hole */
+} PwWineVmFailureKind;
+
+typedef struct PwWineVmForeignDiag
+{
+    PwWineVmFailureKind kind;
+    int kernel_status;
+    uintptr_t cursor;
+    uintptr_t entry_start, entry_end;
+} PwWineVmForeignDiag;
+
 /* The entry holding address, or the next one: 0, 1 at the end of the map, -1 on a refused or malformed query. */
 int pw_wine_vm_entry(const void *address, PwWineVmEntry *entry);
 /* The first entry in [address, +bytes) whose protection or flags differ from like's (a bare reservation of Wine's):
@@ -30,6 +46,10 @@ int pw_wine_vm_entry(const void *address, PwWineVmEntry *entry);
  * cannot take is asked about once more (what took it is judged), then -1. Without fill, holes count as none. */
 int pw_wine_vm_foreign(const void *address, size_t bytes, const PwWineVmEntry *like, PwWineVmEntry *found,
                        int (*fill)(uintptr_t address, size_t bytes));
+/* Same as pw_wine_vm_foreign, additionally filling *diag (when non-NULL) on failure. */
+int pw_wine_vm_foreign_diag(const void *address, size_t bytes, const PwWineVmEntry *like, PwWineVmEntry *found,
+                            int (*fill)(uintptr_t address, size_t bytes), PwWineVmForeignDiag *diag);
+const char *pw_wine_vm_failure_name(PwWineVmFailureKind kind);
 /* Wine's sorted reservation list remains owned and locked by ntdll. The
  * callback returns its containing/next reservation (0), or end of list (1).
  * In a gap between Windows views, return 0 for free space up to the next

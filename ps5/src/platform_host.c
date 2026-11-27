@@ -29,6 +29,11 @@ platform_init(const char *title_name)
 }
 
 void
+platform_kill_local_processes(void)
+{
+}
+
+void
 platform_say_file(int fd)
 {
    (void)fd;   /* the host reference build's stderr is already a file */
@@ -66,6 +71,14 @@ pad_poll(struct pad *pad)
    memset(pad, 0, sizeof(*pad));
 }
 
+void
+pad_poll_slot(int slot, struct pad *pad)
+{
+   (void)slot;
+   if (pad)
+      memset(pad, 0, sizeof(*pad));
+}
+
 int
 pad_readings(const struct pad_reading **readings)
 {
@@ -81,8 +94,25 @@ pad_vibrate(float large, float small)
 }
 
 void
+pad_vibrate_slot(int slot, float large, float small)
+{
+   (void)slot;
+   (void)large;
+   (void)small;
+}
+
+void
 pad_light_bar(uint8_t r, uint8_t g, uint8_t b)
 {
+   (void)r;
+   (void)g;
+   (void)b;
+}
+
+void
+pad_light_bar_slot(int slot, uint8_t r, uint8_t g, uint8_t b)
+{
+   (void)slot;
    (void)r;
    (void)g;
    (void)b;

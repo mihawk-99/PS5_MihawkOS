@@ -93,6 +93,12 @@ int main(void)
     pw_code_budget_setup(&budget, NULL, NULL, NULL);
     assert(budget.mode == PW_CODE_BUDGET_ADAPTIVE && budget.bytes == 64u << 20);
 
+    /* Large ~250 MB binary (~10,000 evicted 16 KiB clusters): real thrash still raises without hash collision loss. */
+    pw_code_budget_setup(&budget, NULL, NULL, "C:\\Games\\large_game.exe");
+    for (unsigned i = 0; i < 10000; ++i)
+        pw_code_budget_evicted(&budget, 0x140000000ull + (uintptr_t)i * 16384);
+    assert(cycle(0x140000000ull, 64, 10000, 5000) == 1 && budget.bytes == 96u << 20 && budget.raises == 1);
+
     puts("code budget: games and the listed clients raised in 32 MiB steps on 1 MiB coming back a second time in "
          "10 s up to 256 MiB, a phase change not raised, the user's setting first: ok");
     return 0;

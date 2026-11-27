@@ -88,13 +88,14 @@ MihawkOS ships two things together — a **Wine + Proton runtime** engineered fo
 
 <a id="highlights"></a>
 
-## <picture><source media="(prefers-color-scheme: dark)" srcset="docs/media/readme/orb-games-night.svg"><img src="docs/media/readme/orb-games-day.svg" width="30" height="30" alt=""></picture> What's New in Alpha 9
+## <picture><source media="(prefers-color-scheme: dark)" srcset="docs/media/readme/orb-games-night.svg"><img src="docs/media/readme/orb-games-day.svg" width="30" height="30" alt=""></picture> What's New in Alpha 10
 
 *Tested on a standard PS5 (firmware 13.60). PS5 Pro (10.01) verification remains pending.*
 
-- **Persistent Steam sessions — zero close/reopen handovers.** Launching or closing a game from Steam Big Picture no longer shuts Steam down or restarts MihawkOS via `LoadExec`. Games start straight from Big Picture, return immediately to live Big Picture on exit, and complete **Steam Cloud** `AC Launch` and `AC Exit` syncs across repeated launches.
-- **65,536 CPU / 32,768 GPU page tables via elevated Sony local processes.** 64-bit Steam games and Steam's browser now run in pre-warmed, Lapy-elevated Sony local processes (`/app0/wine-local-child.bin`, **25–30 ms** warm spawn latency) sharing the title's expanded **65,536 CPU** (`256 MiB`) and **32,768 GPU** (`128 MiB`) application page-table pools (`ps5/sce_sys/param.json`, leaving **11,456 MiB** direct memory) and `1 GiB` flexible pool. They consume **0** entries from the console's 8,192-entry system page-table pool, isolate crashes from the title/broker/Steam, and reclaim **100%** of page tables and memory on exit.
-- **Faster Steam startup & I/O.** Reduced Wine server, xattr, and file I/O overhead on Steam hot paths (patch `2485`), shader-cache namespace reuse, adaptive CEF code-cache budgeting, and clean held-helper reaping before a game starts (patch `2486`).
+- **Native 1440p & 4K game resolution output (`#65`).** Choose `1080p`, `1440p` (`2560×1440`), or `4K` (`3840×2160`) globally in Settings, per-game in Options, or via the WebUI (localized across all 10 languages), with graceful fallback to 1080p if VideoOut declines a mode. Verified on PS5 at **120 Hz** in both `2560×1440` (`92.1 FPS`, `fast_copy=1`) and `3840×2160` (`96.1 FPS`, `fast_copy=1`).
+- **Multi-controller support (2–4 DualSense) + Rumble (`#64`).** Polls up to 4 logged-in DualSense controllers with 2 s hot-plug refresh, exposes all 4 slots across XInput (`xinput1_3` 64-bit & 32-bit WoW64) and HID (`winebus.sys`), and forwards both XInput vibration and DualSense USB output report `0x02` rumble back to the console's `scePadSetVibration` (auto-muted on overlay, OSK, pause, or exit).
+- **Universal elevated Sony local processes for all 64-bit apps.** Extends pre-warmed elevated local processes (`/app0/wine-local-child.bin`, `65,536 CPU / 32,768 GPU` app page tables, `0` system PT) from Steam-only to all 64-bit games, browsers, and Chromium apps, with a deterministic half-close exit flush handshake and `PW_CODE_BUDGET_EVICTED = 16384` (~256 MiB executable cache for large protected binaries).
+- **Direct3D 12 Tiled Resources Tier 2 + game compatibility fixes.** Exposes D3D12 Tiled Resources Tier 2 without PRT residency queries in VKD3D-Proton (patch `0004`), fixes DXVK `dxbc-spirv` `Operand::getSwizzle()` crashes on SM3 constant-operand `texkill` (`#42`), adds `EINTR`/`EAGAIN` retry handling and foreign-mapping diagnostics (`#43`), hardens writeback flush on atomic rename/save (`#56`/`#59`), and fixes orphaned local children (`#70`) and bounded Steam shutdown.
 
 <a id="benchmarks-and-what-runs"></a>
 

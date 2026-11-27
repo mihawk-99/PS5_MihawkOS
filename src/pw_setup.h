@@ -232,9 +232,11 @@ typedef enum {
     PW_TEXT_OPTIONS_GAME_MODE,
     PW_TEXT_OPTIONS_CONTROLLER,
     PW_TEXT_OPTIONS_INSIDE,
+    PW_TEXT_OPTIONS_RESOLUTION,
     PW_TEXT_OPTIONS_SETTINGS_ON,
     PW_TEXT_OPTIONS_SETTINGS_OFF,
     PW_TEXT_OPTIONS_SETTINGS_PAD, /* {1}: the controller */
+    PW_TEXT_OPTIONS_SETTINGS_RES, /* {1}: the resolution */
     PW_TEXT_OPTIONS_ON_HERE,
     PW_TEXT_OPTIONS_OFF_HERE,
     PW_TEXT_OPTIONS_PAD_360,
@@ -250,6 +252,8 @@ typedef enum {
     PW_TEXT_OPTIONS_CONTROLLER_CYCLE,
     PW_TEXT_OPTIONS_INSIDE_BODY,
     PW_TEXT_OPTIONS_INSIDE_OFF_BODY,
+    PW_TEXT_OPTIONS_RESOLUTION_BODY,
+    PW_TEXT_OPTIONS_RESOLUTION_CYCLE,
     PW_TEXT_OPTIONS_APPLIES, /* {1}: the game */
     PW_TEXT_OPTIONS_NOT_SAVED, /* {1}: why (English) */
     /* Settings, Controls and the theme picker (examples/ps5proton/ps5proton.cpp); the themes' own names and
@@ -308,6 +312,11 @@ typedef enum {
     PW_TEXT_SET_WEBUI_WAITING,
     PW_TEXT_SET_HZ,
     PW_TEXT_SET_AUTO,
+    PW_TEXT_SET_RESOLUTION,
+    PW_TEXT_SET_RESOLUTION_SUB, /* {1}: the resolution */
+    PW_TEXT_SET_RESOLUTION_CHOSEN, /* {1}: the resolution */
+    PW_TEXT_SET_RESOLUTION_BODY,
+    PW_TEXT_SET_RESOLUTION_FALLBACK,
     PW_TEXT_SET_OFF, /* the rows' lines */
     PW_TEXT_SET_GAME_MODE_ON,
     PW_TEXT_SET_GAME_MODE_OFF,

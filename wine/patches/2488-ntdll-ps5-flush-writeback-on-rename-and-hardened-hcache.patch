@@ -1,0 +1,70 @@
+From: Mihawk <mihawk@localhost>
+Date: Fri, 27 Nov 2026 00:00:00 +0000
+Subject: [PATCH] ntdll: ps5: flush writeback on rename/disposition and harden wb_hcache
+
+Fixes Issues #56 and #59 (atomic Auto Save and save loading crashes
+introduced by patch 2485's write-back cache):
+- NtSetInformationFile: call wb_flush_all() on rename, link, and disposition
+  classes (FileRenameInformation*, FileLinkInformation*, FileDispositionInformation*)
+  so replacing an existing save file with a temp file never races pending
+  write-back buffers on either source or target inode, and clear kind as well
+  as name_hash in wb_hcache.
+- wb_note_handle: never return early when wb_hash_basename() returns 0 (e.g.
+  temp filenames containing '~' or relative handles), so a recycled handle slot
+  in wb_hcache can never retain a previous handle's stale kind/dev/ino and skip
+  flushing before NtReadFile.
+- wb_flush_closed_handle: also flush any buffered entry matching the handle's
+  cached dev/ino before clearing its wb_hcache slot.
+
+---
+diff --git a/dlls/ntdll/unix/file.c b/dlls/ntdll/unix/file.c
+--- a/dlls/ntdll/unix/file.c
++++ b/dlls/ntdll/unix/file.c
+@@ -7657,7 +7657,6 @@
+ 
+     if (!handle || handle == (HANDLE)(LONG_PTR)-1) return;
+     h = wb_hash_basename( attr );
+-    if (!h) return;
+     s = wb_hslot( handle );
+     wb_lock();
+     __atomic_store_n( &wb_hcache[s].handle, handle, __ATOMIC_RELAXED );
+@@ -7808,6 +7807,8 @@
+     wb_lock();
+     if (wb_hcache[s].handle == handle)
+     {
++        if (wb_hcache[s].kind == 1 && __atomic_load_n( &wb_pending, __ATOMIC_RELAXED ))
++            wb_flush_file_locked( wb_hcache[s].dev, wb_hcache[s].ino );
+         __atomic_store_n( &wb_hcache[s].handle, NULL, __ATOMIC_RELAXED );
+         wb_hcache[s].name_hash = 0;
+         wb_hcache[s].kind = 0;
+@@ -9804,11 +9805,28 @@
+ {
+     unsigned int s = wb_hslot( handle );
+ 
+-    wb_flush_handle( handle );
++    switch (class)
++    {
++    case FileRenameInformation:
++    case FileRenameInformationEx:
++    case FileLinkInformation:
++    case FileLinkInformationEx:
++    case FileDispositionInformation:
++    case FileDispositionInformationEx:
++        wb_flush_all();
++        break;
++    default:
++        wb_flush_handle( handle );
++        break;
++    }
+     if (__atomic_load_n( &wb_hcache[s].handle, __ATOMIC_RELAXED ) == handle)
+     {
+         wb_lock();
+-        if (wb_hcache[s].handle == handle) wb_hcache[s].name_hash = 0;
++        if (wb_hcache[s].handle == handle)
++        {
++            wb_hcache[s].name_hash = 0;
++            wb_hcache[s].kind = 0;
++        }
+         wb_unlock();
+     }
+     return real_NtSetInformationFile( handle, io, ptr, len, class );

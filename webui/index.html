@@ -205,6 +205,11 @@
           <p class="muted">On: games can run at up to 120 frames a second on a TV that supports 120 Hz; choose 120 Hz in the game's own display settings too. Turn it off if your TV shows no picture or flickers when a game starts.</p></div>
         <label class="switch"><input type="checkbox" id="high-refresh" aria-label="120 Hz output"><span></span></label>
       </div>
+      <div class="glass card setting tall">
+        <div><h3>Game resolution</h3>
+          <p class="muted">The maximum display resolution offered to games. Falls back to 1080p automatically if your TV does not accept 1440p or 4K.</p></div>
+        <div class="choices" id="resolution" role="group" aria-label="Game resolution"></div>
+      </div>
     </div>
     <h2 class="section-title">The launcher</h2>
     <div class="settings">
@@ -321,6 +326,7 @@
       <div class="fields">
         <label>Game Mode<select name="game_mode"></select></label>
         <label>Controller<select name="controller"></select></label>
+        <label>Resolution<select name="resolution"></select></label>
       </div>
       <p class="hint">Leave both on the Settings choice unless this game needs another: Game Mode off if its screen stays black, another controller if it shows the wrong buttons or does not react.</p>
     </section>

@@ -18,6 +18,8 @@ extern "C" {
 /* Standard error into klog (each line prefixed with the title's name), and
  * the shell's splash dismissed. Call first. */
 void platform_init(const char *title_name);
+/* Kill any Sony local processes owned by this application (cleanup on startup/exit). */
+void platform_kill_local_processes(void);
 
 /* One line to klog, flushed. */
 void say(const char *format, ...) __attribute__((format(printf, 1, 2)));
@@ -60,9 +62,13 @@ struct pad {
    uint64_t timestamp_us;
 };
 
-/* Open the first user's pad; false (and no input) when there is none. */
+/* Up to four DualSense controllers (one per logged-in PS5 user, slot 0 = initial user). */
+enum { PAD_MAX_SLOTS = 4 };
+
+/* Open the first user's pad (and any other logged-in users' pads); false when slot 0 has none. */
 bool pad_open(void);
 void pad_poll(struct pad *pad);
+void pad_poll_slot(int slot, struct pad *pad);
 
 /* Set in a reading's buttons while the shell has the pad (the home screen, a
  * system dialog): that reading is not input for the title. */
@@ -84,8 +90,10 @@ int pad_readings(const struct pad_reading **readings);
 
 /* Rumble: the large and the small motor, 0..1 each; 0, 0 stops it. */
 void pad_vibrate(float large, float small);
+void pad_vibrate_slot(int slot, float large, float small);
 /* The light bar's colour. */
 void pad_light_bar(uint8_t r, uint8_t g, uint8_t b);
+void pad_light_bar_slot(int slot, uint8_t r, uint8_t g, uint8_t b);
 
 /* Sound: one 48 kHz output of interleaved stereo 16-bit samples. A thread of
  * its own calls fill for 256 frames at a time and blocks while the console

@@ -6,7 +6,7 @@
 #include <sys/mman.h>
 #include <sys/stat.h>
 #include <unistd.h>
-enum { PW_WINDOW_SCENE_MEMORY_LIMIT=64u<<20 };
+enum { PW_WINDOW_SCENE_MEMORY_LIMIT=128u<<20 };
 static int valid_snapshot(const PwWindowSnapshot *snapshot)
 {
     if(!snapshot || snapshot->version!=PW_WINDOW_SNAPSHOT_VERSION || snapshot->size!=sizeof(*snapshot) ||

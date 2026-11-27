@@ -7,7 +7,8 @@
 int main(void)
 {
     size_t bytes=pw_window_page_bytes(3,2);assert(bytes==16384);
-    assert(!pw_window_page_bytes(2177,2));assert(!pw_window_page_bytes(2,1409));
+    assert(pw_window_page_bytes(2560,1440)>0 && pw_window_page_bytes(3840,2160)>0 && pw_window_page_bytes(4096,2432)>0);
+    assert(!pw_window_page_bytes(4097,2));assert(!pw_window_page_bytes(2,2433));
     PwWindowPage *p=calloc(1,bytes),h;assert(p);
     assert(!pw_window_page_init(p,bytes,4,8,3,2,-16,5));
     assert(!pw_window_page_header(p,bytes,&h));assert(h.offset_x==-16 && h.generation==8);

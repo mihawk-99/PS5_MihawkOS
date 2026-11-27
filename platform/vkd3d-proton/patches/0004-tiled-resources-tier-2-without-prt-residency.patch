@@ -1,0 +1,52 @@
+PS5's RADV supports sparseBinding, sparseResidencyAliased, sparseResidencyBuffer, sparseResidencyImage2D,
+residencyStandard2DBlockShape, shaderResourceMinLod, unaligned mip sizes, and filterMinmaxSingleComponentFormats,
+and binds unbound tiles to a shared zero block without faulting. It lacks only PRT page bits
+(shaderResourceResidency and residencyNonResidentStrict).
+
+Patch 0001 allowed Feature Level 12_0+ while still reporting D3D12_TILED_RESOURCES_TIER_1, a combination that
+never exists on Windows hardware (D3D12 mandates Tier 2 for FL 12_0). Modern D3D12 engines check
+TiledResourcesTier >= 2 for transient-resource registration while creating CreateReservedResource transient
+render targets on FL 12_0+, leaving the transient pool unpopulated and crashing on the first render-target bind.
+
+Report D3D12_TILED_RESOURCES_TIER_2 (capped at Tier 2, never Tier 3/4) when all Tier 2 requirements except PRT
+residency feedback are present, and guard VKD3D_SHADER_META_FLAG_USES_SPARSE_RESIDENCY on
+device_info.features2.features.shaderResourceResidency directly so shaders using CheckAccessFullyMapped are still
+refused cleanly at pipeline creation.
+
+--- a/libs/vkd3d/device.c
++++ b/libs/vkd3d/device.c
+@@ -8888,13 +8888,18 @@
+             !device->queue_families[VKD3D_QUEUE_FAMILY_SPARSE_BINDING]->queue_count)
+         return D3D12_TILED_RESOURCES_TIER_NOT_SUPPORTED;
+ 
+-    if (!features->shaderResourceResidency || !features->shaderResourceMinLod ||
++    if (!features->shaderResourceMinLod ||
+             sparse_properties->residencyAlignedMipSize ||
+-            !sparse_properties->residencyNonResidentStrict ||
+             !device->device_info.vulkan_1_2_properties.filterMinmaxSingleComponentFormats)
+         return D3D12_TILED_RESOURCES_TIER_1;
+ 
+-    if (!features->sparseResidencyImage3D ||
++    /* PS5: RADV has every Tier 2 capability except PRT residency feedback (shaderResourceResidency /
++     * residencyNonResidentStrict) and backs unbound tiles with a zero block. Report Tier 2 so FL 12_0+
++     * engines do not see an impossible FL 12_0 + Tier 1 mismatch, cap at Tier 2 without PRT, and guard
++     * shader sparse-residency queries on shaderResourceResidency at PSO validation. */
++    if (!features->shaderResourceResidency ||
++            !sparse_properties->residencyNonResidentStrict ||
++            !features->sparseResidencyImage3D ||
+             !sparse_properties->residencyStandard3DBlockShape)
+         return D3D12_TILED_RESOURCES_TIER_2;
+ 
+@@ -10724,9 +10729,10 @@
+     }
+ 
+     if ((meta->flags & VKD3D_SHADER_META_FLAG_USES_SPARSE_RESIDENCY) &&
+-            device->d3d12_caps.options.TiledResourcesTier < D3D12_TILED_RESOURCES_TIER_2)
++            (device->d3d12_caps.options.TiledResourcesTier < D3D12_TILED_RESOURCES_TIER_2 ||
++                    !device->device_info.features2.features.shaderResourceResidency))
+     {
+-        WARN("Attempting to use sparse residency query in shader %016"PRIx64", but this requires sparse tier 2.\n", meta->hash);
++        WARN("Attempting to use sparse residency query in shader %016"PRIx64", but this requires sparse tier 2 and shaderResourceResidency.\n", meta->hash);
+         return false;
+     }
+ 

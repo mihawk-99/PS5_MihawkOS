@@ -92,10 +92,14 @@ void pw_wine_set_display_release(PwWineDisplayRelease release,void *context);
 /* 0, or -1 when the queue is full or the event is invalid. */
 int pw_wine_post_input(const PwWineInput *event);
 void pw_wine_sink_stats(PwWineSinkStats *stats);
+/* Up to four gamepads (one per logged-in PS5 user). Slot 0 is the primary controller. */
+enum { PW_WINE_MAX_PADS = 4 };
+
 /* The gamepad's newest state, or NULL when it is disconnected. The sink
  * numbers the packets; the pad's own packet field is ignored. */
 void pw_wine_set_pad(const PwWinePad *pad);
-/* How many times the controller connected or disconnected, as this process sees it: the title counts them as it sets the
+void pw_wine_set_pad_slot(unsigned slot, const PwWinePad *pad);
+/* How many times any controller connected or disconnected, as this process sees it: the title counts them as it sets the
  * pad, and wakes the input fd; a helper counts the differences between its looks at the input page. The driver tells the
  * game's windows (WM_DEVICECHANGE, patch 2423) when the count moved. */
 uint32_t pw_wine_pad_changes(void);
@@ -105,13 +109,16 @@ uint32_t pw_wine_pad_changes(void);
 void pw_wine_set_pad_kind(int kind);
 int pw_wine_pad_kind(void);
 /* 1 and the newest motor speeds (0..65535) when they changed since the
- * last call, else 0. */
+ * last call (including rumble requested from any adopted helper/local child), else 0. */
 int pw_wine_rumble(uint32_t *left,uint32_t *right);
+int pw_wine_rumble_slot(unsigned slot,uint32_t *left,uint32_t *right);
 
 /* DualSense USB reports, shared with winebus. NULL disconnects. In a helper, whose sink the title never sets, this is
  * the title's report, read from the input page. */
 void pw_wine_set_dualsense(const uint8_t *report);
+void pw_wine_set_dualsense_slot(unsigned slot, const uint8_t *report);
 int pw_wine_dualsense(uint8_t *report);
+int pw_wine_dualsense_slot(unsigned slot, uint8_t *report);
 /* Where a press goes in a helper, counted for its log: the PS5 bus (winebus) notes what it did with each report it
  * read, and pw_wine_input_stats gives every count since the start. */
 enum { PW_WINE_INPUT_QUEUED, PW_WINE_INPUT_UNSTARTED, PW_WINE_INPUT_CREATED, PW_WINE_INPUT_REMOVED };
@@ -140,6 +147,7 @@ int pw_wine_input_fd(void);
 /* 1 and the gamepad's state while one is connected, else 0. In a Windows child process, whose sink the title never
  * sets, this is the title's pad, read from the input page the title shares with its children. */
 int pw_wine_pad(PwWinePad *pad);
+int pw_wine_pad_slot(unsigned slot, PwWinePad *pad);
 /* The input page and the audio ring a helper shares with the title are the helper's (src/pw_shared_page.h): its
  * loader makes them and gives them to the title, which maps them. */
 #define PW_WINE_INPUT_PAGE_BYTES 16384
@@ -150,8 +158,9 @@ void *pw_wine_input_page_adopt(int fd);
 void pw_wine_input_page_release(void *page);
 /* The title, every tick: its suspend word in every adopted page (src/pw_suspend.h). */
 void pw_wine_set_suspend(uint32_t away,uint32_t beat);
-/* The rumble a game asked for (XInputSetState); speeds are clamped. */
+/* The rumble a game asked for (XInputSetState / DualSense HID output report); speeds are clamped. */
 void pw_wine_set_rumble(uint32_t left,uint32_t right);
+void pw_wine_set_rumble_slot(unsigned slot,uint32_t left,uint32_t right);
 /* 1 when the title set an audio sink, or, in a helper, when the title gave it an audio ring (WINE_PS5_AUDIO_FD,
  * src/pw_audio_ring.h): the audio driver offers its device only then. */
 int pw_wine_audio_available(void);

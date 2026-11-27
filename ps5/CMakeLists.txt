@@ -217,6 +217,7 @@ add_library(samples OBJECT
 	${ROOT}/src/pw_game_mode.c
 	${ROOT}/src/pw_wallpaper.c
 	${ROOT}/src/pw_high_refresh.c
+	${ROOT}/src/pw_resolution.c
 	${ROOT}/src/pw_controller.c
 	${ROOT}/src/pw_detailed_logs.c
 	${ROOT}/src/pw_log_sessions.c

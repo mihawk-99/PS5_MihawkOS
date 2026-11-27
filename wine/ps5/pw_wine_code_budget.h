@@ -41,7 +41,7 @@ enum {
     PW_CODE_BUDGET_MAX_MIB = 256,
     PW_CODE_BUDGET_WINDOW_MS = 10000,
     PW_CODE_BUDGET_THRASH_KIB = 1024,
-    PW_CODE_BUDGET_EVICTED = 4096,
+    PW_CODE_BUDGET_EVICTED = 16384,   /* 256 MiB of 16 KiB clusters: avoids hash collisions in ~250 MB Denuvo images */
     PW_CODE_BUDGET_SAMPLES = 256,     /* 4 MiB of 16 KiB re-conversions: four times the threshold */
 };
 
