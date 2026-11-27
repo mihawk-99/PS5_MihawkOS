@@ -41,7 +41,7 @@ extern int sceKernelUsleep(unsigned);
  * not the session's result. */
 /* game_line: the program the title runs itself started this helper, or a helper it started did (a game's launcher in
  * the title starts the game): the title's end waits for it with no time limit (pw_ps5_wait_children). */
-struct child { int fd, service, pid, closing, initial, unloading, gpu_cookie, memory, code_kib, game_line; void *input_page, *audio_ring; };
+struct child { int fd, service, local_service, pid, closing, initial, unloading, gpu_cookie, memory, code_kib, game_line; void *input_page, *audio_ring; };
 static struct child children[32];
 static pthread_mutex_t child_lock = PTHREAD_MUTEX_INITIALIZER;
 static pthread_cond_t child_closed = PTHREAD_COND_INITIALIZER;
@@ -97,6 +97,20 @@ void pw_ps5_set_graphics_start(int (*start)(int,const struct pw_child_bootstrap 
  * the title offers one (WINE_PS5_TITLE_PROCESS). */
 static int (*title_client_start)(int,const struct pw_child_bootstrap *);
 void pw_ps5_set_title_client_start(int (*start)(int,const struct pw_child_bootstrap *)) { title_client_start=start; }
+static int (*local_spawn)(int *, int *, int *);
+static int (*local_close)(int, int, int);
+static void warm_local_refill(void);
+static int local_games_on(void)
+{
+    const char *value = getenv("WINE_PS5_LOCAL_GAMES");
+    return local_spawn && local_close && value && !strcmp(value, "1");
+}
+void pw_ps5_set_local_spawner(int (*spawn)(int *, int *, int *), int (*close_local)(int, int, int))
+{
+    local_spawn = spawn;
+    local_close = close_local;
+    if (local_games_on()) warm_local_refill();
+}
 /* The title's say on a claim it refused (EBUSY): nonzero when it took the claim as a play request (src/pw_title_play.h),
  * which this process then refuses; answered runs once the refusal is sent. */
 static int (*title_busy)(const struct pw_child_bootstrap *);
@@ -162,12 +176,89 @@ static int spawns_ended;
 /* The helper started ahead of need, under child_lock (src/pw_warm_helper.h); warm_changed wakes its keeper. */
 static PwWarmHelper warm = PW_WARM_HELPER_INIT;
 static pthread_cond_t warm_changed = PTHREAD_COND_INITIALIZER;
+static int warm_local_fd = -1, warm_local_pid, warm_local_service, warm_local_making;
 void pw_ps5_end_spawns(void)
 {
     pthread_mutex_lock(&child_lock);
     spawns_ended = 1;
     pthread_cond_broadcast(&warm_changed);
     pthread_mutex_unlock(&child_lock);
+}
+static int close_until_gone(int pid, int control);
+static int close_child_slot(int local_service, int pid, int control)
+{
+    if (local_service > 0 && local_close) return local_close(local_service, pid, control);
+    return close_until_gone(pid, control);
+}
+static void *warm_local_keeper(void *unused)
+{
+    (void)unused;
+    int fd = -1, pid = 0, service = 0;
+    const long long began = payload_ms();
+    if (!local_spawn || !local_close || local_spawn(&fd, &pid, &service)) {
+        const int saved = errno;
+        pthread_mutex_lock(&child_lock); warm_local_making = 0; pthread_mutex_unlock(&child_lock);
+        fprintf(stderr, "wine-ps5: warm local helper not made (errno %d); the next 64-bit game starts cold\n", saved);
+        return NULL;
+    }
+    pthread_mutex_lock(&child_lock);
+    warm_local_making = 0;
+    if (spawns_ended || warm_local_fd >= 0 || fd < 0 || pid <= 0 || service <= 0) {
+        pthread_mutex_unlock(&child_lock);
+        local_close(service, pid, fd);
+        return NULL;
+    }
+    warm_local_fd = fd;
+    warm_local_pid = pid;
+    warm_local_service = service;
+    fprintf(stderr, "wine-ps5: warm local helper native=%d service=%#x parked in %lld ms\n",
+            pid, (unsigned)service, payload_ms() - began);
+    while (!spawns_ended && warm_local_fd == fd && warm_local_pid == pid)
+        pthread_cond_wait(&warm_changed, &child_lock);
+    const int still = warm_local_fd == fd && warm_local_pid == pid;
+    if (still) { warm_local_fd = -1; warm_local_pid = 0; warm_local_service = 0; }
+    pthread_mutex_unlock(&child_lock);
+    if (still) {
+        fprintf(stderr, "wine-ps5: warm local helper native=%d closed unused\n", pid);
+        local_close(service, pid, fd);
+    }
+    return NULL;
+}
+static void warm_local_refill(void)
+{
+    pthread_mutex_lock(&child_lock);
+    const int make = local_games_on() && pw_warm_enabled(getenv("WINE_PS5_WARM_HELPER")) &&
+                     !spawns_ended && warm_local_fd < 0 && !warm_local_making;
+    if (make) warm_local_making = 1;
+    pthread_mutex_unlock(&child_lock);
+    if (!make) return;
+    pthread_t thread;
+    pthread_attr_t attributes;
+    int error = pthread_attr_init(&attributes);
+    if (!error) error = pthread_attr_setdetachstate(&attributes, PTHREAD_CREATE_DETACHED);
+    if (!error) error = pthread_attr_setstacksize(&attributes, 256u << 10);
+    if (!error) error = pthread_create(&thread, &attributes, warm_local_keeper, NULL);
+    pthread_attr_destroy(&attributes);
+    if (error) { pthread_mutex_lock(&child_lock); warm_local_making = 0; pthread_mutex_unlock(&child_lock); }
+}
+static int warm_local_take_alive(int *fd, int *pid, int *service)
+{
+    pthread_mutex_lock(&child_lock);
+    const int taken = warm_local_fd >= 0;
+    if (taken) {
+        *fd = warm_local_fd; *pid = warm_local_pid; *service = warm_local_service;
+        warm_local_fd = -1; warm_local_pid = 0; warm_local_service = 0;
+        pthread_cond_broadcast(&warm_changed);
+    }
+    pthread_mutex_unlock(&child_lock);
+    if (!taken) return 0;
+    struct pollfd probe = {*fd, POLLIN, 0};
+    if (poll(&probe, 1, 0) == 0) return 1;
+    fprintf(stderr, "wine-ps5: warm local helper native=%d gone while parked (revents %#x); a cold start instead\n",
+            *pid, (unsigned)probe.revents);
+    if (local_close) local_close(*service, *pid, *fd);
+    *fd = -1; *pid = 0; *service = 0;
+    return 0;
 }
 static int close_until_gone(int pid, int control)
 {
@@ -272,7 +363,11 @@ static int warm_take_alive(int *fd, int *pid)
     *fd = -1; *pid = 0;
     return 0;
 }
-static int spawn_native(int server_fd, const struct pw_child_bootstrap *boot, int *native_pid);
+static int spawn_native_ex(int server_fd, const struct pw_child_bootstrap *boot, int *native_pid, int prefer_local);
+static int spawn_native(int server_fd, const struct pw_child_bootstrap *boot, int *native_pid)
+{
+    return spawn_native_ex(server_fd, boot, native_pid, 0);
+}
 /* The title runs a program itself (title_client_start took it): what it starts, and what those start, are its game's. */
 static int title_client_live;
 /* The title runs a session's root itself (proton_wine.cpp, start_title_root): what it starts is its game's too. */
@@ -322,6 +417,10 @@ static void *spawn_worker(void *opaque)
             /* The title runs one; another goes to a helper, as any process does. */
             else if(errno==EBUSY)result=spawn_native(work->fds[0],&work->request.bootstrap,&native_pid);
         } else { errno=ENOTSUP;result=-1; }
+    } else if(work->request.bootstrap.flags==PW_CHILD_GRAPHICS && gpu_open && local_games_on()) {
+        /* Steam / hybrid mode: run 64-bit games and Steam's browser in elevated Sony local processes
+         * (65,536 app CPU page tables, 1 GiB app FMEM, isolated OS teardown; Steam never has to close). */
+        result=spawn_native_ex(work->fds[0],&work->request.bootstrap,&native_pid,1);
     } else if(work->request.bootstrap.flags==PW_CHILD_GRAPHICS && gpu_open && title_client_start) {
         /* Beside the broker: the title's own client, a broker client in this process; once it is taken, a helper. */
         result=title_client_start(work->fds[0],&work->request.bootstrap);
@@ -544,14 +643,14 @@ static void *monitor_child(void *opaque)
     }
     pthread_mutex_lock(&child_lock);
     if(child->initial && !child->unloading && root_result<0)root_result=1; // Lost/malformed completion is terminal failure.
-    const int service = child->service, pid = child->pid, gpu_cookie=child->gpu_cookie;
+    const int service = child->service, local_service = child->local_service, pid = child->pid, gpu_cookie=child->gpu_cookie;
     while (child->closing == 2) pthread_cond_wait(&child_closed, &child_lock);
     child->closing = 1;
     const int control=child->fd; child->fd = -1;
     // Retain the slot until service close completes, so another spawn cannot
     // reuse its storage while this monitor still owns it.
     pthread_mutex_unlock(&child_lock);
-    const int status = close_until_gone(pid,control);
+    const int status = close_child_slot(local_service,pid,control);
     payload_trace("close-returned",pid,control,status);
     /* Gone, however it ended: its waits leave the synchronization device and its place is free (src/pw_ntsync.h). */
     const int dropped = pw_ntsync_process_gone(pid,1,1000);
@@ -565,7 +664,7 @@ static void *monitor_child(void *opaque)
     pthread_mutex_lock(&child_lock);
     if(child->memory>=0) { close(child->memory);child->memory=-1; }
     child->gpu_cookie=0;child->input_page=NULL;child->audio_ring=NULL;
-    child->service = 0; child->pid = 0; child->closing = 0; child->initial = 0; child->unloading = 0; child->game_line = 0;
+    child->service = 0; child->local_service = 0; child->pid = 0; child->closing = 0; child->initial = 0; child->unloading = 0; child->game_line = 0;
     pthread_mutex_unlock(&child_lock);
     payload_trace("resources-released",pid,control,0);
     descriptor_metrics("closed");
@@ -929,7 +1028,7 @@ static int child_game_mode(const struct pw_child_bootstrap *boot)
     if(!value)value=pw_wine_block_value(boot->environment,sizeof(boot->environment),"WINE_PS5_GAME_MODE");
     return !value ? -1 : !strcmp(value,"1") ? 1 : !strcmp(value,"0") ? 0 : -1;
 }
-static int spawn_native(int server_fd, const struct pw_child_bootstrap *boot, int *native_pid)
+static int spawn_native_ex(int server_fd, const struct pw_child_bootstrap *boot, int *native_pid, int prefer_local)
 {
     const long long requested = payload_ms();
     long long locked = 0, sent = 0;
@@ -937,7 +1036,7 @@ static int spawn_native(int server_fd, const struct pw_child_bootstrap *boot, in
     pthread_mutex_lock(&child_lock);
     struct child *child = NULL;
     const int refused = spawns_ended;
-    for (unsigned i = 0; i < 32 && !refused; ++i) if (!children[i].service) { child = &children[i]; child->service = -1; break; }
+    for (unsigned i = 0; i < 32 && !refused; ++i) if (!children[i].service) { child = &children[i]; child->service = -1; child->local_service = 0; break; }
     pthread_mutex_unlock(&child_lock);
     if (refused) { errno = ESHUTDOWN; return -1; }
     if (!child) { errno = EAGAIN; return -1; }
@@ -972,15 +1071,27 @@ static int spawn_native(int server_fd, const struct pw_child_bootstrap *boot, in
     boot=&gpu_boot;
     descriptor_metrics("before_spawn");
 
-    int payload_pid=0;
+    int payload_pid=0, local_service=0;
     int pair[2] = {-1,-1}, result = -1, service = -1, saved_errno, gpu_fd=-1;
-    const int warm_start = warm_take_alive(&pair[0], &payload_pid);
-    if (warm_start) service = 1;
-    else {
-        if (pw_child_socketpair(pair,sizeof(struct pw_child_spawn))) goto done;
-        service = payload_spawn(pair[1],&payload_pid,&times) ? -1 : 1;
+    int warm_start = 0;
+    if (prefer_local && local_spawn && local_close) {
+        warm_start = warm_local_take_alive(&pair[0], &payload_pid, &local_service);
+        if (warm_start) service = 1;
+        else if (!local_spawn(&pair[0], &payload_pid, &local_service)) service = 1;
+        else fprintf(stderr, "wine-ps5: local child spawn failed (errno %d); falling back to payload helper\n", errno);
+    }
+    if (service <= 0) {
+        local_service = 0;
+        warm_start = warm_take_alive(&pair[0], &payload_pid);
+        if (warm_start) service = 1;
+        else {
+            if (pw_child_socketpair(pair,sizeof(struct pw_child_spawn))) goto done;
+            service = payload_spawn(pair[1],&payload_pid,&times) ? -1 : 1;
+        }
     }
     fprintf(stderr, "wine-ps5: child spawn service=%#x\n", (unsigned)service);
+    if (local_service > 0)
+        fprintf(stderr, "wine-ps5: local child native=%d local_service=%#x warm=%d\n", payload_pid, (unsigned)local_service, warm_start);
     if (service <= 0) goto done;
     /* Before it runs: its windows take the screen or not from its first frame */
     if(child_notice)child_notice(PW_CHILD_NOTICE_GAME_MODE,payload_pid,child_game_mode(boot));
@@ -1016,7 +1127,7 @@ static int spawn_native(int server_fd, const struct pw_child_bootstrap *boot, in
     }
     if (ack.value) { errno = EIO; goto done; }
     pthread_mutex_lock(&child_lock);
-    child->fd = pair[0]; child->pid = ack.pid; child->service = service; child->closing = 0; child->game_line = 0;
+    child->fd = pair[0]; child->pid = ack.pid; child->service = service; child->local_service = local_service; child->closing = 0; child->game_line = 0;
     child->memory = memory_fd; memory_fd = -1;
     child->input_page=input_page;input_page=NULL;
     child->audio_ring=audio_ring;audio_ring=NULL;
@@ -1032,7 +1143,7 @@ static int spawn_native(int server_fd, const struct pw_child_bootstrap *boot, in
         /* One line per start, every step after the request: tools/start_stages.py lines it up with the helper's own. */
         const long long now = payload_ms();
         /* A cold start's time, request to ready, for the memory guard's slowdown rule (pw_memory_start_slowed). */
-        if (!warm_start) {
+        if (!warm_start && !local_service) {
             __atomic_store_n(&start_last_ms, (uint64_t)(now - requested), __ATOMIC_RELAXED);
             uint64_t none = 0;
             __atomic_compare_exchange_n(&start_first_ms, &none, (uint64_t)(now - requested), 0, __ATOMIC_RELAXED, __ATOMIC_RELAXED);
@@ -1054,13 +1165,16 @@ static int spawn_native(int server_fd, const struct pw_child_bootstrap *boot, in
         fprintf(stderr,"wine-ps5: child bootstrap failed errno=%d packet=%zu\n",saved_errno,sizeof(*boot));
         if(child_notice)child_notice(PW_CHILD_NOTICE_SPAWN,payload_pid,saved_errno);
         if(pair[1]>=0) { close(pair[1]);pair[1]=-1; }
-        if(payload_pid>0) { close_until_gone(payload_pid,pair[0]);pair[0]=-1; }
+        if(payload_pid>0) { close_child_slot(local_service,payload_pid,pair[0]);pair[0]=-1; }
         if(gpu_cookie && gpu_close)gpu_close(gpu_cookie,-payload_pid);
-        pthread_mutex_lock(&child_lock); child->service = 0; child->pid = 0; child->game_line = 0;
+        pthread_mutex_lock(&child_lock); child->service = 0; child->local_service = 0; child->pid = 0; child->game_line = 0;
         pthread_mutex_unlock(&child_lock);
     }
     for (unsigned i = 0; i < 2; ++i) if (pair[i] != -1) close(pair[i]);
-    if (!result) warm_refill();
+    if (!result) {
+        if (local_service > 0) warm_local_refill();
+        else warm_refill();
+    }
     errno = saved_errno;
     return result;
 }
@@ -1397,6 +1511,15 @@ void pw_ps5_wait_children(void)
             if (waited % 3000 == 0) report_open_children(waited / 100);
         }
     } while (live);
+    /* Every Windows process is gone: stop spawns and wait for any parked warm local helper to close cleanly. */
+    pw_ps5_end_spawns();
+    for (;;) {
+        pthread_mutex_lock(&child_lock);
+        const int warm_live = warm_local_making != 0 || warm_local_fd >= 0;
+        pthread_mutex_unlock(&child_lock);
+        if (!warm_live) break;
+        sceKernelUsleep(10000);
+    }
     descriptor_metrics("all_children_closed");
     pthread_mutex_lock(&memory_lock);
     if (memory_control >= 0) memory_slowest_say("this session");

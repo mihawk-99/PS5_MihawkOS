@@ -8,6 +8,7 @@
 #include <sys/stat.h>
 #include <sys/socket.h>
 #include <sys/mman.h>
+#include <sys/resource.h>
 #include <unistd.h>
 #include "proton_gpu_broker_probe.h"
 #include "proton_flex_probe.h"
@@ -422,6 +423,16 @@ static void flex_point(struct ProtonFlexReply *reply, unsigned point)
     reply->resident[point] = counted ? -1 : (int64_t)resident;
     reply->mapped[point] = counted ? -1 : (int64_t)mapped;
     reply->available[point] = sceKernelAvailableFlexibleMemorySize(&available) ? -1 : (int64_t)available;
+    int cpu_total = -1, cpu_free = -1, gpu_total = -1, gpu_free = -1;
+    if (!sceKernelGetPageTableStats(&cpu_total, &cpu_free, &gpu_total, &gpu_free)) {
+        reply->pt_cpu_total[point] = cpu_total;
+        reply->pt_cpu_free[point] = cpu_free;
+        reply->pt_gpu_total = gpu_total;
+        reply->pt_gpu_free = gpu_free;
+    } else {
+        reply->pt_cpu_total[point] = -1;
+        reply->pt_cpu_free[point] = -1;
+    }
 }
 static void flex_touch(void *at, uint64_t bytes)
 {
@@ -431,6 +442,29 @@ static void flex_helper(void)
 {
     struct ProtonFlexReply reply = {0};
     reply.magic = PROTON_FLEX_MAGIC; reply.pid = getpid();
+    reply.elevation = -1;
+    reply.pt_gpu_total = reply.pt_gpu_free = -1;
+    reply.jit80_made = reply.jit80_mapped = reply.jit80_protect = reply.jit80_value = -1;
+    reply.nofile_cur = reply.nofile_max = reply.nofile_raise_rc = reply.nofile_raise_cur = -1;
+#ifdef PROTON_NATIVE_GPU_ELEVATION
+    static const struct ps5_elevation_config grant = {
+        "/download0/elevate_proc", "/download0", "/download0/lapy_owned_result", "/data", 60, 50000
+    };
+    reply.elevation = ps5_elevation_request_with(&grant, PS5_ELEVATION_FILESYSTEM);
+    if (geteuid() != 0) {
+        (void)seteuid(geteuid());
+        for (int wait = 0; wait < 150 && geteuid() != 0; ++wait) sceKernelUsleep(20000);
+    }
+#endif
+    reply.euid = (int32_t)geteuid();
+    struct rlimit rl = {0};
+    if (!getrlimit(RLIMIT_NOFILE, &rl)) {
+        reply.nofile_cur = (int32_t)rl.rlim_cur;
+        reply.nofile_max = (int32_t)rl.rlim_max;
+        struct rlimit raised = { 4096, rl.rlim_max > 4096 ? rl.rlim_max : 4096 };
+        reply.nofile_raise_rc = setrlimit(RLIMIT_NOFILE, &raised);
+        if (!getrlimit(RLIMIT_NOFILE, &rl)) reply.nofile_raise_cur = (int32_t)rl.rlim_cur;
+    }
     flex_point(&reply, FLEX_START);
     int64_t physical = -1;
     void *direct = 0;
@@ -450,6 +484,22 @@ static void flex_helper(void)
         else reply.jit_made = -1;
     }
     flex_point(&reply, FLEX_JIT);
+    int jit80 = -1;
+    reply.jit80_made = sceKernelJitCreateSharedMemory("pw-flex-80m", 80u << 20, 7, &jit80);
+    if (!reply.jit80_made) {
+        void *code80 = mmap(0, 80u << 20, PROT_READ | PROT_WRITE, MAP_SHARED, jit80, 0);
+        reply.jit80_mapped = code80 == MAP_FAILED ? -1 : 0;
+        if (!reply.jit80_mapped) {
+            static const unsigned char body[] = {0xb8, 0x2a, 0x00, 0x00, 0x00, 0xc3};
+            for (unsigned i = 0; i < sizeof(body); ++i) ((volatile unsigned char *)code80)[i] = body[i];
+            reply.jit80_protect = sceKernelMprotect(code80, 16384, PROT_READ | PROT_EXEC);
+            void *s = 0, *e = 0;
+            int prot = 0;
+            if (!reply.jit80_protect && !sceKernelQueryMemoryProtection(code80, &s, &e, &prot) && (prot & PROT_EXEC))
+                reply.jit80_value = ((int (*)(void))(uintptr_t)code80)();
+        }
+        if (jit80 >= 0) close(jit80);
+    }
     for (unsigned way = 0; way < FLEX_EXEC_WAYS; ++way) proton_flex_exec_try(way, &reply.exec[way]);
     if (ready(3, POLLOUT) && send(3, &reply, sizeof(reply), MSG_NOSIGNAL) == sizeof(reply)) {
         int32_t owned_id = -1;

@@ -1432,7 +1432,7 @@ void return_to_launcher(const char *reason)
     notices_post();
     // stderr is drained by the title's klog thread. Preserve the last Wine
     // messages before LoadExec replaces this process.
-    usleep(500000);
+    usleep(100000);
     if (!reason && ended_ready.load(std::memory_order_acquire) && !ended_reason.empty()) reason = ended_reason.c_str();
     if (!reason && missing_dll.reason[0]) reason = missing_dll.reason;
     // The session's last line in both logs, on disk: a log that stops without it ended some other way (the launcher's
@@ -1507,9 +1507,131 @@ static int suspend_hold(uint64_t now_ms)
 // 1 while it runs in the background, 0 in the foreground, -1 when it cannot be read. The system's overlay over a running
 // app is only reported (overlaid): notifications raise it too, and a game is not paused for one. The system's events
 // are taken and named, so a resume event shows in the log next to the clock's own evidence.
+#include "pw_local_child.h"
+#include <poll.h>
 struct SystemServiceStatus { int32_t events; uint8_t overlaid, background, cpu7, streaming, vr_out, reserved[251]; };
 extern "C" int sceSystemServiceGetStatus(SystemServiceStatus *status);
 extern "C" int sceSystemServiceReceiveEvent(void *event);
+extern "C" int sceSystemServiceGetAppStatus(void *);
+extern "C" int sceSystemServiceGetLocalProcessStatusList(void *, unsigned, unsigned *);
+extern "C" int sceSystemServiceAddLocalProcess(int, const char *, const char *const *, const void *);
+extern "C" int sceSystemServiceKillLocalProcess(int, int);
+extern "C" int sceKernelUsleep(unsigned);
+
+static pthread_mutex_t local_spawn_lock = PTHREAD_MUTEX_INITIALIZER;
+
+static int local_app_id()
+{
+    uint32_t status[4]{};
+    return sceSystemServiceGetAppStatus(status) == 0 ? int(status[0]) : -1;
+}
+
+static bool local_process_present(int service_id)
+{
+    struct Entry { int32_t id; char name[32]; } entries[16]{};
+    unsigned count = 0;
+    if (sceSystemServiceGetLocalProcessStatusList(entries, 16, &count) != 0 || count > 16) return false;
+    for (unsigned i = 0; i < count; ++i) if (entries[i].id == service_id) return true;
+    return false;
+}
+
+static int local_child_close(int service_id, int pid, int control_fd)
+{
+    if (control_fd >= 0) {
+        (void)shutdown(control_fd, SHUT_RDWR);
+        // Give an exiting local process up to 300 ms to flush its log and close fd 3.
+        struct pollfd wait{control_fd, POLLIN, 0};
+        for (int tries = 0; tries < 6; ++tries) {
+            const int r = poll(&wait, 1, 50);
+            if (r > 0 && (wait.revents & (POLLHUP | POLLERR | POLLNVAL))) break;
+            if (r > 0 && (wait.revents & POLLIN)) {
+                char discard[64];
+                if (recv(control_fd, discard, sizeof(discard), MSG_DONTWAIT) <= 0) break;
+            }
+        }
+        close(control_fd);
+    }
+    const int app = local_app_id();
+    int killed = -1;
+    if (app > 0 && service_id > 0) {
+        killed = sceSystemServiceKillLocalProcess(app, service_id);
+        for (int attempt = 0; attempt < 300 && local_process_present(service_id); ++attempt)
+            sceKernelUsleep(10000);
+    }
+    say("Wine: local child native=%d service=%#x closed status=%#x", pid, unsigned(service_id), unsigned(killed));
+    return killed;
+}
+
+static int local_child_spawn(int *control_fd, int *native_pid, int *service_id)
+{
+    if (!control_fd || !native_pid || !service_id) { errno = EINVAL; return -1; }
+    *control_fd = -1; *native_pid = 0; *service_id = 0;
+    const int app = local_app_id();
+    if (app <= 0) { errno = ENOENT; return -1; }
+    pthread_mutex_lock(&local_spawn_lock);
+    int pair[2]{-1, -1};
+    int child_service = -1, result = -1, saved = EIO;
+    if (socketpair(AF_UNIX, SOCK_SEQPACKET, 0, pair) != 0) {
+        saved = errno;
+        goto done;
+    }
+    {
+        int buf = 65536;
+        (void)setsockopt(pair[0], SOL_SOCKET, SO_SNDBUF, &buf, sizeof(buf));
+        (void)setsockopt(pair[0], SOL_SOCKET, SO_RCVBUF, &buf, sizeof(buf));
+        (void)setsockopt(pair[1], SOL_SOCKET, SO_SNDBUF, &buf, sizeof(buf));
+        (void)setsockopt(pair[1], SOL_SOCKET, SO_RCVBUF, &buf, sizeof(buf));
+    }
+    {
+        pw_local_spawn_options options{};
+        options.size = sizeof(options);
+        options.fd = pair[1];
+        options.crash_report = 1;
+        options.other[0] = uint32_t(-1);
+        options.other[3] = 2;
+        options.other[4] = 0x80000000u;
+        const char *args[] = {"/app0/wine-local-child.bin", nullptr};
+        child_service = sceSystemServiceAddLocalProcess(app, args[0], args, &options);
+        close(pair[1]);
+        pair[1] = -1;
+    }
+    if (child_service <= 0) {
+        say("Wine: sceSystemServiceAddLocalProcess failed status=%#x", unsigned(child_service));
+        saved = EAGAIN;
+        goto done;
+    }
+    {
+        // Wait for the child to complete Lapy elevation (uid=0, full caps) and report its native PID.
+        pw_local_hello hello{};
+        struct pollfd wait{pair[0], POLLIN, 0};
+        int ready = 0;
+        for (int tries = 0; tries < 2 && !ready; ++tries) {
+            ready = poll(&wait, 1, 5000) == 1 && (wait.revents & POLLIN);
+            if (wait.revents & (POLLHUP | POLLERR | POLLNVAL)) break;
+        }
+        const ssize_t got = ready ? recv(pair[0], &hello, sizeof(hello), 0) : -1;
+        if (got != (ssize_t)sizeof(hello) || hello.magic != PW_LOCAL_HELLO_MAGIC ||
+            hello.pid <= 0 || hello.status != 0 || hello.euid != 0) {
+            say("Wine: local child hello failed service=%#x got=%zd pid=%d status=%d euid=%d",
+                unsigned(child_service), got, hello.pid, hello.status, hello.euid);
+            saved = hello.status > 0 ? hello.status : EPROTO;
+            goto done;
+        }
+        *control_fd = pair[0]; pair[0] = -1;
+        *native_pid = hello.pid;
+        *service_id = child_service;
+        child_service = -1;
+        result = 0;
+        say("Wine: local child elevated native=%d service=%#x euid=%d", *native_pid, unsigned(*service_id), hello.euid);
+    }
+done:
+    if (pair[1] >= 0) close(pair[1]);
+    if (child_service > 0) (void)local_child_close(child_service, 0, pair[0]);
+    else if (pair[0] >= 0) close(pair[0]);
+    pthread_mutex_unlock(&local_spawn_lock);
+    errno = saved;
+    return result;
+}
 static int system_away(bool *overlaid)
 {
     SystemServiceStatus status{};
@@ -2263,7 +2385,7 @@ static bool handover_cover(const void *pixels)
     const int step = handover_step.load();
     if (pixels && (play_session || proton_launch().returning) && title_client_claimed.load() &&
         (step == PW_STEAM_HANDOVER_START || step == PW_STEAM_HANDOVER_REOPEN) &&
-        title_presents() >= handover_presents_from.load() + 120) {
+        title_presents() >= handover_presents_from.load() + 10) {
         proton_gpu_broker_set_cover(nullptr);
         if (!handover_released.exchange(true)) {
             if (handover_direct_held.exchange(false)) pw_window_direct_set_process(getpid(), handover_game_direct.load());
@@ -2861,7 +2983,7 @@ void proton_run_wine()
         // warn-seh: a game's exceptions are its own control flow (an emulator's write tracker takes thousands), and
         // each one was symbolized and logged twice (WINE_BACKTRACE_LOG_ON is WARN_ON(seh)); crashes still log as err.
         detailed ? "+timestamp,+pid,+tid,+debugstr,+loaddll,+process,+ps5audio,warn+all,warn-seh" :
-                   "+timestamp,+pid,+tid,+debugstr,+loaddll,+ps5audio,warn+explorer,warn-seh";
+                   "+timestamp,+pid,+tid,+debugstr,+loaddll,+ps5audio,warn+explorer,warn-seh,fixme-all,fixme+process";
     // A test run's own channels (tools/run-console.py --env PROTON_WINEDEBUG=...): what a failure needs traced, for that launch only.
     // Read from this launch's own entries: they are applied to the environment only further down.
     std::string launch_winedebug;
@@ -3283,15 +3405,28 @@ void proton_run_wine()
             set_gpu(proton_gpu_broker_open,proton_gpu_broker_close);
             owner_broker_running=true;
             // Alpha 7's default, "Run inside MihawkOS" (wine/ps5/pw_wine_title_game.h): a 64-bit library game runs
-            // here, beside the broker; WINE_PS5_TITLE_GAMES=0 (this launch's) keeps games in helpers, as Alpha 6.
-            // Only with the broker: the title's other graphics path would refuse a game rather than send it to a helper.
-            setenv("WINE_PS5_TITLE_GAMES","1",0);
+            // with the title's expanded page-table pool (65,536 CPU PT) and 1 GiB flexible memory.
+            // Steam sessions (unless play_session) run 64-bit games and Steam's browser in elevated Sony local
+            // processes (/app0/wine-local-child.bin), so every 64-bit game gets the full 65,536-entry app pool and
+            // clean OS-level teardown without ever closing Steam or restarting with LoadExec.
+            const bool is_steam_root = !strcasecmp(pw_title_game_name(game.executable.c_str()), "steam.exe");
+            setenv("WINE_PS5_TITLE_GAMES", "1", 0);
+            if (is_steam_root && !play_session && access(proton_title_path("/app0/wine-local-child.bin").c_str(), F_OK) == 0)
+                setenv("WINE_PS5_LOCAL_GAMES", "1", 0);
             // A Chromium-based game starts as one process (kernelbase patch 2404), so the whole game sits in the title's
             // pool; a launch's own WINE_PS5_CHROMIUM_ARGS (another set, or empty: none) wins.
             setenv("WINE_PS5_CHROMIUM_ARGS","--single-process",0);
             const bool title_games=!strcmp(getenv("WINE_PS5_TITLE_GAMES"),"1");
+            const bool local_games=getenv("WINE_PS5_LOCAL_GAMES") && !strcmp(getenv("WINE_PS5_LOCAL_GAMES"),"1");
             const char *named=getenv("WINE_PS5_TITLE_PROCESS");
-            if((named && *named) || title_games) {
+            if (access(proton_title_path("/app0/wine-local-child.bin").c_str(), F_OK) == 0) {
+                auto set_local=symbol<void (*)(int (*)(int *,int *,int *),int (*)(int,int,int))>("pw_ps5_set_local_spawner");
+                if (set_local) {
+                    set_local(local_child_spawn, local_child_close);
+                    say("Wine: Sony local-process spawner registered (local_games=%d)", local_games ? 1 : 0);
+                }
+            }
+            if(!local_games && ((named && *named) || title_games)) {
                 auto set_title_client=symbol<void (*)(int (*)(int,const struct pw_child_bootstrap *))>("pw_ps5_set_title_client_start");
                 if(set_title_client)set_title_client(start_title_client);
                 // A library game's claim while Steam's browser holds the title: a play request (src/pw_title_play.h).
@@ -4596,9 +4731,9 @@ void proton_run_wine()
         // After a sign-in the client ignores the close and is not hung: no snapshot (16 s of klog on 2026-10-26), and it is
         // ended once its token is on disk, checked each second from the close, or 25 s after it.
         const unsigned stop_age = stop_tick ? tick - stop_tick : 0;
-        // Steam asked to shut down is given all the time it takes before the stop ends anything: only the player's choice
-        // closes it (src/pw_title_play.h).
-        const bool steam_closing = play_shutdown_ms.load() != 0;
+        // Steam asked to shut down is given all the time it takes while Steam's own helpers are still alive;
+        // once Steam itself is gone, a lingering game must still escalate normally.
+        const bool steam_closing = play_shutdown_ms.load() != 0 && steam_helpers() > 0;
         // A play session's game ended alone (end_game) and still there 20 s later: everything is ended.
         // Not while its exit waits for Steam (play_game_exit): the game is gone then, and Steam is not to be cut short.
         if (tick % 120 == 30 && play_game_end_ms.load() && !leaving.load() && !play_game_end_full && !steam_waiting.load() &&
@@ -4993,9 +5128,10 @@ void proton_run_wine()
             else pw_hang_breaker_decide(&sample, &verdict);
             proton_flight_publish(sample.present_age_ms, sample.census_age_ms, sample.census_known, verdict == PW_HANG_STALLED);
             // The freeze snapshot (src/pw_freeze_watch.h): what every thread does and waits on, early and once per
-            // stall, the game left running.
+            // stall, the game left running. A handover cover hides new frames on purpose and is not a game freeze.
             const PwFreezeAction freeze = pw_freeze_watch_step(&freeze_watch, sample.present_age_ms,
-                in_title ? shown_flips > title_client_flips.load() : shown_last_ms != 0, pw_suspend_hold(&title_suspend, now), 0);
+                in_title ? shown_flips > title_client_flips.load() : shown_last_ms != 0,
+                pw_suspend_hold(&title_suspend, now) || handover_covering.load(), 0);
             if (freeze == PW_FREEZE_RECOVERED) {
                 say("Wine: freeze snapshot: the game drew again after about %llu s without a new frame",
                     (unsigned long long)(freeze_watch.stalled_ms / 1000));

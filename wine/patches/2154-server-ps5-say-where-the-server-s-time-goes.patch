@@ -1,0 +1,300 @@
+From 0000000000000000000000000000000000000000 Mon Sep 17 00:00:00 2001
+From: Mihawk <163614687+mihawk-99@users.noreply.github.com>
+Date: Sun, 22 Nov 2026 06:00:00 -0400
+Subject: [PATCH] server: PS5: say where the server's time goes.
+
+In a Steam start on the Pro (2026-11-22, docs/STEAM.md) the callers of create_file waited 17 ms a call on average,
+113 ms in the worst 10 s, and every other request slowed with it: 183 of the 461 seconds threads spent in server
+calls. The callers' waits are all that is recorded, so nothing said whether the server worked in the request, listed
+watched directories (patches 0902 and 2091) or did not run.
+
+While requests come the server now writes one line every 10 s to standard error, the Wine log:
+
+  wineserver: times ms= wakes= polled= loop_ms= loop_cpu_ms= requests= request_ms= direct= direct_ms=
+      lock_waits= lock_wait_ms= change_lists= change_ms= change_items= top name=calls/average us/longest us ...
+
+loop_ms is the wall time the main loop held the lock between two sleeps and loop_cpu_ms its thread's CPU time in
+them (the difference is time blocked in a system call or not running); polled counts wakes of the poll() fallback;
+direct are the requests client threads ran themselves (patch 0918) and lock_wait what they slept for the lock;
+change_* the lists of watched directories, timer and kqueue alike; top the eight requests with the most time in
+their handlers. Two clock reads a request and four a wake; nothing is formatted except that line.
+---
+ server/change.c  |  12 +++++-
+ server/fd.c      |  16 +++++++
+ server/request.c | 125 +++++++++++++++++++++++++++++++++++++++++++++++++++++++
+ server/trace.c   |   7 ++++
+ 4 files changed, 159 insertions(+), 1 deletion(-)
+
+diff --git a/server/change.c b/server/change.c
+index 26c701d..cbf0dd8 100644
+--- a/server/change.c
++++ b/server/change.c
+@@ -1321,6 +1321,10 @@ static void poll_timeout( void *private )
+     watch->count = count;
+     /* a listing that takes long is made less often: eight times as long between two */
+     took = ((long long)(after.tv_sec - before.tv_sec) * 1000000000 + (after.tv_nsec - before.tv_nsec)) / 100;
++    {
++        extern void ps5_times_change( unsigned long long ns, unsigned int items );
++        ps5_times_change( took * 100, count );
++    }
+     watch->interval = took * 8 < POLL_MIN_INTERVAL ? POLL_MIN_INTERVAL
+                       : took * 8 > POLL_MAX_INTERVAL ? POLL_MAX_INTERVAL : took * 8;
+     poll_arm( dir );
+@@ -1407,7 +1411,13 @@ static int inotify_adjust_changes( struct dir *dir )
+     watch->vnode = -1;
+     vnode_add( dir );   /* before the first list, so that no change falls between the two */
+     /* the list the next ones are compared with is made now, before the caller can change anything */
+-    poll_scan( base, "", dir->subtree, 0, &watch->items, &watch->count, &size );
++    {
++        extern unsigned long long ps5_times_now( int cpu );
++        extern void ps5_times_change( unsigned long long ns, unsigned int items );
++        unsigned long long started = ps5_times_now( 0 );
++        poll_scan( base, "", dir->subtree, 0, &watch->items, &watch->count, &size );
++        ps5_times_change( ps5_times_now( 0 ) - started, watch->count );
++    }
+     if (watch->items) qsort( watch->items, watch->count, sizeof(*watch->items), poll_compare );
+     poll_arm( dir );
+     return 1;
+diff --git a/server/fd.c b/server/fd.c
+index fc9ba34..097c09a 100644
+--- a/server/fd.c
++++ b/server/fd.c
+@@ -364,6 +364,10 @@ static const timeout_t user_shared_data_timeout = 16 * 10000;
+  * pw_wineserver_call_direct, request.c) under this lock, which the server
+  * thread holds except while it sleeps in kqueue/epoll. */
+ pthread_mutex_t inprocess_server_mutex = PTHREAD_MUTEX_INITIALIZER;
++#ifdef __PROSPERO__
++extern void ps5_times_loop_wake( int polled );   /* request.c: where the server's time goes */
++extern void ps5_times_loop_sleep(void);
++#endif
+ unsigned int inprocess_server_holder, inprocess_server_locks;
+ int inprocess_direct_ok;      /* the main loop sleeps in kqueue/epoll: clients may run requests */
+ int inprocess_wake_fd = -1;   /* written to wake the sleeping main loop */
+@@ -404,6 +408,9 @@ static unsigned int inprocess_sleep( int timeout, const struct timespec *ts )
+     if (timeout == -1) inprocess_sleep_until = TIMEOUT_INFINITE;
+     else if (ts) inprocess_sleep_until = monotonic_time + ts->tv_sec * TICKS_PER_SEC + ts->tv_nsec / 100;
+     else inprocess_sleep_until = monotonic_time + (timeout_t)timeout * 10000;
++#ifdef __PROSPERO__
++    ps5_times_loop_sleep();
++#endif
+     inprocess_server_unlocking();
+     pthread_mutex_unlock( &inprocess_server_mutex );
+     return poll_users_epoch;
+@@ -416,6 +423,9 @@ static int inprocess_wake( unsigned int epoch )
+ {
+     pthread_mutex_lock( &inprocess_server_mutex );
+     inprocess_server_locked();
++#ifdef __PROSPERO__
++    ps5_times_loop_wake( 0 );
++#endif
+     inprocess_sleep_until = 0;
+     return epoch == poll_users_epoch;
+ }
+@@ -1139,6 +1149,9 @@ void main_loop(void)
+         if (!active_users) break;  /* last user removed by a timeout */
+ 
+ #ifdef WINE_INPROCESS_SERVER
++#ifdef __PROSPERO__
++        ps5_times_loop_sleep();
++#endif
+         inprocess_server_unlocking();
+         pthread_mutex_unlock( &inprocess_server_mutex );
+ #endif
+@@ -1146,6 +1159,9 @@ void main_loop(void)
+ #ifdef WINE_INPROCESS_SERVER
+         pthread_mutex_lock( &inprocess_server_mutex );
+         inprocess_server_locked();
++#ifdef __PROSPERO__
++        ps5_times_loop_wake( 1 );
++#endif
+ #endif
+         set_current_time();
+ 
+diff --git a/server/request.c b/server/request.c
+index 2b01617..13bf163 100644
+--- a/server/request.c
++++ b/server/request.c
+@@ -298,8 +298,110 @@ static void send_reply( union generic_reply *reply )
+         fatal_protocol_error( current, "reply write: %s\n", strerror( errno ));
+ }
+ 
++#ifdef __PROSPERO__
++/* Where the server's time goes. In a Steam start its callers waited 17 to 113 ms for a create_file and every other
++ * request slowed with it (docs/STEAM.md, 2026-11-22); nothing said whether the server worked in the request, listed
++ * watched directories or did not run. One line every 10 s on standard error (the Wine log) while requests come: the
++ * main loop's wakes with their wall and CPU time, the requests client threads ran themselves and their waits for the
++ * lock, the directory lists, and the eight requests that took most as name=calls/average us/longest us.
++ * Everything here is read and written under the server lock. */
++enum { PS5_TIMES_PERIOD_NS_100 = 10 * 10000000, PS5_TIMES_TOP = 8 };
++static unsigned long long ps5_req_ns[REQ_NB_REQUESTS], ps5_req_max[REQ_NB_REQUESTS];
++static unsigned int ps5_req_calls[REQ_NB_REQUESTS];
++static unsigned long long ps5_direct_ns, ps5_lock_wait_ns, ps5_loop_ns, ps5_loop_cpu_ns, ps5_change_ns;
++static unsigned int ps5_direct_calls, ps5_lock_waits, ps5_loop_wakes, ps5_loop_polls, ps5_change_lists, ps5_change_items;
++static unsigned long long ps5_loop_woke, ps5_loop_woke_cpu;
++static timeout_t ps5_times_since;
++
++unsigned long long ps5_times_now( int cpu )
++{
++    struct timespec ts;
++    if (clock_gettime( cpu ? CLOCK_THREAD_CPUTIME_ID : CLOCK_MONOTONIC, &ts )) return 0;
++    return (unsigned long long)ts.tv_sec * 1000000000ull + ts.tv_nsec;
++}
++
++/* the main loop woke with the lock (polled: its poll() fallback, which reads every descriptor) */
++void ps5_times_loop_wake( int polled )
++{
++    ps5_loop_woke = ps5_times_now( 0 );
++    ps5_loop_woke_cpu = ps5_times_now( 1 );
++    ps5_loop_wakes++;
++    ps5_loop_polls += polled;
++}
++
++/* and goes back to sleep */
++void ps5_times_loop_sleep(void)
++{
++    unsigned long long cpu = ps5_times_now( 1 );
++    if (!ps5_loop_woke) return;
++    ps5_loop_ns += ps5_times_now( 0 ) - ps5_loop_woke;
++    if (cpu && ps5_loop_woke_cpu) ps5_loop_cpu_ns += cpu - ps5_loop_woke_cpu;
++    ps5_loop_woke = 0;
++}
++
++/* a watched directory was listed (change.c) */
++void ps5_times_change( unsigned long long ns, unsigned int items )
++{
++    ps5_change_ns += ns;
++    ps5_change_lists++;
++    ps5_change_items += items;
++}
++
++static void ps5_times_request( unsigned int req, unsigned long long ns, int direct )
++{
++    extern const char *ps5_request_name( unsigned int req );
++    unsigned int i, j, top[PS5_TIMES_TOP], found = 0, calls = 0;
++    unsigned long long total = 0;
++    char line[1024];
++    int used;
++
++    if (req < REQ_NB_REQUESTS)
++    {
++        ps5_req_calls[req]++;
++        ps5_req_ns[req] += ns;
++        if (ns > ps5_req_max[req]) ps5_req_max[req] = ns;
++    }
++    if (direct) { ps5_direct_calls++; ps5_direct_ns += ns; }
++    if (!ps5_times_since) ps5_times_since = monotonic_time;
++    if (monotonic_time - ps5_times_since < PS5_TIMES_PERIOD_NS_100) return;
++
++    for (i = 0; i < REQ_NB_REQUESTS; i++)
++    {
++        if (!ps5_req_calls[i]) continue;
++        calls += ps5_req_calls[i];
++        total += ps5_req_ns[i];
++        for (j = found; j > 0 && ps5_req_ns[top[j - 1]] < ps5_req_ns[i]; j--)
++            if (j < PS5_TIMES_TOP) top[j] = top[j - 1];
++        if (j < PS5_TIMES_TOP) top[j] = i;
++        if (found < PS5_TIMES_TOP) found++;
++    }
++    used = snprintf( line, sizeof(line), "wineserver: times ms=%llu wakes=%u polled=%u loop_ms=%llu loop_cpu_ms=%llu "
++                     "requests=%u request_ms=%llu direct=%u direct_ms=%llu lock_waits=%u lock_wait_ms=%llu "
++                     "change_lists=%u change_ms=%llu change_items=%u top",
++                     (unsigned long long)(monotonic_time - ps5_times_since) / 10000, ps5_loop_wakes, ps5_loop_polls,
++                     ps5_loop_ns / 1000000, ps5_loop_cpu_ns / 1000000, calls, total / 1000000,
++                     ps5_direct_calls, ps5_direct_ns / 1000000, ps5_lock_waits, ps5_lock_wait_ns / 1000000,
++                     ps5_change_lists, ps5_change_ns / 1000000, ps5_change_items );
++    for (i = 0; i < found && used > 0 && used < (int)sizeof(line) - 80; i++)
++        used += snprintf( line + used, sizeof(line) - used, " %s=%u/%llu/%llu", ps5_request_name( top[i] ),
++                          ps5_req_calls[top[i]], ps5_req_ns[top[i]] / ps5_req_calls[top[i]] / 1000,
++                          ps5_req_max[top[i]] / 1000 );
++    fprintf( stderr, "%s\n", line );
++
++    memset( ps5_req_calls, 0, sizeof(ps5_req_calls) );
++    memset( ps5_req_ns, 0, sizeof(ps5_req_ns) );
++    memset( ps5_req_max, 0, sizeof(ps5_req_max) );
++    ps5_direct_ns = ps5_lock_wait_ns = ps5_loop_ns = ps5_loop_cpu_ns = ps5_change_ns = 0;
++    ps5_direct_calls = ps5_lock_waits = ps5_loop_wakes = ps5_loop_polls = ps5_change_lists = ps5_change_items = 0;
++    ps5_times_since = monotonic_time;
++}
++#endif
++
+ /* call a request handler */
+ static void call_req_handler( struct thread *thread )
+ {
++#ifdef __PROSPERO__
++    unsigned long long ps5_started;
++#endif
+     union generic_reply reply;
+     enum request req = thread->req.request_header.req;
+@@ -316,10 +418,16 @@ static void call_req_handler( struct thread *thread )
+ 
+     if (debug_level) trace_request();
+ 
++#ifdef __PROSPERO__
++    ps5_started = ps5_times_now( 0 );
++#endif
+     if (req < REQ_NB_REQUESTS)
+         req_handlers[req]( &current->req, &reply );
+     else
+         set_error( STATUS_NOT_IMPLEMENTED );
++#ifdef __PROSPERO__
++    ps5_times_request( req, ps5_times_now( 0 ) - ps5_started, 0 );
++#endif
+ 
+ #ifdef __PROSPERO__
+     {
+@@ -400,6 +508,10 @@ static void lock_server_for_client(void)
+ {
+     int i;
+ 
++#ifdef __PROSPERO__
++    unsigned long long ps5_started = ps5_times_now( 0 );
++#endif
++
+     for (i = 0; i < 200; i++)
+     {
+         if (!pthread_mutex_trylock( &inprocess_server_mutex ))
+@@ -413,6 +526,10 @@ static void lock_server_for_client(void)
+     }
+     pthread_mutex_lock( &inprocess_server_mutex );
+     inprocess_server_locked();
++#ifdef __PROSPERO__
++    ps5_lock_waits++;   /* only the waits that slept: the spin above is a microsecond or two */
++    ps5_lock_wait_ns += ps5_times_now( 0 ) - ps5_started;
++#endif
+ }
+ 
+ /* Run a request on the calling thread, which is the client thread tid of
+@@ -466,7 +582,15 @@ DECLSPEC_EXPORT int pw_wineserver_call_direct( unsigned int tid, client_ptr_t te
+         memset( &reply, 0, sizeof(reply) );
+         if (debug_level) trace_request();
+ 
++#ifdef __PROSPERO__
++        {
++            unsigned long long ps5_started = ps5_times_now( 0 );
++            req_handlers[req]( &current->req, &reply );
++            ps5_times_request( req, ps5_times_now( 0 ) - ps5_started, 1 );
++        }
++#else
+         req_handlers[req]( &current->req, &reply );
++#endif
+ #ifdef __PROSPERO__
+         {
+             extern void ps5_change_drain(void);
+diff --git a/server/trace.c b/server/trace.c
+index f5bb999..9db9223 100644
+--- a/server/trace.c
++++ b/server/trace.c
+@@ -1611,6 +1611,13 @@ static void dump_varargs_monitor_infos( const char *prefix, data_size_t size )
+     remove_data( size );
+ }
+ 
++#ifdef __PROSPERO__
++const char *ps5_request_name( unsigned int req )
++{
++    return req < REQ_NB_REQUESTS ? req_names[req] : "?";
++}
++#endif
++
+ void trace_request(void)
+ {
+     enum request req = current->req.request_header.req;

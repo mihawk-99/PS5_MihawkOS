@@ -101,6 +101,11 @@ def main():
         for name in overlay:
             (source / name).parent.mkdir(parents=True, exist_ok=True)
             shutil.copyfile(ROOT / name, source / name)
+        for sibling in ('PS5_Vulkan', 'PS5_PayloadSDK', 'PS5_VKHomebrewUI', 'PS5_RetroArch'):
+            target = ROOT.parent / sibling
+            link = work / sibling
+            if target.exists() and not link.exists():
+                link.symlink_to(target)
         if args.tester:
             # Its own title, beside MihawkOS: another title ID and content ID, so it can never replace PPSA99170's folder.
             param = json.loads((ROOT / 'ps5/sce_sys/param.json').read_text())
@@ -121,8 +126,8 @@ def main():
                     '-DPS5_SERVICE_NATIVE=' + ('ON' if args.kind == 'service-native' else 'OFF'),
                     '-DPS5_INSTALL_PROBE=' + ('ON' if args.kind == 'install-probe' else 'OFF'),
                     '-DPS5_TESTER_PROBE=' + ('ON' if args.tester else 'OFF'),
-                    # The install probe draws the production launcher under its notifications.
-                    '-DPS5_GPU_BROKER='+('ON' if args.wine_gpu_broker or args.kind == 'install-probe' else 'OFF'),
+                    # The install probe draws the production launcher under its notifications; proton_wine.cpp requires the broker.
+                    '-DPS5_GPU_BROKER='+('ON' if args.wine_gpu_broker or args.kind in ('install-probe', 'service-native') else 'OFF'),
                     '-DCMAKE_VERBOSE_MAKEFILE=OFF'], check=True, env=environment)
     subprocess.run(['ninja', '-C', str(build), 'title'], check=True, env=environment)
     if args.kind == 'service-native':

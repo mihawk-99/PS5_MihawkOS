@@ -114,7 +114,7 @@ int main(void)
         reset(wide);
         assert(ps5_rule_count == pw_steam_rule_count());
         const WCHAR *web = ps5_process_rule(L"\"C:\\Program Files (x86)\\Steam\\bin\\cef\\cef.win64\\steamwebhelper.exe\" -lang=en_US", L"add");
-        assert(web && !wcscmp(web, L" --single-process"));
+        assert(web && wcsstr(web, L"--single-process") && wcsstr(web, L"--disable-background-networking"));
         assert(ps5_process_rule(L"C:\\Program Files (x86)\\Steam\\bin\\gldriverquery64.exe", L"fail"));
         assert(ps5_process_rule(L".\\bin\\vulkandriverquery.exe", L"fail"));
         assert(ps5_process_rule(L"C:\\Program Files (x86)\\Steam\\bin\\hardwareupdater\\hardwareupdater.exe --check-for-updates", L"fail"));

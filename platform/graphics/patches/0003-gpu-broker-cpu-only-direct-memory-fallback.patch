@@ -1,0 +1,34 @@
+From 0000000000000000000000000000000000000000 Mon Sep 17 00:00:00 2001
+From: Mihawk <163614687+mihawk-99@users.noreply.github.com>
+Date: Thu, 26 Nov 2026 21:53:00 -0500
+Subject: [PATCH] gpu-broker: fall back to CPU-only direct memory mapping in local-process clients
+
+In a Sony local process (category=native_game without an initialized GPU VM),
+sceKernelMapDirectMemory with GPU protection bits (0x33) returns 0x4e0003.
+A broker client only accesses its shared host-visible buffer from the CPU
+while the owning title maps the same physical offset with GPU protection 0x33.
+Falling back to CPU read/write (0x03) when 0x33 fails lets Sony local-process
+clients map direct-memory host buffers cleanly without affecting payload helpers.
+---
+ tooling/gpu-broker/client.c | 6 +++++-
+ 1 file changed, 5 insertions(+), 1 deletion(-)
+
+diff --git a/tooling/gpu-broker/client.c b/tooling/gpu-broker/client.c
+index 1111111..2222222 100644
+--- a/tooling/gpu-broker/client.c
++++ b/tooling/gpu-broker/client.c
+@@ -34,7 +34,11 @@ static void *map_host_at(void *at,uint64_t bytes,int fd,uint64_t dmem_plus_one)
+ {
+     if(dmem_plus_one) {
+         void *got=at;
+-        const int status=sceKernelMapDirectMemory(&got,(size_t)bytes,0x33,PS5_KERNEL_MAP_FIXED,(int64_t)(dmem_plus_one-1),16384);
++        int status=sceKernelMapDirectMemory(&got,(size_t)bytes,0x33,PS5_KERNEL_MAP_FIXED,(int64_t)(dmem_plus_one-1),16384);
++        if(status) {
++            got=at;
++            status=sceKernelMapDirectMemory(&got,(size_t)bytes,0x03,PS5_KERNEL_MAP_FIXED,(int64_t)(dmem_plus_one-1),16384);
++        }
+         if(status || got!=at) {
+             fprintf(stderr,"gpu-client: direct memory %llu at %p for %llu bytes: status %#x, mapped at %p\n",(unsigned long long)(dmem_plus_one-1),at,(unsigned long long)bytes,(unsigned)status,got);
+             return MAP_FAILED;
+--
+2.47.0

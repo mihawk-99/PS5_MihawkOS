@@ -36,6 +36,7 @@
 
 enum {
     PW_CODE_BUDGET_START_MIB = 64,
+    PW_CODE_BUDGET_BROWSER_START_MIB = 96,   /* CEF/Chromium browser helpers always raise 64->96 MiB on boot */
     PW_CODE_BUDGET_STEP_MIB = 32,
     PW_CODE_BUDGET_MAX_MIB = 256,
     PW_CODE_BUDGET_WINDOW_MS = 10000,

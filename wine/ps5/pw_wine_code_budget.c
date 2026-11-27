@@ -18,20 +18,31 @@ static const char *const listed[] = {
     "cefsharp.browsersubprocess.exe", "msedgewebview2.exe",                           /* launchers' embedded browsers */
 };
 
+static const char *const browsers[] = {
+    "steamwebhelper.exe", "epicwebhelper.exe", "battle.net helper.exe", "galaxyclient helper.exe",
+    "uplaywebcore.exe", "socialclubhelper.exe", "qtwebengineprocess.exe",
+    "cefsharp.browsersubprocess.exe", "msedgewebview2.exe",
+};
+
 static int lower(int c) { return c >= 'A' && c <= 'Z' ? c - 'A' + 'a' : c; }
 
-int pw_code_budget_listed(const char *image)
+static int matches_any(const char *image, const char *const *table, size_t count)
 {
     const char *name = image;
     if (!image) return 0;
     for (const char *at = image; *at; ++at)
         if (*at == '\\' || *at == '/') name = at + 1;
-    for (size_t i = 0; i < sizeof(listed) / sizeof(listed[0]); ++i) {
-        const char *a = name, *b = listed[i];
+    for (size_t i = 0; i < count; ++i) {
+        const char *a = name, *b = table[i];
         while (*a && lower((unsigned char)*a) == *b) ++a, ++b;
         if (!*a && !*b) return 1;
     }
     return 0;
+}
+
+int pw_code_budget_listed(const char *image)
+{
+    return matches_any(image, listed, sizeof(listed) / sizeof(listed[0]));
 }
 
 static long number(const char *text, long low, long high)
@@ -52,6 +63,10 @@ void pw_code_budget_setup(PwCodeBudget *budget, const char *setting, const char 
         return;
     }
     budget->mode = pw_code_budget_listed(image) ? PW_CODE_BUDGET_LISTED : PW_CODE_BUDGET_ADAPTIVE;
+    if (budget->mode == PW_CODE_BUDGET_LISTED && matches_any(image, browsers, sizeof(browsers) / sizeof(browsers[0]))) {
+        budget->bytes = (uint64_t)PW_CODE_BUDGET_BROWSER_START_MIB << 20;
+        return;
+    }
     budget->bytes = (uint64_t)(budget->mode == PW_CODE_BUDGET_ADAPTIVE && first > 0 ? first : PW_CODE_BUDGET_START_MIB) << 20;
 }
 

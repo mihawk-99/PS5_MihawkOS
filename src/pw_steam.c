@@ -183,7 +183,7 @@ static const struct { const char *name, *action, *value; } kRules[] = {
     { "vulkandriverquery64.exe", "fail", "" },
     { "hardwareupdater.exe", "fail", "" },
     { "bin\\SteamService.exe", "run", "C:\\windows\\system32\\hostname.exe" },   /* the install-script runner */
-    { "steamwebhelper.exe", "add", " --single-process" },
+    { "steamwebhelper.exe", "add", " --single-process --js-flags=--max-old-space-size=128 --disable-extensions --disable-background-networking --disable-dev-shm-usage --disk-cache-size=33554432" },
     { "gameoverlayui.exe", "fail", "" },
     { "gameoverlayui64.exe", "fail", "" },
     /* While a library game runs, the browser waits suspended (patch 2104): about 950 of the client's ~1,676 system page

@@ -20,6 +20,10 @@ struct ProtonFlexReply {
     int32_t direct_alloc, direct_map, anon_map, jit_made;
     int64_t resident[FLEX_POINTS], mapped[FLEX_POINTS], available[FLEX_POINTS];
     struct ProtonFlexExec exec[FLEX_EXEC_WAYS];
+    int32_t elevation, euid;
+    int32_t pt_cpu_total[FLEX_POINTS], pt_cpu_free[FLEX_POINTS], pt_gpu_total, pt_gpu_free;
+    int32_t jit80_made, jit80_mapped, jit80_protect, jit80_value;
+    int32_t nofile_cur, nofile_max, nofile_raise_rc, nofile_raise_cur;
 };
 /* What the tester probe keeps of one flex run (native/proton_tester_probe.cpp): the spawn's answer, the helper's reply,
  * and the title's free flexible memory before, while the helper held its 64 MiB, and after it was closed. */
@@ -34,6 +38,7 @@ extern int sceKernelMapDirectMemory(void **, size_t, int, int, int64_t, size_t);
 extern int sceKernelMprotect(const void *, size_t, int);
 extern int sceKernelQueryMemoryProtection(void *, void **, void **, int *);
 extern int sceKernelJitCreateSharedMemory(const char *, size_t, int, int *);
+extern int sceKernelGetPageTableStats(int *, int *, int *, int *);
 extern int64_t sceKernelGetDirectMemorySize(void);
 /* One way to a page of `mov eax, 42; ret`: run only where the kernel says execute is held (a payload's kernel answers
  * success and drops it). The memory is left mapped: the probe's processes end soon after. */

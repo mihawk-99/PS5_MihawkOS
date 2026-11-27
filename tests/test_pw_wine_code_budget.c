@@ -35,12 +35,15 @@ int main(void)
     assert(!pw_code_budget_listed("C:\\Games\\game.exe") && !pw_code_budget_listed("Launcher.exe"));
     assert(!pw_code_budget_listed("steam.exe.bak") && !pw_code_budget_listed("xsteam.exe") && !pw_code_budget_listed(NULL));
 
-    /* A listed client: 64 MiB to start. Its cold churn, code coming back once, raises nothing however much of it there is... */
+    /* A listed browser helper: 96 MiB to start (avoids libcef boot thrash). Its cold churn raises nothing... */
     pw_code_budget_setup(&budget, NULL, NULL, "C:\\Program Files (x86)\\Steam\\steamwebhelper.exe");
-    assert(budget.mode == PW_CODE_BUDGET_LISTED && budget.bytes == 64u << 20);
-    assert(!thrash(0x140000000, 2000, 0, 5000) && budget.bytes == 64u << 20 && budget.reconverted_kib == 2000 * 16);
+    assert(budget.mode == PW_CODE_BUDGET_LISTED && budget.bytes == 96u << 20);
+    assert(!thrash(0x140000000, 2000, 0, 5000) && budget.bytes == 96u << 20 && budget.reconverted_kib == 2000 * 16);
     /* ...but code cycling through it (Big Picture drawing in one process) raises it as a game's is. */
-    assert(cycle(0x1a0000000, 64, 20000, 5000) == 1 && budget.bytes == 96u << 20 && budget.raises == 1);
+    assert(cycle(0x1a0000000, 64, 20000, 5000) == 1 && budget.bytes == 128u << 20 && budget.raises == 1);
+    /* Non-browser listed clients (steam.exe) still start at 64 MiB. */
+    pw_code_budget_setup(&budget, NULL, NULL, "C:\\Program Files (x86)\\Steam\\steam.exe");
+    assert(budget.mode == PW_CODE_BUDGET_LISTED && budget.bytes == 64u << 20);
 
     /* A game: 64 MiB to start; light eviction (under 1 MiB re-converted in 10 s) raises nothing. */
     pw_code_budget_setup(&budget, NULL, NULL, "C:\\Games\\game.exe");

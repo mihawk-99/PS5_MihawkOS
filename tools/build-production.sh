@@ -113,6 +113,7 @@ bash "$root/tools/link_gpu_client.sh" "$vulkan" "$root/.deps/gpu-wsi-client" "$f
     "$sdk" 0 0 1
 
 bash "$root/tools/build-payload-loader.sh"
+bash "$root/tools/build-local-child.sh"
 bash "$root/tools/build-graphics-process-probe.sh"
 stage wine-probes "${title_sources[@]}" --repo-except wine/ --input "$root/.deps/wine-runtime/build" --input "$root/.deps/wine-runtime/source" \
     --input "$root/.deps/llvm-mingw" --input "$root/.deps/magick-7.1.2-32" --output "$root/.deps/probes" "${theme[@]}" -- \
@@ -126,9 +127,10 @@ if [ -f "$root/build/ps5/build.ninja" ]; then
     cmake -S "$root/ps5" -B "$root/build/ps5" -DPS5_GPU_BROKER=ON -DPS5_VULKAN_DIR="$vulkan" > /dev/null
 fi
 PS5_VULKAN_DIR="$vulkan" bash "$root/ps5/tools/build.sh"
-# The helper loader is the payload one (tools/build-payload-loader.sh, staged by stage-wine.py); the title folder
-# carries no other since the Sony-managed route was removed.
+# The helper loader is the payload one (tools/build-payload-loader.sh, staged by stage-wine.py), plus the Sony
+# local-process loader (tools/build-local-child.sh) for 64-bit Steam games in the title's expanded app pool.
 rm -f "$root/dist/$title/wine-child.bin"
+cp "$root/build/wine-local-child.bin" "$root/dist/$title/wine-local-child.bin"
 
 cp "$daemon/lapy-root-daemon.elf" "$root/dist/$title/lapy-root-daemon.elf"
 # Mesa's WGL over Zink, OpenGL for programs in helper processes; stage-wine.py puts it in the runtime.

@@ -20,13 +20,14 @@ static int directory(const char *path)
 int pw_shader_cache_configure(const char *root, const char *profile,
                               const char *version_file, int enabled)
 {
-    char version[66], base[4096], path[4096], windows[4099];
+    char version[66], base[4096], path[4096], windows[4099], dxvk_windows[4099];
     int status = 0;
     FILE *file;
     /* Disable first, including the launcher's inherited RADV directory. */
     unsetenv("PS5_SHADER_CACHE_DIR");
     unsetenv("MESA_SHADER_CACHE_DIR");
     unsetenv("DXVK_SHADER_CACHE_PATH");
+    unsetenv("VKD3D_SHADER_CACHE_PATH");
     unsetenv("DXVK_DXGI_ADAPTER_SUMMARY");
     if (setenv("MESA_SHADER_CACHE_DISABLE", "true", 1) || setenv("DXVK_SHADER_CACHE", "0", 1))
         return errno;
@@ -45,22 +46,25 @@ int pw_shader_cache_configure(const char *root, const char *profile,
     if ((status = directory(base))) return status;
     if (snprintf(base, sizeof(base), "%s/%s/%s", root, profile, version) >= (int)sizeof(base)) return ENAMETOOLONG;
     if ((status = directory(base))) return status;
-    static const char *const folders[] = {"radv", "gl", "dxvk"};
-    static const char *const variables[] = {"MESA_SHADER_CACHE_DIR", "PS5_SHADER_CACHE_DIR", "DXVK_SHADER_CACHE_PATH"};
-    for (unsigned i = 0; i < 3; ++i) {
+    static const char *const folders[] = {"radv", "gl", "dxvk", "vkd3d"};
+    static const char *const variables[] = {"MESA_SHADER_CACHE_DIR", "PS5_SHADER_CACHE_DIR", "DXVK_SHADER_CACHE_PATH",
+                                            "VKD3D_SHADER_CACHE_PATH"};
+    dxvk_windows[0] = 0;
+    for (unsigned i = 0; i < 4; ++i) {
         if (snprintf(path, sizeof(path), "%s/%s", base, folders[i]) >= (int)sizeof(path)) {
             status = ENAMETOOLONG;
             break;
         }
         if ((status = directory(path))) break;
-        /* DXVK is a Windows DLL; the two drivers consume native paths. */
+        /* DXVK and VKD3D-Proton are Windows DLLs; the two native drivers consume POSIX paths. */
         snprintf(windows, sizeof(windows), "Z:%s", path);
         for (char *p = windows; *p; ++p) if (*p == '/') *p = '\\';
-        if (setenv(variables[i], i == 2 ? windows : path, 1)) { status = errno; break; }
+        if (i == 2) strcpy(dxvk_windows, windows);
+        if (setenv(variables[i], i >= 2 ? windows : path, 1)) { status = errno; break; }
     }
     /* DXGI's adapters without Vulkan (platform/dxvk/patches/0004): the namespace changes with the driver and DXVK. */
-    if (!status && strlen(windows) + sizeof("\\dxgi-adapters.bin") > sizeof(windows)) status = ENAMETOOLONG;
-    if (!status && setenv("DXVK_DXGI_ADAPTER_SUMMARY", strcat(windows, "\\dxgi-adapters.bin"), 1)) status = errno;
+    if (!status && strlen(dxvk_windows) + sizeof("\\dxgi-adapters.bin") > sizeof(dxvk_windows)) status = ENAMETOOLONG;
+    if (!status && setenv("DXVK_DXGI_ADAPTER_SUMMARY", strcat(dxvk_windows, "\\dxgi-adapters.bin"), 1)) status = errno;
     if (!status && (setenv("MESA_SHADER_CACHE_DISABLE", "false", 1) || setenv("DXVK_SHADER_CACHE", "1", 1)))
         status = errno;
     if (status) pw_shader_cache_configure(root, profile, version_file, 0);

@@ -95,6 +95,11 @@ void pw_ps5_set_graphics_start(int (*start)(int,const struct pw_child_bootstrap 
 /* The title's start of the one program it runs itself beside the GPU broker (docs/TITLE_CLIENT.md): a process whose
  * image WINE_PS5_TITLE_PROCESS names is sent there instead of to a helper, until one runs (EBUSY: a helper). */
 void pw_ps5_set_title_client_start(int (*start)(int,const struct pw_child_bootstrap *));
+/* The title's Sony local-process spawner (/app0/wine-local-child.bin): spawns an isolated OS process attached to the
+ * title's application container (65,536 CPU page tables, 1 GiB flexible memory, direct memory) and closes it cleanly
+ * through sceSystemServiceKillLocalProcess when it exits. */
+void pw_ps5_set_local_spawner(int (*spawn)(int *control_fd, int *native_pid, int *service_id),
+                              int (*close_local)(int service_id, int native_pid, int control_fd));
 /* The title: 1 when the image a new process runs (its Windows path) is a fixed-base 32-bit one (src/pw_pe_arch.h).
  * Called on the spawning threads for every helper but the memory helper, so it must only read. */
 void pw_ps5_set_fixed_base_lookup(int (*lookup)(const char *image));

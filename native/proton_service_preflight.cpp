@@ -74,9 +74,11 @@ int flex_probe(FILE *output, const char *identity, ProtonFlexRun *run = nullptr,
     int parent_service_id = -1;
     contains_process(getpid(), before_count, &parent_service_id);
     const int64_t title_before = title_flexible();
+    int pt_cpu_t0 = -1, pt_cpu_f0 = -1, pt_gpu_t0 = -1, pt_gpu_f0 = -1;
+    (void)sceKernelGetPageTableStats(&pt_cpu_t0, &pt_cpu_f0, &pt_gpu_t0, &pt_gpu_f0);
     if (run) run->title_before = title_before;
-    fprintf(output, "flex title app=%d list_count=%u parent_service_id=%d title_flexible_before=%lld\n", parent_app, before_count,
-            parent_service_id, (long long)title_before);
+    fprintf(output, "flex title app=%d list_count=%u parent_service_id=%d title_flexible_before=%lld pt_before=%d/%d gpu_pt=%d/%d\n",
+            parent_app, before_count, parent_service_id, (long long)title_before, pt_cpu_f0, pt_cpu_t0, pt_gpu_f0, pt_gpu_t0);
     int pair[2]{-1, -1};
     if (parent_app <= 0 || before_count != 1 || parent_service_id <= 0 || socketpair(AF_UNIX, SOCK_SEQPACKET, 0, pair)) {
         fprintf(output, "flex spawn=skipped\n");
@@ -99,14 +101,21 @@ int flex_probe(FILE *output, const char *identity, ProtonFlexRun *run = nullptr,
     for (int wait = 0; wait < 6 && !answered; ++wait) answered = ready(pair[0], POLLIN);
     answered = answered && recv(pair[0], &reply, sizeof(reply), 0) == sizeof(reply) && reply.magic == PROTON_FLEX_MAGIC;
     const int64_t title_held = title_flexible();
+    int pt_cpu_t1 = -1, pt_cpu_f1 = -1, pt_gpu_t1 = -1, pt_gpu_f1 = -1;
+    (void)sceKernelGetPageTableStats(&pt_cpu_t1, &pt_cpu_f1, &pt_gpu_t1, &pt_gpu_f1);
     if (run) { run->answered = answered; run->reply = reply; run->title_held = title_held; }
-    fprintf(output, "flex helper answered=%d pid=%d direct_alloc=%#x direct_map=%#x anon_map=%d jit_made=%#x title_flexible_held=%lld\n",
-            answered, reply.pid, unsigned(reply.direct_alloc), unsigned(reply.direct_map), reply.anon_map, unsigned(reply.jit_made),
-            (long long)title_held);
+    fprintf(output, "flex helper answered=%d pid=%d elevation=%d euid=%d direct_alloc=%#x direct_map=%#x anon_map=%d jit_made=%#x "
+            "jit80_made=%#x jit80_mapped=%d jit80_protect=%#x jit80_value=%d nofile=%d/%d raise_rc=%d raise_cur=%d "
+            "title_flexible_held=%lld title_pt_held=%d/%d\n",
+            answered, reply.pid, reply.elevation, reply.euid, unsigned(reply.direct_alloc), unsigned(reply.direct_map),
+            reply.anon_map, unsigned(reply.jit_made), unsigned(reply.jit80_made), reply.jit80_mapped,
+            unsigned(reply.jit80_protect), reply.jit80_value, reply.nofile_cur, reply.nofile_max,
+            reply.nofile_raise_rc, reply.nofile_raise_cur, (long long)title_held, pt_cpu_f1, pt_cpu_t1);
     static const char *const points[FLEX_POINTS] = {"start", "direct", "anon", "jit"};
     for (unsigned p = 0; answered && p < FLEX_POINTS; ++p)
-        fprintf(output, "flex point=%s resident=%lld mapped=%lld available=%lld\n", points[p], (long long)reply.resident[p],
-                (long long)reply.mapped[p], (long long)reply.available[p]);
+        fprintf(output, "flex point=%s resident=%lld mapped=%lld available=%lld pt=%d/%d gpu_pt=%d/%d\n", points[p],
+                (long long)reply.resident[p], (long long)reply.mapped[p], (long long)reply.available[p],
+                reply.pt_cpu_free[p], reply.pt_cpu_total[p], reply.pt_gpu_free, reply.pt_gpu_total);
     static const char *const ways[FLEX_EXEC_WAYS] = {"direct0", "direct12", "main12", "mapx", "anon", "jit"};
     ProtonFlexExec title[FLEX_EXEC_WAYS]{};
     for (unsigned way = 0; title_ways && way < FLEX_EXEC_WAYS; ++way) proton_flex_exec_try(way, &title[way]);
@@ -131,8 +140,10 @@ int flex_probe(FILE *output, const char *identity, ProtonFlexRun *run = nullptr,
     }
     sceKernelUsleep(500000);
     const int64_t title_after = title_flexible();
-    fprintf(output, "flex close completion=%d closed=%#x present=%d list_after=%u title_flexible_after=%lld\n", done, unsigned(closed),
-            present, after_count, (long long)title_after);
+    int pt_cpu_t2 = -1, pt_cpu_f2 = -1, pt_gpu_t2 = -1, pt_gpu_f2 = -1;
+    (void)sceKernelGetPageTableStats(&pt_cpu_t2, &pt_cpu_f2, &pt_gpu_t2, &pt_gpu_f2);
+    fprintf(output, "flex close completion=%d closed=%#x present=%d list_after=%u title_flexible_after=%lld title_pt_after=%d/%d\n",
+            done, unsigned(closed), present, after_count, (long long)title_after, pt_cpu_f2, pt_cpu_t2);
     if (run) { run->title_after = title_after; run->closed = closed; run->present = present; }
     close(pair[0]);
     // The verdict asks only that the probe ran and cleaned up; the figures are the answer, read by tools/run-child-probe.py.

@@ -1,0 +1,116 @@
+From: Mihawk <mihawk@localhost>
+Date: Thu, 26 Nov 2026 00:00:00 +0000
+Subject: [PATCH] kernelbase: ps5: terminate and reap held browser helper before launching game
+
+In a persistent Steam session, steamwebhelper.exe runs in a helper so launching
+or closing a game never has to shut down Steam or restart the title via LoadExec.
+Before CreateProcessInternalW creates a library game process, terminate any
+running held helper (steamwebhelper.exe) and wait up to 2 s for it to exit so
+its GPU broker slot, RAM, and ~1,000+ system page tables are freed before the
+game allocates its own. If game creation fails, clear the launching guard and
+resume any held helper cleanly.
+
+---
+diff --git a/dlls/kernelbase/process.c b/dlls/kernelbase/process.c
+--- a/dlls/kernelbase/process.c
++++ b/dlls/kernelbase/process.c
+@@ -773,17 +773,62 @@
+ static HANDLE ps5_hold_game;      /* the running game's process (its watcher owns the handle), or 0 */
+ static HANDLE ps5_hold_helper;    /* the last held-by-rule program started, its process */
+ static HANDLE ps5_hold_thread;    /* its first thread while it waits suspended for the game's end */
++static BOOL ps5_hold_launching;   /* TRUE while a game is being created after ending the held helper */
+ 
+ static BOOL ps5_hold_game_running(void)
+ {
+     BOOL running;
+ 
+     RtlAcquireSRWLockExclusive( &ps5_hold_lock );
+-    running = ps5_hold_game && WaitForSingleObject( ps5_hold_game, 0 ) == WAIT_TIMEOUT;
++    running = ps5_hold_launching || (ps5_hold_game && WaitForSingleObject( ps5_hold_game, 0 ) == WAIT_TIMEOUT);
+     RtlReleaseSRWLockExclusive( &ps5_hold_lock );
+     return running;
+ }
+ 
++/* Before a game starts: end the running held helper (e.g. steamwebhelper.exe) and wait briefly for it to exit
++ * so its GPU broker slot, RAM and ~1,000+ system page tables are freed before the game allocates its own. */
++static BOOL ps5_hold_before_game( const WCHAR *app_name )
++{
++    HANDLE self = GetCurrentProcess(), end = 0;
++
++    if (!ps5_hold_is_game( app_name ) || ps5_hold_off()) return FALSE;
++    RtlAcquireSRWLockExclusive( &ps5_hold_lock );
++    ps5_hold_launching = TRUE;
++    if (ps5_hold_helper && !ps5_hold_thread && WaitForSingleObject( ps5_hold_helper, 0 ) == WAIT_TIMEOUT)
++        DuplicateHandle( self, ps5_hold_helper, self, &end, PROCESS_TERMINATE | SYNCHRONIZE, FALSE, 0 );
++    RtlReleaseSRWLockExclusive( &ps5_hold_lock );
++    if (end)
++    {
++        DWORD waited;
++        FIXME( "HACK: ending the held program before %s starts (WINE_PS5_PROCESS_RULES).\n", debugstr_w(app_name) );
++        TerminateProcess( end, 1 );
++        waited = WaitForSingleObject( end, 2000 );
++        FIXME( "HACK: held program exited before game start (wait=%#lx).\n", waited );
++        CloseHandle( end );
++    }
++    return TRUE;
++}
++
++static void ps5_hold_abort(void)
++{
++    HANDLE resume = 0;
++
++    RtlAcquireSRWLockExclusive( &ps5_hold_lock );
++    ps5_hold_launching = FALSE;
++    if (!ps5_hold_game)
++    {
++        resume = ps5_hold_thread;
++        ps5_hold_thread = 0;
++    }
++    RtlReleaseSRWLockExclusive( &ps5_hold_lock );
++    if (resume)
++    {
++        FIXME( "HACK: game start failed; resuming the held program (WINE_PS5_PROCESS_RULES).\n" );
++        NtResumeThread( resume, NULL );
++        CloseHandle( resume );
++    }
++}
++
+ static DWORD WINAPI ps5_hold_watch( void *game )
+ {
+     HANDLE resume = 0;
+@@ -826,8 +871,9 @@
+         return;
+     }
+     if (!ps5_hold_is_game( app_name ) || ps5_hold_off()) return;
+-    if (!DuplicateHandle( self, info->hProcess, self, &process, SYNCHRONIZE, FALSE, 0 )) return;
++    if (!DuplicateHandle( self, info->hProcess, self, &process, SYNCHRONIZE, FALSE, 0 )) { ps5_hold_abort(); return; }
+     RtlAcquireSRWLockExclusive( &ps5_hold_lock );
++    ps5_hold_launching = FALSE;
+     ps5_hold_game = process;
+     if (ps5_hold_helper && !ps5_hold_thread && WaitForSingleObject( ps5_hold_helper, 0 ) == WAIT_TIMEOUT)
+         DuplicateHandle( self, ps5_hold_helper, self, &end, PROCESS_TERMINATE, FALSE, 0 );
+@@ -963,7 +1009,7 @@
+     HANDLE parent = 0, debug = 0;
+     char *product_name = NULL;
+     const WCHAR *append, *run_in_place;
+-    BOOL held = FALSE;
++    BOOL held = FALSE, hold_armed = FALSE;
+     ULONG nt_flags = 0;
+     USHORT machine = 0;
+     NTSTATUS status;
+@@ -1197,6 +1243,7 @@
+     if (flags & CREATE_BREAKAWAY_FROM_JOB) nt_flags |= PROCESS_CREATE_FLAGS_BREAKAWAY;
+     if (flags & CREATE_SUSPENDED) nt_flags |= PROCESS_CREATE_FLAGS_SUSPENDED;
+ 
++    hold_armed = ps5_hold_before_game( app_name );
+     status = create_nt_process( token, debug, process_attr, thread_attr,
+                                 nt_flags, params, &rtl_info, parent, machine, handle_list, job_list );
+     switch (status)
+@@ -1238,6 +1285,7 @@
+         TRACE( "started process pid %04lx tid %04lx\n", info->dwProcessId, info->dwThreadId );
+         ps5_hold_started( app_name, info, held );
+     }
++    else if (hold_armed) ps5_hold_abort();
+ 
+  done:
+     RtlDestroyProcessParameters( params );

@@ -42,7 +42,9 @@
 #include <sys/cpuset.h>
 #include <sys/rtprio.h>
 #include <ps5platform/kernel.h>
+#ifndef PROTON_LOCAL_CHILD
 #include "pw_prx_elf_ps5.h"
+#endif
 #include "../src/pw_firmware.h"
 #include "../src/pw_warm_helper.h"
 #include "../wine/ps5/pw_wine_dl.h"
@@ -252,12 +254,22 @@ static int placement_read(int level, uint64_t *mask, int *error)
     memcpy(mask, set, sizeof(*mask));
     return 0;
 }
+#ifdef PROTON_LOCAL_CHILD
+extern int scePthreadGetthreadid(void);
+static int child_thr_self(long *tid) { *tid = (long)scePthreadGetthreadid(); return 0; }
+#else
+static int child_thr_self(long *tid) { return thr_self(tid); }
+#endif
 static int placement_create(int *set_id, int *error)
 {
+#ifdef PROTON_LOCAL_CHILD
+    (void)set_id; *error = ENOSYS; return -1;
+#else
     cpusetid_t id;
     if (cpuset(&id)) { *error = errno; return -1; }
     *set_id = (int)id;
     return 0;
+#endif
 }
 static int placement_get(int *set_id, int *error)
 {
@@ -281,8 +293,12 @@ static int placement_set_mask(int set_id, uint64_t mask, int *error)
 }
 static int placement_move(int set_id, int *error)
 {
+#ifdef PROTON_LOCAL_CHILD
+    (void)set_id; *error = ENOSYS; return -1;
+#else
     if (cpuset_setid(CPU_WHICH_PID, -1, (cpusetid_t)set_id)) { *error = errno; return -1; }
     return 0;
+#endif
 }
 static int placement_affinity(uint64_t mask, int *error)
 {
@@ -335,7 +351,7 @@ static void sched_entry(const char *kind, const char *block, size_t bytes)
     char line[512];
     pw_helper_sched_read(block, bytes, &helper_sched);
     (void)sched_cpuset_size();
-    (void)thr_self(&main_tid);
+    (void)child_thr_self(&main_tid);
     sched_self(&entry);
     sched_plain(&plain);
     const int service_error = pw_helper_sched_plan(&helper_sched, PW_HELPER_SCHED_SERVICE, entry.policy, plain.policy,
@@ -564,7 +580,7 @@ static int stall_threads(void)
     int size;
     long self = 0;
     char line[384], name[sizeof(thread.ki_tdname)], wmesg[sizeof(thread.ki_wmesg)], lock[sizeof(thread.ki_lockname)];
-    (void)thr_self(&self);
+    (void)child_thr_self(&self);
     while (census_next(raw, bytes, &at, &thread, &size)) {
         struct rtprio kernel = {0};
         const int refused = rtprio_thread(RTP_LOOKUP, thread.ki_tid, &kernel) ? errno : 0;
@@ -665,7 +681,7 @@ static void census_take(void)
     unsigned records = 0;
     struct kinfo_proc record;
     const unsigned char *start;
-    (void)thr_self(&self);
+    (void)child_thr_self(&self);
     char *raw = census_list(KERN_PROC_PID | KERN_PROC_INC_THREAD, getpid(), &bytes, &error);
     while (census_next(raw, bytes, &at, &record, &size))
         if (records++ < 16 && used < sizeof(tids) - 12)
@@ -1198,15 +1214,17 @@ static void direct_section_tally(void)
              (unsigned long long)v[24]);
     stage(line);
 }
+/* A native SDK thread has GS base zero. Wine's process-wide signal routing
+ * must preserve this handler while still catching PE32 faults in Wine threads. */
+static volatile sig_atomic_t native_signals_seen;
+#ifndef PROTON_LOCAL_CHILD
 /* sigaction(2) itself, system call 416, without libkernel's wrapper (patch 0945). */
 static int payload_raw_sigaction(int sig, const struct sigaction *act, struct sigaction *old)
 {
     return (int)syscall(416, sig, act, old);
 }
-/* A native SDK thread has GS base zero. Wine's process-wide signal routing
- * must preserve this handler while still catching PE32 faults in Wine threads. */
-static volatile sig_atomic_t native_signals_seen;
 static void native_signal_probe(int sig) { if (sig == SIGUSR1) ++native_signals_seen; }
+#endif
 
 /* A profile of what this process's threads run (wine/ps5/pw_wine_threads.h), taken ten times a second when
  * WINE_PS5_SAMPLE=1 and printed with each 10 s census: per thread the CPU it used and how many samples found it in
@@ -1466,7 +1484,9 @@ static void *payload_telemetry(void *unused)
          * it before the first census of 10 s has walked its mappings (2026-10-12; record removed from the tree): what holds it is read at 2, 4, 6, 8, 9, 11,
          * 12, 13 and 15 s as well (its flexible memory goes from 44 to 345 MiB at about 10 s). */
         static unsigned long long census_resident_mib, census_tick;
-        const int early_tick = tick == 19 || tick == 39 || tick == 59 || tick == 79 || tick == 89 || tick == 109 || tick == 119 || tick == 129 || tick == 149;
+        /* Only take early resident-memory / vm_census snapshots when asked (WINE_PS5_EARLY=1): walking every mapping
+         * in every helper during the first 15 s stole hundreds of ms of startup CPU and virtual_mutex time. */
+        const int early_tick = early_every_second && (tick == 19 || tick == 39 || tick == 59 || tick == 79 || tick == 89 || tick == 109 || tick == 119 || tick == 129 || tick == 149);
         /* Every second to 60 s (the climb of 2026-10-24 was 255 to 469 MiB between two of the sparse samples), and a full census when the
          * count has risen 50 MiB since the last one, at most once in 5 s. WINE_PS5_EARLY=1 turns this on; it costs a line a second. */
         const int dense = early_every_second && tick < 600 && tick % 10 == 9;
@@ -1496,13 +1516,12 @@ static void *payload_telemetry(void *unused)
                   ? "PS5_PROTON_NATIVE_SIGNAL_PROBE PASS: prior native handler called once\n"
                   : "PS5_PROTON_NATIVE_SIGNAL_PROBE FAIL: prior native handler not called once\n");
         }
-        /* The heavy part of the census (every descriptor's fstat, 190 ms with an emulator's 3,000 files, the images and the mapping
-         * walk) runs every 10 s for the first minute and then every WINE_PS5_CENSUS_SECONDS (60): on every 10 s it was a
-         * 300 to 660 ms gap in the frames of a game that otherwise held 58 fps (2026-10-13; record removed from the tree). The cheap counters keep their
-         * 10 s period. */
+        /* The heavy part of the census (every descriptor's fstat, image_stats taking virtual_mutex, and vm_census)
+         * runs every WINE_PS5_CENSUS_SECONDS (60), or every 10 s during the first minute only when WINE_PS5_EARLY=1.
+         * Cheap lock-free counters keep their 10 s period. */
         static unsigned files, dirs;
         const unsigned seconds = (tick + 1) / 10;
-        const int heavy = seconds <= 60 || seconds % census_period == 0;
+        const int heavy = (early_every_second && seconds <= 60) || seconds % census_period == 0;
         const long long census_begin = now_ns();
         long long fds_ns = 0, image_ns = 0, vm_ns = 0;
         if (heavy) {
@@ -1781,6 +1800,7 @@ static int doom_tick(PwControlDoom *watch, long long now, int held)
     return 1;
 }
 
+#ifndef PROTON_LOCAL_CHILD
 /* The staged unsigned ELF beside the fake-signed SELF: load it in this helper's address space (13.59 and later
  * cannot load the SELF through the kernel). The same fields pw_wine_start_load fills, without a kernel handle or
  * the ntdll adopt; the caller goes on to the protocol check and the Wine entry. */
@@ -1864,6 +1884,7 @@ static void *title_watch(void *unused)
     fsync(output_fd);
     _exit(0);
 }
+#endif
 
 static void wine_child_run(void)
 {
@@ -1941,11 +1962,23 @@ static void wine_child_run(void)
         if (diagnostic_fd >= 0) close(diagnostic_fd);
         stage("wine-child: native stderr capture unavailable\n");
     }
+#ifndef PROTON_LOCAL_CHILD
     const payload_args_t *runtime_args=payload_get_args();
     char runtime_line[128];
     snprintf(runtime_line,sizeof(runtime_line),"wine-child: payload runtime pipe=%d/%d pair=%d/%d control=3\n",
         runtime_args->rwpipe[0],runtime_args->rwpipe[1],runtime_args->rwpair[0],runtime_args->rwpair[1]);
     stage(runtime_line);
+#else
+    {
+        int pt_ct = -1, pt_cf = -1, pt_gt = -1, pt_gf = -1;
+        (void)sceKernelGetPageTableStats(&pt_ct, &pt_cf, &pt_gt, &pt_gf);
+        char runtime_line[160];
+        snprintf(runtime_line, sizeof(runtime_line),
+                 "wine-child: local-process runtime control=3 euid=%u cpu_pt=%d/%d gpu_pt=%d/%d\n",
+                 (unsigned)geteuid(), pt_cf, pt_ct, pt_gf, pt_gt);
+        stage(runtime_line);
+    }
+#endif
     struct pw_child_bootstrap boot = {0};
     struct pollfd pollfd = {3, POLLIN, 0};
     int server_fd = -1, error = 1, acknowledged = 0, fds[2];unsigned count=0;
@@ -1965,8 +1998,15 @@ static void wine_child_run(void)
     int broker_fd=-1;
 #endif
     /* A helper the title started ahead of need waits here until a start takes it (src/pw_warm_helper.h); the title closes
-     * one it does not use, which ends this wait with a hangup. */
-    const int boot_polled = poll(&pollfd, 1, PW_WARM_BOOTSTRAP_MS);
+     * one it does not use, which ends this wait with a hangup. A parked Sony local helper waits until taken or closed so
+     * it stays warm throughout a long Steam Big Picture session. */
+    const int boot_polled = poll(&pollfd, 1,
+#ifdef PROTON_LOCAL_CHILD
+                                 -1
+#else
+                                 PW_WARM_BOOTSTRAP_MS
+#endif
+                                );
     const int boot_poll_error = boot_polled < 0 ? errno : 0;
     const ssize_t boot_received = boot_polled == 1 && (pollfd.revents & POLLIN)
                                 ? pw_child_recv(3, &boot, sizeof(boot), fds, &count) : -2;
@@ -2002,6 +2042,7 @@ static void wine_child_run(void)
     }
     sched_place_cpus(boot.flags, boot.environment, sizeof(boot.environment));
     sched_entry(boot.flags==PW_CHILD_MEMORY ? "memory" : "program", boot.environment, sizeof(boot.environment));
+#ifndef PROTON_LOCAL_CHILD
     // The title's exit, watched directly, for every helper the memory helper included (title_watch above).
     if ((title_pid = pw_control_title_pid(boot.environment, sizeof(boot.environment))) > 0) {
         char watch_line[96];
@@ -2009,12 +2050,14 @@ static void wine_child_run(void)
                  native_thread(title_watch, 64u << 10));
         stage(watch_line);
     } else stage("wine-child: title watch: no WINE_PS5_TITLE_PID in the bootstrap\n");
+#endif
     {
         char sync_line[96];
         snprintf(sync_line, sizeof(sync_line), "wine-child: log sync every 10 s, stall watch every 1 s status=%d\n",
                  native_thread(log_sync, 64u << 10));
         stage(sync_line);
     }
+#ifndef PROTON_LOCAL_CHILD
     if(boot.flags==PW_CHILD_MEMORY) {
         // The memory helper (src/pw_memory_helper.h): no Windows program here. It makes the shared memory the title's
         // server and GPU broker would otherwise make, until the title is gone.
@@ -2036,6 +2079,7 @@ static void wine_child_run(void)
         fsync(output_fd);
         return;
     }
+#endif
     server_fd=fds[0];
     if(boot.flags&PW_CHILD_INPUT) {
         // This child's input page (pw_wine_sink.h): made here and given to the title, which keeps the pad in it, so
@@ -2117,7 +2161,12 @@ static void wine_child_run(void)
     gpu_device_query("before_elevation",gpu_fd);
 #endif
     if(set_env("WINE_PS5_PAYLOAD_CHILD", "1"))goto done;
+#ifdef PROTON_LOCAL_CHILD
+    if(set_env("WINE_PS5_LOCAL_CHILD", "1"))goto done;
+    stage("wine-child: local-process entry, control fd 3; app page-table pool\n");
+#else
     stage("wine-child: payload entry, control fd 3; no elevation needed\n");
+#endif
     start_stamp("payload-entry", -1);
     // The title and its children share one budget of about 250 open files (fd-budget-01). The server, in the
     // title, opens every Windows file and parks the idle ones (patch 0929); a child's own files are few, and it
@@ -2178,9 +2227,15 @@ static void wine_child_run(void)
         stage("wine-child: environment failed\n"); goto done;
     }
     /* Wine's modules load through this helper's own loader on every firmware (src/pw_prx_elf.h says why), unless the run
-     * asks for the kernel's with WINE_PS5_PRX_LOADER=0. */
+     * asks for the kernel's with WINE_PS5_PRX_LOADER=0. A Sony local process lives in the application container and
+     * loads fake-signed PRXes natively through Sony's kernel loader, just like eboot.bin. */
     const char *loader_reason = "default";
+#ifdef PROTON_LOCAL_CHILD
+    const int user_space_loader = 0;
+    loader_reason = "local-process";
+#else
     const int user_space_loader = pw_prx_elf_wanted(boot.environment, sizeof(boot.environment), &loader_reason);
+#endif
     {
         /* Before the kernel's module loader, which can stop this process inside the call (the pager error at
          * ntdll.prx's text, errno 92): the line must be on disk first. */
@@ -2188,11 +2243,14 @@ static void wine_child_run(void)
         snprintf(loader_line, sizeof(loader_line), "wine-child: module loader=%s (%s)\n",
                  user_space_loader ? "user-space" : "kernel", loader_reason);
         snprintf(load_line, sizeof(load_line), "wine-child: loading ntdll path=%s\n", ntdll);
+#ifndef PROTON_LOCAL_CHILD
         { char directory[256]; snprintf(directory, sizeof(directory), "%s", ntdll); char *slash = strrchr(directory, '/'); if (slash) { *slash = 0; pw_malloc_trace_start(directory); } }
+#endif
         stage(loader_line);
         stage(load_line);
         start_stamp("ntdll-loading", -1);
     }
+#ifndef PROTON_LOCAL_CHILD
     int elf_ntdll_handle = -1;
     if (user_space_loader) {
         const int elf_status = wine_start_elf(ntdll);
@@ -2202,7 +2260,9 @@ static void wine_child_run(void)
             snprintf(fail_line, sizeof(fail_line), "wine-child: ntdll elf load failed status=%d\n", elf_status);
             stage(fail_line); goto done;
         }
-    } else if (pw_wine_start_load(&wine, &config, &ops)) {
+    } else
+#endif
+    if (pw_wine_start_load(&wine, &config, &ops)) {
         stage("wine-child: ntdll load failed\n"); goto done;
     }
     stage("wine-child: ntdll loaded\n");
@@ -2220,6 +2280,7 @@ static void wine_child_run(void)
             goto done;
         }
     }
+#ifndef PROTON_LOCAL_CHILD
     if (user_space_loader) {
         static PwWineDlOps elf_dl_ops;
         elf_dl_ops.load_start = pw_prx_elf_ps5_load_start;
@@ -2232,6 +2293,7 @@ static void wine_child_run(void)
         stage(dl_configure ? "wine-child: sibling modules load through the user-space loader\n"
                            : "wine-child: ntdll has no dl configure; siblings use the kernel\n");
     }
+#endif
     int (*set_application)(const char *,size_t)=
         (void *)pw_prx_lookup(wine.descriptor,"pw_ps5_set_initial_environment");
     if(!set_application || (boot.application_bytes &&
@@ -2289,6 +2351,7 @@ static void wine_child_run(void)
         }
         stage("wine-child: application direct-memory allocator adopted\n");
     }
+#ifndef PROTON_LOCAL_CHILD
     /* The kernel's own sigaction for ntdll (patch 0945): in a WoW64 process the signal handlers must be entered
      * before anything reads %fs, which then holds the 32-bit TEB; libkernel's sigaction wraps them in code that
      * does (docs/IA32_DESIGN.md, M0). A payload may make the system call; a PRX module may not. */
@@ -2303,6 +2366,7 @@ static void wine_child_run(void)
         sigemptyset(&action.sa_mask);
         if (payload_raw_sigaction(SIGUSR1, &action, NULL)) goto done;
     }
+#endif
     int (*adopt_module)(int (*)(int32_t)) = (void *)pw_prx_lookup(wine.descriptor,"__wine_ps5_set_payload_module");
     /* A user-space module (wine.module < 0) has no kernel handle to wire: its text is JIT memory and its data is
      * anonymous memory this loader owns. The hook still goes to ntdll for the kernel-loaded modules of a title. */

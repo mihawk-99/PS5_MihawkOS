@@ -676,9 +676,21 @@ ProtonGame read_game(const std::string &id, const std::string &directory)
 					game.complaint = "env words are NAME=VALUE: " + setting;
 				} else if (setting.rfind("WINE_PS5_PROCESS_RULES=", 0) == 0) {
 					// An entry an older build wrote keeps its rules and gains this build's (src/pw_steam.h).
+					// Upgrade the exact legacy Steam browser default (" --single-process") to this build's flags.
+					std::string raw = setting.substr(strlen("WINE_PS5_PROCESS_RULES="));
+					const std::string legacy = "steamwebhelper.exe|add| --single-process";
+					const size_t pos = raw.find(legacy);
+					if (pos != std::string::npos && (pos + legacy.size() == raw.size() || raw[pos + legacy.size()] == ';')) {
+						for (unsigned ri = 0; ri < pw_steam_rule_count(); ++ri) {
+							const char *rn = nullptr, *ra = nullptr, *rv = nullptr;
+							if (pw_steam_rule(ri, &rn, &ra, &rv) && !strcmp(rn, "steamwebhelper.exe") && !strcmp(ra, "add")) {
+								raw.replace(pos, legacy.size(), std::string(rn) + "|" + ra + "|" + rv);
+								break;
+							}
+						}
+					}
 					char merged[2048];
-					const size_t length = pw_steam_rules_merge(setting.c_str() + strlen("WINE_PS5_PROCESS_RULES="),
-					                                           merged, sizeof(merged));
+					const size_t length = pw_steam_rules_merge(raw.c_str(), merged, sizeof(merged));
 					game.env.push_back(length ? "WINE_PS5_PROCESS_RULES=" + std::string(merged) : setting);
 				} else {
 					game.env.push_back(setting);
