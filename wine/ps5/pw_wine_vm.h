@@ -30,6 +30,17 @@ int pw_wine_vm_entry(const void *address, PwWineVmEntry *entry);
  * cannot take is asked about once more (what took it is judged), then -1. Without fill, holes count as none. */
 int pw_wine_vm_foreign(const void *address, size_t bytes, const PwWineVmEntry *like, PwWineVmEntry *found,
                        int (*fill)(uintptr_t address, size_t bytes));
+/* Optional failure details for the foreign-mapping guard; does not change its fail-closed result. */
+enum
+{
+    PW_WINE_VM_FAILURE_NONE = 0,
+    PW_WINE_VM_FAILURE_QUERY = 1,
+    PW_WINE_VM_FAILURE_ENTRY = 2,
+    PW_WINE_VM_FAILURE_REFILL = 3,
+};
+int pw_wine_vm_foreign_diagnostic(const void *address, size_t bytes, const PwWineVmEntry *like,
+                                  PwWineVmEntry *found, int (*fill)(uintptr_t address, size_t bytes),
+                                  int *failure_kind, int *kernel_status);
 /* Wine's sorted reservation list remains owned and locked by ntdll. The
  * callback returns its containing/next reservation (0), or end of list (1).
  * In a gap between Windows views, return 0 for free space up to the next
