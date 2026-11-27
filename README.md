@@ -1,292 +1,248 @@
 <div align="center">
 
+<img src="ps5/sce_sys/icon0.png" width="136" alt="MihawkOS Icon" />
+
 # MihawkOS
 
+**Your Windows games on the TV — with a desktop of their own around them.**
+<br />
+*Native PS5 homebrew running 64-bit & 32-bit Windows games on Wine + GE-Proton11-7, RADV Vulkan, built-in persistent Steam Big Picture, and a Windows-style desktop.*
+
 <p>
-<picture><source media="(prefers-color-scheme: dark)" srcset="docs/media/readme/badges/platform-night.svg"><img src="docs/media/readme/badges/platform-day.svg" height="22" alt="Platform: PlayStation 5"></picture>
-<a href="LICENSE"><picture><source media="(prefers-color-scheme: dark)" srcset="docs/media/readme/badges/license-night.svg"><img src="docs/media/readme/badges/license-day.svg" height="22" alt="License: GPL-3.0-or-later"></picture></a>
-<a href="https://github.com/mihawk-99/PS5_MihawkOS/releases"><picture><source media="(prefers-color-scheme: dark)" srcset="docs/media/readme/badges/status-night.svg"><img src="docs/media/readme/badges/status-day.svg" height="22" alt="Status: alpha, experimental"></picture></a>
-<a href="#compatibility-and-known-limits"><picture><source media="(prefers-color-scheme: dark)" srcset="docs/media/readme/badges/tested-on-night.svg"><img src="docs/media/readme/badges/tested-on-day.svg" height="22" alt="Tested on: PS5 Pro firmware 10.01 and PS5 firmware 13.40 and 13.60"></picture></a>
-<a href="#what-runs"><picture><source media="(prefers-color-scheme: dark)" srcset="docs/media/readme/badges/runs-night.svg"><img src="docs/media/readme/badges/runs-day.svg" height="22" alt="Runs: Windows x64 and x86 programs, x86 through WoW64"></picture></a>
-<a href="NOTICE.md"><picture><source media="(prefers-color-scheme: dark)" srcset="docs/media/readme/badges/built-on-night.svg"><img src="docs/media/readme/badges/built-on-day.svg" height="22" alt="Built on: Wine from GE-Proton11-7"></picture></a>
-<a href="#first-launch"><picture><source media="(prefers-color-scheme: dark)" srcset="docs/media/readme/badges/languages-night.svg"><img src="docs/media/readme/badges/languages-day.svg" height="22" alt="Languages: 10"></picture></a>
+  <a href="#compatibility-and-known-limits"><img src="docs/badges/platform.svg" alt="Platform: PS5 | PS5 Pro" /></a>
+  <a href="#architecture-overview"><img src="docs/badges/graphics.svg" alt="Graphics: DXVK • VKD3D • Zink • RADV" /></a>
+  <a href="NOTICE.md"><img src="docs/badges/runtime.svg" alt="Runtime: GE-Proton11-7 Wine" /></a>
+</p>
+<p>
+  <a href="#benchmarks-and-what-runs"><img src="docs/badges/runs.svg" alt="Runs: Win64 • Win32 WoW64" /></a>
+  <a href="#architecture-overview"><img src="docs/badges/page_tables.svg" alt="Page Tables: 65,536 CPU • 120 Hz" /></a>
+  <a href="https://github.com/mihawk-99/PS5_MihawkOS/releases"><img src="docs/badges/title_id.svg" alt="Title ID: PPSA99170" /></a>
+  <a href="LICENSE"><img src="docs/badges/license.svg" alt="License: GPL-3.0" /></a>
 </p>
 
-**Your Windows games on the TV. A desktop of their own around them.**
+<p>
+  <a href="https://github.com/mihawk-99/PS5_MihawkOS/releases">Download</a> •
+  <a href="#highlights">Highlights</a> •
+  <a href="#architecture-overview">Architecture</a> •
+  <a href="#steam-built-in">Steam</a> •
+  <a href="#get-started">Get Started</a> •
+  <a href="#webui">WebUI</a> •
+  <a href="#controls">Controls</a> •
+  <a href="#compatibility-and-known-limits">Limits</a> •
+  <a href="#documentation-hub">Docs</a>
+</p>
 
-64-bit and 32-bit Windows programs · Steam, built in · A browser companion for your phone
+<br />
 
-[Download](https://github.com/mihawk-99/PS5_MihawkOS/releases) · [Get started](#get-started) · [Steam](#steam-built-in) · [What runs](#what-runs) · [Known limits](#compatibility-and-known-limits)
+<picture>
+  <source media="(prefers-color-scheme: dark)" srcset="docs/media/readme/banner-night.svg" />
+  <img src="docs/media/readme/banner-day.svg" width="960" alt="The MihawkOS mark over Frutiger Aero artwork: sky, clouds, soap bubbles and green hills" />
+</picture>
 
 </div>
 
-## MihawkOS is a passion project, not a piracy project.
+---
 
-It exists so you can play the games you own on the console you own.
-
-- **Piracy is not condoned.**
-- **No games, saves, keys, firmware or exploits are included, and they never will be.**
-- **Use only games and programs you have the right to run**: your own copies, bought or installed by you.
-- **Requests for, or links to, games, keys, firmware or exploits are not welcome** in this project's issues or discussions.
+> [!IMPORTANT]
+> **MihawkOS is a passion project, not a piracy project.** It exists so you can play the games you own on the console you own.
+> - **No games, saves, keys, firmware or exploits are included**, and they never will be.
+> - **Use only games and programs you have the right to run** — your own copies, bought or installed by you.
+> - **Requests for, or links to, games, keys, firmware or exploits are not welcome** in this project's issues or discussions.
 
 ---
 
-<p align="center">
-  <picture><source media="(prefers-color-scheme: dark)" srcset="docs/media/readme/banner-night.svg"><img src="docs/media/readme/banner-day.svg" width="960" alt="The MihawkOS mark over the project's own Frutiger Aero artwork: a sky with clouds and soap bubbles above green hills"></picture>
-</p>
-
-<p align="center"><strong>Windows programs on a PlayStation 5, started from a desktop of their own.</strong><br>Pick a game from the launcher, or open the desktop and start it from its shortcut, as on a PC.</p>
-
-MihawkOS is a homebrew title for PS5 consoles that already run homebrew, made by [Mihawk](https://github.com/mihawk-99).
-Underneath is a Wine runtime with Proton's graphics stack. On top is **Mihawk OS**, a Windows-style desktop with a
-taskbar, Start, File Explorer and a web browser of its own.
-
-**Releases** are on the [Releases](https://github.com/mihawk-99/PS5_MihawkOS/releases) page. Each one says what
-changed and which consoles it was tested on.
-
-**New on `fast-steam` (tested on a standard PS5, firmware 13.60; PS5 Pro 10.01 and full commit gate pending):**
-- **Persistent Steam sessions — no close/reopen handovers.** Launching a game from Steam Big Picture no longer closes
-  Steam or restarts MihawkOS through `LoadExec`. Games launch directly from Big Picture, return straight to live Big
-  Picture when closed, and keep **Steam Cloud** (`AC Launch` and `AC Exit` sync) working across repeated launches in a
-  single session.
-- **65,536 CPU / 32,768 GPU page tables via elevated Sony local processes.** 64-bit Steam games and Steam's built-in
-  browser now run in pre-warmed, Lapy-elevated Sony local processes (`/app0/wine-local-child.bin`, `25–30 ms` warm
-  spawn latency) sharing the title's expanded **65,536 CPU** (`256 MiB`) and **32,768 GPU** (`128 MiB`) application
-  page-table pools (`ps5/sce_sys/param.json`, leaving `11,456 MiB` direct memory) and `1 GiB` flexible pool. They use
-  **zero** entries from the console's 8,192-entry system page-table pool, isolate crashes from the title/broker/Steam,
-  and reclaim 100% of page tables and memory on exit. `steam.exe` (32-bit), 32-bit games, and Wine services remain in
-  `elfldr` payload helpers.
-- **Faster Steam startup and I/O.** Reduced Wine server, xattr, and file I/O overhead during Steam startup (patch
-  `2485`), shader-cache namespace reuse, expanded code-cache budgeting for Steam's browser, and clean held-helper
-  reaping before a game launches (patch `2486`).
-- **Proven on a standard PS5 (firmware 13.60):**
-  - A 2D action game launched twice in one persistent Steam session: `27–30 ms` warm spawns, **122 FPS**, direct return
-    to live Big Picture without closing Steam, Steam Cloud `AC Launch` and `AC Exit` sync complete on both cycles,
-    `63,644 / 65,536` CPU page tables free and `3,971 / 8,192` system page tables free.
-  - A heavy 3D game (`4.5 GiB` direct memory): `30 ms` warm spawn, `7,636` direct-scanout flips at **119.9 FPS**
-    (`p99 8.75 ms`), `62,395 / 65,536` CPU page tables free, `32,690 / 32,768` GPU page tables free, `3,721 / 8,192`
-    system page tables free.
-  - A 3D Direct3D 12 demo (`~2.0 GiB` VRAM + `1.1 GiB` host direct memory): `4,802` direct frames at **117.7 FPS**,
-    `62,543 / 65,536` CPU page tables free, `3,819 / 8,192` system page tables free.
-
-**Coming in Alpha 8** (not yet run on a console):
-- **A control overlay over the game**, in the same see-through glass as the keyboard: press **L3 + R3** in a game.
-  It has Exit game (press Cross twice), Statistics (FPS, frame time, CPU, GPU, memory and both page-table pools; it
-  stays on screen after the overlay closes), the on-screen keyboard, and Mouse off/on (as if the mouse were unplugged,
-  for games whose pointer sticks in the middle), and Controller (Xbox 360, Xbox One or DualSense, switched while the game
-  runs and saved for it; a game that picks its controller only at start shows the new buttons after a restart). L3 + R3 is
-  now on by default: if the keyboard's gesture was off, it is
-  L3 + R3; a gesture you chose stays. Change it in Settings, Controls.
-
-**New in 7.1:**
-- **MihawkOS's own on-screen keyboard**, at the bottom of the screen with the game visible above it: see-through
-  frosted glass with rising bubbles, and a key press on screen in 2 to 5 ms. It works on firmware 13.60, where the PS5's
-  system keyboard cannot be loaded by homebrew.
-- **Games inside MihawkOS no longer freeze until the mouse moves:** a wake-up meant for input that stayed set made the
-  game's main loop spin. Our test that reproduced it now passes in every release's checks.
-- **The update line says what it's doing** (checking, downloading with MB and percent, checking the signature,
-  preparing, ready) and why it failed when it does. MihawkOS checks each time you open it from the home screen, at most
-  once an hour.
-- **Updating:** from Alpha 7, update by replacing the PPSA99170 folder; from 7.1 on, MihawkOS updates itself.
-
-7.1 was tested on a standard PS5 (firmware 13.60).
-
-**New in Alpha 7:**
-- **Games run inside MihawkOS.** A 64-bit game from Steam's library or your Games folder now runs in MihawkOS's own
-  process instead of a helper, with MihawkOS's larger page-table pool (16,384, against the helpers' 8,192). 32-bit
-  games, a second game while one runs, and a game's launcher, installers and crash reporters still run in helpers.
-  MihawkOS picks the game by what it is: a program that draws with Direct3D, Vulkan or OpenGL, not a launcher,
-  installer or crash reporter. A game built on Chromium (Electron or NW.js) runs as one process. Press TRIANGLE on a
-  game to choose, for that game, to run it the old way.
-- **One folder to install, and it updates itself.** The Windows runtime ships inside `PPSA99170`: copy the folder, open
-  MihawkOS, and it installs the runtime by itself. To update, replace the folder and open MihawkOS: it writes only what
-  changed, and `/data/ps5proton` (your prefix, games, Steam and settings) is left alone. A signed update check asks
-  GitHub for new releases: it checks when you open MihawkOS, at most once an hour.
-- **A new main menu.** A tile grid on a sky, Files to start any program on C:, Options for each game, and ten
-  languages. An **on-screen keyboard** (off by default; Settings, Controls) types into games.
-- **Frames reach the screen sooner.** Each finished frame is copied to the TV in under 1 ms instead of about 7.4 ms.
-- **Direct3D 12:** feature level 12_1; games see the real GPU's name and model; up to 32,768 reserved graphics memory
-  pieces; games that place graphics memory over their own memory (existing heaps) can.
-- **Behaves more like Windows:** a game's message boxes show on screen and CROSS answers them; a program can read
-  another program's command line and its parent's details; a game missing a DLL ends with that file's name instead of
-  leaving MihawkOS stuck; a controller that drops and comes back is found again.
-- **Games:** Undertale, Deltarune and other GameMaker games start; Deltarune's sound stays clean across chapters; The
-  Witcher 3's DirectX 12 version plays when started from Files or the library; started from the Mihawk OS desktop it
-  still closes itself at once (it inspects the program that started it), a known limit.
-- **Steam:** big downloads no longer close it (over 10,000 files open at once), and it warns before starting when the
-  console is too low on memory.
-- **A game that stops drawing for 3 minutes inside MihawkOS is ended**, and MihawkOS returns to its launcher.
-- **The guided setup can no longer be skipped.** A new page, **Before you play**, says which games MihawkOS cannot run
-  (DRM such as Denuvo, anti-cheat); hold ✕ for 10 seconds to go on.
-- **Payloads:** the checklist can be passed by holding TRIANGLE for 5 seconds; NanoDNS is optional; ShadowMountPlus is
-  checked by presence only; the payload memory notice shows only at 200 MiB or more.
-- **Logs keep their last minutes**, so a crash report shows what happened just before.
-- **Looks:** a new Frutiger Aero title icon, and the Bubble City wallpaper by Skeuoss.
-
-Alpha 7 itself was tested on the PS5 Pro (firmware 10.01); earlier features were also shown on a standard PS5.
-
-> [!WARNING]
-> **Needs the official payload set, and nothing more.** At every start MihawkOS checks for Kstuff Lite 1.11 Beta or
-> later, [ShadowMountPlus](https://github.com/drakmor/ShadowMountPlus) beta11 or newer, elfldr and websrv
-> (NanoDNS, klog, ftpsrv and pldmgr may also run). It stays on its payload check while one is missing or too old, or while any
-> other payload runs, and says what to load or close. It sees that kstuff and ShadowMountPlus run, not their versions:
-> load Kstuff Lite 1.11 Beta or later and ShadowMountPlus beta11 or newer yourself. MihawkOS does not ship or change any of them.
-
-<a id="what-it-is"></a>
-
-## <picture><source media="(prefers-color-scheme: dark)" srcset="docs/media/readme/divider-night.svg"><img src="docs/media/readme/divider-day.svg" width="960" alt=""></picture><br><picture><source media="(prefers-color-scheme: dark)" srcset="docs/media/readme/orb-desktop-night.svg"><img src="docs/media/readme/orb-desktop-day.svg" width="34" height="34" alt=""></picture> Two things that ship together
-
-- **A desktop.** Mihawk OS is a Windows-style desktop with a taskbar, Start with search and pins, File Explorer, a
-  desktop of shortcuts and MihawkBrowser. A shortcut appears for each game you copy in. Its wallpaper, and the PS5 home-screen
-  background, is Bubble City by the artist Skeuoss, used with their permission; its music and its mark are the project's own.
-- **A runtime.** Wine with Proton's components: DXVK and VKD3D-Proton for Direct3D, Mesa's Zink for OpenGL. It is pinned
-  from GE-Proton and patched so it runs on the console. Windows programs run in isolated OS processes: `elfldr` payload
-  helpers for 32-bit programs, Wine services, and direct-launched helpers, and pre-warmed elevated Sony local processes
-  (`/app0/wine-local-child.bin`) for 64-bit Steam games and Steam's browser so they share the title's 65,536-entry
-  application page-table pool without consuming the 8,192-entry system pool. MihawkOS itself owns the screen, the
-  controller, the sound, the shared wineserver, and the GPU broker that every program draws through.
-
-A full-screen game takes the screen directly (**Game Mode**), and the desktop comes back when it ends.
-
 <a id="at-a-glance"></a>
 
-## <picture><source media="(prefers-color-scheme: dark)" srcset="docs/media/readme/orb-this-pc-night.svg"><img src="docs/media/readme/orb-this-pc-day.svg" width="34" height="34" alt=""></picture> At a glance
+## <picture><source media="(prefers-color-scheme: dark)" srcset="docs/media/readme/orb-this-pc-night.svg"><img src="docs/media/readme/orb-this-pc-day.svg" width="30" height="30" alt=""></picture> At a Glance
 
-| Made for your library |
-| --- |
-| <img src="themes/windows11/icons/original/games.svg" width="36" height="36" alt=""> **Windows games, 64-bit and 32-bit.** Direct3D 11 and 12, OpenGL and video, with the DualSense as an Xbox controller. |
-| <img src="themes/windows11/icons/original/app-generic.svg" width="36" height="36" alt=""> **Steam, built in.** Download, install and sign in once with your phone. After that, Big Picture opens from the launcher. |
-| <img src="themes/windows11/icons/original/app-browser.svg" width="36" height="36" alt=""> **A browser companion.** Add games, find their art, make home-screen tiles, back up saves and change settings from a phone or computer. |
-| <img src="themes/windows11/icons/original/downloads.svg" width="36" height="36" alt=""> **Guided from the first launch.** One folder to copy: a setup in ten languages installs the runtime from it. |
+MihawkOS ships two things together — a **Wine + Proton runtime** engineered for PS5 hardware, and **Mihawk OS**, a Windows-style desktop with a taskbar, Start menu, File Explorer and built-in web browser. Pick a game from the controller launcher, launch directly from **Steam Big Picture**, or open the desktop like a PC.
 
-**Explore:** [Get started](#get-started) · [Steam](#steam-built-in) · [WebUI](#webui) · [Add games](#add-your-games) · [Controls](#controls) · [What runs](#what-runs) · [Your files](#your-files) · [Known limits](#compatibility-and-known-limits) · [Build](#build-from-source)
+<table>
+  <tr>
+    <td width="50%">
+      <img src="themes/windows11/icons/original/games.svg" width="32" height="32" align="left" alt="" />
+      <strong>64-bit &amp; 32-bit Windows Games</strong><br />
+      Direct3D 9/10/11 (DXVK), Direct3D 12 (VKD3D-Proton), OpenGL 4.6 (Mesa Zink), and Media Foundation video on PS5 RADV — with the DualSense as Xbox 360, Xbox One, or DualSense.
+    </td>
+    <td width="50%">
+      <img src="themes/windows11/icons/original/app-generic.svg" width="32" height="32" align="left" alt="" />
+      <strong>Persistent Steam Big Picture</strong><br />
+      Guided install and one-time phone QR sign-in. Games launch straight from Big Picture without closing Steam, return directly to live Big Picture on exit, and keep Steam Cloud working.
+    </td>
+  </tr>
+  <tr>
+    <td width="50%">
+      <img src="themes/windows11/icons/original/desktop.svg" width="32" height="32" align="left" alt="" />
+      <strong>Mihawk OS Desktop &amp; Game Mode</strong><br />
+      Taskbar, Start search &amp; pins, File Explorer, shortcuts, MihawkBrowser, and a frosted-glass on-screen keyboard. Full-screen games take direct scanout and return to the desktop when done.
+    </td>
+    <td width="50%">
+      <img src="themes/windows11/icons/original/app-browser.svg" width="32" height="32" align="left" alt="" />
+      <strong>Phone &amp; PC WebUI Companion</strong><br />
+      Scan a QR code to upload games, fetch cover art, create PS5 home-screen tiles, back up or restore saves as ZIPs, tweak per-game settings, and export masked bug reports.
+    </td>
+  </tr>
+</table>
 
-<a id="get-started"></a>
+---
 
-## <picture><source media="(prefers-color-scheme: dark)" srcset="docs/media/readme/orb-downloads-night.svg"><img src="docs/media/readme/orb-downloads-day.svg" width="34" height="34" alt=""></picture> Get started
+<a id="highlights"></a>
 
-1. **Set up the console's homebrew tools.** Load the official payload set: **Kstuff Lite 1.11 Beta** or later,
-   **elfldr**, **websrv** and **ShadowMountPlus beta11** or newer (NanoDNS is optional), and no other payload. You set these up yourself, with tools from their own authors; see
-   [Every time you play](#every-time-you-play) for the tested set. This project does not provide, link to or explain
-   a jailbreak.
-2. **Install the title.** Unzip the release's one download and copy its `PPSA99170` folder to
-   `/data/homebrew/PPSA99170/`, over FTP from a phone or computer, or with a file manager on the console. The folder is
-   about 0.6 GB: the Windows runtime is inside it. Leave about 4 GB free on the console for the runtime and your first
-   Windows drive. ShadowMountPlus needs about 45 seconds to register a new title. A refusal in that window is not a
-   crash.
-3. **Open MihawkOS from the home screen.** The guided setup walks you through the rest:
-   - choose your language;
-   - let it install the Windows runtime from its own folder, about a minute;
-   - let it build your Windows drive, about a minute;
-   - then choose **Install Steam**, which guides you through Steam, or **Go to the game library**, where Mihawk OS
-     is a press away.
-4. **Add your games.** Scan the WebUI's QR code with your phone and follow **Add a game**, or set up
-   [Steam](#steam-built-in) from the launcher.
+## <picture><source media="(prefers-color-scheme: dark)" srcset="docs/media/readme/orb-games-night.svg"><img src="docs/media/readme/orb-games-day.svg" width="30" height="30" alt=""></picture> What's New on `fast-steam`
 
-No games, keys or firmware are included. Use your own copies of the games and programs you run.
+*Tested on a standard PS5 (firmware 13.60). PS5 Pro (10.01) verification and the full console commit gate remain pending on this branch.*
 
-### Scan to connect
+- **Persistent Steam sessions — zero close/reopen handovers.** Launching or closing a game from Steam Big Picture no longer shuts Steam down or restarts MihawkOS via `LoadExec`. Games start straight from Big Picture, return immediately to live Big Picture on exit, and complete **Steam Cloud** `AC Launch` and `AC Exit` syncs across repeated launches.
+- **65,536 CPU / 32,768 GPU page tables via elevated Sony local processes.** 64-bit Steam games and Steam's browser now run in pre-warmed, Lapy-elevated Sony local processes (`/app0/wine-local-child.bin`, **25–30 ms** warm spawn latency) sharing the title's expanded **65,536 CPU** (`256 MiB`) and **32,768 GPU** (`128 MiB`) application page-table pools (`ps5/sce_sys/param.json`, leaving **11,456 MiB** direct memory) and `1 GiB` flexible pool. They consume **0** entries from the console's 8,192-entry system page-table pool, isolate crashes from the title/broker/Steam, and reclaim **100%** of page tables and memory on exit.
+- **Faster Steam startup & I/O.** Reduced Wine server, xattr, and file I/O overhead on Steam hot paths (patch `2485`), shader-cache namespace reuse, adaptive CEF code-cache budgeting, and clean held-helper reaping before a game starts (patch `2486`).
 
-| Where | What the QR code opens |
+<a id="benchmarks-and-what-runs"></a>
+
+### Verified Base PS5 (13.60) Benchmarks
+
+Every row below comes directly from committed console evidence in `evidence/` on a **standard PS5 (firmware 13.60)** at 120 Hz. These are measured runs, not a universal compatibility list.
+
+| Workload | Warm Spawn | Measured Frame Rate &amp; Pacing | CPU PT Free (of 65,536) | System PT Free (of 8,192) | Memory &amp; Lifecycle |
+| --- | :---: | --- | :---: | :---: | --- |
+| **Elevated local-process probe** ([record](evidence/sony-local-elev-pt-probe-02.json)) | – | `jit80_value=42`, `prot=5` (`euid=0`) | `65,513 → 65,396 → 65,513` | `0` consumed | **100%** PT &amp; `1,031,798,784 B` FMEM reclaimed on close |
+| **Heavy 3D 64-bit game via Steam** ([record](evidence/p3-local-village-2026-11-26-02.json)) | `30 ms` | **119.9 FPS** (`7,636` direct flips, `p99 8.75 ms`, `0` gaps ≥ 100 ms) | `62,395` (`95.2%` free; GPU `32,690/32,768`) | `3,721` | `4.5 GiB` direct memory mapped; clean exit to `11,178 MiB` free |
+| **3D Direct3D 12 demo via Steam** ([record](evidence/p3-local-re3demo-2026-11-26-01.json)) | `26 ms` | **117.7 FPS** (`4,802` direct frames, verified 1080p capture) | `62,543` (`95.4%` free; GPU `32,277/32,768`) | `3,819` | `1.99 GiB` VRAM + `1.14 GiB` host DMEM; clean exit to `11,265 MiB` free |
+| **2D 64-bit game launched twice in one Steam session** ([record](evidence/p3-e2e-spelunky2-twice-2026-11-26-01.json)) | `27 ms` / `30 ms` | **122.0 FPS** (#1) &amp; **122.7 FPS** (#2), live Big Picture between runs | `63,661 → 64,574 → 63,644 → 65,002` | `3,929 → 3,971` | Steam Cloud `AC Launch` &amp; `AC Exit` complete on both cycles; **0** `LoadExec` handovers |
+
+### Platform Capabilities Proven on Console
+
+| Area | Verified on PS5 Pro (10.01) &amp; Standard PS5 (13.40 / 13.60) |
 | --- | --- |
-| **The launcher's library**, under the side panel | The WebUI, at `http://<PS5 address>:6767` |
-| **Settings → Web UI** in the launcher | The same, larger |
+| **Windows execution** | 64-bit PE64 and native 32-bit PE32 via WoW64; up to 8 concurrent processes; **1,337 / 1,708** Wine conformance test files match host Wine ([docs/CONFORMANCE.md](docs/CONFORMANCE.md)) |
+| **Graphics** | Direct3D 9/10/11 (DXVK), Direct3D 12 feature level `12_1` (VKD3D-Proton, up to 32,768 reserved heaps), OpenGL 4.6 (Mesa Zink), and Media Foundation video; sub-1 ms direct scanout in Game Mode |
+| **Steam** | Guided download, install, phone QR sign-in, persistent Big Picture across repeated 64-bit game launches with Steam Cloud sync (standard PS5 13.60); install &amp; sign-in also verified inside PS5 Pro memory limits |
+| **Input &amp; audio** | DualSense as Xbox 360, Xbox One, or DualSense (runtime switchable via `L3 + R3` overlay), touchpad trackpad, USB keyboard &amp; mouse, and 48 kHz stereo audio through the title mixer |
+| **Desktop &amp; network** | Taskbar, Start search/pins, File Explorer, desktop shortcuts, MihawkBrowser (CEF 150), frosted-glass OSK, real DNS (`c-ares`), HTTP, and strict GnuTLS HTTPS |
 
-<a id="first-launch"></a>
+<details>
+<summary><strong>Earlier release highlights (Alpha 3 – Alpha 8)</strong></summary>
 
-## <picture><source media="(prefers-color-scheme: dark)" srcset="docs/media/readme/orb-this-pc-night.svg"><img src="docs/media/readme/orb-this-pc-day.svg" width="34" height="34" alt=""></picture> Your first launch
+- **Alpha 8 (in progress):** In-game frosted-glass control overlay (**L3 + R3**) with Exit game, live Statistics HUD (FPS, frame time, CPU, GPU, memory, and both page-table pools), on-screen keyboard, Mouse off/on toggle, and live Controller switching (Xbox 360 / Xbox One / DualSense).
+- **Alpha 7.1 (tested on standard PS5 13.60):** Frosted-glass on-screen keyboard (`2–5 ms` key response, works on 13.60 without system keyboard); fixed input wake-up freeze in games; live progress &amp; signature-verified self-updater.
+- **Alpha 7 (tested on PS5 Pro 10.01):** One-folder self-installing runtime inside `PPSA99170`; tile-grid main menu in 10 languages with Files browser and per-game Options; sub-1 ms frame presentation; Direct3D 12 feature level `12_1` with existing heaps; real Win32 message boxes, parent/command-line queries, and missing-DLL diagnostics; 10,000+ open files for large Steam downloads; Bubble City wallpaper by Skeuoss.
+- **Alpha 4 – Alpha 6:** Adaptive per-helper code cache budget (`64 MiB` start, grows on thrash); firmware-aware memory guard; self-contained PRX loader fixing "errno 92" on firmwares 11.00–13.x; Wine conformance fixes (attributes, junctions, directory watches, 4 KiB page protection, live crash dumps, privileged instruction emulation `SGDT`/`SIDT`/`SLDT`/`SMSW`/`STR`, CJK fonts, OpenGL &amp; Vulkan present fixes).
 
-The first time you open MihawkOS, it shows a short guided setup, like a new console's.
+</details>
 
-| Step | What it does |
-| --- | --- |
-| **Welcome** | About ten minutes from here to your desktop. The setup cannot be skipped. |
-| **Language** | English (US), Français, Español, Deutsch, Italiano, Русский, 简体中文, 日本語, Português (Brasil) and Polski. New Windows drives take this language too, so games default to it. |
-| **Installing** | Starts by itself: the runtime is copied from the MihawkOS folder and every file is checked. The size, the speed and the time left. A folder copied without its pieces, or a full disk, is said plainly, with Try again. |
-| **Preparing Mihawk OS** | Builds your Windows drive, about a minute, with each stage ticked off as it finishes. |
-| **Before you play** | What MihawkOS is, and the games it cannot run: games with DRM such as Denuvo, and games with anti-cheat or kernel-level protection such as Easy Anti-Cheat or BattlEye. Hold ✕ for 10 seconds to continue. |
-| **Done** | **Install Steam** (the Steam guide) or **Go to the game library**. Steam stays on the library's Steam row for later. |
+---
 
-Use the D-pad and Cross, or the touchpad as a pointer. Any problem is said in plain words with a way out: a drive the
-PS5 cannot read, an incomplete folder, too little space. Open the setup again at any time from **Settings → Guided
-setup**.
+<a id="architecture-overview"></a>
+
+## <picture><source media="(prefers-color-scheme: dark)" srcset="docs/media/readme/orb-desktop-night.svg"><img src="docs/media/readme/orb-desktop-day.svg" width="30" height="30" alt=""></picture> Architecture Overview
+
+MihawkOS isolates Windows programs in separate OS processes while the owning title (`eboot.bin`) coordinates the shared wineserver, RADV GPU broker, display scanout, DualSense input, and audio mixer. In Steam sessions, 64-bit games and Steam's browser execute in pre-warmed, Lapy-elevated Sony local processes (`/app0/wine-local-child.bin`) so they inherit the title's expanded **65,536 CPU / 32,768 GPU** application page-table pools without touching the console's 8,192-entry system pool:
+
+```mermaid
+flowchart TD
+    subgraph Title["Owning Title: eboot.bin (PPSA99170 • App Container)"]
+        WS["Shared In-Process Wineserver + ntsync"]
+        GPU["GPU Broker (RADV Vulkan + Direct Scanout / Compositor)"]
+        IO["DualSense HID/XInput • 48 kHz Audio Mixer • DNS Resolver"]
+    end
+
+    subgraph Local["Elevated Sony Local Processes: /app0/wine-local-child.bin (Warm Pool: 25–30 ms)"]
+        Game64["64-bit Steam Games (DXVK / VKD3D-Proton / Zink)"]
+        Web64["steamwebhelper.exe (Big Picture UI)"]
+    end
+
+    subgraph Payloads["elfldr Payload Helpers (8,192 System PT Pool)"]
+        Steam32["steam.exe (32-bit WoW64, Persistent Across Games)"]
+        Win32["32-bit Games (WoW64) • Wine Services • Memory Helper"]
+    end
+
+    subgraph Mem["PS5 Unified Memory Pools (ps5/sce_sys/param.json)"]
+        AppPT["65,536 CPU PT (256 MiB) • 32,768 GPU PT (128 MiB) • 1 GiB App FMEM"]
+        DMEM["11,456 MiB Shared Application Direct Memory"]
+    end
+
+    Game64 & Web64 <-->|SOCK_SEQPACKET + Broker| Title
+    Steam32 & Win32 <-->|SOCK_SEQPACKET + Broker| Title
+    Title & Local --- AppPT
+    Title & Local & Payloads --- DMEM
+```
+
+- **Direct-launched 64-bit games** outside Steam continue to support MihawkOS's in-title execution route (`docs/TITLE_CLIENT.md`) or `elfldr` payload helpers (`TRIANGLE` on any tile to toggle).
+- **Zero-leak cleanup:** When a local-process game exits or crashes, `sceSystemServiceKillLocalProcess` returns 100% of its page tables and flexible memory immediately without closing Steam or restarting MihawkOS.
+
+---
 
 <a id="steam-built-in"></a>
 
-## <picture><source media="(prefers-color-scheme: dark)" srcset="docs/media/readme/divider-night.svg"><img src="docs/media/readme/divider-day.svg" width="960" alt=""></picture><br><picture><source media="(prefers-color-scheme: dark)" srcset="docs/media/readme/orb-app-generic-night.svg"><img src="docs/media/readme/orb-app-generic-day.svg" width="34" height="34" alt=""></picture> Steam, built in
+## <picture><source media="(prefers-color-scheme: dark)" srcset="docs/media/readme/orb-app-generic-night.svg"><img src="docs/media/readme/orb-app-generic-day.svg" width="30" height="30" alt=""></picture> Steam, Built In
 
-Choose **Steam** in the launcher's library. The first time, a guided setup in the same style says what will happen and
-keeps saying it until you are signed in:
+Select **Steam** from the launcher's library. On first launch, a guided setup in all ten languages walks you through everything automatically (requires internet and an accurate console clock; MihawkOS is not affiliated with Valve and ships nothing of Valve's):
 
-1. **Download.** Steam's installer comes from Valve's servers, checked before it runs. Nothing of Valve's is in this
-   repository or a release.
-2. **Install.** About half a minute when MihawkOS is already set up; a first install also builds your Windows drive.
-3. **First start.** Steam updates itself, which takes about five minutes. A still screen is normal; the guide shows the
-   download and the time.
-4. **Sign in once.** Open the Steam app on your phone, tap the shield and scan the code. MihawkOS closes Steam as soon
-   as your sign-in is saved.
-5. **Big Picture.** From then on, Steam opens straight into Big Picture, made for the controller.
+| Step | What Happens |
+| :---: | --- |
+| **1. Download** | Fetches Valve's official `SteamSetup.exe` over verified TLS and validates its PE signature before running. |
+| **2. Install** | Runs the silent installer (~30 seconds once your Windows drive is prepared). |
+| **3. First Update** | Steam downloads and applies its own packages (~5 minutes; the guide shows live MB progress). |
+| **4. Sign In Once** | Open the Steam mobile app, tap the shield icon, and scan the QR code. MihawkOS saves your session automatically. |
+| **5. Big Picture** | Every future launch opens straight into **Steam Big Picture** with persistent sessions, 65,536-PT game launches, live return on exit, and **Steam Cloud** sync. |
 
-Big Picture runs cleanly and stays alive across games:
-- **No close-Steam / reopen-Steam handovers.** Starting a game from Big Picture keeps `steam.exe` running instead of
-  closing Steam and restarting MihawkOS. Before a library game starts, the held browser helper is reaped cleanly so its
-  memory and GPU slot are freed (patch `2486`); when the game ends, Big Picture returns live right away and **Steam
-  Cloud** completes its `AC Exit` upload and next `AC Launch` sync cleanly.
-- **65,536-entry page-table headroom for heavy 64-bit games.** In a Steam session, both `steamwebhelper.exe` and 64-bit
-  games run in pre-warmed, Lapy-elevated Sony local processes (`/app0/wine-local-child.bin`, `25–30 ms` warm spawn)
-  drawing from the title's **65,536 CPU / 32,768 GPU** page-table pools (`param.json`) rather than the console's
-  8,192-entry system pool. Heavy 64-bit games allocating 4–6 GiB of direct memory keep more than 62,000 CPU page tables
-  and 3,700 system page tables free, and every page table is returned by the OS when the game exits.
-- **Faster startup and smoother Big Picture.** Steam's built-in browser runs as one process with an adaptive code budget
-  that grows on thrash, alongside fast Steam file/xattr/server paths (patch `2485`) and shader-cache namespace reuse. On
-  a standard PS5 (firmware 13.60) at 120 Hz, Big Picture's slow frames (>20 ms) fell from 79 to 38 in the first minute,
-  from 162 to 66 while scrolling, and from 74 to 60 in menus; on `fast-steam`, three tested 64-bit Steam games reached
-  117.7–122.7 FPS with 26–30 ms warm local-process spawns ([docs/STEAM.md](docs/STEAM.md)).
+- **Controller button prompts:** Choose **Xbox 360** (default), **Xbox One**, or **DualSense** in **Settings → Controller** (or live in-game via `L3 + R3`) so Steam and games show matching button glyphs.
+- **Smooth Big Picture UI:** Steam's browser runs with an adaptive code budget and fast file/xattr/server paths (patches `2485` &amp; `2486`), cutting slow frames (>20 ms) during scrolling from `162` to `66` on standard PS5 at 120 Hz while leaving >62,000 CPU page tables free for games ([docs/STEAM.md](docs/STEAM.md)).
 
-**Settings → Controller** chooses the controller programs see: **Xbox 360** (the default), **Xbox One** or
-**DualSense**. Steam then shows that controller's button glyphs.
+---
 
-The guide's words are in all ten languages. It needs an internet connection and the console's clock set right.
-MihawkOS is not affiliated with Valve.
+<a id="get-started"></a>
+
+## <picture><source media="(prefers-color-scheme: dark)" srcset="docs/media/readme/orb-downloads-night.svg"><img src="docs/media/readme/orb-downloads-day.svg" width="30" height="30" alt=""></picture> Get Started
+
+> [!WARNING]
+> **Official payload set required — and nothing else.** At every launch MihawkOS verifies **Kstuff Lite 1.11 Beta+**, **elfldr**, **websrv**, and **ShadowMountPlus beta11+** (NanoDNS, klogsrv, ftpsrv, and pldmgr are optional). Extra payloads such as etaHEN hold memory games need and keep MihawkOS on its payload check. **Never load OnionHEN.** MihawkOS starts its `/data` access service (Lapy) itself — never launch a second copy.
+
+### Installation &amp; First Launch
+
+1. **Cold-boot and load payloads.** Never use Rest Mode (it unloads payloads; only a full restart restores them). Load **Kstuff Lite 1.11 Beta+**, **elfldr**, **websrv**, and **ShadowMountPlus beta11+**.
+2. **Copy `PPSA99170`.** Extract the release archive and copy `PPSA99170/` (~0.6 GB, runtime bundled inside) to `/data/homebrew/PPSA99170/` via FTP or a console file manager. Leave ~4 GB free for the unpacked runtime and your first Windows drive. Wait ~45 seconds for ShadowMountPlus to register the tile.
+3. **Complete Guided Setup.** Open **MihawkOS** from the PS5 home screen and follow the built-in setup (choose from 10 languages: English, Français, Español, Deutsch, Italiano, Русский, 简体中文, 日本語, Português (Brasil), Polski; runtime install ~1 min; Windows drive creation ~1 min; then jump straight to **Install Steam** or **Game Library**).
+4. **Add games.** Launch **Steam** directly, or scan the launcher's QR code to open the **WebUI** at `http://<PS5 address>:6767`.
+
+<details>
+<summary><strong>Tested payload footprint (standard PS5, 88 MiB total)</strong></summary>
+
+| Payload | Required | Minimum | Measured RSS | Port | Purpose |
+| --- | :---: | --- | :---: | :---: | --- |
+| [Kstuff Lite](https://github.com/EchoStretch/kstuff-lite) | Yes | 1.11 Beta | `7.7 MiB` | – | Kernel homebrew support |
+| [elfldr](https://github.com/ps5-payload-dev/elfldr) | Yes | – | `22.8 MiB` | via websrv | Spawning `/data` daemon &amp; payload helpers |
+| [websrv](https://github.com/ps5-payload-dev/websrv) | Yes | – | `v0.34, 8.2 MiB` | `8080` | Payload transport |
+| [ShadowMountPlus](https://github.com/drakmor/ShadowMountPlus) | Yes | beta11 | `25.2 MiB` | `10101` | Home-screen launching &amp; WebUI game tiles |
+| NanoDNS | Optional | – | `4.1 MiB` | – | Optional DNS blocker (appears as "payload" on 13.60) |
+| [ftpsrv](https://github.com/ps5-payload-dev/ftpsrv) | Optional | – | `4.1 MiB` | `2121` | Copying titles, runtime, or games over LAN |
+| [klogsrv](https://github.com/ps5-payload-dev/klogsrv) | Optional | – | `3.9 MiB` | `3232` | PC dev tools &amp; kernel logs |
+| pldmgr | Optional | – | `12.3 MiB` | – | Payload loader manager |
+
+</details>
+
+---
 
 <a id="webui"></a>
 
-## <picture><source media="(prefers-color-scheme: dark)" srcset="docs/media/readme/divider-night.svg"><img src="docs/media/readme/divider-day.svg" width="960" alt=""></picture><br><picture><source media="(prefers-color-scheme: dark)" srcset="docs/media/readme/orb-app-browser-night.svg"><img src="docs/media/readme/orb-app-browser-day.svg" width="34" height="34" alt=""></picture> Your browser companion
+## <picture><source media="(prefers-color-scheme: dark)" srcset="docs/media/readme/orb-app-browser-night.svg"><img src="docs/media/readme/orb-app-browser-day.svg" width="30" height="30" alt=""></picture> WebUI Companion &amp; Adding Games
 
-While the launcher is on screen, MihawkOS serves a page on port **6767** for a phone or computer on the same network.
-Scan the QR code, or type `http://<PS5 address>:6767`. Every page guides one task in plain words; the technical fields
-stay under a game's **Advanced settings**. The flag in the header chooses its language.
+While the launcher is open, MihawkOS serves a mobile- and desktop-friendly WebUI on port **`6767`** (scan the QR code under the library side panel or in **Settings → Web UI**). It automatically stops when a game or desktop launches so it uses zero RAM while playing.
 
-| Page | What you can do |
+> **Network note:** The WebUI requires a per-session CSRF token and refuses cross-origin requests, but has no login. Use it only on a trusted LAN and never forward port `6767` to the internet.
+
+| WebUI Page | What You Can Do |
 | --- | --- |
-| <img src="themes/windows11/icons/original/games.svg" width="24" height="24" alt=""> **My games** | See every game with its picture and whether it is ready to play. Open one to change its name, its program, its picture, and how it plays: Game Mode and controller, for that game alone. |
-| <img src="themes/windows11/icons/original/folder-open.svg" width="24" height="24" alt=""> **Add a game** | Three steps: choose the game's folder on your computer, copy it to the console (a stopped copy carries on), and set it up with its program suggested. |
-| <img src="themes/windows11/icons/original/pictures.svg" width="24" height="24" alt=""> **Picture and details** | Look the game up in the Steam store by name and keep its art and details, or use your own JPEG or PNG. |
-| <img src="themes/windows11/icons/original/desktop.svg" width="24" height="24" alt=""> **Home screen** | Make a tile for the PS5 home screen that opens MihawkOS straight into one game, with its icon drawn from the game's art. The tile appears a few seconds after MihawkOS closes. |
-| <img src="themes/windows11/icons/original/documents.svg" width="24" height="24" alt=""> **Saves** | Download a game's save folder as a ZIP, and put one back. |
-| <img src="themes/windows11/icons/original/music.svg" width="24" height="24" alt=""> **Settings** | Controller, Game Mode, 120 Hz output, theme and music, mouse buttons and detailed logs, the same as the launcher's. |
-| <img src="themes/windows11/icons/original/document.svg" width="24" height="24" alt=""> **Help** | What to do when something goes wrong, and a bug report ZIP with every address masked. |
+| **My games** | View every game, edit its executable/arguments/art, and configure per-game Game Mode &amp; controller type |
+| **Add a game** | Upload a game folder from your phone or PC (resumes interrupted copies) with automatic `.exe` detection |
+| **Picture &amp; details** | Fetch store cover art and metadata by name, or upload a custom PNG/JPEG |
+| **Home screen** | Generate a native PS5 home-screen tile (`PPSA99300–PPSA99399`) that boots straight into one game |
+| **Saves** | Export any game's save folder as a ZIP backup and restore it anytime |
+| **Settings &amp; Help** | Mirror launcher settings and download a masked bug-report ZIP |
 
-The page stops when a game or the desktop starts, so it holds no memory while you play. A banner says so, and how to
-come back.
+**Manual install via FTP:** Copy any game folder into `/data/ps5proton/prefixes/mihawk/drive_c/Games/<Name>` (`C:\Games\<Name>`). Folders with a single 64-bit or 32-bit `.exe` at the top automatically get a Mihawk OS desktop shortcut on the next launch. For multi-exe folders or custom arguments, create `/data/ps5proton/games/<id>/game.json` (or let the WebUI generate it).
 
-> The WebUI is a local HTTP service without a login. It refuses requests from other sites and needs a token for every
-> change, but use it on a trusted network and do not forward port **6767** to the internet.
-
-<a id="add-your-games"></a>
-
-## <picture><source media="(prefers-color-scheme: dark)" srcset="docs/media/readme/orb-games-night.svg"><img src="docs/media/readme/orb-games-day.svg" width="34" height="34" alt=""></picture> Add your games
-
-**The easiest way: the WebUI.** **Add a game** copies the folder and sets it up for you.
-
-**The quick way: copy the folder.** Put the game's folder in
-`/data/ps5proton/prefixes/mihawk/drive_c/Games/<Name>` (that is `C:\Games\<Name>`) over FTP. If the folder holds one
-64-bit or 32-bit `.exe` at its top, the next Mihawk OS session puts a shortcut named after the folder on the desktop.
-Uninstallers and crash handlers are not counted.
-
-**With an entry.** A game whose program sits in a subfolder, a folder with several programs, or a program that needs
-arguments or settings needs a `game.json`. The WebUI writes it for you; by hand, it is
-`/data/ps5proton/games/<id>/game.json`:
+<details>
+<summary><strong>Manual game.json schema &amp; environment keys</strong></summary>
 
 ```json
 {
@@ -298,276 +254,125 @@ arguments or settings needs a `game.json`. The WebUI writes it for you; by hand,
 }
 ```
 
-<details>
-<summary><strong>Every key in game.json</strong></summary>
-
-| Key | Meaning |
+| Key | Description |
 | --- | --- |
-| `name`, `detail` | The two lines shown for the entry. Without `name`, the folder name is used. |
-| `executable` | Absolute Windows path, `C:\...` or `Z:\...`. The launcher checks the file is there. |
-| `arguments` | One string, split at spaces; double quotes keep words together. |
-| `directory` | The *Start in* folder, an absolute Windows path. |
-| `prefix` | Prefix folder id, up to 64 letters, digits, `_` or `-`. Defaults to `mihawk`. |
-| `env` | A list of `"NAME=VALUE"` strings. A game's own choices: `WINE_PS5_GAME_MODE=1` or `=0` (Game Mode) and `WINE_PS5_CONTROLLER=xbox-360`, `xbox-one` or `dualsense` (the controller); they also reach the programs the game starts. `WINE_PS5_TITLE_PROCESS=<program>.exe` runs that one 64-bit program inside MihawkOS's own process, where its memory is not drawn from the console's shared pool. `WINE_PS5_OPENGL=1` marks an OpenGL program. A game that asks for memory to use at once at fixed addresses far above what the console can map (about 1 TiB) is given it lower down without any setting; `WINE_PS5_HIGH_RESERVE_ELSEWHERE=0` turns that off for one game, and `=1` also moves the requests that only reserve or lie just above the limit. Words starting `PROTON_` or `MIHAWK_` belong to the title and are not applied from the desktop. |
-| `desktop` | `false` leaves the program off the desktop. |
-| `launcher` | `false` keeps the program out of the launcher's list (the WebUI's "In MihawkOS's game list" unticked). It still opens from the desktop or a home-screen tile. |
-
-</details>
-
-An entry with a problem gets no shortcut. Its reason is in `logs/title-last.log` (`game <id> (<name>): <reason>`), and
-the WebUI shows it under **Why?**. Only x86 programs run, 64-bit or 32-bit; a 32-bit one runs through WoW64.
-
-**Start a game without the desktop.** Choose its entry in the launcher. It starts full screen, and returns to the
-launcher when it ends.
-
-<a id="controls"></a>
-
-## <picture><source media="(prefers-color-scheme: dark)" srcset="docs/media/readme/orb-app-generic-night.svg"><img src="docs/media/readme/orb-app-generic-day.svg" width="34" height="34" alt=""></picture> Controls
-
-### The launcher
-
-The main menu is a grid of tiles on a sky: Mihawk OS first and largest, Steam, your games (ten a page after the first),
-and the Web UI's QR code. Under them, a dock: Settings, Files and Payloads. The menu speaks the language chosen in the
-guided setup, and so does Settings.
-
-| Button | Does |
-| --- | --- |
-| D-pad, Cross | Choose a tile, then open it |
-| Left stick | Moves the pointer; the tile under it is chosen |
-| L1, R1 | The page before or after |
-| Triangle | A game's own options: Game Mode, controller, and whether it runs inside MihawkOS |
-| Square | Themes for Settings' pages: thirty of them. Gloss / Skeuomorphic is the default. |
-| Circle | Back |
-| Options, held 1 s | Close the launcher |
-
-- **Settings** (the dock): Controls, Game Mode, Controller, 120 Hz output, Music, Guided setup, Logging and Web UI.
-- **Files** (the dock) shows Mihawk OS's C: drive. Cross on a program starts it, as a game in the library starts, without
-  the desktop. Files only looks: it changes and deletes nothing.
-
-- **Controls** assigns the left, right and middle mouse clicks to DualSense buttons. The default is left click on the
-  touchpad click.
-- **Game Mode** is on by default. A full-screen game's frames go straight to the screen, and the desktop unloads while
-  it plays. If a game's screen stays black, turn it off for that game: it then shows inside the desktop.
-- **120 Hz output** applies to every game, from the next launch.
-
-### The Mihawk OS desktop
-
-- **The touchpad** is a trackpad: move to point, click to left-click, click with two fingers to right-click, hold the
-  click and move to drag.
-- **A USB keyboard and mouse** work from the start of a session, through a USB-C hub in the tests. One plugged in later
-  is found within 3 seconds.
-- **Start → End session** returns to the launcher. Use it rather than the PS button: settings are saved every 30
-  seconds, so a session ended from outside can lose up to 30 seconds of them.
-- **While a game runs**, Options goes to the game.
-
-<a id="what-runs"></a>
-
-## <picture><source media="(prefers-color-scheme: dark)" srcset="docs/media/readme/divider-night.svg"><img src="docs/media/readme/divider-day.svg" width="960" alt=""></picture><br><picture><source media="(prefers-color-scheme: dark)" srcset="docs/media/readme/orb-games-night.svg"><img src="docs/media/readme/orb-games-day.svg" width="34" height="34" alt=""></picture> What runs
-
-Every line here is something a console run showed, on a **PS5 Pro (firmware 10.01)** or a **standard PS5 (firmware
-13.40 and 13.60)**. It is not a compatibility list: each game needs its own run. The proof behind each line is in
-[docs/FEATURES.md](docs/FEATURES.md), [docs/PLAN.md](docs/PLAN.md) and `evidence/`.
-
-| Area | What the console has shown |
-| --- | --- |
-| Windows programs | 64-bit programs, and 32-bit ones natively through WoW64; up to eight at once, with the programs they start |
-| Graphics | Direct3D 11 through DXVK, Direct3D 12 through VKD3D-Proton, OpenGL through Mesa's Zink, and video through Media Foundation; Game Mode hands a full-screen game the screen; a large 3D game on Direct3D 12 held about 117 frames a second |
-| Steam | Installed, signed in by phone, opened in Big Picture, and kept alive across repeated 64-bit game launches on the standard PS5 (13.60) with live Big Picture return, Steam Cloud `AC Launch` / `AC Exit` sync, and elevated Sony local-process games on the 65,536 CPU page-table pool (`117.7–122.7 FPS` across three tested 64-bit games); install and sign-in also verified inside the PS5 Pro's memory limit |
-| Input and sound | The DualSense as an Xbox 360 or Xbox One controller or as itself, the touchpad as a pointer, USB keyboard and mouse; sound through the title's mixer |
-| Network | Name lookups, HTTP and strict HTTPS from Windows programs |
-| Desktop | Taskbar, Start with search and pins, File Explorer, a desktop folder view, MihawkBrowser |
-| When things go wrong | PS5 notifications during a session, repeated in the launcher afterwards; a notice when the console's memory is getting full; a memory guard that closes a runaway program before the console stalls |
-
-### What changed since the third alpha
-
-- **Memory.** A game can be set to run inside MihawkOS's own process, which takes it off the console's shared pool. Each
-  helper's converted code is held to a budget: 64 MiB to start, raised only when code it let go keeps coming back,
-  for games, Steam and the launchers alike. Steam's web helper went from 234-250 MiB to 173-193 MiB, and each
-  helper starts about 8 MiB lighter.
-- **A memory notice that knows the console.** "The PS5's memory is getting full" now appears at the point where each
-  firmware starts to swap, not at one figure for all.
-- **Helpers start the same way on every firmware.** They load Wine's modules with MihawkOS's own loader, so
-  they no longer depend on the jailbreak's support for fake-signed programs. That support was the cause of the
-  "errno 92" stop testers reported on firmwares such as 11.00, 12.40 and 13.x.
-- **Wine's own tests, on the console.** Wine's conformance suite runs on the console, each test file compared with the
-  same file on a PC: 1,337 of 1,708 test files match ([docs/CONFORMANCE.md](docs/CONFORMANCE.md)).
-- **Fixes found that way, for every program:** Windows file attributes (hidden, read-only, system) kept on a disk that
-  has none; symbolic links and junctions; programs told about folder changes at once; each 4 KiB page's protection
-  honoured; programs that debug the programs they start; a 32-bit video demuxer; the directory reparse tag; block
-  ciphers started without an IV; crash dumps of a live process; and guards that keep MihawkOS running when one program
-  misbehaves.
-- **Fonts.** Chinese text in its right weight, and games that bring their own fonts.
-- **OpenGL.** SwapBuffers with no current context, copies between windows, and a context deleted while another thread
-  still uses it, all now answered as Windows answers them.
-- **Privileged processor instructions.** Programs that use SGDT, SIDT, SLDT, SMSW or STR in their start-up code no
-  longer crash on the PS5: MihawkOS answers them the way Linux does on a PC.
-- **Vulkan.** A program that asks for the "immediate" or "mailbox" present mode gets its window, presented in step with
-  the display, instead of a refusal. A Vulkan window reports its own drawing area, not the whole screen.
-- **Start-up.** USB keyboard and mouse support loads first, which fixed a tester's console where neither worked.
-- **Looks.** The Frutiger Aero loading screen and the Bubble Earth wallpaper (Bubble City by Skeuoss since Alpha 7).
-
-<a id="your-files"></a>
-
-## <picture><source media="(prefers-color-scheme: dark)" srcset="docs/media/readme/divider-night.svg"><img src="docs/media/readme/divider-day.svg" width="960" alt=""></picture><br><picture><source media="(prefers-color-scheme: dark)" srcset="docs/media/readme/orb-folder-night.svg"><img src="docs/media/readme/orb-folder-day.svg" width="34" height="34" alt=""></picture> Your files
-
-`C:` in Mihawk OS is `prefixes/mihawk/drive_c`, and `Z:` is the console's root, so `/data/...` is also
-`Z:\data\...`. Over FTP, everything lives under `/data`:
-
-```text
-/data
-├── homebrew/
-│   ├── dev.conf                        two lines for the /data access service
-│   ├── PPSA99170/                      the MihawkOS title
-│   └── PPSA99300…PPSA99399/            home-screen tiles the WebUI made, one game each
-└── ps5proton/
-    ├── runtime/ge11-7/                 the Wine runtime
-    ├── install/                        where the FTP install step reads the runtime from
-    ├── prefixes/
-    │   └── mihawk/                     Mihawk OS: the desktop and every program
-    │       └── drive_c/Games/<Name>/   your games, C:\Games\<Name>
-    ├── games/<id>/game.json            the library, one entry per game
-    ├── covers/                         art the WebUI saved
-    ├── logs/                           every log the title and Wine write
-    ├── caches/                         shader caches
-    └── *.txt                           your choices: controls, Game Mode, controller, 120 Hz, logging
-```
-
-> [!WARNING]
-> `prefixes/mihawk` holds every game in `C:\Games`, everything installed in it, Steam, and your saves. Deleting it
-> deletes all of them. Back up your saves from the WebUI before you remove anything.
-
-Updates keep your prefix, your games and your settings. The first session of a new prefix is MihawkOS's own: the guided
-setup ends it once your Windows drive is built. A game started in a brand-new prefix's first session did not get the
-DualSense; in later sessions it did.
-
-<a id="every-time-you-play"></a>
-
-## <picture><source media="(prefers-color-scheme: dark)" srcset="docs/media/readme/orb-drive-night.svg"><img src="docs/media/readme/orb-drive-day.svg" width="34" height="34" alt=""></picture> Every time you play
-
-1. **Cold-boot the console.** Never use rest mode: it unloads the payloads, and only a real restart brings them back.
-2. **Load Kstuff Lite 1.11 Beta** or later, then **elfldr**, **websrv** and **ShadowMountPlus beta11** or newer
-   (NanoDNS is optional). Keep elfldr loaded while you play: MihawkOS starts its `/data` access service and every Windows helper
-   through it.
-3. **Open MihawkOS.** Its payload check lists each payload. If one is missing it says which to load; press CROSS to
-   check again. If one is too old or an extra payload runs, restart the PS5 and load only the set above.
-
-What the tested consoles ran alongside MihawkOS. This repository ships none of them; each comes from its own project.
-
-| Payload | Required | Minimum | Seen on the base PS5, 2026-10-29 | Port | Needed for |
-| --- | --- | --- | --- | --- | --- |
-| [Kstuff Lite](https://github.com/EchoStretch/kstuff-lite) | Yes | 1.11 Beta | 7.7 MiB | – | Everything |
-| [elfldr](https://github.com/ps5-payload-dev/elfldr) | Yes | – | 22.8 MiB | through websrv | Always |
-| [websrv](https://github.com/ps5-payload-dev/websrv) | Yes | – | v0.34, 8.2 MiB | 8080 | Always |
-| NanoDNS | Optional | – | 4.1 MiB | – | The official set; without it MihawkOS still runs |
-| [ShadowMountPlus](https://github.com/drakmor/ShadowMountPlus) | Yes | beta11 (asked, not checked) | 1.7beta10, 25.2 MiB | 10101 | Starting from the home screen, WebUI tiles |
-| [ftpsrv](https://github.com/ps5-payload-dev/ftpsrv) | Optional | – | 4.1 MiB | 2121 | Copying the title, the runtime or games over FTP |
-| [klogsrv](https://github.com/ps5-payload-dev/klogsrv) | Optional | – | 3.9 MiB | 3232 | The PC tools, and the kernel log in **Settings → Logging** |
-| pldmgr | Optional | – | 12.3 MiB | – | Loading the payloads |
-
-Any other payload keeps MihawkOS on its payload check, etaHEN among them: each one holds memory games need. A payload the
-console lists only as "payload" cannot be told apart, so the check shows it as unknown and lets you in (on firmware 13.60,
-NanoDNS loaded through websrv looks like this). The set above
-held 88 MiB on the base PS5 (`evidence/payloads-base-2026-10-29-01.json`).
-
-> [!WARNING]
-> **Never load OnionHEN.** The PC setup tool stops if the kernel log mentions it. Restart without it.
-
-MihawkOS starts the `/data` access service (the Lapy daemon) itself. Never start a second copy.
-
-<a id="compatibility-and-known-limits"></a>
-
-## <picture><source media="(prefers-color-scheme: dark)" srcset="docs/media/readme/orb-document-night.svg"><img src="docs/media/readme/orb-document-day.svg" width="34" height="34" alt=""></picture> Compatibility and known limits
-
-MihawkOS was tested on a **PS5 Pro on firmware 10.01** and a **standard PS5 on firmware 13.40 and 13.60**. Other models
-and firmwares are reported by testers, not proven here.
-
-- **A game that freezes on its loading screen may not be closed by itself yet.** Close MihawkOS from the PS button menu.
-  A fix comes in a later update.
-- **The Witcher 3 started from the Mihawk OS desktop closes itself at once.** Start it from the library or Files.
-- **Pipe memory runs out after very many program starts.** Each boot, the console's kernel has a fixed budget of pipe
-  memory, and every Windows program start uses some that is never given back. After very many starts, programs stop
-  starting and MihawkOS says **Restart the PS5**. A restart is the only cure.
-- **The PS5 Pro has less memory for Windows programs.** Its memory guard steps in at about 870 MiB, against about
-  1,800 MiB on the standard PS5. Steam and the tested games fit; a launcher with a heavy built-in browser can be closed
-  by the memory guard during its start.
-- **Translations still need a native speaker's review.** All ten languages are complete, written with machine help.
-  Mihawk OS's own desktop and the launcher around the setup stay in English.
-- **The per-boot setup is yours to do.** The payload set after every cold boot, as above. Rest
-  mode needs a full restart.
-- **ShadowMountPlus quirks.** Before 1.7beta6, another homebrew could refuse to start after MihawkOS closed
-  (`0x80940033`); 1.7beta6 and later keep ShellCore's launch hook in memory, the fix MihawkOS asks for by asking for
-  beta11 or newer ([docs/LAUNCH_AFTER_EXIT.md](docs/LAUNCH_AFTER_EXIT.md)). It installs and removes nothing while MihawkOS runs, which
-  is why a new home-screen tile appears only after MihawkOS closes.
-- **Some games stop at an error of their own at start-up**, the same one they show under Proton on a PC.
-- **Not supported:** kernel drivers and anti-cheat. Rumble is not proven. The desktop's focus does not follow the D-pad.
-- **To update MihawkOS**, replace the `PPSA99170` folder with the new release's and open it: it updates its runtime by
-  itself.
-
-**For a bug report,** turn on **Settings → Logging**, reproduce the problem, open MihawkOS again and download the bug
-report from the WebUI's **Help** page. It masks addresses, but check it before you share it, and never post your
-console's address.
-
-<details>
-<summary><strong>Troubleshooting</strong></summary>
-
-| You see | Do this |
-| --- | --- |
-| *No access to /data: …* | The line says why: websrv not answering, `dev.conf` missing, or the access service not answering. Check elfldr and websrv are loaded, then reopen. After rest mode, restart the PS5. |
-| *The Wine runtime is not installed …* | Run the guided setup again (**Settings → Guided setup**), or re-run the PC setup tool. |
-| A notification, *MihawkOS: A program could not start …* with *Restart the PS5* | The boot's pipe memory is used up. Restart the console. |
-| A notification, *The PS5's memory is getting full …* | Games may slow down while the console swaps. Close what you do not need. |
-| A notification, *The PS5's memory is nearly full …* | The memory guard asked the program using the most to close, or ended it, before the console stalled. |
-| A notification, *A program stopped: the GPU did not answer it* | That program's helper waited 15 s for the GPU and was ended. `logs/sessions/0/` has which. |
-| A folder has no shortcut | It holds more than one `.exe` at its top. Set its program in the WebUI, or write a `game.json`. |
-| The home-screen tile refuses to start right after install | ShadowMountPlus needs about 45 seconds to register a new title. Wait and try again. |
-| A game's screen stays black | Turn Game Mode off for that game in the WebUI, or in Settings, and start it again. |
-| A game sees no controller | **Settings → Controller**: choose Xbox 360. DualSense shows the pad only to programs made for it. |
-| *The last session … did not end normally* | It crashed, froze or lost power. Copy `logs/title-last.log` and `logs/wine-last.log` (and their `-end` files) off before the next session moves them. |
-| The console hangs | Wait at least 3 minutes before cutting power. |
-
-Logs are in `/data/ps5proton/logs/`: `title-last.log`, `wine-last.log`, and `sessions/0`, `1`, `2` for the last three
-sessions. A long session keeps each log's start and its end: past 4 MiB (title) or 8 MiB (Wine) the log goes on in
-`title-end.log` or `wine-end.log`, and `title-end.1.log` or `wine-end.1.log` holds the part just before. The Web UI's bug
-report includes them.
+| `name`, `detail` | Display title and subtitle (defaults to folder name). |
+| `executable`, `directory` | Absolute Windows paths (`C:\...` or `Z:\...`). |
+| `arguments` | Command-line string (double quotes preserve spaces). |
+| `prefix` | Prefix folder ID (up to 64 chars `[A-Za-z0-9_-]`; default `mihawk`). |
+| `desktop`, `launcher` | Set `false` to hide from the Mihawk OS desktop or launcher tile grid. |
+| `env` | List of `"NAME=VALUE"` pairs: `WINE_PS5_GAME_MODE=1\|0`, `WINE_PS5_CONTROLLER=xbox-360\|xbox-one\|dualsense`, `WINE_PS5_OPENGL=1`, `WINE_PS5_TITLE_PROCESS=<exe>`, `WINE_PS5_HIGH_RESERVE_ELSEWHERE=0\|1`. `PROTON_*` / `MIHAWK_*` keys belong to the title. |
 
 </details>
 
 ---
 
-<a id="build-from-source"></a>
+<a id="controls"></a>
 
-## <picture><source media="(prefers-color-scheme: dark)" srcset="docs/media/readme/divider-night.svg"><img src="docs/media/readme/divider-day.svg" width="960" alt=""></picture><br><picture><source media="(prefers-color-scheme: dark)" srcset="docs/media/readme/orb-drive-night.svg"><img src="docs/media/readme/orb-drive-day.svg" width="34" height="34" alt=""></picture> Build from source
+## <picture><source media="(prefers-color-scheme: dark)" srcset="docs/media/readme/orb-app-generic-night.svg"><img src="docs/media/readme/orb-app-generic-day.svg" width="30" height="30" alt=""></picture> Controls
 
-<details>
-<summary><strong>Build requirements and commands</strong></summary>
+| Context | Input | Action |
+| --- | --- | --- |
+| **Launcher** | `D-pad` / `Left Stick` + `Cross` | Navigate tiles and launch (Mihawk OS, Steam, games, WebUI QR) |
+| **Launcher** | `L1` / `R1` | Previous / next library page |
+| **Launcher** | `Triangle` | Per-game options (Game Mode, controller, execution mode) |
+| **Launcher** | `Square` | Choose from 30 launcher themes (Gloss / Skeuomorphic default) |
+| **Launcher** | `Circle` / `Options (hold 1 s)` | Back / Close launcher |
+| **In-Game** | `L3 + R3` | Open frosted-glass control overlay (Exit game, live Stats HUD, OSK, Mouse toggle, Controller switch) |
+| **Mihawk OS Desktop** | `Touchpad` | Trackpad cursor: click = left-click, two-finger click = right-click, hold &amp; drag = drag |
+| **Mihawk OS Desktop** | `USB Keyboard &amp; Mouse` | Plug-and-play (even via USB-C hub; hot-plugged devices detected within 3 s) |
+| **Mihawk OS Desktop** | `Start → End session` | Clean return to launcher (saves registry immediately; prefer over PS button) |
 
-Read [AGENTS.md](AGENTS.md) first: the rules, the commit gate and the sibling repositories the build expects. The
-owner builds on CachyOS (Arch Linux) on an x86_64 PC; other distributions are untested. A first build downloads well
-over 1 GB and builds Wine for hours.
+---
 
-**Host tools**
+<a id="your-files"></a>
 
-- **clang, clang++, lld and LLVM 23.1.3** (`llvm-ar`, `llvm-ranlib`, `llvm-objcopy`, `llvm-config`). The version
-  matters: the Lapy daemon the title ships is pinned by SHA-256, and another compiler gives another file, which
-  `tools/build-production.sh` refuses. If your system has a numbered `llvm-config-*`, set `LLVM_CONFIG` to the 23.1.3 one.
-- **Build tools:** git, curl, wget, unzip, tar, xz, zstd, patch, make, cmake, ninja, meson, pkg-config, autoconf, bison,
-  flex, perl, glslang, a C compiler named `cc`, the zlib headers and the FreeType development files.
-- **Python 3.12 or later** with Pillow, pefile, fontTools, numpy, mako, MarkupSafe, PyYAML, packaging and cryptography.
-- **ImageMagick 7.1.2-32 Q16-HDRI with librsvg**, for the desktop's icons. `tools/fetch-all.sh` unpacks Arch Linux's
-  package of that release on Arch-based hosts; elsewhere, put a build of that exact release on `PATH`.
-- **Not needed on the system:** the Windows cross compiler and Wine; `tools/fetch-all.sh` puts the pinned ones in
-  `.deps/`.
+## <picture><source media="(prefers-color-scheme: dark)" srcset="docs/media/readme/orb-folder-night.svg"><img src="docs/media/readme/orb-folder-day.svg" width="30" height="30" alt=""></picture> Your Files
 
-**Sources**, cloned next to each other:
+`C:` inside Mihawk OS maps to `/data/ps5proton/prefixes/mihawk/drive_c`, and `Z:` maps to the console root.
 
 ```text
-workspace/
-├── PS5_MihawkOS/         this repository
-├── PS5_Vulkan/           RADV's link recipe and the console tools; holds .env
-├── PS5_Mesa/             Mesa, for RADV and Zink
-├── PS5_PayloadSDK/       the payload SDK fork and its platform layer
-└── PS5-Lapy-JB-Daemon/   the /data access daemon
+/data
+├── homebrew/
+│   ├── dev.conf                        /data access service configuration
+│   ├── PPSA99170/                      MihawkOS title + wine-local-child.bin + bundled runtime
+│   └── PPSA99300…PPSA99399/            WebUI-generated home-screen game tiles
+└── ps5proton/
+    ├── runtime/ge11-7/                 Unpacked Wine + Proton runtime
+    ├── prefixes/mihawk/                Shared Windows prefix (C:\Games, Steam, saves, registry)
+    ├── games/<id>/game.json            Library entries
+    ├── covers/ · caches/ · logs/       Cover art, shader caches, and rotating session logs
+    └── *.txt                           Saved settings (controls, Game Mode, controller, 120 Hz)
 ```
+
+> [!WARNING]
+> **`/data/ps5proton/prefixes/mihawk` holds your games, Steam install, and saves.** Updating MihawkOS keeps this folder intact; always back up saves via the WebUI before deleting it.
+
+---
+
+<a id="compatibility-and-known-limits"></a>
+
+## <picture><source media="(prefers-color-scheme: dark)" srcset="docs/media/readme/orb-document-night.svg"><img src="docs/media/readme/orb-document-day.svg" width="30" height="30" alt=""></picture> Compatibility &amp; Known Limits
+
+Tested on a **PS5 Pro (firmware 10.01)** and a **standard PS5 (firmwares 13.40 and 13.60)**. Other models and firmwares are community-reported.
+
+- **Not supported:** Kernel-level anti-cheat (Easy Anti-Cheat, BattlEye, etc.), kernel drivers, and heavy DRM such as Denuvo. Controller rumble is not yet verified.
+- **PS5 Pro memory ceiling:** The PS5 Pro's system-memory guard engages around `870 MiB` (vs `~1,800 MiB` on standard PS5). `fast-steam`'s elevated Sony local-process path moves 64-bit games and Steam's browser off the system pool, but has so far been verified on standard PS5 (13.60) only.
+- **Pipe memory across very many starts:** The console kernel has a fixed per-boot pipe-memory budget; after very many process starts, MihawkOS prompts **Restart the PS5**.
+- **Rest Mode &amp; ShadowMountPlus:** Always cold-boot after shutdown/rest mode. ShadowMountPlus beta11+ is required so other homebrew can launch cleanly after MihawkOS exits (`docs/LAUNCH_AFTER_EXIT.md`); new WebUI home-screen tiles appear a few seconds after MihawkOS closes.
+- **Updating:** From 7.1 onward, MihawkOS checks for signed GitHub updates automatically (at most once per hour); you can also update manually by replacing `/data/homebrew/PPSA99170/`.
+
+<details>
+<summary><strong>Troubleshooting &amp; Bug Reports</strong></summary>
+
+| Symptom | Fix |
+| --- | --- |
+| *No access to /data: …* | Verify `elfldr` and `websrv` are loaded and `dev.conf` exists; cold-boot if returning from Rest Mode. |
+| *The Wine runtime is not installed …* | Re-run **Settings → Guided setup** or `tools/console-setup.py`. |
+| *A program could not start … Restart the PS5* | Per-boot kernel pipe memory is exhausted; reboot the console. |
+| *The PS5's memory is getting full / nearly full* | Close unused background apps or restart; the memory guard ends runaway helpers before the console stalls. |
+| Black screen in a game | Toggle **Game Mode** off for that game (`Triangle` in launcher or via WebUI) and relaunch. |
+| Game sees no controller | Switch **Settings → Controller** (or `L3 + R3` overlay) to **Xbox 360** or **Xbox One**. |
+| Home-screen tile won't open right after install | Wait ~45 seconds for ShadowMountPlus to finish registering it. |
+
+**Filing a bug report:** Enable **Settings → Logging**, reproduce the issue, reopen MihawkOS, and download the masked bug-report ZIP from the WebUI **Help** page (includes `logs/title-last.log`, `logs/wine-last.log`, and tail logs). Never post your console's IP address.
+
+</details>
+
+---
+
+<a id="documentation-hub"></a>
+
+## <picture><source media="(prefers-color-scheme: dark)" srcset="docs/media/readme/orb-documents-night.svg"><img src="docs/media/readme/orb-documents-day.svg" width="30" height="30" alt=""></picture> Documentation Hub
+
+| Document | Contents |
+| --- | --- |
+| [**AGENTS.md**](AGENTS.md) | Repository rules, commit gate workflow, and agent development loop |
+| [**docs/ARCHITECTURE.md**](docs/ARCHITECTURE.md) | System ownership, hybrid payload + elevated Sony local-process design, memory pools, and GPU broker |
+| [**docs/STEAM.md**](docs/STEAM.md) | Persistent Steam sessions, elevated local-process benchmarks, guided setup, and PS5 Pro memory notes |
+| [**docs/WINDOWS_PROCESSES.md**](docs/WINDOWS_PROCESSES.md) | Payload helpers, `/app0/wine-local-child.bin`, 65,536-PT pool capacity, and diagnostics |
+| [**docs/FLEXIBLE_MEMORY.md**](docs/FLEXIBLE_MEMORY.md) | Flexible memory pools, adaptive code cache budget, and the 2026-11-26 Lapy-elevated JIT breakthrough |
+| [**docs/GRAPHICS_PROCESS_BROKER.md**](docs/GRAPHICS_PROCESS_BROKER.md) | Brokered RADV Vulkan, Zink OpenGL, direct scanout, and local-process CPU-only mapping fallback |
+| [**docs/PLAN.md**](docs/PLAN.md) &amp; [**docs/FEATURES.md**](docs/FEATURES.md) | Current milestones, evidence index, and verified feature limits |
+| [**docs/CONFORMANCE.md**](docs/CONFORMANCE.md) | Wine conformance suite results on PS5 (`1,337 / 1,708` matching test files) |
+| [**docs/MIHAWK_OS.md**](docs/MIHAWK_OS.md), [**docs/WEBUI.md**](docs/WEBUI.md), [**docs/GUIDED_SETUP.md**](docs/GUIDED_SETUP.md) | Mihawk OS desktop, browser companion, and 10-language guided setup |
+
+---
+
+<a id="build-from-source"></a>
+
+## <picture><source media="(prefers-color-scheme: dark)" srcset="docs/media/readme/orb-drive-night.svg"><img src="docs/media/readme/orb-drive-day.svg" width="30" height="30" alt=""></picture> Build From Source
+
+<details>
+<summary><strong>Toolchain requirements, sibling repos, build commands &amp; runtime switches</strong></summary>
+
+Read [AGENTS.md](AGENTS.md) first. Builds are verified on **CachyOS (Arch Linux x86_64)**; an initial build downloads >1 GB of pinned inputs and compiles Wine.
+
+- **Compiler &amp; tools:** `clang` / `clang++` / `lld` / **LLVM 23.1.3** (exact version required for the SHA-256-pinned Lapy daemon; set `LLVM_CONFIG` if numbered), `git`, `curl`, `wget`, `unzip`, `tar`, `xz`, `zstd`, `patch`, `make`, `cmake`, `ninja`, `meson`, `pkg-config`, `autoconf`, `bison`, `flex`, `perl`, `glslang`, `cc`, zlib &amp; FreeType headers.
+- **Python 3.12+:** `Pillow`, `pefile`, `fontTools`, `numpy`, `mako`, `MarkupSafe`, `PyYAML`, `packaging`, `cryptography`.
+- **ImageMagick 7.1.2-32 Q16-HDRI** with `librsvg` (auto-fetched on Arch-based hosts by `tools/fetch-all.sh`).
+
+**Clone sibling repositories beside `PS5_MihawkOS`:**
 
 ```sh
 git clone https://github.com/mihawk-99/PS5_MihawkOS.git
@@ -577,113 +382,52 @@ git clone https://github.com/mihawk-99/PS5_PayloadSDK.git
 git clone https://github.com/mpereiraesaa/PS5-Lapy-JB-Daemon.git
 ```
 
-The build reads PS5_Mesa, PS5_PayloadSDK and the Lapy daemon at their pinned revisions with `git archive`, so a plain
-clone of each is enough. PS5_Vulkan's working tree must stay at its pin
-(`tools/setup-graphics-foundation.sh` names it), because the PC tools import its `tools/`; build its
-`runtime/libc.prx` and `build/host/ps5-native-tool` there with its own `tools/setup-native-dependencies.sh` and `make`.
-[PS5_VKHomebrewUI](https://github.com/mihawk-99/PS5_VKHomebrewUI), the launcher's UI kit, is read from beside them or
-fetched at its pin.
-
-**Build, test, deploy:**
+**Fetch, build, test, and deploy:**
 
 ```sh
-bash tools/fetch-all.sh                         # once: every pinned input, checked by SHA-256 (hours: host Wine)
-bash tools/fetch-all.sh --check                 # changes nothing: each pin's hash and its URL
-bash tools/build-production.sh --jobs 8         # the title in dist/PPSA99170/, the runtime in .deps/staged/
-bash tools/host-tests.sh                        # host tests
-python3 tools/console-setup.py --check          # read only: what the console is missing
-python3 tools/console-setup.py                  # deploy the title and runtime, and read every file back
-python3 tools/gate.py run --name <unique-run>   # the console battery, before a code commit
-python3 tools/publication-check.py all          # no addresses, secrets, game data or game names
+bash tools/fetch-all.sh                         # once: fetch & verify all pinned inputs
+bash tools/build-production.sh --jobs 8         # builds dist/PPSA99170/ (incl. wine-local-child.bin) & runtime
+bash tools/host-tests.sh                        # 219 host unit & integration tests
+python3 tools/console-setup.py                  # deploy title + runtime and verify SHA-256 readback
+python3 tools/gate.py run --name <unique-run>   # mandatory console commit gate
+python3 tools/publication-check.py all          # verify zero addresses, secrets, game data or game names
 ```
 
-The console's address goes in `../PS5_Vulkan/.env` as `PS5_HOST`, git-ignored; the tools mask it in what they print.
-Title builds are reproducible: the same sources give the same files, and the deploy sends every program whose code
-changed, even when its size did not. `PS5_PROTON_CACHE=/path/to/folder` reuses downloads you already have when their
-name and SHA-256 match.
+Put your console's IP in git-ignored `../PS5_Vulkan/.env` as `PS5_HOST`. Enable repo hooks with `git config core.hooksPath tools/git-hooks`.
 
-The hooks (`git config core.hooksPath tools/git-hooks`) refuse a code commit the console battery did not pass on
-exactly that build, and run the privacy guard on every commit.
-
-**Runtime switches for builders**, set in an entry's `env`: `WINE_PS5_CODE_BUDGET_MIB` overrides a helper's code
-budget (0 turns it off); `WINE_PS5_PRX_LOADER=0` asks the kernel to load Wine's modules instead of MihawkOS's loader,
-for an A/B; `WINE_PS5_LOCAL_GAMES=0` disables elevated Sony local-process routing (`/app0/wine-local-child.bin`, built
-by `tools/build-local-child.sh`) in Steam sessions and falls back to `elfldr` payload helpers.
-
-Where to read next: [docs/ARCHITECTURE.md](docs/ARCHITECTURE.md) (who owns what, how a program starts),
-[docs/PLAN.md](docs/PLAN.md) (what is being built and what is proven),
-[docs/WINDOWS_PROCESSES.md](docs/WINDOWS_PROCESSES.md), [docs/FLEXIBLE_MEMORY.md](docs/FLEXIBLE_MEMORY.md),
-[docs/STEAM.md](docs/STEAM.md), [docs/WEBUI.md](docs/WEBUI.md), [docs/GUIDED_SETUP.md](docs/GUIDED_SETUP.md),
-[docs/CONFORMANCE.md](docs/CONFORMANCE.md) and [docs/MIHAWK_OS.md](docs/MIHAWK_OS.md).
+**Builder runtime switches (`game.json` `env`):**
+- `WINE_PS5_LOCAL_GAMES=0` — disable elevated Sony local-process routing (`/app0/wine-local-child.bin`, built by `tools/build-local-child.sh`) in Steam sessions and fall back to `elfldr` helpers.
+- `WINE_PS5_CODE_BUDGET_MIB=<N>` — override per-helper code-cache budget (`0` disables eviction).
+- `WINE_PS5_PRX_LOADER=0` — use the kernel PRX loader instead of MihawkOS's loader for A/B testing.
 
 </details>
 
 <details>
-<summary><strong>Authors and acknowledgements</strong></summary>
+<summary><strong>Authors &amp; Acknowledgements</strong></summary>
 
-MihawkOS stands on other people's work. Every upstream is pinned by revision or hash and keeps its own licence; the
-full list, with every pin, is [NOTICE.md](NOTICE.md), and where the platform knowledge came from is
-[docs/PROVENANCE.md](docs/PROVENANCE.md).
+Every upstream component is pinned by revision or hash and retains its own licence ([NOTICE.md](NOTICE.md), [docs/PROVENANCE.md](docs/PROVENANCE.md)).
 
-| Part | Project | Licence |
+| Component | Project | Licence |
 | --- | --- | --- |
-| This title, its runtime integration and desktop | [Mihawk](https://github.com/mihawk-99): PS5_MihawkOS, [PS5_Vulkan](https://github.com/mihawk-99/PS5_Vulkan), [PS5_Mesa](https://github.com/mihawk-99/PS5_Mesa), [PS5_PayloadSDK](https://github.com/mihawk-99/PS5_PayloadSDK), [PS5_VKHomebrewUI](https://github.com/mihawk-99/PS5_VKHomebrewUI) | GPL-3.0-or-later; the forks keep their upstreams' |
-| PS5 Wine patch series and platform knowledge | [prospero-win](https://github.com/mpereiraesaa/prospero-win) by mpereiraesaa | LGPL-2.1-or-later |
-| Wine | [ValveSoftware/wine](https://github.com/ValveSoftware/wine) and wine-staging, pinned from GE-Proton11-7 through [mihawk-99/proton-ge-custom](https://github.com/mihawk-99/proton-ge-custom), a fork of [GloriousEggroll/proton-ge-custom](https://github.com/GloriousEggroll/proton-ge-custom) | LGPL-2.1-or-later |
-| Unicode data and default fonts | GE-Proton11-7's ICU 68 Windows DLLs and font collection (Liberation, Source Han Sans, Noto, Ume and Wine's own) | Unicode/ICU licence; OFL-1.1; GPL-2.0 with font exception; Ume's licence; Apache-2.0 |
-| Direct3D 8 to 11 | [DXVK](https://github.com/doitsujin/dxvk) by Philip Rebohle and contributors | zlib |
-| Direct3D 12 | [VKD3D-Proton](https://github.com/HansKristian-Work/vkd3d-proton) | LGPL-2.1-or-later |
-| Vulkan driver and OpenGL | Mesa's RADV and Zink, through PS5_Vulkan and PS5_Mesa | MIT |
-| Title-side OpenGL | [PS5 OpenGL SDK](https://github.com/darkxex/ps5-opengl) 1.0.2 by BlackBearReloaded (mirror; the original repository is gone) | GPL-3.0-or-later |
-| Media playback | [FFmpeg](https://ffmpeg.org/) 8.1.3, built without GPL or non-free parts, and GE-Proton's winedmo rework | LGPL-2.1-or-later |
-| TLS | [GnuTLS](https://gnutls.org/) with [Nettle](https://www.lysator.liu.se/~nisse/nettle/) for Windows programs; [Mbed TLS](https://github.com/Mbed-TLS/mbedtls) for the title's own downloads | LGPL-2.1-or-later; LGPL-3.0-or-later or GPL-2.0-or-later; Apache-2.0 |
-| Name lookups | [c-ares](https://github.com/c-ares/c-ares) 1.34.8 | MIT |
-| MihawkBrowser's engine | [Chromium Embedded Framework](https://github.com/chromiumembedded/cef) 150, unmodified | BSD-3-Clause, with its `CREDITS.html` |
-| .NET and HTML for Windows programs | [Wine Mono](https://gitlab.winehq.org/mono/wine-mono) and [Wine Gecko](https://gitlab.winehq.org/wine/wine-gecko) | MIT with component notices; MPL-2.0 |
-| Title foundation | [PS5_VulkanTemplate](https://github.com/mihawk-99/PS5_VulkanTemplate), from [SaschaWillems/Vulkan](https://github.com/SaschaWillems/Vulkan) | MIT |
-| Launcher themes, components and sounds | BlackBearReloaded's ps5-homebrew-ui, through PS5_VKHomebrewUI; Inter and Montserrat faces | GPL-3.0-or-later; OFL-1.1 and Bitstream Vera |
-| Platform layer and PRX tools | PS5_PayloadSDK, from [ps5-payload-dev/sdk](https://github.com/ps5-payload-dev/sdk) by John Törnblom, and [ps5-native-app-boilerplate](https://github.com/BlackBearReloaded/ps5-native-app-boilerplate) by BlackBearReloaded | GPL-3.0-or-later |
-| `/data` access | [PS5-Lapy-JB-Daemon](https://github.com/mpereiraesaa/PS5-Lapy-JB-Daemon) by Arksama / Team PHU and contributors | MIT |
-| The WebUI and home-screen tiles | Designed after [PS5_RetroArch](https://github.com/mihawk-99/PS5_RetroArch)'s WebUI and forwarders; served by [GNU libmicrohttpd](https://www.gnu.org/software/libmicrohttpd/) 1.0.10 | GPL-3.0-or-later; LGPL-2.1-or-later |
-| Updates and runtime install | [Monocypher](https://monocypher.org/) (signature checks) and [Zstandard](https://github.com/facebook/zstd) (decompression) | BSD-2-Clause; BSD-3-Clause |
-| Store client backend, JSON and QR codes | [Aurelia](https://github.com/Drackrath/Aurelia) 0.1.40 (pinned, unmodified), [jsmn](https://github.com/zserge/jsmn), [QR Code generator](https://github.com/nayuki/QR-Code-generator) by Nayuki | GPL-3.0; MIT; MIT |
-| The setup's flags and CJK faces | [flag-icons](https://github.com/lipis/flag-icons); Noto Sans SC and JP from [google/fonts](https://github.com/google/fonts) | MIT; OFL-1.1 |
-| Desktop type and glyphs | Proton UI, derived from [Selawik](https://github.com/microsoft/Selawik); [Fluent System Icons](https://github.com/microsoft/fluentui-system-icons); [Cascadia Mono](https://github.com/microsoft/cascadia-code) | OFL-1.1; MIT; OFL-1.1 |
-| Desktop theme | Mihawk Light, derived from Wine Light by Zhiyi Zhang for CodeWeavers and Wine contributors | LGPL-2.1-or-later |
-| Desktop wallpaper and home-screen background | *Bubble City* by Skeuoss | Used with the artist's permission; not under an open licence ([NOTICE.md](NOTICE.md)) |
-
-Pictures and details the WebUI saves come from the Steam store at your request and stay on your own console; the
-artwork remains its publishers'. This README's banner, dividers and heading orbs (`docs/media/readme/`) are drawn for the project, around the
-desktop's own original icons (`themes/windows11/icons/original/`) and the Mihawk mark.
+| Title, runtime integration &amp; desktop | [Mihawk](https://github.com/mihawk-99): PS5_MihawkOS, [PS5_Vulkan](https://github.com/mihawk-99/PS5_Vulkan), [PS5_Mesa](https://github.com/mihawk-99/PS5_Mesa), [PS5_PayloadSDK](https://github.com/mihawk-99/PS5_PayloadSDK), [PS5_VKHomebrewUI](https://github.com/mihawk-99/PS5_VKHomebrewUI) | GPL-3.0-or-later (forks keep upstream licences) |
+| PS5 Wine patches &amp; platform knowledge | [prospero-win](https://github.com/mpereiraesaa/prospero-win) by mpereiraesaa | LGPL-2.1-or-later |
+| Wine &amp; Proton stack | [ValveSoftware/wine](https://github.com/ValveSoftware/wine) + wine-staging pinned from GE-Proton11-7 ([mihawk-99/proton-ge-custom](https://github.com/mihawk-99/proton-ge-custom), forked from [GloriousEggroll/proton-ge-custom](https://github.com/GloriousEggroll/proton-ge-custom)) | LGPL-2.1-or-later |
+| Direct3D 8–12 | [DXVK](https://github.com/doitsujin/dxvk) &amp; [VKD3D-Proton](https://github.com/HansKristian-Work/vkd3d-proton) | zlib · LGPL-2.1-or-later |
+| Vulkan &amp; OpenGL | Mesa RADV &amp; Zink (via PS5_Vulkan / PS5_Mesa); [PS5 OpenGL SDK](https://github.com/darkxex/ps5-opengl) 1.0.2 | MIT · GPL-3.0-or-later |
+| Media, TLS, DNS &amp; Web | [FFmpeg](https://ffmpeg.org/) 8.1.3, [GnuTLS](https://gnutls.org/)/Nettle, [Mbed TLS](https://github.com/Mbed-TLS/mbedtls), [c-ares](https://github.com/c-ares/c-ares) 1.34.8, [CEF](https://github.com/chromiumembedded/cef) 150, [Wine Mono](https://gitlab.winehq.org/mono/wine-mono), [Wine Gecko](https://gitlab.winehq.org/wine/wine-gecko) | LGPL-2.1+ · Apache-2.0 · MIT · BSD-3-Clause · MPL-2.0 |
+| PS5 foundation, `/data` &amp; WebUI | [PS5_VulkanTemplate](https://github.com/mihawk-99/PS5_VulkanTemplate), PS5_PayloadSDK ([ps5-payload-dev/sdk](https://github.com/ps5-payload-dev/sdk), [ps5-native-app-boilerplate](https://github.com/BlackBearReloaded/ps5-native-app-boilerplate)), [PS5-Lapy-JB-Daemon](https://github.com/mpereiraesaa/PS5-Lapy-JB-Daemon), [GNU libmicrohttpd](https://www.gnu.org/software/libmicrohttpd/) 1.0.10, [Monocypher](https://monocypher.org/), [Zstandard](https://github.com/facebook/zstd), [Aurelia](https://github.com/Drackrath/Aurelia) 0.1.40, [jsmn](https://github.com/zserge/jsmn), [QR Code generator](https://github.com/nayuki/QR-Code-generator) | MIT · GPL-3.0+ · LGPL-2.1+ · BSD |
+| Fonts, icons, theme &amp; wallpaper | ICU 68, Liberation, Source Han Sans, Noto Sans, Ume, Selawik/Proton UI, Fluent System Icons, Cascadia Mono, flag-icons, Wine Light / Mihawk Light, *Bubble City* by Skeuoss (used with permission; not open-licensed) | OFL-1.1 · MIT · Apache-2.0 · LGPL-2.1+ · Permission |
 
 </details>
 
+---
+
 <a id="license-and-third-party-terms"></a>
 
-## <picture><source media="(prefers-color-scheme: dark)" srcset="docs/media/readme/orb-documents-night.svg"><img src="docs/media/readme/orb-documents-day.svg" width="34" height="34" alt=""></picture> License and third-party terms
+## License &amp; Legal
 
-**MihawkOS itself** is free software under the **GNU General Public License v3.0 or later** ([LICENSE](LICENSE),
-[LICENSING.md](LICENSING.md)). The few files that keep another licence are named there: the files carrying imported
-upstream code, the Wine theme, the original icons, the Mihawk mark and the wallpapers (LGPL-2.1-or-later), the template
-files that say MIT, and one OFL-1.1 file. Patches to an upstream project keep that project's licence: the Wine patch
-series is LGPL-2.1-or-later, like Wine.
+**MihawkOS** is free software licensed under the **GNU General Public License v3.0 or later** ([LICENSE](LICENSE), [LICENSING.md](LICENSING.md); patches to upstream projects retain their upstream licences, including LGPL-2.1-or-later for Wine patches). All upstream notices ship beside the binaries in `licenses/` and `share/licenses/`.
 
-Every upstream keeps its own licence and notices, and its licence text ships beside the binaries: the runtime's
-`share/licenses/` and the title's `licenses/`. A binary release comes with its corresponding source: this repository
-at the same revision, its patch series and the pins that rebuild every input. Windows programs and games are not
-covered by any of these licences; running a program on the layer is use, and its own terms apply.
-
-**No games, saves, keys, firmware or exploits are included, and piracy is not condoned.** You are responsible for
-having the right to the programs you run, and for whether modifying your console is lawful where you live. The full
-notes are in [LEGAL.md](LEGAL.md).
-
-This is an independent homebrew project, not affiliated with, sponsored by or endorsed by Sony Interactive
-Entertainment, Microsoft, Valve or any game publisher. PlayStation, PS5 and DualSense are trademarks of Sony Interactive
-Entertainment Inc.; Windows is a trademark of Microsoft Corporation; Steam and Proton are trademarks of Valve
-Corporation. Other names belong to their owners and are used only to say what the project runs on and works with.
-
-Mihawk OS is not Windows. It contains no proprietary Microsoft code, fonts, icons, wallpapers or sounds, and no Windows
-logo: the Start button shows the project's own Mihawk mark. Its look follows Windows 11 from public references, and the
-open-source Microsoft assets it uses are credited above. The name "Mihawk" is the author's handle.
+No games, saves, keys, firmware or exploits are included, and piracy is not condoned ([LEGAL.md](LEGAL.md)). MihawkOS is an independent homebrew project not affiliated with, sponsored by, or endorsed by Sony Interactive Entertainment, Microsoft, Valve, or any game publisher. PlayStation, PS5, and DualSense are trademarks of Sony Interactive Entertainment Inc.; Windows is a trademark of Microsoft Corporation; Steam and Proton are trademarks of Valve Corporation. Mihawk OS contains no proprietary Microsoft code, fonts, icons, wallpapers, or sounds.
 
 <p align="center">made by <a href="https://github.com/mihawk-99">Mihawk</a> · Built on the work of the Wine, Proton and PS5 homebrew communities.</p>
