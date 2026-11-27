@@ -1,8 +1,9 @@
 # Architecture
 
-Production architecture as of 2026-10-07. See [PLAN.md](PLAN.md) for acceptance
-status and [the earlier architecture](history/2026-10-07/docs/ARCHITECTURE.md)
-for the single-title and Sony-managed experiments.
+Production architecture as of 2026-11-26. See [PLAN.md](PLAN.md) for acceptance
+status and persistent store-client / elevated local-process measurements, and
+[the earlier architecture](history/2026-10-07/docs/ARCHITECTURE.md) for the
+single-title and earlier un-elevated Sony-managed experiments.
 
 ## Ownership
 
@@ -10,30 +11,39 @@ for the single-title and Sony-managed experiments.
 | --- | --- |
 | Title, Vulkan UI, native pad/audio integration and harness | PS5_VulkanTemplate foundation |
 | Game library, profiles, runtime staging and launch/return flow | PS5_Proton |
-| Wine PS5 adapters, shared wineserver and process bootstrap | PS5_Proton, derived from prospero-win |
+| Wine PS5 adapters, shared wineserver, payload and local-process bootstraps | PS5_Proton, derived from prospero-win |
 | Wine Windows modules, DXVK, VKD3D-Proton and Proton patches | Pinned GE-Proton stack, with this repository's ordered PS5 patches |
 | RADV, canonical link recipe, reusable GPU broker and WGL/Zink builder | PS5_Vulkan |
 | RADV broker overlays and Zink presentation/memory fixes | PS5_Mesa |
-| Filesystem elevation | Pinned Lapy daemon and platform client |
+| Filesystem and local-process elevation | Pinned Lapy daemon and platform client |
 | Native payload creation | Resident websrv/elfldr |
+| Elevated Sony local-process helper (`/app0/wine-local-child.bin`) | Title via `sceSystemServiceAddLocalProcess` / `sceSystemServiceKillLocalProcess`, built by `tools/build-local-child.sh` |
 
 ## Boot and shutdown
 
 ```text
 PS5 home screen
   -> launcher title: filesystem grant, game library, thirty-theme UI
-  -> select a game: persist one-shot request, release launcher devices, LoadExec
+  -> select a game or store client: persist one-shot request, release launcher devices, LoadExec
   -> owner title: shared wineserver + memory helper + GPU broker + input/audio
-       -> initial Windows program in a payload
-            -> Windows children and descendants in separate payloads
-  -> game close: stop/reap helpers, finish GPU work, save runtime state
+       -> 32-bit programs, services, and default helpers in elfldr payloads (system PT pool)
+       -> 64-bit store-client games and browser in elevated Sony local processes
+          (/app0/wine-local-child.bin; 65,536 CPU / 32,768 GPU app PT pool; 0 system PT)
+       -> direct-launched 64-bit games may also run in-title (TITLE_CLIENT.md)
+  -> game exit inside a persistent store-client session:
+       local process closed via sceSystemServiceKillLocalProcess (100% PT/memory reclaimed),
+       store client stays alive (no LoadExec handover)
+  -> session close: stop/reap helpers and local children, finish GPU work, save runtime state
   -> LoadExec back to launcher
 ```
 
 The persisted one-shot request survives the observed loss of restart arguments.
-The title never calls `exit()` or returns from `_start`; its CRT/shell-close and
-LoadExec paths end or replace it. A payload has its own native lifetime and may
-return from its payload entry point.
+The title and its Sony local processes (`/app0/wine-local-child.bin`) never call
+`exit()` or return from `_start`; the title ends or replaces itself through its
+shell-close and `LoadExec` paths, and a Sony local process closes its control
+endpoint (fd 3) and parks until the title ends it via
+`sceSystemServiceKillLocalProcess`. An `elfldr` payload has its own native
+lifetime and may return from its payload entry point.
 
 ## Processes and bootstrap
 
@@ -109,10 +119,29 @@ establish the exact cause of the earlier console outage.
 
 The process/GPU/frame tables have 32 slots. Console evidence proves eight
 simultaneous Windows children; memory and bootstrap helpers also consume resources.
-`title` and `single` layouts remain diagnostics. Production's process adapter
-calls `payload_spawn` directly and has no Sony-spawn fallback. Standalone Sony
-probes and historical build tools remain for investigation; production packaging
-removes `wine-child.bin` and stages only the payload loader.
+`title` and `single` layouts remain diagnostics.
+
+**Hybrid payload + elevated Sony local-process execution (2026-11-26).**
+In persistent store-client sessions (`WINE_PS5_LOCAL_GAMES=1`), the title registers
+a local spawner (`pw_ps5_set_local_spawner`) backed by `/app0/wine-local-child.bin`
+(`native/proton_local_child.c`, `native/pw_local_child.h`, `tools/build-local-child.sh`),
+a headless SELF importing only `libkernel.sprx` and `libSceLibcInternal.sprx`.
+The title keeps one pre-warmed elevated local child ready (`25–30 ms` warm spawn):
+on entry, the local child elevates through the resident Lapy daemon (waiting for
+`geteuid() == 0` with private credentials so JIT shared memory is permitted),
+sends a `PW_LOCAL_HELLO_MAGIC` handshake on fd 3, loads `ntdll.prx` via
+`sceKernelLoadStartModule` (`~5–6 ms`), and runs the shared `proton_wine_child.c`
+loop. 64-bit graphics processes (games and the store client's browser) route to
+these elevated local processes so they draw 100% of their page tables from the
+title's expanded **65,536 CPU / 32,768 GPU** application page-table pools
+(`ps5/sce_sys/param.json`: `cpuPageTableSize = 268435456`,
+`gpuPageTableSize = 134217728`, leaving `11,456 MiB` direct memory) and `1 GiB`
+flexible pool instead of the 8,192-entry system pool, while 32-bit programs and
+Wine services remain in `elfldr` payload helpers. On exit or crash,
+`sceSystemServiceKillLocalProcess` reclaims 100% of the local process's page
+tables and flexible memory without restarting the title or closing the store
+client. Direct-launched titles outside the store client keep their existing
+payload and in-title routing unchanged.
 
 ## 32-bit Windows execution
 
@@ -132,10 +161,20 @@ interpreter remains a diagnostic fallback, not the game execution path.
 ## Memory and shared ownership
 
 The payload imports `sceKernelAllocateDirectMemoryForApp` from `libkernel_sys`
-and supplies it to Wine through `__wine_ps5_set_payload_direct_memory`.
-Wine's existing mapper backs Windows commits and the Unix heap from the shared
-11,712 MiB application pool. Helpers retain budget 0; no kernel budget patch
-is applied. Title PRXs do not import the private allocator.
+and supplies it to Wine through `__wine_ps5_set_payload_direct_memory`. Elevated
+Sony local processes (`/app0/wine-local-child.bin`) live inside the application
+container and call ordinary `sceKernelAllocateDirectMemory` directly without
+importing `libkernel_sys`. Wine's existing mapper backs Windows commits and the
+Unix heap from the shared application direct-memory pool (**11,456 MiB** with
+`cpuPageTableSize = 256 MiB` and `gpuPageTableSize = 128 MiB` in
+`ps5/sce_sys/param.json`; `11,712 MiB` with default page-table sizes). Payload
+helpers retain budget 0; no kernel budget patch is applied. Title PRXs do not
+import the private allocator.
+
+In the GPU broker client (`platform/graphics/patches/0003-gpu-broker-cpu-only-direct-memory-fallback.patch`),
+Sony local processes without an initialized AGC GPU VM fall back from `0x33` to
+CPU-only `0x03` when mapping shared direct-memory host buffers; the owning title
+retains `0x33` GPU access on the same physical range.
 
 Reservations stay virtual until committed. Commit, zeroing, decommit and release
 use the direct-memory mapper. The payload SDK supplies executable-memory callbacks.

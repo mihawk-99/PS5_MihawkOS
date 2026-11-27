@@ -1,5 +1,24 @@
 # The flexible-memory wall
 
+> [!IMPORTANT]
+> **2026-11-26 update (branch `fast-steam`, standard PS5 13.60):** The 2026-10-25
+> finding below that *"on 13.60, a Sony local process cannot execute anything (JIT
+> create refused, `0x80020001 EPERM`)"* was measured on an **un-elevated** local
+> process. When a Sony local process elevates through the resident Lapy daemon
+> (waiting for `geteuid() == 0` with private credentials before touching memory),
+> `sceKernelJitCreateSharedMemory` succeeds with full execute permissions even past
+> 65 MiB (`evidence/sony-local-elev-pt-probe-02.json`: `euid=0`, `jit_made=0`,
+> `jit80_made=0`, `jit80_mapped=0`, `jit80_protect=0`, `jit80_value=42`,
+> `way=jit prot=5 value=42`). Combined with `kernel.cpuPageTableSize = 268435456`
+> (**65,536 CPU PT**) and `kernel.gpuPageTableSize = 134217728` (**32,768 GPU PT**)
+> in `ps5/sce_sys/param.json`, **route 1b is now proven and shipped on `fast-steam`**
+> as `/app0/wine-local-child.bin` for 64-bit Steam games and `steamwebhelper.exe`:
+> their JIT code, flexible memory, and page tables draw from the title's 1 GiB
+> flexible pool and 65,536-entry CPU page-table pool (`0` system PT, 100% OS-level
+> reclamation on `sceSystemServiceKillLocalProcess`, verified across three 64-bit
+> Steam games in `evidence/p3-local-*.json` and `evidence/p3-e2e-spelunky2-twice-2026-11-26-01.json`).
+> The 2026-10-25..27 investigation below is preserved intact as historical context.
+
 The owner's question (2026-10-25): "Even if we pass all Wine compliance tests, 1GiB flexible memory is still a wall."
 Then: bypass it entirely, without hvctl and without reading or writing kernel or hypervisor memory. This document says
 what the wall is, measured, and which routes past it remain. Records: `evidence/flex-sony-base-2026-10-25-01.json`,
@@ -88,7 +107,7 @@ What cannot move is the code: 104 + 30 MiB here, and 162 MB converted across the
 | 2 | **Direct-only data in helpers**: sections, libc heap slack, module data, stacks | Steam in Big Picture: helpers 467 -> 267 MiB in 7 (below); stacks not moved | Small | **Done** except stacks (`fmem-bp-*-2026-10-2[56]`) |
 | 3 | **The game in the title** (`PROTON_LAYOUT=title`): its code and flexible memory go to the title's partition, ~950 MiB free | The game's whole share (the 2D game's helper: 61 MiB census plus its code) leaves the system pool | One process per title session; on 13.60 the title backend expects direct memory to execute, which it does not (above), so that path needs JIT conversion in the title first | Not run on 13.60 |
 | 4 | **Title-made JIT for helpers' code**: payloads map JIT objects the title makes, so code is charged to the title's partition | All code off the system pool | 2026-10-06: memory the title made and a helper still held when the system closed the title **panicked the console** (`src/pw_shared_page.h`) | Not pursued without a safe close protocol |
-| 1b | **Sony local processes running code from direct memory** (up to ~6 slots in the title's partition) | Their code and data leave the system pool; only their libc and stacks go to the title's mostly free partition | A second placement and spawn path; the 7-process ceiling | **13.60: dead** on the standard PS5 and the Pro (no execute at all, JIT refused); 4.03 standard: the same. **Pro at 10.01: unmeasured** (below) |
+| 1b | **Elevated Sony local processes (`/app0/wine-local-child.bin`) running JIT code in the title's partition** | Their JIT code, flexible memory, and page tables leave the system pool and draw from the title's 1 GiB flexible pool and expanded 65,536-entry CPU PT pool (`0` system PT), with 100% OS-level reclamation on close | Lapy elevation handshake before memory mapping; GPU broker CPU-only `0x03` fallback (`0003`) | **Proven & shipped on `fast-steam` (2026-11-26, base PS5 13.60)**: `sony-local-elev-pt-probe-02.json` (`jit80_value=42`, `65,513/65,536` PT reclaimed) + 3 real 64-bit Steam games (`p3-local-*`, `p3-e2e-spelunky2-twice-2026-11-26-01.json`). Earlier 2026-10-25 negative was un-elevated. **Pro 10.01: pending** |
 | - | The slider | - | - | **Measured negative**: it only trades the title's flexible memory for direct |
 | - | hvctl, kernel budget writes, bare-title `rfork` | - | - | Excluded: the owner's condition; a known panic |
 

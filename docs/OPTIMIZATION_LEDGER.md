@@ -1,6 +1,6 @@
 # Optimization ledger
 
-Reviewed 2026-10-07. This index distinguishes retained improvements from current
+Reviewed 2026-11-26. This index distinguishes retained improvements from current
 performance claims. Full hypotheses, code changes, failed experiments and measured
 rounds R1–R7 remain in [the original ledger](history/2026-10-07/docs/OPTIMIZATION_LEDGER.md).
 
@@ -8,6 +8,7 @@ rounds R1–R7 remain in [the original ledger](history/2026-10-07/docs/OPTIMIZAT
 
 | Work | Accomplishment | Limit |
 | --- | --- | --- |
+| Persistent store client & elevated local processes (2026-11-26) | Eliminated close/reopen `LoadExec` handovers; pre-warmed elevated `/app0/wine-local-child.bin` spawns in `25–30 ms` (`ntdll.prx` kernel load `~5–6 ms`); expanded `65,536` CPU / `32,768` GPU app PT pool leaves `>62,300/65,536` CPU PT and `>3,700/8,192` system PT free across heavy 64-bit games (`117.7–122.7 FPS`); faster store-client file/xattr/server paths (`2485`, `2486`) | Measured on base PS5 (13.60); PS5 Pro (10.01) and full `tools/gate.py run` battery pending |
 | Measurement/tooling | Frame/server/memory counters, repeatable game/probe runs and preserved verdicts | Old single-title counters do not automatically describe every helper |
 | Exit robustness | Threads terminate at the user-mode boundary; durable registry saves and normal-close fixes | Power-loss recovery is not universally proven |
 | Synchronization | PS5 in-process synchronization implementation and focused correctness/closure tests | Kernel/platform differences still need suite-specific validation |

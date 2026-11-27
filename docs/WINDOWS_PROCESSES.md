@@ -1,31 +1,51 @@
 # Windows processes
 
-Current production guide, reviewed 2026-10-07. The chronological investigation,
-including failed runs and obsolete opt-ins, is retained in
+Current production guide, updated 2026-11-26. The chronological
+investigation, including failed runs and obsolete opt-ins, is retained in
 [the process history](history/2026-10-07/docs/WINDOWS_PROCESSES.md).
 
 ## Bootstrap and ownership
 
 Every executable defaults to the owner/broker layout. The PS5 title hosts the
-shared wineserver, graphics/display, input and audio. Windows programs are
-separate native payload processes created through resident websrv/elfldr.
+shared wineserver, graphics/display, input and audio. Windows programs run in
+isolated native processes through two complementary backends:
+
+- **`elfldr` payload helpers** (created via resident `websrv`/`elfldr`): used for
+  32-bit programs (WoW64), Wine system services, non-graphics tools, and direct-launched
+  helpers. They consume page tables from the console's 8,192-entry system pool and
+  allocate direct memory through `sceKernelAllocateDirectMemoryForApp`.
+- **Elevated Sony local processes (`/app0/wine-local-child.bin`)** (created via
+  `sceSystemServiceAddLocalProcess`, enabled by default in persistent store-client
+  sessions with `WINE_PS5_LOCAL_GAMES=1`): used for 64-bit graphics programs (games
+  and the store client's browser). Each local child elevates through the resident
+  Lapy daemon before touching memory (granting `euid=0` and JIT shared-memory
+  execution on firmware 13.60), loads `ntdll.prx` via `sceKernelLoadStartModule`
+  (`~5–6 ms`), draws 100% of its page tables from the title's expanded **65,536 CPU
+  / 32,768 GPU** application page-table pools (`ps5/sce_sys/param.json`) and `1 GiB`
+  flexible pool (`0` system page tables), allocates direct memory via ordinary
+  `sceKernelAllocateDirectMemory`, and returns 100% of its page tables and memory
+  when ended through `sceSystemServiceKillLocalProcess`. One pre-warmed local child
+  is kept parked so game and browser launches complete in **25–30 ms**.
+
 Descendant requests return to the owning title; Wine preserves their actual
 Windows parent relationships, startup parameters and inherited handles.
 
-A rendezvous transfers production's packet control connection, distinct from
-the wineserver connection and GPU/input/audio transports. The loader acknowledges
-the endpoint before the owner closes its copy, and the owner keeps the child's
-GPU-broker socket until READY: a unix socket whose every reference is in flight
-can arrive flushed on the console (readable, first read 0 bytes). The loader and
-runtime must agree on the bootstrap contract. Control EOF ends a payload. The owner checks
-native-PID absence and GPU completion before reclaiming resources.
+A rendezvous transfers a payload helper's packet control connection, distinct from
+the wineserver connection and GPU/input/audio transports (local processes inherit
+their `SOCK_SEQPACKET` control endpoint directly as fd 3 via `SpawnOptions.fd`).
+The loader acknowledges the endpoint before the owner closes its copy, and the owner
+keeps the child's GPU-broker socket until READY: a unix socket whose every reference
+is in flight can arrive flushed on the console (readable, first read 0 bytes). The
+loader and runtime must agree on the bootstrap contract. Control EOF ends a helper
+(payloads return; local children flush, close fd 3, and wait for
+`sceSystemServiceKillLocalProcess`). The owner checks native-PID absence and GPU
+completion before reclaiming resources.
 
 The 32-entry tables are implementation capacity, not a 32-child console claim.
 Eight simultaneous Windows children and four rendering Windows processes were
 verified in separate tests. Both counts exclude any claim of universal game-scale
-concurrency. Sony-managed spawning belongs to earlier experiments; its production
-spawning adapter was removed. The one-graphics-client arrangement remains an older
-diagnostic mode, not the current default.
+concurrency. The one-graphics-client arrangement remains an older diagnostic mode,
+not the current default.
 
 ## Process behavior already checked
 
@@ -130,13 +150,35 @@ observation alone.
 
 Evidence: the four 2026-10-07 run and memory records (removed from the tree; in git history).
 
+## Elevated Sony local processes and expanded page tables, 2026-11-26
+
+With `kernel.cpuPageTableSize = 268435456` (65,536 CPU PT) and
+`kernel.gpuPageTableSize = 134217728` (32,768 GPU PT) in `ps5/sce_sys/param.json`,
+the shared direct-memory pool is **11,456 MiB** (`11,712 MiB` with default PT sizes).
+On the standard PS5 (firmware 13.60), elevated Sony local processes were verified in
+the standalone flex probe (`evidence/sony-local-elev-pt-probe-02.json`: `euid=0`,
+`jit80_made=0`, `jit80_value=42`, `65,513/65,536` CPU PT and `1,031,798,784` B FMEM
+100% reclaimed on close) and across three 64-bit games launched from a persistent
+store-client session:
+- Heavy 3D game (`evidence/p3-local-village-2026-11-26-02.json`): `30 ms` warm spawn,
+  `4.5 GiB` direct memory, `7,636` direct flips at `119.9 FPS`, `62,395/65,536` CPU PT
+  free, `3,721/8,192` system PT free.
+- 3D Direct3D 12 demo (`evidence/p3-local-re3demo-2026-11-26-01.json`): `26 ms` warm
+  spawn, `4,802` direct frames at `117.7 FPS`, `62,543/65,536` CPU PT free,
+  `3,819/8,192` system PT free.
+- 2D action game launched twice in one session (`evidence/p3-e2e-spelunky2-twice-2026-11-26-01.json`):
+  `27–30 ms` warm spawns, `122–122.7 FPS`, full page-table reclamation between launches
+  (`63,661 -> 64,574 -> 63,644 -> 65,002` free of `65,536`), `3,971/8,192` system PT free.
+
+Set `WINE_PS5_LOCAL_GAMES=0` to disable local-process routing and fall back to
+`elfldr` payload helpers.
+
 ## Diagnostics and remaining limits
 
-`PROTON_LAYOUT=title` and `single`, `PROTON_ZINK=0`,
+`PROTON_LAYOUT=title` and `single`, `PROTON_ZINK=0`, `WINE_PS5_LOCAL_GAMES=0`,
 `WINE_PS5_HELPER_AUDIO=0` and `WINE_PS5_PAYLOAD_DMEM=0` are explicit diagnostics,
-not recommended game defaults. The old `WINE_PS5_PAYLOAD_CHILDREN=0` Sony-spawn
-opt-out is no longer implemented by the production process adapter. Historical
-Sony probes/build tools remain separate from the shipped payload route.
+not recommended game defaults. The old `WINE_PS5_PAYLOAD_CHILDREN=0` toggle is
+obsolete; local-process routing is controlled by `WINE_PS5_LOCAL_GAMES`.
 
 The system-memory guard stays enabled because application backing does not remove
 all system-pool consumption. Closing under synthetic pressure passed in the latest

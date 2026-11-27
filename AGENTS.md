@@ -25,10 +25,18 @@ programs** run natively through WoW64 (rule 9). Focused probes and short real-ga
 sessions have console evidence; broader compatibility and API conformance remain
 work to qualify, not universal support claims.
 
-Windows programs run as separate payload processes by default. The title owns the
-shared wineserver, GPU broker, display, controller feed and audio mixer. OpenGL
-uses Mesa/Zink through Vulkan/RADV. Payload helpers use the shared application
-memory pool; see the current process guide for measured capacity and limits.
+Windows programs run as separate isolated processes by default: `elfldr` payload
+helpers for 32-bit programs, Wine services, and direct-launched helpers, and
+pre-warmed Lapy-elevated Sony local processes (`/app0/wine-local-child.bin`,
+built by `tools/build-local-child.sh`) for 64-bit store-client games and the
+client's browser so they share the title's expanded 65,536 CPU / 32,768 GPU
+application page-table pool (`ps5/sce_sys/param.json`) without consuming the
+8,192-entry system pool or closing and reopening the store client across games.
+The title owns the shared wineserver, GPU broker, display, controller feed and
+audio mixer. OpenGL uses Mesa/Zink through Vulkan/RADV. Helpers use the shared
+application memory pool (`11,456 MiB` direct memory with 256 MiB CPU / 128 MiB
+GPU page tables); see [docs/WINDOWS_PROCESSES.md](docs/WINDOWS_PROCESSES.md)
+and [docs/PLAN.md](docs/PLAN.md) for measured capacity and limits.
 
 The knowledge base for the Wine side is
 [prospero-win](https://github.com/mpereiraesaa/prospero-win) — read

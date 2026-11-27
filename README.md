@@ -44,6 +44,31 @@ taskbar, Start, File Explorer and a web browser of its own.
 **Releases** are on the [Releases](https://github.com/mihawk-99/PS5_MihawkOS/releases) page. Each one says what
 changed and which consoles it was tested on.
 
+**New on `fast-steam` (tested on a standard PS5, firmware 13.60; PS5 Pro 10.01 and full commit gate pending):**
+- **Persistent Steam sessions — no close/reopen handovers.** Launching a game from Steam Big Picture no longer closes
+  Steam or restarts MihawkOS through `LoadExec`. Games launch directly from Big Picture, return straight to live Big
+  Picture when closed, and keep **Steam Cloud** (`AC Launch` and `AC Exit` sync) working across repeated launches in a
+  single session.
+- **65,536 CPU / 32,768 GPU page tables via elevated Sony local processes.** 64-bit Steam games and Steam's built-in
+  browser now run in pre-warmed, Lapy-elevated Sony local processes (`/app0/wine-local-child.bin`, `25–30 ms` warm
+  spawn latency) sharing the title's expanded **65,536 CPU** (`256 MiB`) and **32,768 GPU** (`128 MiB`) application
+  page-table pools (`ps5/sce_sys/param.json`, leaving `11,456 MiB` direct memory) and `1 GiB` flexible pool. They use
+  **zero** entries from the console's 8,192-entry system page-table pool, isolate crashes from the title/broker/Steam,
+  and reclaim 100% of page tables and memory on exit. `steam.exe` (32-bit), 32-bit games, and Wine services remain in
+  `elfldr` payload helpers.
+- **Faster Steam startup and I/O.** Reduced Wine server, xattr, and file I/O overhead during Steam startup (patch
+  `2485`), shader-cache namespace reuse, expanded code-cache budgeting for Steam's browser, and clean held-helper
+  reaping before a game launches (patch `2486`).
+- **Proven on a standard PS5 (firmware 13.60):**
+  - A 2D action game launched twice in one persistent Steam session: `27–30 ms` warm spawns, **122 FPS**, direct return
+    to live Big Picture without closing Steam, Steam Cloud `AC Launch` and `AC Exit` sync complete on both cycles,
+    `63,644 / 65,536` CPU page tables free and `3,971 / 8,192` system page tables free.
+  - A heavy 3D game (`4.5 GiB` direct memory): `30 ms` warm spawn, `7,636` direct-scanout flips at **119.9 FPS**
+    (`p99 8.75 ms`), `62,395 / 65,536` CPU page tables free, `32,690 / 32,768` GPU page tables free, `3,721 / 8,192`
+    system page tables free.
+  - A 3D Direct3D 12 demo (`~2.0 GiB` VRAM + `1.1 GiB` host direct memory): `4,802` direct frames at **117.7 FPS**,
+    `62,543 / 65,536` CPU page tables free, `3,819 / 8,192` system page tables free.
+
 **Coming in Alpha 8** (not yet run on a console):
 - **A control overlay over the game**, in the same see-through glass as the keyboard: press **L3 + R3** in a game.
   It has Exit game (press Cross twice), Statistics (FPS, frame time, CPU, GPU, memory and both page-table pools; it
@@ -115,8 +140,11 @@ Alpha 7 itself was tested on the PS5 Pro (firmware 10.01); earlier features were
   desktop of shortcuts and MihawkBrowser. A shortcut appears for each game you copy in. Its wallpaper, and the PS5 home-screen
   background, is Bubble City by the artist Skeuoss, used with their permission; its music and its mark are the project's own.
 - **A runtime.** Wine with Proton's components: DXVK and VKD3D-Proton for Direct3D, Mesa's Zink for OpenGL. It is pinned
-  from GE-Proton and patched so it runs on the console. Each Windows program runs in a process of its own. MihawkOS
-  itself owns the screen, the controller, the sound and the GPU that every program draws through.
+  from GE-Proton and patched so it runs on the console. Windows programs run in isolated OS processes: `elfldr` payload
+  helpers for 32-bit programs, Wine services, and direct-launched helpers, and pre-warmed elevated Sony local processes
+  (`/app0/wine-local-child.bin`) for 64-bit Steam games and Steam's browser so they share the title's 65,536-entry
+  application page-table pool without consuming the 8,192-entry system pool. MihawkOS itself owns the screen, the
+  controller, the sound, the shared wineserver, and the GPU broker that every program draws through.
 
 A full-screen game takes the screen directly (**Game Mode**), and the desktop comes back when it ends.
 
@@ -199,15 +227,21 @@ keeps saying it until you are signed in:
    as your sign-in is saved.
 5. **Big Picture.** From then on, Steam opens straight into Big Picture, made for the controller.
 
-Big Picture stutters less. Steam's built-in browser runs as one process, and its code budget now grows when it needs
-to. On a standard PS5 (firmware 13.60) at 120 Hz, the frames that took longer than 20 ms fell from 79 to 38 in the first
-minute, from 162 to 66 while scrolling and from 74 to 60 in the menus. Separate browser processes drew it more smoothly
-still (7 slow frames while scrolling), but each process takes part of the console's system page tables, and with them
-Steam alone left too few for a game to start.
-
-Steam games start in about half the time they used to: Steam's own file check is skipped, and a game's file reads are
-much cheaper. In the measured run, a 2D game launched from its library entry reached steady play in 66 seconds,
-down from 120.
+Big Picture runs cleanly and stays alive across games:
+- **No close-Steam / reopen-Steam handovers.** Starting a game from Big Picture keeps `steam.exe` running instead of
+  closing Steam and restarting MihawkOS. Before a library game starts, the held browser helper is reaped cleanly so its
+  memory and GPU slot are freed (patch `2486`); when the game ends, Big Picture returns live right away and **Steam
+  Cloud** completes its `AC Exit` upload and next `AC Launch` sync cleanly.
+- **65,536-entry page-table headroom for heavy 64-bit games.** In a Steam session, both `steamwebhelper.exe` and 64-bit
+  games run in pre-warmed, Lapy-elevated Sony local processes (`/app0/wine-local-child.bin`, `25–30 ms` warm spawn)
+  drawing from the title's **65,536 CPU / 32,768 GPU** page-table pools (`param.json`) rather than the console's
+  8,192-entry system pool. Heavy 64-bit games allocating 4–6 GiB of direct memory keep more than 62,000 CPU page tables
+  and 3,700 system page tables free, and every page table is returned by the OS when the game exits.
+- **Faster startup and smoother Big Picture.** Steam's built-in browser runs as one process with an adaptive code budget
+  that grows on thrash, alongside fast Steam file/xattr/server paths (patch `2485`) and shader-cache namespace reuse. On
+  a standard PS5 (firmware 13.60) at 120 Hz, Big Picture's slow frames (>20 ms) fell from 79 to 38 in the first minute,
+  from 162 to 66 while scrolling, and from 74 to 60 in menus; on `fast-steam`, three tested 64-bit Steam games reached
+  117.7–122.7 FPS with 26–30 ms warm local-process spawns ([docs/STEAM.md](docs/STEAM.md)).
 
 **Settings → Controller** chooses the controller programs see: **Xbox 360** (the default), **Xbox One** or
 **DualSense**. Steam then shows that controller's button glyphs.
@@ -338,7 +372,7 @@ Every line here is something a console run showed, on a **PS5 Pro (firmware 10.0
 | --- | --- |
 | Windows programs | 64-bit programs, and 32-bit ones natively through WoW64; up to eight at once, with the programs they start |
 | Graphics | Direct3D 11 through DXVK, Direct3D 12 through VKD3D-Proton, OpenGL through Mesa's Zink, and video through Media Foundation; Game Mode hands a full-screen game the screen; a large 3D game on Direct3D 12 held about 117 frames a second |
-| Steam | Installed, signed in by phone and opened in Big Picture on the standard PS5; its install and sign-in window inside the PS5 Pro's memory limit |
+| Steam | Installed, signed in by phone, opened in Big Picture, and kept alive across repeated 64-bit game launches on the standard PS5 (13.60) with live Big Picture return, Steam Cloud `AC Launch` / `AC Exit` sync, and elevated Sony local-process games on the 65,536 CPU page-table pool (`117.7–122.7 FPS` across three tested 64-bit games); install and sign-in also verified inside the PS5 Pro's memory limit |
 | Input and sound | The DualSense as an Xbox 360 or Xbox One controller or as itself, the touchpad as a pointer, USB keyboard and mouse; sound through the title's mixer |
 | Network | Name lookups, HTTP and strict HTTPS from Windows programs |
 | Desktop | Taskbar, Start with search and pins, File Explorer, a desktop folder view, MihawkBrowser |
@@ -573,7 +607,8 @@ exactly that build, and run the privacy guard on every commit.
 
 **Runtime switches for builders**, set in an entry's `env`: `WINE_PS5_CODE_BUDGET_MIB` overrides a helper's code
 budget (0 turns it off); `WINE_PS5_PRX_LOADER=0` asks the kernel to load Wine's modules instead of MihawkOS's loader,
-for an A/B.
+for an A/B; `WINE_PS5_LOCAL_GAMES=0` disables elevated Sony local-process routing (`/app0/wine-local-child.bin`, built
+by `tools/build-local-child.sh`) in Steam sessions and falls back to `elfldr` payload helpers.
 
 Where to read next: [docs/ARCHITECTURE.md](docs/ARCHITECTURE.md) (who owns what, how a program starts),
 [docs/PLAN.md](docs/PLAN.md) (what is being built and what is proven),

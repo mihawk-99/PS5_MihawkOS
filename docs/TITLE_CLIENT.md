@@ -1,5 +1,21 @@
 # One Windows client in the title, beside the GPU broker (design, 2026-10-26)
 
+> [!IMPORTANT]
+> **Superseding note for Steam sessions (2026-11-26, branch `fast-steam`):**
+> Direct-launched 64-bit games outside Steam continue to use the in-title route
+> (`eboot.bin`) documented below unchanged. For **Steam sessions**
+> (`is_steam_root && !play_session`), however, `fast-steam` no longer runs either
+> `steamwebhelper.exe` or 64-bit Steam games inside `eboot.bin` and no longer uses
+> a close-Steam / reopen-Steam `LoadExec` handover on game start/exit. Instead,
+> both `steamwebhelper.exe` and 64-bit Steam games run in pre-warmed, Lapy-elevated
+> Sony local processes (`/app0/wine-local-child.bin`, `25–30 ms` warm spawn) that
+> share the title's expanded **65,536 CPU / 32,768 GPU** page-table pools and
+> `1 GiB` flexible pool while keeping every game isolated in its own OS process
+> (100% OS-level page-table and memory reclamation on `sceSystemServiceKillLocalProcess`,
+> zero crash propagation to the title/broker/server/Steam, and live return to Big
+> Picture with Steam Cloud sync intact). See [STEAM.md](STEAM.md) and
+> [FLEXIBLE_MEMORY.md](FLEXIBLE_MEMORY.md) for the 2026-11-26 measurements.
+
 Design only: nothing here is built or run. The owner decides the build. The goal and the memory measurements are in
 [FLEXIBLE_MEMORY.md](FLEXIBLE_MEMORY.md) ("Next: the game inside the title").
 

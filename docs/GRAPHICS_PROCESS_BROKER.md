@@ -1,16 +1,25 @@
 # Graphics process broker
 
-Current guide, reviewed 2026-10-07. The GPU broker is the production path for
-payload graphics. The earlier native experiments, failed direct-GPU attempts,
-throughput measurements and overlay development are in
+Current guide, updated 2026-11-26. The GPU broker is the
+production path for both `elfldr` payload helpers and elevated Sony local-process
+helpers (`/app0/wine-local-child.bin`). The earlier native experiments, failed
+direct-GPU attempts, throughput measurements and overlay development are in
 [the graphics history](history/2026-10-07/docs/GRAPHICS_PROCESS_BROKER.md).
 
 ## Mechanism
 
-The title owns the console GPU context and display. Each Windows payload keeps
-its own Wine/Vulkan/RADV state and asks the broker to allocate GPU resources,
-submit work, wait for completion and present frames. This avoids requiring each
-child to initialize a separate native Sony GPU context.
+The title owns the console GPU context and display. Each Windows child process
+(payload helper or Sony local process) keeps its own Wine/Vulkan/RADV client
+state and asks the broker to allocate GPU resources, submit work, wait for
+completion and present frames. This avoids requiring each child to initialize a
+separate native Sony GPU context.
+
+For Sony local-process clients (`/app0/wine-local-child.bin`), which run as
+`native_game` without an initialized AGC GPU VM,
+`platform/graphics/patches/0003-gpu-broker-cpu-only-direct-memory-fallback.patch`
+falls back from `0x33` to CPU-only `0x03` in `tooling/gpu-broker/client.c` when
+mapping shared direct-memory host buffers; the owning title (`eboot.bin`) keeps
+`0x33` GPU access on the same physical range.
 
 The owner displays completed child images through VideoOut. Desktop/window frames
 also reach its compositor. Foreground-window state directs presentation and pointer
@@ -42,6 +51,7 @@ Pins and ownership are in [ARCHITECTURE.md](ARCHITECTURE.md) and
 | Zink | Offscreen shader/vertex probe reported OpenGL 4.6; visible presentation passed; a .NET (MonoGame) game used the production default |
 | Audio/input | Helper controller state and HID reports; desktop pointer/click gate; a .NET (MonoGame) game's human input and audible music |
 | Memory/closure | Application-backed Windows memory plus shell closure with a live 2 GiB graphics helper passed |
+| Local-process clients (2026-11-26) | Elevated Sony local-process 64-bit games rendered `7,636` direct flips at `119.9 FPS` (`p3-local-village-2026-11-26-02.json`), `4,802` direct frames at `117.7 FPS` (`1.99 GiB` VRAM + `1.14 GiB` host DMEM, `p3-local-re3demo-2026-11-26-01.json`), and `8,823` total flips across two consecutive launches + live browser return (`p3-e2e-spelunky2-twice-2026-11-26-01.json`), all with `dmem_host refused=0 free_failed=0` |
 
 Representative records are [payload-graphics-10](../evidence/payload-graphics-10.json),
 [manual game audio](../evidence/manual-default-audio-2026-10-06-02.json),

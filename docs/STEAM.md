@@ -1,4 +1,71 @@
-# The launcher's Steam option, and the client inside the Pro's memory limit
+# Steam on MihawkOS: persistent sessions, elevated local-process games, and the launcher option
+
+## Persistent Steam sessions and elevated Sony local processes (2026-11-26, branch `fast-steam`, base PS5 13.60)
+
+On branch `fast-steam`, Steam sessions no longer shut Steam down or restart the title through `LoadExec` when starting or
+closing a game, and 64-bit Steam games no longer contend for either the single in-title process slot (`eboot.bin`) or
+the 8,192-entry system page-table pool.
+
+### What changed
+
+1. **Phase 1 — Faster Steam startup and I/O:**
+   - `wine/patches/2485-ps5-fast-steam-file-and-server-ops.patch` and `wine/ps5/pw_wine_xattr.c`: faster Steam file,
+     extended-attribute, and wineserver operations during client startup and game launch.
+   - `src/pw_steam.c`, `src/pw_shader_cache.c`, `wine/ps5/pw_wine_code_budget.{h,c}`: shader-cache namespace reuse and
+     tuned code-cache budgets for Steam and its browser helper (`tests/test_pw_wine_code_budget.c`).
+2. **Phase 2 — Persistent Steam lifecycle (no close/reopen `LoadExec` handover):**
+   - `native/proton_wine.cpp` and `ps5/src/proton_launch.cpp`: for Steam sessions (`is_steam_root && !play_session`),
+     `steam.exe` remains alive across game launches and exits rather than shutting down and handing off through
+     `LoadExec`.
+   - `wine/patches/2486-kernelbase-ps5-reap-held-helper-before-starting-game.patch`: before creating a library game
+     process, cleanly terminates and waits up to 2 s to reap the held `steamwebhelper.exe` process so its GPU broker
+     slot and ~1 GiB direct memory are released before the game allocates its own; if game creation fails, resumes the
+     held helper cleanly.
+   - On game exit, Steam remains live, Big Picture immediately resumes foreground presentation, and **Steam Cloud**
+     completes both `AC Launch` and `AC Exit` syncs reliably.
+3. **Phase 3 — Hybrid elevated Sony local processes (`/app0/wine-local-child.bin`) + 65,536 CPU / 32,768 GPU PT pool:**
+   - Why Phase 2 alone was not enough: running 64-bit Steam games in `elfldr` payload helpers kept them on the console's
+     8,192-entry system page-table pool, where heavy 64-bit games mapping 3–6 GiB quickly dropped below the page-table
+     guard threshold. Earlier `docs/FLEXIBLE_MEMORY.md` probes thought Sony local processes (`sceSystemServiceAddLocalProcess`)
+     could not execute JIT code on firmware 13.60 only because the probe helper had not elevated through the resident
+     Lapy daemon.
+   - Proof (`evidence/sony-local-elev-pt-probe-02.json`): elevating a Sony local process via Lapy (waiting for
+     `geteuid() == 0` with private credentials before touching memory) grants full JIT execution (`jit_made=0`,
+     `jit80_made=0`, `jit80_value=42`, `way=jit prot=5 value=42`), `RLIMIT_NOFILE = 13952/13952`, and full access to
+     the title's expanded `param.json` page-table pools (`65,513 / 65,536` CPU PT, `65,536 / 65,536` GPU PT), returning
+     100.0% of page tables and `1,031,798,784` bytes of flexible memory on `sceSystemServiceKillLocalProcess`.
+   - Implementation:
+     - `ps5/sce_sys/param.json`: raises `kernel.cpuPageTableSize` to `268435456` (**256 MiB = 65,536 CPU PT**) and
+       `kernel.gpuPageTableSize` to `134217728` (**128 MiB = 32,768 GPU PT**), leaving **11,456 MiB** direct memory.
+     - `native/pw_local_child.h`, `native/proton_local_child.c`, `native/proton_wine_child.c`, `tools/build-local-child.sh`:
+       builds and signs `/app0/wine-local-child.bin` (headless SELF importing only `libkernel.sprx` and
+       `libSceLibcInternal.sprx`), elevates via Lapy with 3-attempt retry, loads `ntdll.prx` via
+       `sceKernelLoadStartModule` (`~5–6 ms`), and runs the shared Wine child loop without ever calling `exit()` or
+       returning from `_start`.
+     - `wine/ps5/pw_wine_process.{h,c}` and `native/proton_wine.cpp`: keeps a pre-warmed elevated local helper ready
+       (`25–30 ms` spawn latency) and routes 64-bit graphics processes (`steamwebhelper.exe` and 64-bit games) to Sony
+       local processes when `WINE_PS5_LOCAL_GAMES=1` (the Steam-session default; `WINE_PS5_LOCAL_GAMES=0` falls back to
+       payload helpers). `steam.exe` (32-bit), 32-bit games, and Wine services remain in `elfldr` payload helpers.
+       Direct-launched titles outside Steam keep their existing routing untouched.
+     - `platform/graphics/patches/0003-gpu-broker-cpu-only-direct-memory-fallback.patch`: falls back from `0x33` to
+       CPU-only `0x03` direct-memory mapping in GPU broker clients inside Sony local processes without an initialized
+       AGC GPU VM, while `eboot.bin` retains `0x33` GPU access.
+
+### Measured results on the standard PS5 (firmware 13.60, 2026-11-26)
+
+| Run (`evidence/`) | Workload | Warm spawn | Rendering | CPU PT free (of 65,536) | System PT free (of 8,192) | Memory & Cloud |
+| --- | --- | --- | --- | --- | --- | --- |
+| `sony-local-elev-pt-probe-02.json` | Elevated local-process probe | – | `jit80_value=42`, `prot=5` | `65,513 -> 65,396 -> 65,513` (100% reclaimed) | 0 system PT consumed | `1,031,798,784` B FMEM 100% reclaimed |
+| `p3-local-village-2026-11-26-02.json` | Heavy 3D 64-bit game via Steam | `30 ms` | `7,636` direct flips, **119.9 FPS** (`p99 8.75 ms`, 0 gaps >= 100 ms) | `62,395` (`gpu 32,690/32,768`) | `3,721` | `4.5 GiB` direct memory (`4,925/11,456 MiB` free), clean exit to `11,178 MiB` free |
+| `p3-local-re3demo-2026-11-26-01.json` | 3D Direct3D 12 demo via Steam | `26 ms` | `4,802` direct frames, **117.7 FPS**, verified 1080p capture | `62,543` (`gpu 32,277/32,768`) | `3,819` | `1.99 GiB` VRAM + `1.14 GiB` host DMEM, clean exit to `11,265 MiB` free |
+| `p3-e2e-spelunky2-twice-2026-11-26-01.json` | 2D 64-bit game launched **twice** in one Steam session | `27 ms` (#1), `30 ms` (#2) | **122 FPS** (#1), **122.7 FPS** (#2), live Big Picture between runs (3 captures verified) | `63,661` (#1) -> `64,574` (returned) -> `63,644` (#2) -> `65,002` (exit) | `3,929` (#1) -> `3,971` (#2) | Steam Cloud `AC Launch` + `AC Exit` `Upload complete` on **both** cycles; zero `LoadExec` handovers |
+
+**What remains open on `fast-steam`:**
+- Running the full console commit gate (`tools/gate.py run`) and testing the hybrid elevated local-process path on the PS5 Pro (firmware 10.01).
+
+---
+
+## The launcher's Steam option, and the client inside the Pro's memory limit (2026-10-24)
 
 Status 2026-10-24 (PS5 Pro, firmware 10.01, guard 870 MiB unchanged). Code: `src/pw_steam.{h,c}` (portable, host-tested by
 `tests/test_pw_steam.c`, `tests/test_process_rules.c`), `ps5/src/proton_steam.{h,cpp}` (download thread, catalog entries, side panel),

@@ -1,5 +1,43 @@
 # Plan
 
+## Fast persistent Steam and elevated Sony local-process 64-bit games (2026-11-26; branch `fast-steam`; base PS5 13.60; full commit gate pending)
+
+Removes Steam close/reopen `LoadExec` handovers, speeds up Steam startup and I/O, and moves 64-bit Steam games and
+`steamwebhelper.exe` onto Lapy-elevated Sony local processes (`/app0/wine-local-child.bin`) sharing an expanded
+**65,536 CPU / 32,768 GPU** application page-table pool (`ps5/sce_sys/param.json`: `cpuPageTableSize = 268435456`,
+`gpuPageTableSize = 134217728`, leaving `11,456 MiB` direct memory). Full breakdown in [STEAM.md](STEAM.md),
+[ARCHITECTURE.md](ARCHITECTURE.md), [FLEXIBLE_MEMORY.md](FLEXIBLE_MEMORY.md), and [HYPERVISOR.md](HYPERVISOR.md).
+
+- **Phase 1 (fast Steam startup & I/O):** `wine/patches/2485-ps5-fast-steam-file-and-server-ops.patch`,
+  `wine/ps5/pw_wine_xattr.c`, `wine/ps5/pw_wine_code_budget.{h,c}`, `src/pw_steam.c`, `src/pw_shader_cache.c`
+  (`tests/test_pw_wine_code_budget.c`).
+- **Phase 2 (persistent Steam lifecycle):** `wine/patches/2486-kernelbase-ps5-reap-held-helper-before-starting-game.patch`,
+  `native/proton_wine.cpp`, `ps5/src/proton_launch.cpp` (`tests/test_process_rules.c`). Keeps `steam.exe` alive across
+  game launches and exits, reaps the held browser helper before launching a library game, and returns directly to live
+  Big Picture with Steam Cloud sync intact.
+- **Phase 3 (elevated Sony local processes + 65,536 CPU / 32,768 GPU PT pool):** `native/pw_local_child.h`,
+  `native/proton_local_child.c`, `native/proton_wine_child.c`, `tools/build-local-child.sh`, `wine/ps5/pw_wine_process.{h,c}`,
+  `native/proton_wine.cpp`, `ps5/sce_sys/param.json`, and
+  `platform/graphics/patches/0003-gpu-broker-cpu-only-direct-memory-fallback.patch` (`0x33` -> `0x03` CPU-only fallback
+  for local-process broker clients). Pre-warms one elevated local child (`25–30 ms` warm spawn), loads `ntdll.prx` via
+  `sceKernelLoadStartModule` (`~5–6 ms`), draws 0 system page tables, and reclaims 100% of page tables and flexible
+  memory on `sceSystemServiceKillLocalProcess`. Direct-launched titles outside Steam remain unchanged.
+- **Measured on base PS5 (13.60) and host (`fab446e`):**
+  - Host: `tools/build-wine-ps5.sh --check-patches` PASS; `tools/host-tests.sh` **219 passed**; `tools/privacy_check.py staged` PASS.
+  - Probe (`evidence/sony-local-elev-pt-probe-02.json`): elevated Sony local child `euid=0`, `jit80_made=0`,
+    `jit80_value=42`, `way=jit prot=5 value=42`, `nofile=13952/13952`, CPU PT `65,513 -> 65,396 -> 65,513` (100%
+    reclaimed), FMEM `1,031,798,784 -> 960,495,616 -> 1,031,798,784` B (100% reclaimed).
+  - Heavy 3D 64-bit game (`evidence/p3-local-village-2026-11-26-02.json`): `30 ms` warm spawn, `4.5 GiB` direct memory,
+    `7,636` direct flips at **119.9 FPS** (`p99 8.75 ms`), `62,395/65,536` CPU PT free, `32,690/32,768` GPU PT free,
+    `3,721/8,192` system PT free.
+  - 3D Direct3D 12 demo (`evidence/p3-local-re3demo-2026-11-26-01.json`): `26 ms` warm spawn, `4,802` direct frames at
+    **117.7 FPS** (`1.99 GiB` VRAM + `1.14 GiB` host DMEM), `62,543/65,536` CPU PT free, `3,819/8,192` system PT free.
+  - 2D 64-bit game launched twice in one Steam session (`evidence/p3-e2e-spelunky2-twice-2026-11-26-01.json`):
+    `27–30 ms` warm spawns, **122 / 122.7 FPS**, live Big Picture return without closing Steam, Steam Cloud `AC Launch`
+    + `AC Exit` `Upload complete` on both cycles, CPU PT `63,661 -> 64,574 -> 63,644 -> 65,002` free of `65,536`,
+    system PT `3,929 -> 3,971` free of `8,192`.
+- **Open:** full console commit gate (`tools/gate.py run`) and PS5 Pro (firmware 10.01) verification on this branch.
+
 ## MihawkOS desktop round 4: text, shortcut icons, dialogs, accent, window frame (2026-11-07; base PS5)
 
 The owner's five follow-ups, one gate for all of them. Numbers are in docs/SHELL81_REVIEW.md, "Round 4".

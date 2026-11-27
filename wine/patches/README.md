@@ -813,3 +813,15 @@ in place of the default blue.
 
 Patch 2493 aliases Segoe UI (and its Light, Semilight and Semibold faces) to Proton UI in `wine.inf`. Before, Wine's Times
 New Roman alias made every program asking for the most common UI face draw serif text, the message box included.
+
+Patch 2154 (`server: ps5: say where the server's time goes`) adds periodic 10 s wineserver timing breakdowns (wakes,
+loop time, request counts/latency, lock wait, change lists, and top request handlers) so Steam and game startup
+bottlenecks show up directly in klog without a separate profiler.
+
+Patch 2485 (`ps5: fast Steam file and server ops`) cuts Wine server, filesystem, and xattr overhead on the hot paths hit
+during Steam startup and game launches (`wine/ps5/pw_wine_xattr.c`).
+
+Patch 2486 (`kernelbase: ps5: terminate and reap held browser helper before launching game`) terminates and waits up to
+2 s to reap a running held browser helper (`steamwebhelper.exe`) before creating a library game process so its GPU
+broker slot and ~1 GiB direct memory are released before the game allocates its own, while keeping `steam.exe` alive
+without a `LoadExec` handover; if game creation fails, it clears the launching guard and resumes any held helper cleanly.

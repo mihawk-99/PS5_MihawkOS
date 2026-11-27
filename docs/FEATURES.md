@@ -1,8 +1,19 @@
 # Features and accomplishments
 
-Current branch: `windows11` (from `main`, the `mihawk-os` line promoted 2026-10-12). Desktop/runtime evidence reviewed through 2026-10-12.
-Application results retain the dates of their own evidence; the 2026-10-12 section below is the newest.
+Desktop/runtime evidence reviewed through 2026-11-26.
+Application results retain the dates of their own evidence; the 2026-11-26 section below is the newest.
 These are focused console accomplishments, not a universal compatibility list.
+
+## Persistent store client and elevated local-process 64-bit games (2026-11-26, base PS5 13.60)
+
+Host suite passes **219/219** (`tools/host-tests.sh`) and `--check-patches` passes; full console commit gate (`tools/gate.py run`) and PS5 Pro 10.01 verification remain pending on this branch.
+
+| Feature | Accomplishment and limit |
+| --- | --- |
+| Persistent store-client sessions | Games launch directly from Big Picture without closing the store client or restarting MihawkOS via `LoadExec`, return directly to live Big Picture on exit, and keep Cloud save sync (`AC Launch` + `AC Exit`) working across repeated launches (`evidence/p3-e2e-spelunky2-twice-2026-11-26-01.json`). Pro 10.01 not yet tested |
+| Elevated Sony local-process runner | `/app0/wine-local-child.bin` (`sceSystemServiceAddLocalProcess` + Lapy elevation) executes JIT shared memory on firmware 13.60 (`jit80_value=42`, `evidence/sony-local-elev-pt-probe-02.json`), loads `ntdll.prx` via `sceKernelLoadStartModule` (`~5–6 ms`), spawns from a pre-warmed child in `25–30 ms`, and reclaims 100% of page tables and flexible memory on `sceSystemServiceKillLocalProcess` |
+| 65,536 CPU / 32,768 GPU page tables | `ps5/sce_sys/param.json` sets `cpuPageTableSize = 256 MiB` (`65,536`) and `gpuPageTableSize = 128 MiB` (`32,768`), leaving `11,456 MiB` direct memory. 64-bit store-client games and the browser draw `0` entries from the 8,192-entry system pool |
+| Verified 64-bit game runs (base PS5 13.60) | Heavy 3D game: `4.5 GiB` direct memory, `7,636` direct flips at `119.9 FPS`, `62,395/65,536` CPU PT free (`p3-local-village-2026-11-26-02.json`); 3D Direct3D 12 demo: `4,802` frames at `117.7 FPS`, `62,543/65,536` CPU PT free (`p3-local-re3demo-2026-11-26-01.json`); 2D action game launched twice in one session: `122–122.7 FPS`, live return and Cloud sync on both cycles (`p3-e2e-spelunky2-twice-2026-11-26-01.json`) |
 
 ## Windows 11 desktop (2026-10-12, branch `windows11`)
 

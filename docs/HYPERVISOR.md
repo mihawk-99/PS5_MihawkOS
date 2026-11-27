@@ -1200,3 +1200,37 @@ Correction to a trap met on the way: a tracer launched with `pipe=1` (hvctl.py's
 endpoint: Steam's webhelper then died of `payload loader failed at connect … errno=61` (ECONNREFUSED) and showed no
 UI. The fix is `hvctl.py … detach` (`pipe=0`), which starts the payload and releases the loader; the trace then
 streams to klog without blocking any helper.
+
+## Goal round 21 (2026-11-26, branch `fast-steam`): elevated Sony local processes + 65,536 CPU / 32,768 GPU app page tables solve page-table exhaustion without hvctl
+
+On the standard PS5 (firmware 13.60), raising `ps5/sce_sys/param.json` to
+`kernel.cpuPageTableSize = 268435456` (**256 MiB = 65,536 CPU PT**) and
+`kernel.gpuPageTableSize = 134217728` (**128 MiB = 32,768 GPU PT**) leaves
+**11,456 MiB** of direct memory and expands the application page-table pool 8x
+above the 8,192-entry system pool without any kernel patch or `hvctl`.
+
+Because `elfldr` payload helpers draw from the 8,192-entry system pool, heavy
+64-bit Steam games running in payload helpers still tripped the system page-table
+guard when mapping 3–6 GiB quickly. Moving 64-bit Steam games and
+`steamwebhelper.exe` into Lapy-elevated Sony local processes
+(`/app0/wine-local-child.bin`, spawned via `sceSystemServiceAddLocalProcess`)
+routes 100% of their page tables into the 65,536-entry application pool while
+leaving `0` page tables charged to the 8,192-entry system pool:
+
+- **Standalone probe (`evidence/sony-local-elev-pt-probe-02.json`):** after Lapy
+  elevation (`euid=0`), `jit_made=0`, `jit80_made=0`, `jit80_value=42`,
+  `way=jit prot=5 value=42`; CPU page tables moved `65,513 -> 65,396 -> 65,513`
+  of `65,536` (100% reclaimed on `sceSystemServiceKillLocalProcess`) and title
+  flexible memory moved `1,031,798,784 -> 960,495,616 -> 1,031,798,784` bytes
+  (100% reclaimed).
+- **Heavy 3D 64-bit game (`evidence/p3-local-village-2026-11-26-02.json`):**
+  `4.5 GiB` direct memory, `7,636` direct flips at `119.9 FPS`, **`62,395 / 65,536`
+  CPU PT free** (95.2% free), `32,690 / 32,768` GPU PT free, and **`3,721 / 8,192`
+  system PT free**.
+- **3D Direct3D 12 demo (`evidence/p3-local-re3demo-2026-11-26-01.json`):**
+  `4,802` direct frames at `117.7 FPS`, **`62,543 / 65,536` CPU PT free**,
+  `32,277 / 32,768` GPU PT free, and **`3,819 / 8,192` system PT free**.
+- **2D 64-bit game launched twice in one Steam session (`evidence/p3-e2e-spelunky2-twice-2026-11-26-01.json`):**
+  `63,661` (run 1) -> `64,574` (after exit 1) -> `63,644` (run 2) -> `65,002`
+  (after exit 2) free of `65,536` CPU PT, and `3,929 -> 3,971` free of `8,192`
+  system PT (zero leak across repeated launches).
