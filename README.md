@@ -88,9 +88,9 @@ MihawkOS ships two things together — a **Wine + Proton runtime** engineered fo
 
 <a id="highlights"></a>
 
-## <picture><source media="(prefers-color-scheme: dark)" srcset="docs/media/readme/orb-games-night.svg"><img src="docs/media/readme/orb-games-day.svg" width="30" height="30" alt=""></picture> What's New on `fast-steam`
+## <picture><source media="(prefers-color-scheme: dark)" srcset="docs/media/readme/orb-games-night.svg"><img src="docs/media/readme/orb-games-day.svg" width="30" height="30" alt=""></picture> What's New in Alpha 9
 
-*Tested on a standard PS5 (firmware 13.60). PS5 Pro (10.01) verification and the full console commit gate remain pending on this branch.*
+*Tested on a standard PS5 (firmware 13.60). PS5 Pro (10.01) verification remains pending.*
 
 - **Persistent Steam sessions — zero close/reopen handovers.** Launching or closing a game from Steam Big Picture no longer shuts Steam down or restarts MihawkOS via `LoadExec`. Games start straight from Big Picture, return immediately to live Big Picture on exit, and complete **Steam Cloud** `AC Launch` and `AC Exit` syncs across repeated launches.
 - **65,536 CPU / 32,768 GPU page tables via elevated Sony local processes.** 64-bit Steam games and Steam's browser now run in pre-warmed, Lapy-elevated Sony local processes (`/app0/wine-local-child.bin`, **25–30 ms** warm spawn latency) sharing the title's expanded **65,536 CPU** (`256 MiB`) and **32,768 GPU** (`128 MiB`) application page-table pools (`ps5/sce_sys/param.json`, leaving **11,456 MiB** direct memory) and `1 GiB` flexible pool. They consume **0** entries from the console's 8,192-entry system page-table pool, isolate crashes from the title/broker/Steam, and reclaim **100%** of page tables and memory on exit.
@@ -317,7 +317,7 @@ While the launcher is open, MihawkOS serves a mobile- and desktop-friendly WebUI
 Tested on a **PS5 Pro (firmware 10.01)** and a **standard PS5 (firmwares 13.40 and 13.60)**. Other models and firmwares are community-reported.
 
 - **Not supported:** Kernel-level anti-cheat (Easy Anti-Cheat, BattlEye, etc.), kernel drivers, and heavy DRM such as Denuvo. Controller rumble is not yet verified.
-- **PS5 Pro memory ceiling:** The PS5 Pro's system-memory guard engages around `870 MiB` (vs `~1,800 MiB` on standard PS5). `fast-steam`'s elevated Sony local-process path moves 64-bit games and Steam's browser off the system pool, but has so far been verified on standard PS5 (13.60) only.
+- **PS5 Pro memory ceiling:** The PS5 Pro's system-memory guard engages around `870 MiB` (vs `~1,800 MiB` on standard PS5). Alpha 9's elevated Sony local-process path moves 64-bit games and Steam's browser off the system pool, but has so far been verified on standard PS5 (13.60) only.
 - **Pipe memory across very many starts:** The console kernel has a fixed per-boot pipe-memory budget; after very many process starts, MihawkOS prompts **Restart the PS5**.
 - **Rest Mode &amp; ShadowMountPlus:** Always cold-boot after shutdown/rest mode. ShadowMountPlus beta11+ is required so other homebrew can launch cleanly after MihawkOS exits (`docs/LAUNCH_AFTER_EXIT.md`); new WebUI home-screen tiles appear a few seconds after MihawkOS closes.
 - **Updating:** From 7.1 onward, MihawkOS checks for signed GitHub updates automatically (at most once per hour); you can also update manually by replacing `/data/homebrew/PPSA99170/`.

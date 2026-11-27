@@ -27,8 +27,8 @@ ROOT = Path(__file__).resolve().parents[1]
 # What a console run or a PC tool writes into a title folder, never part of a release.
 LEFTOVERS = {'install-source.txt', 'update-source.txt', 'test-run.txt', 'wine-run.txt', 'elevation-retry',
              'session-running', 'session-notices', 'install-probe.txt', 'install-probe-results.txt', 'title-pack.txt'}
-NEEDED = ('eboot.bin', 'sce_sys/param.json', 'runtime-pack.txt', 'runtime-stamp')
-README = """MihawkOS: install it on a jailbroken PS5 (tested on firmware 10.01 and 13.40; supported up to 13.60)
+NEEDED = ('eboot.bin', 'wine-local-child.bin', 'sce_sys/param.json', 'runtime-pack.txt', 'runtime-stamp')
+README = """MihawkOS: install it on a jailbroken PS5 (tested on PS5 Pro firmware 10.01 and standard PS5 13.40 / 13.60)
 
 1. Copy the PPSA99170 folder into /data/homebrew on the console: over FTP from a phone or a PC, or with a file manager
    from a USB stick. It is about 0.6 GB: the Windows runtime is inside it. ShadowMountPlus shows its tile on the home
@@ -38,8 +38,7 @@ README = """MihawkOS: install it on a jailbroken PS5 (tested on firmware 10.01 a
    Windows drive, and some room.
 3. To update, replace the PPSA99170 folder with the new release's and open MihawkOS: it updates its runtime by itself.
 
-Each boot: load kstuff, elfldr and websrv, and ShadowMountPlus first. If another homebrew will not start after MihawkOS
-closes, restart the PS5 (a known issue with ShadowMountPlus 1.7beta4).
+Each boot: load Kstuff Lite 1.11 Beta+, elfldr, websrv, and ShadowMountPlus beta11+ first (and no extra payloads).
 SHA256SUMS lists every file here; from this folder, `sha256sum -c SHA256SUMS` checks a copy.
 """
 
